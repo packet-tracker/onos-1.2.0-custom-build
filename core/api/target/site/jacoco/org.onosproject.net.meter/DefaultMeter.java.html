@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultMeter.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.meter</a> &gt; <span class="el_source">DefaultMeter.java</span></div><h1>DefaultMeter.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.meter;
+
+import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableSet;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.DeviceId;
+
+import java.util.Collection;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * A default implementation of a meter.
+ */
+public final class DefaultMeter implements Meter, MeterEntry  {
+
+
+    private final MeterId id;
+    private final ApplicationId appId;
+    private final Unit unit;
+    private final boolean burst;
+    private final Collection&lt;Band&gt; bands;
+    private final DeviceId deviceId;
+
+    private MeterState state;
+    private long life;
+    private long refCount;
+    private long packets;
+    private long bytes;
+
+    private DefaultMeter(DeviceId deviceId, MeterId id, ApplicationId appId,
+                        Unit unit, boolean burst,
+<span class="fc" id="L50">                        Collection&lt;Band&gt; bands) {</span>
+<span class="fc" id="L51">        this.deviceId = deviceId;</span>
+<span class="fc" id="L52">        this.id = id;</span>
+<span class="fc" id="L53">        this.appId = appId;</span>
+<span class="fc" id="L54">        this.unit = unit;</span>
+<span class="fc" id="L55">        this.burst = burst;</span>
+<span class="fc" id="L56">        this.bands = bands;</span>
+<span class="fc" id="L57">    }</span>
+
+    @Override
+    public DeviceId deviceId() {
+<span class="fc" id="L61">        return deviceId;</span>
+    }
+
+    @Override
+    public MeterId id() {
+<span class="fc" id="L66">        return id;</span>
+    }
+
+    @Override
+    public ApplicationId appId() {
+<span class="fc" id="L71">        return appId;</span>
+    }
+
+    @Override
+    public Unit unit() {
+<span class="nc" id="L76">        return unit;</span>
+    }
+
+    @Override
+    public boolean isBurst() {
+<span class="fc" id="L81">        return burst;</span>
+    }
+
+    @Override
+    public Collection&lt;Band&gt; bands() {
+<span class="nc" id="L86">        return bands;</span>
+    }
+
+    @Override
+    public MeterState state() {
+<span class="nc" id="L91">        return state;</span>
+    }
+
+    @Override
+    public long life() {
+<span class="fc" id="L96">        return life;</span>
+    }
+
+    @Override
+    public long referenceCount() {
+<span class="fc" id="L101">        return refCount;</span>
+    }
+
+    @Override
+    public long packetsSeen() {
+<span class="fc" id="L106">        return packets;</span>
+    }
+
+    @Override
+    public long bytesSeen() {
+<span class="fc" id="L111">        return bytes;</span>
+    }
+
+    public static Builder builder() {
+<span class="fc" id="L115">        return new Builder();</span>
+    }
+
+    @Override
+    public void setState(MeterState state) {
+<span class="nc" id="L120">        this.state = state;</span>
+<span class="nc" id="L121">    }</span>
+
+    @Override
+    public void setLife(long life) {
+<span class="nc" id="L125">        this.life = life;</span>
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public void setReferenceCount(long count) {
+<span class="nc" id="L130">        this.refCount = count;</span>
+<span class="nc" id="L131">    }</span>
+
+    @Override
+    public void setProcessedPackets(long packets) {
+<span class="nc" id="L135">        this.packets = packets;</span>
+<span class="nc" id="L136">    }</span>
+
+    @Override
+    public void setProcessedBytes(long bytes) {
+<span class="nc" id="L140">        this.bytes = bytes;</span>
+<span class="nc" id="L141">    }</span>
+
+    @Override
+    public String toString() {
+<span class="fc" id="L145">        return toStringHelper(this)</span>
+<span class="fc" id="L146">                .add(&quot;device&quot;, deviceId)</span>
+<span class="fc" id="L147">                .add(&quot;id&quot;, id)</span>
+<span class="fc" id="L148">                .add(&quot;appId&quot;, appId.name())</span>
+<span class="fc" id="L149">                .add(&quot;unit&quot;, unit)</span>
+<span class="fc" id="L150">                .add(&quot;isBurst&quot;, burst)</span>
+<span class="fc" id="L151">                .add(&quot;state&quot;, state)</span>
+<span class="fc" id="L152">                .add(&quot;bands&quot;, bands).toString();</span>
+    }
+
+    @Override
+    public boolean equals(Object o) {
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (this == o) {</span>
+<span class="fc" id="L158">            return true;</span>
+        }
+<span class="fc bfc" id="L160" title="All 4 branches covered.">        if (o == null || getClass() != o.getClass()) {</span>
+<span class="fc" id="L161">            return false;</span>
+        }
+<span class="fc" id="L163">        DefaultMeter that = (DefaultMeter) o;</span>
+<span class="fc bfc" id="L164" title="All 2 branches covered.">        return Objects.equal(id, that.id) &amp;&amp;</span>
+<span class="pc bpc" id="L165" title="1 of 2 branches missed.">                Objects.equal(appId, that.appId) &amp;&amp;</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">                Objects.equal(unit, that.unit) &amp;&amp;</span>
+<span class="pc bpc" id="L167" title="1 of 2 branches missed.">                Objects.equal(deviceId, that.deviceId);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L172">        return Objects.hashCode(id, appId, unit, deviceId);</span>
+    }
+
+<span class="fc" id="L175">    public static final class Builder implements Meter.Builder {</span>
+
+        private MeterId id;
+        private ApplicationId appId;
+<span class="fc" id="L179">        private Unit unit = Unit.KB_PER_SEC;</span>
+<span class="fc" id="L180">        private boolean burst = false;</span>
+        private Collection&lt;Band&gt; bands;
+        private DeviceId deviceId;
+
+
+        @Override
+        public Meter.Builder forDevice(DeviceId deviceId) {
+<span class="fc" id="L187">            this.deviceId = deviceId;</span>
+<span class="fc" id="L188">            return this;</span>
+        }
+
+        @Override
+        public Meter.Builder withId(MeterId id) {
+<span class="fc" id="L193">            this.id = id;</span>
+<span class="fc" id="L194">            return this;</span>
+        }
+
+        @Override
+        public Meter.Builder fromApp(ApplicationId appId) {
+<span class="fc" id="L199">            this.appId = appId;</span>
+<span class="fc" id="L200">            return this;</span>
+        }
+
+        @Override
+        public Meter.Builder withUnit(Unit unit) {
+<span class="fc" id="L205">            this.unit = unit;</span>
+<span class="fc" id="L206">            return this;</span>
+        }
+
+        @Override
+        public Meter.Builder burst() {
+<span class="nc" id="L211">            this.burst = true;</span>
+<span class="nc" id="L212">            return this;</span>
+        }
+
+        @Override
+        public Meter.Builder withBands(Collection&lt;Band&gt; bands) {
+<span class="fc" id="L217">            this.bands = ImmutableSet.copyOf(bands);</span>
+<span class="fc" id="L218">            return this;</span>
+        }
+
+        @Override
+        public DefaultMeter build() {
+<span class="fc" id="L223">            checkNotNull(deviceId, &quot;Must specify a device&quot;);</span>
+<span class="fc" id="L224">            checkNotNull(bands, &quot;Must have bands.&quot;);</span>
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">            checkArgument(bands.size() &gt; 0, &quot;Must have at least one band.&quot;);</span>
+<span class="fc" id="L226">            checkNotNull(appId, &quot;Must have an application id&quot;);</span>
+<span class="fc" id="L227">            checkNotNull(id, &quot;Must specify a meter id&quot;);</span>
+<span class="fc" id="L228">            return new DefaultMeter(deviceId, id, appId, unit, burst, bands);</span>
+        }
+
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PathIntent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">PathIntent.java</span></div><h1>PathIntent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import java.util.List;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.Iterables;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * Abstraction of explicitly path specified connectivity intent.
+ */
+@Beta
+public class PathIntent extends ConnectivityIntent {
+
+    private final Path path;
+
+    /**
+     * Creates a new point-to-point intent with the supplied ingress/egress
+     * ports and using the specified explicit path.
+     *
+     * @param appId     application identifier
+     * @param selector  traffic selector
+     * @param treatment treatment
+     * @param path      traversed links
+     * @param constraints  optional list of constraints
+     * @param priority  priority to use for the generated flows
+     * @throws NullPointerException {@code path} is null
+     */
+    protected PathIntent(ApplicationId appId,
+                         TrafficSelector selector,
+                         TrafficTreatment treatment,
+                         Path path,
+                         List&lt;Constraint&gt; constraints,
+                         int priority) {
+<span class="fc" id="L58">        super(appId, null, resources(path.links()), selector, treatment, constraints,</span>
+                priority);
+<span class="fc" id="L60">        PathIntent.validate(path.links());</span>
+<span class="fc" id="L61">        this.path = path;</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * Constructor for serializer.
+     */
+    protected PathIntent() {
+<span class="nc" id="L68">        super();</span>
+<span class="nc" id="L69">        this.path = null;</span>
+<span class="nc" id="L70">    }</span>
+
+    /**
+     * Returns a new host to host intent builder.
+     *
+     * @return host to host intent builder
+     */
+    public static Builder builder() {
+<span class="fc" id="L78">        return new Builder();</span>
+    }
+
+    /**
+     * Builder of a host to host intent.
+     */
+    public static class Builder extends ConnectivityIntent.Builder {
+        Path path;
+
+<span class="fc" id="L87">        protected Builder() {</span>
+            // Hide default constructor
+<span class="fc" id="L89">        }</span>
+
+        @Override
+        public Builder appId(ApplicationId appId) {
+<span class="fc" id="L93">            return (Builder) super.appId(appId);</span>
+        }
+
+        @Override
+        public Builder key(Key key) {
+<span class="nc" id="L98">            return (Builder) super.key(key);</span>
+        }
+
+        @Override
+        public Builder selector(TrafficSelector selector) {
+<span class="fc" id="L103">            return (Builder) super.selector(selector);</span>
+        }
+
+        @Override
+        public Builder treatment(TrafficTreatment treatment) {
+<span class="fc" id="L108">            return (Builder) super.treatment(treatment);</span>
+        }
+
+        @Override
+        public Builder constraints(List&lt;Constraint&gt; constraints) {
+<span class="nc" id="L113">            return (Builder) super.constraints(constraints);</span>
+        }
+
+        @Override
+        public Builder priority(int priority) {
+<span class="fc" id="L118">            return (Builder) super.priority(priority);</span>
+        }
+
+        /**
+         * Sets the path of the intent that will be built.
+         *
+         * @param path path for the intent
+         * @return this builder
+         */
+        public Builder path(Path path) {
+<span class="fc" id="L128">            this.path = path;</span>
+<span class="fc" id="L129">            return this;</span>
+        }
+
+        /**
+         * Builds a path intent from the accumulated parameters.
+         *
+         * @return point to point intent
+         */
+        public PathIntent build() {
+
+<span class="fc" id="L139">            return new PathIntent(</span>
+                    appId,
+                    selector,
+                    treatment,
+                    path,
+                    constraints,
+                    priority
+            );
+        }
+    }
+
+
+
+    // NOTE: This methods takes linear time with the number of links.
+    /**
+     * Validates that source element ID and destination element ID of a link are
+     * different for the specified all links and that destination element ID of a link and source
+     * element ID of the next adjacent source element ID are same for the specified all links.
+     *
+     * @param links links to be validated
+     */
+    public static void validate(List&lt;Link&gt; links) {
+<span class="fc bfc" id="L161" title="All 2 branches covered.">        checkArgument(Iterables.all(links, link -&gt; !link.src().elementId().equals(link.dst().elementId())),</span>
+                &quot;element of src and dst in a link must be different: {}&quot;, links);
+
+<span class="fc" id="L164">        boolean adjacentSame = true;</span>
+<span class="fc bfc" id="L165" title="All 2 branches covered.">        for (int i = 0; i &lt; links.size() - 1; i++) {</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">            if (!links.get(i).dst().elementId().equals(links.get(i + 1).src().elementId())) {</span>
+<span class="nc" id="L167">                adjacentSame = false;</span>
+<span class="nc" id="L168">                break;</span>
+            }
+        }
+<span class="fc" id="L171">        checkArgument(adjacentSame, &quot;adjacent links must share the same element: {}&quot;, links);</span>
+<span class="fc" id="L172">    }</span>
+
+    /**
+     * Returns the links which the traffic goes along.
+     *
+     * @return traversed links
+     */
+    public Path path() {
+<span class="fc" id="L180">        return path;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L185">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L186">                .add(&quot;id&quot;, id())</span>
+<span class="fc" id="L187">                .add(&quot;appId&quot;, appId())</span>
+<span class="fc" id="L188">                .add(&quot;priority&quot;, priority())</span>
+<span class="fc" id="L189">                .add(&quot;resources&quot;, resources())</span>
+<span class="fc" id="L190">                .add(&quot;selector&quot;, selector())</span>
+<span class="fc" id="L191">                .add(&quot;treatment&quot;, treatment())</span>
+<span class="fc" id="L192">                .add(&quot;constraints&quot;, constraints())</span>
+<span class="fc" id="L193">                .add(&quot;path&quot;, path)</span>
+<span class="fc" id="L194">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

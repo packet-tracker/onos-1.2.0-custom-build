@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>JsonUtils.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui</a> &gt; <span class="el_source">JsonUtils.java</span></div><h1>JsonUtils.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * Provides convenience methods for dealing with JSON nodes, arrays etc.
+ */
+public final class JsonUtils {
+
+<span class="fc" id="L27">    private static final ObjectMapper MAPPER = new ObjectMapper();</span>
+
+    // non-instantiable
+<span class="nc" id="L30">    private JsonUtils() { }</span>
+
+    /**
+     * Wraps a message payload into an event structure for the given event
+     * type and sequence ID. Generally, the sequence ID should be a copy of
+     * the ID from the client request event.
+     *
+     * @param type    event type
+     * @param sid     sequence ID
+     * @param payload event payload
+     * @return the object node representation
+     */
+    public static ObjectNode envelope(String type, long sid, ObjectNode payload) {
+<span class="nc" id="L43">        ObjectNode event = MAPPER.createObjectNode();</span>
+<span class="nc" id="L44">        event.put(&quot;event&quot;, type);</span>
+<span class="nc bnc" id="L45" title="All 2 branches missed.">        if (sid &gt; 0) {</span>
+<span class="nc" id="L46">            event.put(&quot;sid&quot;, sid);</span>
+        }
+<span class="nc" id="L48">        event.set(&quot;payload&quot;, payload);</span>
+<span class="nc" id="L49">        return event;</span>
+    }
+
+    /**
+     * Composes a message structure for the given message type and payload.
+     *
+     * @param type    message type
+     * @param payload message payload
+     * @return the object node representation
+     */
+    public static ObjectNode envelope(String type, ObjectNode payload) {
+<span class="nc" id="L60">        ObjectNode event = MAPPER.createObjectNode();</span>
+<span class="nc" id="L61">        event.put(&quot;event&quot;, type);</span>
+<span class="nc" id="L62">        event.set(&quot;payload&quot;, payload);</span>
+<span class="nc" id="L63">        return event;</span>
+    }
+
+    /**
+     * Returns the event type from the specified event.
+     * If the node does not have an &quot;event&quot; property, &quot;unknown&quot; is returned.
+     *
+     * @param event message event
+     * @return extracted event type
+     */
+    public static String eventType(ObjectNode event) {
+<span class="nc" id="L74">        return string(event, &quot;event&quot;, &quot;unknown&quot;);</span>
+    }
+
+    /**
+     * Returns the sequence identifier from the specified event, or 0 (zero)
+     * if the &quot;sid&quot; property does not exist.
+     *
+     * @param event message event
+     * @return extracted sequence identifier
+     */
+    public static long sid(ObjectNode event) {
+<span class="nc" id="L85">        return number(event, &quot;sid&quot;);</span>
+    }
+
+    /**
+     * Returns the payload from the specified event.
+     *
+     * @param event message event
+     * @return extracted payload object
+     */
+    public static ObjectNode payload(ObjectNode event) {
+<span class="nc" id="L95">        return (ObjectNode) event.path(&quot;payload&quot;);</span>
+    }
+
+    /**
+     * Returns the specified node property as a number.
+     *
+     * @param node message event
+     * @param name property name
+     * @return property as number
+     */
+    public static long number(ObjectNode node, String name) {
+<span class="nc" id="L106">        return node.path(name).asLong();</span>
+    }
+
+    /**
+     * Returns the specified node property as a string.
+     *
+     * @param node message event
+     * @param name property name
+     * @return property as a string
+     */
+    public static String string(ObjectNode node, String name) {
+<span class="fc" id="L117">        return node.path(name).asText();</span>
+    }
+
+    /**
+     * Returns the specified node property as a string, with a default fallback.
+     *
+     * @param node         object node
+     * @param name         property name
+     * @param defaultValue fallback value if property is absent
+     * @return property as a string
+     */
+    public static String string(ObjectNode node, String name, String defaultValue) {
+<span class="nc" id="L129">        return node.path(name).asText(defaultValue);</span>
+    }
+
+    /**
+     * Returns the specified node property as an object node.
+     *
+     * @param node object node
+     * @param name property name
+     * @return property as a node
+     */
+    public static ObjectNode node(ObjectNode node, String name) {
+<span class="nc" id="L140">        return (ObjectNode) node.path(name);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

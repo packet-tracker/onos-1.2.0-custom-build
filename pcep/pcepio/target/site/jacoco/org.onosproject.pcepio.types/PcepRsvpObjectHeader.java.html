@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepRsvpObjectHeader.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepRsvpObjectHeader.java</span></div><h1>PcepRsvpObjectHeader.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PcepRsvpObjectHeader.
+ */
+public class PcepRsvpObjectHeader {
+
+    /*
+    0             1              2             3
+    +-------------+-------------+-------------+-------------+
+    |       Length (bytes)      |  Class-Num  |   C-Type    |
+    +-------------+-------------+-------------+-------------+
+    |                                                       |
+    //                  (Object contents)                   //
+    |                                                       |
+    +-------------+-------------+-------------+-------------+
+
+              ERROR_SPEC object Header
+     */
+
+<span class="nc" id="L43">    protected static final Logger log = LoggerFactory.getLogger(PcepRsvpObjectHeader.class);</span>
+
+    public static final boolean REQ_OBJ_MUST_PROCESS = true;
+    public static final boolean REQ_OBJ_OPTIONAL_PROCESS = false;
+    public static final boolean RSP_OBJ_IGNORED = true;
+    public static final boolean RSP_OBJ_PROCESSED = false;
+    public static final int OBJECT_TYPE_SHIFT_VALUE = 4;
+    private byte objClassNum;
+    private byte objClassType;
+    private short objLen;
+
+    /**
+     * Constructor to initialize class num, length and type.
+     *
+     * @param objClassNum object class number
+     * @param objClassType object class type
+     * @param objLen object length
+     */
+<span class="nc" id="L61">    public PcepRsvpObjectHeader(byte objClassNum, byte objClassType, short objLen) {</span>
+<span class="nc" id="L62">        this.objClassNum = objClassNum;</span>
+<span class="nc" id="L63">        this.objClassType = objClassType;</span>
+<span class="nc" id="L64">        this.objLen = objLen;</span>
+<span class="nc" id="L65">    }</span>
+
+    /**
+     * Sets the Class-Num.
+     *
+     * @param value object class number
+     */
+    public void setObjClassNum(byte value) {
+<span class="nc" id="L73">        this.objClassNum = value;</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     * Sets the Class type.
+     *
+     * @param value object class type
+     */
+    public void setObjClassType(byte value) {
+<span class="nc" id="L82">        this.objClassType = value;</span>
+<span class="nc" id="L83">    }</span>
+
+    /**
+     * Sets the Class Length.
+     *
+     * @param value object length
+     */
+    public void setObjLen(short value) {
+<span class="nc" id="L91">        this.objLen = value;</span>
+<span class="nc" id="L92">    }</span>
+
+    /**
+     * Returns Object Length.
+     *
+     * @return objLen
+     */
+    public short getObjLen() {
+<span class="nc" id="L100">        return this.objLen;</span>
+    }
+
+    /**
+     * Returns Object num.
+     *
+     * @return objClassNum
+     */
+    public byte getObjClassNum() {
+<span class="nc" id="L109">        return this.objClassNum;</span>
+    }
+
+    /**
+     * Returns Object type.
+     *
+     * @return objClassType
+     */
+    public byte getObjClassType() {
+<span class="nc" id="L118">        return this.objClassType;</span>
+    }
+
+    /**
+     * Writes the byte stream of PcepRsvpObjectHeader to channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @return object length index in channel buffer
+     */
+    public int write(ChannelBuffer cb) {
+<span class="nc" id="L128">        int iLenStartIndex = cb.writerIndex();</span>
+<span class="nc" id="L129">        cb.writeShort((short) 0);</span>
+<span class="nc" id="L130">        cb.writeByte(this.objClassNum);</span>
+<span class="nc" id="L131">        cb.writeByte(this.objClassType);</span>
+<span class="nc" id="L132">        return cb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads the PcepRsvpObjectHeader.
+     *
+     * @param cb input channel buffer
+     * @return PcepRsvpObjectHeader
+     */
+    public static PcepRsvpObjectHeader read(ChannelBuffer cb) {
+<span class="nc" id="L142">        log.debug(&quot;read &quot;);</span>
+        byte objClassNum;
+        byte objClassType;
+        short objLen;
+<span class="nc" id="L146">        objLen = cb.readShort();</span>
+<span class="nc" id="L147">        objClassNum = cb.readByte();</span>
+<span class="nc" id="L148">        objClassType = cb.readByte();</span>
+
+<span class="nc" id="L150">        return new PcepRsvpObjectHeader(objClassNum, objClassType, objLen);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L155">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L156">                .add(&quot;ObjectClassNum&quot;, objClassNum)</span>
+<span class="nc" id="L157">                .add(&quot;ObjectCType&quot;, objClassType)</span>
+<span class="nc" id="L158">                .add(&quot;ObjectLength&quot;, objLen)</span>
+<span class="nc" id="L159">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DatabaseSerializer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DatabaseSerializer.java</span></div><h1>DatabaseSerializer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.consistent.impl;
+
+import java.nio.ByteBuffer;
+
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.service.DatabaseUpdate;
+import org.onosproject.store.service.Transaction;
+import org.onosproject.store.service.Versioned;
+
+import net.kuujo.copycat.cluster.internal.MemberInfo;
+import net.kuujo.copycat.raft.protocol.AppendRequest;
+import net.kuujo.copycat.raft.protocol.AppendResponse;
+import net.kuujo.copycat.raft.protocol.CommitRequest;
+import net.kuujo.copycat.raft.protocol.CommitResponse;
+import net.kuujo.copycat.raft.protocol.PollRequest;
+import net.kuujo.copycat.raft.protocol.PollResponse;
+import net.kuujo.copycat.raft.protocol.QueryRequest;
+import net.kuujo.copycat.raft.protocol.QueryResponse;
+import net.kuujo.copycat.raft.protocol.ReplicaInfo;
+import net.kuujo.copycat.raft.protocol.SyncRequest;
+import net.kuujo.copycat.raft.protocol.SyncResponse;
+import net.kuujo.copycat.raft.protocol.VoteRequest;
+import net.kuujo.copycat.raft.protocol.VoteResponse;
+import net.kuujo.copycat.util.serializer.SerializerConfig;
+
+/**
+ * Serializer for DatabaseManager's interaction with Copycat.
+ */
+<span class="nc" id="L48">public class DatabaseSerializer extends SerializerConfig {</span>
+
+<span class="nc" id="L50">    private static final KryoNamespace COPYCAT = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L51">            .nextId(KryoNamespace.FLOATING_ID)</span>
+<span class="nc" id="L52">            .register(AppendRequest.class)</span>
+<span class="nc" id="L53">            .register(AppendResponse.class)</span>
+<span class="nc" id="L54">            .register(SyncRequest.class)</span>
+<span class="nc" id="L55">            .register(SyncResponse.class)</span>
+<span class="nc" id="L56">            .register(VoteRequest.class)</span>
+<span class="nc" id="L57">            .register(VoteResponse.class)</span>
+<span class="nc" id="L58">            .register(PollRequest.class)</span>
+<span class="nc" id="L59">            .register(PollResponse.class)</span>
+<span class="nc" id="L60">            .register(QueryRequest.class)</span>
+<span class="nc" id="L61">            .register(QueryResponse.class)</span>
+<span class="nc" id="L62">            .register(CommitRequest.class)</span>
+<span class="nc" id="L63">            .register(CommitResponse.class)</span>
+<span class="nc" id="L64">            .register(ReplicaInfo.class)</span>
+<span class="nc" id="L65">            .register(MemberInfo.class)</span>
+<span class="nc" id="L66">            .build();</span>
+
+<span class="nc" id="L68">    private static final KryoNamespace ONOS_STORE = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L69">            .nextId(KryoNamespace.FLOATING_ID)</span>
+<span class="nc" id="L70">            .register(Versioned.class)</span>
+<span class="nc" id="L71">            .register(DatabaseUpdate.class)</span>
+<span class="nc" id="L72">            .register(DatabaseUpdate.Type.class)</span>
+<span class="nc" id="L73">            .register(Result.class)</span>
+<span class="nc" id="L74">            .register(UpdateResult.class)</span>
+<span class="nc" id="L75">            .register(Result.Status.class)</span>
+<span class="nc" id="L76">            .register(DefaultTransaction.class)</span>
+<span class="nc" id="L77">            .register(Transaction.State.class)</span>
+<span class="nc" id="L78">            .register(org.onosproject.store.consistent.impl.CommitResponse.class)</span>
+<span class="nc" id="L79">            .register(Match.class)</span>
+<span class="nc" id="L80">            .register(NodeId.class)</span>
+<span class="nc" id="L81">            .build();</span>
+
+<span class="nc" id="L83">    private static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L86">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L87">                    .register(KryoNamespaces.BASIC)</span>
+<span class="nc" id="L88">                    .register(COPYCAT)</span>
+<span class="nc" id="L89">                    .register(ONOS_STORE)</span>
+<span class="nc" id="L90">                    .build();</span>
+<span class="nc" id="L91">        }</span>
+    };
+
+    @Override
+    public ByteBuffer writeObject(Object object) {
+<span class="nc" id="L96">        return ByteBuffer.wrap(SERIALIZER.encode(object));</span>
+    }
+
+    @Override
+    public &lt;T&gt; T readObject(ByteBuffer buffer) {
+<span class="nc" id="L101">        return SERIALIZER.decode(buffer);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

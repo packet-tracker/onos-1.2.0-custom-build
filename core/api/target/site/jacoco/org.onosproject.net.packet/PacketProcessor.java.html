@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PacketProcessor.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.packet</a> &gt; <span class="el_source">PacketProcessor.java</span></div><h1>PacketProcessor.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.packet;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * Abstraction of an inbound packet processor.
+ */
+public interface PacketProcessor {
+
+    int ADVISOR_MAX = Integer.MAX_VALUE / 3;
+    int DIRECTOR_MAX = (Integer.MAX_VALUE / 3) * 2;
+    int OBSERVER_MAX = Integer.MAX_VALUE;
+
+    /**
+     * Returns a priority in the ADVISOR range, where processors can take early action and
+     * influence the packet context. However, they cannot handle the packet (i.e. call send() or block()).
+     * The valid range is from 1 to ADVISOR_MAX.
+     * Processors in this range get to see the packet first.
+     *
+     * @param priority priority within ADVISOR range
+     * @return overall priority
+     */
+    static int advisor(int priority) {
+<span class="nc" id="L39">        int overallPriority = priority + 1;</span>
+<span class="nc bnc" id="L40" title="All 4 branches missed.">        checkArgument(overallPriority &gt; 0 &amp;&amp; overallPriority &lt;= ADVISOR_MAX,</span>
+                      &quot;Priority not within ADVISOR range&quot;);
+<span class="nc" id="L42">        return overallPriority;</span>
+    }
+
+    /**
+     * Returns a priority in the DIRECTOR range, where processors can handle the packet.
+     * The valid range is from ADVISOR_MAX+1 to DIRECTOR_MAX.
+     * Processors in this range get to see the packet second, after ADVISORS.
+     *
+     * @param priority priority within the DIRECTOR range
+     * @return overall priority
+     */
+    static int director(int priority) {
+<span class="nc" id="L54">        int overallPriority = ADVISOR_MAX + priority + 1;</span>
+<span class="nc bnc" id="L55" title="All 4 branches missed.">        checkArgument(overallPriority &gt; ADVISOR_MAX &amp;&amp; overallPriority &lt;= DIRECTOR_MAX,</span>
+                      &quot;Priority not within DIRECTOR range&quot;);
+<span class="nc" id="L57">        return overallPriority;</span>
+    }
+
+    /**
+     * Returns a priority in the OBSERVER range, where processors cannot take any action,
+     * but can observe what action has been taken until then.
+     * The valid range is from DIRECTOR_MAX+1 to OBSERVER_MAX.
+     * Processors in this range get to see the packet last, after ADVISORS and DIRECTORS.
+     *
+     * @param priority priority within the OBSERVER range
+     * @return overall priority
+     */
+    static int observer(int priority) {
+<span class="nc" id="L70">        int overallPriority = DIRECTOR_MAX + priority + 1;</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        checkArgument(overallPriority &gt; DIRECTOR_MAX,</span>
+                      &quot;Priority not within OBSERVER range&quot;);
+<span class="nc" id="L73">        return overallPriority;</span>
+    }
+
+    /**
+     * Processes the inbound packet as specified in the given context.
+     *
+     * @param context packet processing context
+     */
+    void process(PacketContext context);
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

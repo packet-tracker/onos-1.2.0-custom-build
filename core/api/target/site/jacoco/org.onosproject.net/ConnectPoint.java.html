@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConnectPoint.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">ConnectPoint.java</span></div><h1>ConnectPoint.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import com.google.common.base.MoreObjects;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Abstraction of a network connection point expressed as a pair of the
+ * network element identifier and port number.
+ */
+public class ConnectPoint {
+
+    private final ElementId elementId;
+    private final PortNumber portNumber;
+
+    /**
+     * Creates a new connection point.
+     *
+     * @param elementId  network element identifier
+     * @param portNumber port number
+     */
+<span class="fc" id="L40">    public ConnectPoint(ElementId elementId, PortNumber portNumber) {</span>
+<span class="fc" id="L41">        this.elementId = elementId;</span>
+<span class="fc" id="L42">        this.portNumber = portNumber;</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * Returns the network element identifier.
+     *
+     * @return element identifier
+     */
+    public ElementId elementId() {
+<span class="fc" id="L51">        return elementId;</span>
+    }
+
+    /**
+     * Returns the identifier of the infrastructure device if the connection
+     * point belongs to a network element which is indeed an infrastructure
+     * device.
+     *
+     * @return network element identifier as a device identifier
+     * @throws java.lang.IllegalStateException if connection point is not
+     *                                         associated with a device
+     */
+    public DeviceId deviceId() {
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        if (elementId instanceof DeviceId) {</span>
+<span class="fc" id="L65">            return (DeviceId) elementId;</span>
+        }
+<span class="nc" id="L67">        throw new IllegalStateException(&quot;Connection point not associated &quot; +</span>
+                                                &quot;with an infrastructure device&quot;);
+    }
+
+    /**
+     * Returns the identifier of the infrastructure device if the connection
+     * point belongs to a network element which is indeed an end-station host.
+     *
+     * @return network element identifier as a host identifier
+     * @throws java.lang.IllegalStateException if connection point is not
+     *                                         associated with a host
+     */
+    public HostId hostId() {
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">        if (elementId instanceof HostId) {</span>
+<span class="fc" id="L81">            return (HostId) elementId;</span>
+        }
+<span class="nc" id="L83">        throw new IllegalStateException(&quot;Connection point not associated &quot; +</span>
+                                                &quot;with an end-station host&quot;);
+    }
+
+    /**
+     * Returns the identifier of the infrastructure device if the connection
+     * point belongs to a network element which is indeed an ip of pcc
+     * client identifier.
+     *
+     * @return network element identifier as a pcc client identifier
+     * @throws java.lang.IllegalStateException if connection point is not
+     *                                         associated with a pcc client
+     */
+    public IpElementId ipElementId() {
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if (elementId instanceof IpElementId) {</span>
+<span class="nc" id="L98">            return (IpElementId) elementId;</span>
+        }
+<span class="nc" id="L100">        throw new IllegalStateException(&quot;Connection point not associated &quot; +</span>
+                                                &quot;with an pcc client&quot;);
+    }
+
+    /**
+     * Returns the connection port number.
+     *
+     * @return port number
+     */
+    public PortNumber port() {
+<span class="fc" id="L110">        return portNumber;</span>
+    }
+
+    /**
+     * Parse a device connect point from a string.
+     * The connect point should be in the format &quot;deviceUri/portNumber&quot;.
+     *
+     * @param string string to parse
+     * @return a ConnectPoint based on the information in the string.
+     */
+    public static ConnectPoint deviceConnectPoint(String string) {
+<span class="fc" id="L121">        checkNotNull(string);</span>
+<span class="fc" id="L122">        String[] splitted = string.split(&quot;/&quot;);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        checkArgument(splitted.length == 2,</span>
+                      &quot;Connect point must be in \&quot;deviceUri/portNumber\&quot; format&quot;);
+
+<span class="fc" id="L126">        return new ConnectPoint(DeviceId.deviceId(splitted[0]),</span>
+<span class="fc" id="L127">                                PortNumber.portNumber(splitted[1]));</span>
+    }
+
+    /**
+     * Parse a host connect point from a string.
+     * The connect point should be in the format &quot;hostId/vlanId/portNumber&quot;.
+     *
+     * @param string string to parse
+     * @return a ConnectPoint based on the information in the string.
+     */
+    public static ConnectPoint hostConnectPoint(String string) {
+<span class="fc" id="L138">        checkNotNull(string);</span>
+<span class="fc" id="L139">        String[] splitted = string.split(&quot;/&quot;);</span>
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        checkArgument(splitted.length == 3,</span>
+                      &quot;Connect point must be in \&quot;hostId/vlanId/portNumber\&quot; format&quot;);
+
+<span class="fc" id="L143">        int lastSlash = string.lastIndexOf(&quot;/&quot;);</span>
+
+<span class="fc" id="L145">        return new ConnectPoint(HostId.hostId(string.substring(0, lastSlash)),</span>
+<span class="fc" id="L146">                                PortNumber.portNumber(string.substring(lastSlash + 1, string.length())));</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L151">        return Objects.hash(elementId, portNumber);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L156" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L157">            return true;</span>
+        }
+<span class="fc bfc" id="L159" title="All 2 branches covered.">        if (obj instanceof ConnectPoint) {</span>
+<span class="fc" id="L160">            final ConnectPoint other = (ConnectPoint) obj;</span>
+<span class="fc bfc" id="L161" title="All 2 branches covered.">            return Objects.equals(this.elementId, other.elementId) &amp;&amp;</span>
+<span class="fc bfc" id="L162" title="All 2 branches covered.">                    Objects.equals(this.portNumber, other.portNumber);</span>
+        }
+<span class="fc" id="L164">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L169">        return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L170">                .add(&quot;elementId&quot;, elementId)</span>
+<span class="fc" id="L171">                .add(&quot;portNumber&quot;, portNumber)</span>
+<span class="fc" id="L172">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

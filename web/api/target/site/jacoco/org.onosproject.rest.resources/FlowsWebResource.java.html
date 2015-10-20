@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowsWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">FlowsWebResource.java</span></div><h1>FlowsWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.stream.StreamSupport;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.onlab.util.ItemNotFoundException;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.rest.AbstractWebResource;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * Query and program flow rules.
+ */
+
+@Path(&quot;flows&quot;)
+<span class="fc" id="L52">public class FlowsWebResource extends AbstractWebResource {</span>
+    public static final String DEVICE_NOT_FOUND = &quot;Device is not found&quot;;
+
+<span class="fc" id="L55">    final FlowRuleService service = get(FlowRuleService.class);</span>
+<span class="fc" id="L56">    final ObjectNode root = mapper().createObjectNode();</span>
+<span class="fc" id="L57">    final ArrayNode flowsNode = root.putArray(&quot;flows&quot;);</span>
+
+    /**
+     * Get all flow entries. Returns array of all flow rules in the system.
+     *
+     * @return array of all the intents in the system
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getFlows() {
+<span class="fc" id="L67">        final Iterable&lt;Device&gt; devices = get(DeviceService.class).getDevices();</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        for (final Device device : devices) {</span>
+<span class="fc" id="L69">            final Iterable&lt;FlowEntry&gt; flowEntries = service.getFlowEntries(device.id());</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">            if (flowEntries != null) {</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">                for (final FlowEntry entry : flowEntries) {</span>
+<span class="fc" id="L72">                    flowsNode.add(codec(FlowEntry.class).encode(entry, this));</span>
+<span class="fc" id="L73">                }</span>
+            }
+<span class="fc" id="L75">        }</span>
+
+<span class="fc" id="L77">        return ok(root).build();</span>
+    }
+
+    /**
+     * Get flow entries of a device. Returns array of all flow rules for the
+     * specified device.
+     *
+     * @param deviceId device identifier
+     * @return flow data as an array
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;{deviceId}&quot;)
+    public Response getFlowByDeviceId(@PathParam(&quot;deviceId&quot;) String deviceId) {
+<span class="fc" id="L91">        final Iterable&lt;FlowEntry&gt; flowEntries =</span>
+<span class="fc" id="L92">                service.getFlowEntries(DeviceId.deviceId(deviceId));</span>
+
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">        if (!flowEntries.iterator().hasNext()) {</span>
+<span class="nc" id="L95">            throw new ItemNotFoundException(DEVICE_NOT_FOUND);</span>
+        }
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        for (final FlowEntry entry : flowEntries) {</span>
+<span class="fc" id="L98">            flowsNode.add(codec(FlowEntry.class).encode(entry, this));</span>
+<span class="fc" id="L99">        }</span>
+<span class="fc" id="L100">        return ok(root).build();</span>
+    }
+
+    /**
+     * Get flow rule. Returns the flow entry specified by the device id and
+     * flow rule id.
+     *
+     * @param deviceId device identifier
+     * @param flowId   flow rule identifier
+     * @return flow data as an array
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;{deviceId}/{flowId}&quot;)
+    public Response getFlowByDeviceIdAndFlowId(@PathParam(&quot;deviceId&quot;) String deviceId,
+                                               @PathParam(&quot;flowId&quot;) long flowId) {
+<span class="fc" id="L116">        final Iterable&lt;FlowEntry&gt; flowEntries =</span>
+<span class="fc" id="L117">                service.getFlowEntries(DeviceId.deviceId(deviceId));</span>
+
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">        if (!flowEntries.iterator().hasNext()) {</span>
+<span class="nc" id="L120">            throw new ItemNotFoundException(DEVICE_NOT_FOUND);</span>
+        }
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        for (final FlowEntry entry : flowEntries) {</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">            if (entry.id().value() == flowId) {</span>
+<span class="fc" id="L124">                flowsNode.add(codec(FlowEntry.class).encode(entry, this));</span>
+            }
+<span class="fc" id="L126">        }</span>
+<span class="fc" id="L127">        return ok(root).build();</span>
+    }
+
+    /**
+     * Create new flow rule. Creates and installs a new flow rule for the
+     * specified device.
+     *
+     * @param deviceId device identifier
+     * @param stream   flow rule JSON
+     * @return status of the request - CREATED if the JSON is correct,
+     * BAD_REQUEST if the JSON is invalid
+     */
+    @POST
+    @Path(&quot;{deviceId}&quot;)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response createFlow(@PathParam(&quot;deviceId&quot;) String deviceId,
+                               InputStream stream) {
+        URI location;
+        try {
+<span class="fc" id="L147">            ObjectNode jsonTree = (ObjectNode) mapper().readTree(stream);</span>
+<span class="fc" id="L148">            JsonNode specifiedDeviceId = jsonTree.get(&quot;deviceId&quot;);</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">            if (specifiedDeviceId != null &amp;&amp;</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">                    !specifiedDeviceId.asText().equals(deviceId)) {</span>
+<span class="nc" id="L151">                throw new IllegalArgumentException(</span>
+                        &quot;Invalid deviceId in flow creation request&quot;);
+            }
+<span class="fc" id="L154">            jsonTree.put(&quot;deviceId&quot;, deviceId);</span>
+<span class="fc" id="L155">            FlowRule rule = codec(FlowRule.class).decode(jsonTree, this);</span>
+<span class="fc" id="L156">            service.applyFlowRules(rule);</span>
+<span class="fc" id="L157">            location = new URI(Long.toString(rule.id().value()));</span>
+<span class="nc" id="L158">        } catch (IOException | URISyntaxException ex) {</span>
+<span class="nc" id="L159">            throw new IllegalArgumentException(ex);</span>
+<span class="fc" id="L160">        }</span>
+
+<span class="fc" id="L162">        return Response</span>
+<span class="fc" id="L163">                .created(location)</span>
+<span class="fc" id="L164">                .build();</span>
+    }
+
+    /**
+     * Remove flow rule. Removes the specified flow rule.
+     *
+     * @param deviceId device identifier
+     * @param flowId   flow rule identifier
+     */
+    @DELETE
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;{deviceId}/{flowId}&quot;)
+    public void deleteFlowByDeviceIdAndFlowId(@PathParam(&quot;deviceId&quot;) String deviceId,
+                                              @PathParam(&quot;flowId&quot;) long flowId) {
+<span class="fc" id="L178">        final Iterable&lt;FlowEntry&gt; flowEntries =</span>
+<span class="fc" id="L179">                service.getFlowEntries(DeviceId.deviceId(deviceId));</span>
+
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">        if (!flowEntries.iterator().hasNext()) {</span>
+<span class="nc" id="L182">            throw new ItemNotFoundException(DEVICE_NOT_FOUND);</span>
+        }
+
+<span class="fc" id="L185">        StreamSupport.stream(flowEntries.spliterator(), false)</span>
+<span class="fc bfc" id="L186" title="All 2 branches covered.">                .filter(entry -&gt; entry.id().value() == flowId)</span>
+<span class="fc" id="L187">                .forEach(service::removeFlowRules);</span>
+<span class="fc" id="L188">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

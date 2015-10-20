@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultConsistentMap.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DefaultConsistentMap.java</span></div><h1>DefaultConsistentMap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.consistent.impl;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.Set;
+
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.ConsistentMapException;
+import org.onosproject.store.service.MapEventListener;
+import org.onosproject.store.service.Versioned;
+
+/**
+ * ConsistentMap implementation that is backed by a Raft consensus
+ * based database.
+ *
+ * @param &lt;K&gt; type of key.
+ * @param &lt;V&gt; type of value.
+ */
+public class DefaultConsistentMap&lt;K, V&gt; implements ConsistentMap&lt;K, V&gt; {
+
+    private static final int OPERATION_TIMEOUT_MILLIS = 5000;
+
+    private final DefaultAsyncConsistentMap&lt;K, V&gt; asyncMap;
+    private Map&lt;K, V&gt; javaMap;
+
+    public String name() {
+<span class="nc" id="L51">        return asyncMap.name();</span>
+    }
+
+<span class="nc" id="L54">    public DefaultConsistentMap(DefaultAsyncConsistentMap&lt;K, V&gt; asyncMap) {</span>
+<span class="nc" id="L55">        this.asyncMap = asyncMap;</span>
+<span class="nc" id="L56">    }</span>
+
+    @Override
+    public int size() {
+<span class="nc" id="L60">        return complete(asyncMap.size());</span>
+    }
+
+    @Override
+    public boolean isEmpty() {
+<span class="nc" id="L65">        return complete(asyncMap.isEmpty());</span>
+    }
+
+    @Override
+    public boolean containsKey(K key) {
+<span class="nc" id="L70">        return complete(asyncMap.containsKey(key));</span>
+    }
+
+    @Override
+    public boolean containsValue(V value) {
+<span class="nc" id="L75">        return complete(asyncMap.containsValue(value));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; get(K key) {
+<span class="nc" id="L80">        return complete(asyncMap.get(key));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; computeIfAbsent(K key,
+            Function&lt;? super K, ? extends V&gt; mappingFunction) {
+<span class="nc" id="L86">        return complete(asyncMap.computeIfAbsent(key, mappingFunction));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; computeIfPresent(K key,
+            BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L92">        return complete(asyncMap.computeIfPresent(key, remappingFunction));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; compute(K key,
+            BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L98">        return complete(asyncMap.compute(key, remappingFunction));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; computeIf(K key,
+            Predicate&lt;? super V&gt; condition,
+            BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L105">        return complete(asyncMap.computeIf(key, condition, remappingFunction));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; put(K key, V value) {
+<span class="nc" id="L110">        return complete(asyncMap.put(key, value));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; putAndGet(K key, V value) {
+<span class="nc" id="L115">        return complete(asyncMap.putAndGet(key, value));</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; remove(K key) {
+<span class="nc" id="L120">        return complete(asyncMap.remove(key));</span>
+    }
+
+    @Override
+    public void clear() {
+<span class="nc" id="L125">        complete(asyncMap.clear());</span>
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public Set&lt;K&gt; keySet() {
+<span class="nc" id="L130">        return complete(asyncMap.keySet());</span>
+    }
+
+    @Override
+    public Collection&lt;Versioned&lt;V&gt;&gt; values() {
+<span class="nc" id="L135">        return complete(asyncMap.values());</span>
+    }
+
+    @Override
+    public Set&lt;Entry&lt;K, Versioned&lt;V&gt;&gt;&gt; entrySet() {
+<span class="nc" id="L140">        return complete(asyncMap.entrySet());</span>
+    }
+
+    @Override
+    public Versioned&lt;V&gt; putIfAbsent(K key, V value) {
+<span class="nc" id="L145">        return complete(asyncMap.putIfAbsent(key, value));</span>
+    }
+
+    @Override
+    public boolean remove(K key, V value) {
+<span class="nc" id="L150">        return complete(asyncMap.remove(key, value));</span>
+    }
+
+    @Override
+    public boolean remove(K key, long version) {
+<span class="nc" id="L155">        return complete(asyncMap.remove(key, version));</span>
+    }
+
+    @Override
+    public boolean replace(K key, V oldValue, V newValue) {
+<span class="nc" id="L160">        return complete(asyncMap.replace(key, oldValue, newValue));</span>
+    }
+
+    @Override
+    public boolean replace(K key, long oldVersion, V newValue) {
+<span class="nc" id="L165">        return complete(asyncMap.replace(key, oldVersion, newValue));</span>
+    }
+
+    private static &lt;T&gt; T complete(CompletableFuture&lt;T&gt; future) {
+        try {
+<span class="nc" id="L170">            return future.get(OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);</span>
+<span class="nc" id="L171">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L172">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L173">            throw new ConsistentMapException.Interrupted();</span>
+<span class="nc" id="L174">        } catch (TimeoutException e) {</span>
+<span class="nc" id="L175">            throw new ConsistentMapException.Timeout();</span>
+<span class="nc" id="L176">        } catch (ExecutionException e) {</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if (e.getCause() instanceof ConsistentMapException) {</span>
+<span class="nc" id="L178">                throw (ConsistentMapException) e.getCause();</span>
+            } else {
+<span class="nc" id="L180">                throw new ConsistentMapException(e.getCause());</span>
+            }
+        }
+    }
+
+    @Override
+    public void addListener(MapEventListener&lt;K, V&gt; listener) {
+<span class="nc" id="L187">        asyncMap.addListener(listener);</span>
+<span class="nc" id="L188">    }</span>
+
+    @Override
+    public void removeListener(MapEventListener&lt;K, V&gt; listener) {
+<span class="nc" id="L192">        asyncMap.addListener(listener);</span>
+<span class="nc" id="L193">    }</span>
+
+    @Override
+    public Map&lt;K, V&gt; asJavaMap() {
+<span class="nc" id="L197">        synchronized (this) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            if (javaMap == null) {</span>
+<span class="nc" id="L199">                javaMap = new ConsistentMapBackedJavaMap&lt;&gt;(this);</span>
+            }
+<span class="nc" id="L201">        }</span>
+<span class="nc" id="L202">        return javaMap;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

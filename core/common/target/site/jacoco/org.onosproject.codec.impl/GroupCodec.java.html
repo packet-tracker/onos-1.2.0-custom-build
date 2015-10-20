@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">GroupCodec.java</span></div><h1>GroupCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.group.Group;
+import org.onosproject.net.group.GroupBucket;
+
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Group JSON codec.
+ */
+<span class="fc" id="L31">public final class GroupCodec extends JsonCodec&lt;Group&gt; {</span>
+    // JSON field names
+    private static final String ID = &quot;id&quot;;
+    private static final String STATE = &quot;state&quot;;
+    private static final String LIFE = &quot;life&quot;;
+    private static final String PACKETS = &quot;packets&quot;;
+    private static final String BYTES = &quot;bytes&quot;;
+    private static final String REFERENCE_COUNT = &quot;referenceCount&quot;;
+    private static final String TYPE = &quot;type&quot;;
+    private static final String DEVICE_ID = &quot;deviceId&quot;;
+    private static final String APP_ID = &quot;appId&quot;;
+    private static final String APP_COOKIE  = &quot;appCookie&quot;;
+    private static final String GIVEN_GROUP_ID  = &quot;givenGroupId&quot;;
+    private static final String BUCKETS = &quot;buckets&quot;;
+
+    @Override
+    public ObjectNode encode(Group group, CodecContext context) {
+<span class="fc" id="L48">        checkNotNull(group, &quot;Group cannot be null&quot;);</span>
+<span class="fc" id="L49">        ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="fc" id="L50">                .put(ID, group.id().toString())</span>
+<span class="fc" id="L51">                .put(STATE, group.state().toString())</span>
+<span class="fc" id="L52">                .put(LIFE, group.life())</span>
+<span class="fc" id="L53">                .put(PACKETS, group.packets())</span>
+<span class="fc" id="L54">                .put(BYTES, group.bytes())</span>
+<span class="fc" id="L55">                .put(REFERENCE_COUNT, group.referenceCount())</span>
+<span class="fc" id="L56">                .put(TYPE, group.type().toString())</span>
+<span class="fc" id="L57">                .put(DEVICE_ID, group.deviceId().toString());</span>
+
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">        if (group.appId() != null) {</span>
+<span class="nc" id="L60">            result.put(APP_ID, group.appId().toString());</span>
+        }
+
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        if (group.appCookie() != null) {</span>
+<span class="nc" id="L64">            result.put(APP_COOKIE, group.appCookie().toString());</span>
+        }
+
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">        if (group.givenGroupId() != null) {</span>
+<span class="nc" id="L68">            result.put(GIVEN_GROUP_ID, group.givenGroupId());</span>
+        }
+
+<span class="fc" id="L71">        ArrayNode buckets = context.mapper().createArrayNode();</span>
+<span class="fc" id="L72">        group.buckets().buckets().forEach(bucket -&gt; {</span>
+<span class="fc" id="L73">                    ObjectNode bucketJson = context.codec(GroupBucket.class).encode(bucket, context);</span>
+<span class="fc" id="L74">                    buckets.add(bucketJson);</span>
+<span class="fc" id="L75">                });</span>
+<span class="fc" id="L76">        result.set(BUCKETS, buckets);</span>
+<span class="fc" id="L77">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,1708 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpUpdate.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpUpdate.java</span></div><h1>BgpUpdate.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.apache.commons.lang3.tuple.Pair;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.Ip4Prefix;
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.Ip6Prefix;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * A class for handling BGP UPDATE messages.
+ */
+final class BgpUpdate {
+<span class="fc" id="L38">    private static final Logger log = LoggerFactory.getLogger(BgpUpdate.class);</span>
+
+    /**
+     * Default constructor.
+     * &lt;p&gt;
+     * The constructor is private to prevent creating an instance of
+     * this utility class.
+     */
+<span class="nc" id="L46">    private BgpUpdate() {</span>
+<span class="nc" id="L47">    }</span>
+
+    /**
+     * Processes BGP UPDATE message.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param message the message to process
+     */
+    static void processBgpUpdate(BgpSession bgpSession,
+                                 ChannelHandlerContext ctx,
+                                 ChannelBuffer message) {
+<span class="fc" id="L59">        DecodedBgpRoutes decodedBgpRoutes = new DecodedBgpRoutes();</span>
+
+<span class="fc" id="L61">        int minLength =</span>
+            BgpConstants.BGP_UPDATE_MIN_LENGTH - BgpConstants.BGP_HEADER_LENGTH;
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        if (message.readableBytes() &lt; minLength) {</span>
+<span class="nc" id="L64">            log.debug(&quot;BGP RX UPDATE Error from {}: &quot; +</span>
+                      &quot;Message length {} too short. Must be at least {}&quot;,
+<span class="nc" id="L66">                      bgpSession.remoteInfo().address(),</span>
+<span class="nc" id="L67">                      message.readableBytes(), minLength);</span>
+            //
+            // ERROR: Bad Message Length
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L72">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L73">                BgpNotification.prepareBgpNotificationBadMessageLength(</span>
+<span class="nc" id="L74">                message.readableBytes() + BgpConstants.BGP_HEADER_LENGTH);</span>
+<span class="nc" id="L75">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L76">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L77">            return;</span>
+        }
+
+<span class="fc" id="L80">        log.debug(&quot;BGP RX UPDATE message from {}&quot;,</span>
+<span class="fc" id="L81">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // Parse the UPDATE message
+        //
+
+        //
+        // Parse the Withdrawn Routes
+        //
+<span class="fc" id="L90">        int withdrawnRoutesLength = message.readUnsignedShort();</span>
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">        if (withdrawnRoutesLength &gt; message.readableBytes()) {</span>
+            // ERROR: Malformed Attribute List
+<span class="nc" id="L93">            actionsBgpUpdateMalformedAttributeList(bgpSession, ctx);</span>
+<span class="nc" id="L94">            return;</span>
+        }
+<span class="fc" id="L96">        Collection&lt;Ip4Prefix&gt; withdrawnPrefixes = null;</span>
+        try {
+<span class="fc" id="L98">            withdrawnPrefixes = parsePackedIp4Prefixes(withdrawnRoutesLength,</span>
+                                                       message);
+<span class="nc" id="L100">        } catch (BgpMessage.BgpParseException e) {</span>
+            // ERROR: Invalid Network Field
+<span class="nc" id="L102">            log.debug(&quot;Exception parsing Withdrawn Prefixes from BGP peer {}: &quot;,</span>
+<span class="nc" id="L103">                      bgpSession.remoteInfo().bgpId(), e);</span>
+<span class="nc" id="L104">            actionsBgpUpdateInvalidNetworkField(bgpSession, ctx);</span>
+<span class="nc" id="L105">            return;</span>
+<span class="fc" id="L106">        }</span>
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        for (Ip4Prefix prefix : withdrawnPrefixes) {</span>
+<span class="fc" id="L108">            log.debug(&quot;BGP RX UPDATE message WITHDRAWN from {}: {}&quot;,</span>
+<span class="fc" id="L109">                      bgpSession.remoteInfo().address(), prefix);</span>
+<span class="fc" id="L110">            BgpRouteEntry bgpRouteEntry = bgpSession.findBgpRoute(prefix);</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">            if (bgpRouteEntry != null) {</span>
+<span class="fc" id="L112">                decodedBgpRoutes.deletedUnicastRoutes4.put(prefix,</span>
+                                                           bgpRouteEntry);
+            }
+<span class="fc" id="L115">        }</span>
+
+        //
+        // Parse the Path Attributes
+        //
+        try {
+<span class="fc" id="L121">            parsePathAttributes(bgpSession, ctx, message, decodedBgpRoutes);</span>
+<span class="nc" id="L122">        } catch (BgpMessage.BgpParseException e) {</span>
+<span class="nc" id="L123">            log.debug(&quot;Exception parsing Path Attributes from BGP peer {}: &quot;,</span>
+<span class="nc" id="L124">                      bgpSession.remoteInfo().bgpId(), e);</span>
+            // NOTE: The session was already closed, so nothing else to do
+<span class="nc" id="L126">            return;</span>
+<span class="fc" id="L127">        }</span>
+
+        //
+        // Update the BGP RIB-IN
+        //
+        for (Ip4Prefix ip4Prefix :
+<span class="fc bfc" id="L133" title="All 2 branches covered.">                 decodedBgpRoutes.deletedUnicastRoutes4.keySet()) {</span>
+<span class="fc" id="L134">            bgpSession.removeBgpRoute(ip4Prefix);</span>
+<span class="fc" id="L135">        }</span>
+        //
+        for (BgpRouteEntry bgpRouteEntry :
+<span class="fc bfc" id="L138" title="All 2 branches covered.">                 decodedBgpRoutes.addedUnicastRoutes4.values()) {</span>
+<span class="fc" id="L139">            bgpSession.addBgpRoute(bgpRouteEntry);</span>
+<span class="fc" id="L140">        }</span>
+        //
+        for (Ip6Prefix ip6Prefix :
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">                 decodedBgpRoutes.deletedUnicastRoutes6.keySet()) {</span>
+<span class="nc" id="L144">            bgpSession.removeBgpRoute(ip6Prefix);</span>
+<span class="nc" id="L145">        }</span>
+        //
+        for (BgpRouteEntry bgpRouteEntry :
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">                 decodedBgpRoutes.addedUnicastRoutes6.values()) {</span>
+<span class="nc" id="L149">            bgpSession.addBgpRoute(bgpRouteEntry);</span>
+<span class="nc" id="L150">        }</span>
+
+        //
+        // Push the updates to the BGP Merged RIB
+        //
+<span class="fc" id="L155">        BgpRouteSelector bgpRouteSelector =</span>
+<span class="fc" id="L156">            bgpSession.getBgpSessionManager().getBgpRouteSelector();</span>
+<span class="fc" id="L157">        bgpRouteSelector.routeUpdates(bgpSession,</span>
+<span class="fc" id="L158">                                decodedBgpRoutes.addedUnicastRoutes4.values(),</span>
+<span class="fc" id="L159">                                decodedBgpRoutes.deletedUnicastRoutes4.values());</span>
+<span class="fc" id="L160">        bgpRouteSelector.routeUpdates(bgpSession,</span>
+<span class="fc" id="L161">                                decodedBgpRoutes.addedUnicastRoutes6.values(),</span>
+<span class="fc" id="L162">                                decodedBgpRoutes.deletedUnicastRoutes6.values());</span>
+
+        // Start the Session Timeout timer
+<span class="fc" id="L165">        bgpSession.restartSessionTimeoutTimer(ctx);</span>
+<span class="fc" id="L166">    }</span>
+
+    /**
+     * Parse BGP Path Attributes from the BGP UPDATE message.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param message the message to parse
+     * @param decodedBgpRoutes the container to store the decoded BGP Route
+     * Entries. It might already contain some route entries such as withdrawn
+     * IPv4 prefixes
+     * @throws BgpMessage.BgpParseException
+     */
+    // CHECKSTYLE IGNORE MethodLength FOR NEXT 300 LINES
+    private static void parsePathAttributes(
+                                        BgpSession bgpSession,
+                                        ChannelHandlerContext ctx,
+                                        ChannelBuffer message,
+                                        DecodedBgpRoutes decodedBgpRoutes)
+        throws BgpMessage.BgpParseException {
+
+        //
+        // Parsed values
+        //
+<span class="fc" id="L190">        Short origin = -1;                      // Mandatory</span>
+<span class="fc" id="L191">        BgpRouteEntry.AsPath asPath = null;     // Mandatory</span>
+        // Legacy NLRI (RFC 4271). Mandatory NEXT_HOP if legacy NLRI is used
+<span class="fc" id="L193">        MpNlri legacyNlri = new MpNlri(</span>
+                BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4,
+                                       BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST);
+<span class="fc" id="L196">        long multiExitDisc =                    // Optional</span>
+            BgpConstants.Update.MultiExitDisc.LOWEST_MULTI_EXIT_DISC;
+<span class="fc" id="L198">        Long localPref = null;                  // Mandatory</span>
+<span class="fc" id="L199">        Long aggregatorAsNumber = null;         // Optional: unused</span>
+<span class="fc" id="L200">        Ip4Address aggregatorIpAddress = null;  // Optional: unused</span>
+<span class="fc" id="L201">        Collection&lt;MpNlri&gt; mpNlriReachList = new ArrayList&lt;&gt;();   // Optional</span>
+<span class="fc" id="L202">        Collection&lt;MpNlri&gt; mpNlriUnreachList = new ArrayList&lt;&gt;(); // Optional</span>
+
+        //
+        // Get and verify the Path Attributes Length
+        //
+<span class="fc" id="L207">        int pathAttributeLength = message.readUnsignedShort();</span>
+<span class="pc bpc" id="L208" title="1 of 2 branches missed.">        if (pathAttributeLength &gt; message.readableBytes()) {</span>
+            // ERROR: Malformed Attribute List
+<span class="nc" id="L210">            actionsBgpUpdateMalformedAttributeList(bgpSession, ctx);</span>
+<span class="nc" id="L211">            String errorMsg = &quot;Malformed Attribute List&quot;;</span>
+<span class="nc" id="L212">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="pc bpc" id="L214" title="1 of 2 branches missed.">        if (pathAttributeLength == 0) {</span>
+<span class="nc" id="L215">            return;</span>
+        }
+
+        //
+        // Parse the Path Attributes
+        //
+<span class="fc" id="L221">        int pathAttributeEnd = message.readerIndex() + pathAttributeLength;</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        while (message.readerIndex() &lt; pathAttributeEnd) {</span>
+<span class="fc" id="L223">            int attrFlags = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">            if (message.readerIndex() &gt;= pathAttributeEnd) {</span>
+                // ERROR: Malformed Attribute List
+<span class="nc" id="L226">                actionsBgpUpdateMalformedAttributeList(bgpSession, ctx);</span>
+<span class="nc" id="L227">                String errorMsg = &quot;Malformed Attribute List&quot;;</span>
+<span class="nc" id="L228">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+<span class="fc" id="L230">            int attrTypeCode = message.readUnsignedByte();</span>
+
+            // The Attribute Flags
+<span class="fc bfc" id="L233" title="All 2 branches covered.">            boolean optionalBit =       ((0x80 &amp; attrFlags) != 0);</span>
+<span class="fc bfc" id="L234" title="All 2 branches covered.">            boolean transitiveBit =     ((0x40 &amp; attrFlags) != 0);</span>
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">            boolean partialBit =        ((0x20 &amp; attrFlags) != 0);</span>
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">            boolean extendedLengthBit = ((0x10 &amp; attrFlags) != 0);</span>
+
+            // The Attribute Length
+<span class="fc" id="L239">            int attrLen = 0;</span>
+<span class="fc" id="L240">            int attrLenOctets = 1;</span>
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">            if (extendedLengthBit) {</span>
+<span class="nc" id="L242">                attrLenOctets = 2;</span>
+            }
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">            if (message.readerIndex() + attrLenOctets &gt; pathAttributeEnd) {</span>
+                // ERROR: Malformed Attribute List
+<span class="nc" id="L246">                actionsBgpUpdateMalformedAttributeList(bgpSession, ctx);</span>
+<span class="nc" id="L247">                String errorMsg = &quot;Malformed Attribute List&quot;;</span>
+<span class="nc" id="L248">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+<span class="pc bpc" id="L250" title="1 of 2 branches missed.">            if (extendedLengthBit) {</span>
+<span class="nc" id="L251">                attrLen = message.readUnsignedShort();</span>
+            } else {
+<span class="fc" id="L253">                attrLen = message.readUnsignedByte();</span>
+            }
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">            if (message.readerIndex() + attrLen &gt; pathAttributeEnd) {</span>
+                // ERROR: Malformed Attribute List
+<span class="nc" id="L257">                actionsBgpUpdateMalformedAttributeList(bgpSession, ctx);</span>
+<span class="nc" id="L258">                String errorMsg = &quot;Malformed Attribute List&quot;;</span>
+<span class="nc" id="L259">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+
+            // Verify the Attribute Flags
+<span class="fc" id="L263">            verifyBgpUpdateAttributeFlags(bgpSession, ctx, attrTypeCode,</span>
+                                          attrLen, attrFlags, message);
+
+            //
+            // Extract the Attribute Value based on the Attribute Type Code
+            //
+<span class="pc bpc" id="L269" title="5 of 10 branches missed.">            switch (attrTypeCode) {</span>
+
+            case BgpConstants.Update.Origin.TYPE:
+                // Attribute Type Code ORIGIN
+<span class="fc" id="L273">                origin = parseAttributeTypeOrigin(bgpSession, ctx,</span>
+                                                  attrTypeCode, attrLen,
+                                                  attrFlags, message);
+<span class="fc" id="L276">                break;</span>
+
+            case BgpConstants.Update.AsPath.TYPE:
+                // Attribute Type Code AS_PATH
+<span class="fc" id="L280">                asPath = parseAttributeTypeAsPath(bgpSession, ctx,</span>
+                                                  attrTypeCode, attrLen,
+                                                  attrFlags, message);
+<span class="fc" id="L283">                break;</span>
+
+            case BgpConstants.Update.NextHop.TYPE:
+                // Attribute Type Code NEXT_HOP
+<span class="fc" id="L287">                legacyNlri.nextHop4 =</span>
+<span class="fc" id="L288">                    parseAttributeTypeNextHop(bgpSession, ctx,</span>
+                                              attrTypeCode, attrLen,
+                                              attrFlags, message);
+<span class="fc" id="L291">                break;</span>
+
+            case BgpConstants.Update.MultiExitDisc.TYPE:
+                // Attribute Type Code MULTI_EXIT_DISC
+<span class="fc" id="L295">                multiExitDisc =</span>
+<span class="fc" id="L296">                    parseAttributeTypeMultiExitDisc(bgpSession, ctx,</span>
+                                                    attrTypeCode, attrLen,
+                                                    attrFlags, message);
+<span class="fc" id="L299">                break;</span>
+
+            case BgpConstants.Update.LocalPref.TYPE:
+                // Attribute Type Code LOCAL_PREF
+<span class="fc" id="L303">                localPref =</span>
+<span class="fc" id="L304">                    parseAttributeTypeLocalPref(bgpSession, ctx,</span>
+                                                attrTypeCode, attrLen,
+                                                attrFlags, message);
+<span class="fc" id="L307">                break;</span>
+
+            case BgpConstants.Update.AtomicAggregate.TYPE:
+                // Attribute Type Code ATOMIC_AGGREGATE
+<span class="nc" id="L311">                parseAttributeTypeAtomicAggregate(bgpSession, ctx,</span>
+                                                  attrTypeCode, attrLen,
+                                                  attrFlags, message);
+                // Nothing to do: this attribute is primarily informational
+<span class="nc" id="L315">                break;</span>
+
+            case BgpConstants.Update.Aggregator.TYPE:
+                // Attribute Type Code AGGREGATOR
+<span class="nc" id="L319">                Pair&lt;Long, Ip4Address&gt; aggregator =</span>
+<span class="nc" id="L320">                    parseAttributeTypeAggregator(bgpSession, ctx,</span>
+                                                 attrTypeCode, attrLen,
+                                                 attrFlags, message);
+<span class="nc" id="L323">                aggregatorAsNumber = aggregator.getLeft();</span>
+<span class="nc" id="L324">                aggregatorIpAddress = aggregator.getRight();</span>
+<span class="nc" id="L325">                break;</span>
+
+            case BgpConstants.Update.MpReachNlri.TYPE:
+                // Attribute Type Code MP_REACH_NLRI
+<span class="nc" id="L329">                MpNlri mpNlriReach =</span>
+<span class="nc" id="L330">                    parseAttributeTypeMpReachNlri(bgpSession, ctx,</span>
+                                                  attrTypeCode,
+                                                  attrLen,
+                                                  attrFlags, message);
+<span class="nc bnc" id="L334" title="All 2 branches missed.">                if (mpNlriReach != null) {</span>
+<span class="nc" id="L335">                    mpNlriReachList.add(mpNlriReach);</span>
+                }
+                break;
+
+            case BgpConstants.Update.MpUnreachNlri.TYPE:
+                // Attribute Type Code MP_UNREACH_NLRI
+<span class="nc" id="L341">                MpNlri mpNlriUnreach =</span>
+<span class="nc" id="L342">                    parseAttributeTypeMpUnreachNlri(bgpSession, ctx,</span>
+                                                    attrTypeCode, attrLen,
+                                                    attrFlags, message);
+<span class="nc bnc" id="L345" title="All 2 branches missed.">                if (mpNlriUnreach != null) {</span>
+<span class="nc" id="L346">                    mpNlriUnreachList.add(mpNlriUnreach);</span>
+                }
+                break;
+
+            default:
+                // NOTE: Parse any new Attribute Types if needed
+<span class="nc bnc" id="L352" title="All 2 branches missed.">                if (!optionalBit) {</span>
+                    // ERROR: Unrecognized Well-known Attribute
+<span class="nc" id="L354">                    actionsBgpUpdateUnrecognizedWellKnownAttribute(</span>
+                        bgpSession, ctx, attrTypeCode, attrLen, attrFlags,
+                        message);
+<span class="nc" id="L357">                    String errorMsg = &quot;Unrecognized Well-known Attribute: &quot; +</span>
+                        attrTypeCode;
+<span class="nc" id="L359">                    throw new BgpMessage.BgpParseException(errorMsg);</span>
+                }
+
+                // Skip the data from the unrecognized attribute
+<span class="nc" id="L363">                log.debug(&quot;BGP RX UPDATE message from {}: &quot; +</span>
+                          &quot;Unrecognized Attribute Type {}&quot;,
+<span class="nc" id="L365">                          bgpSession.remoteInfo().address(), attrTypeCode);</span>
+<span class="nc" id="L366">                message.skipBytes(attrLen);</span>
+                break;
+            }
+<span class="fc" id="L369">        }</span>
+
+        //
+        // Parse the NLRI (Network Layer Reachability Information)
+        //
+<span class="fc" id="L374">        int nlriLength = message.readableBytes();</span>
+        try {
+<span class="fc" id="L376">            Collection&lt;Ip4Prefix&gt; addedPrefixes4 =</span>
+<span class="fc" id="L377">                parsePackedIp4Prefixes(nlriLength, message);</span>
+            // Store it inside the legacy NLRI wrapper
+<span class="fc" id="L379">            legacyNlri.nlri4 = addedPrefixes4;</span>
+<span class="nc" id="L380">        } catch (BgpMessage.BgpParseException e) {</span>
+            // ERROR: Invalid Network Field
+<span class="nc" id="L382">            log.debug(&quot;Exception parsing NLRI from BGP peer {}: &quot;,</span>
+<span class="nc" id="L383">                      bgpSession.remoteInfo().bgpId(), e);</span>
+<span class="nc" id="L384">            actionsBgpUpdateInvalidNetworkField(bgpSession, ctx);</span>
+            // Rethrow the exception
+<span class="nc" id="L386">            throw e;</span>
+<span class="fc" id="L387">        }</span>
+
+        // Verify the Well-known Attributes
+<span class="fc" id="L390">        verifyBgpUpdateWellKnownAttributes(bgpSession, ctx, origin, asPath,</span>
+                                           localPref, legacyNlri,
+                                           mpNlriReachList);
+
+        //
+        // Generate the deleted routes
+        //
+<span class="pc bpc" id="L397" title="1 of 2 branches missed.">        for (MpNlri mpNlri : mpNlriUnreachList) {</span>
+            BgpRouteEntry bgpRouteEntry;
+
+            // The deleted IPv4 routes
+<span class="nc bnc" id="L401" title="All 2 branches missed.">            for (Ip4Prefix prefix : mpNlri.nlri4) {</span>
+<span class="nc" id="L402">                bgpRouteEntry = bgpSession.findBgpRoute(prefix);</span>
+<span class="nc bnc" id="L403" title="All 2 branches missed.">                if (bgpRouteEntry != null) {</span>
+<span class="nc" id="L404">                    decodedBgpRoutes.deletedUnicastRoutes4.put(prefix,</span>
+                                                               bgpRouteEntry);
+                }
+<span class="nc" id="L407">            }</span>
+
+            // The deleted IPv6 routes
+<span class="nc bnc" id="L410" title="All 2 branches missed.">            for (Ip6Prefix prefix : mpNlri.nlri6) {</span>
+<span class="nc" id="L411">                bgpRouteEntry = bgpSession.findBgpRoute(prefix);</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">                if (bgpRouteEntry != null) {</span>
+<span class="nc" id="L413">                    decodedBgpRoutes.deletedUnicastRoutes6.put(prefix,</span>
+                                                               bgpRouteEntry);
+                }
+<span class="nc" id="L416">            }</span>
+<span class="nc" id="L417">        }</span>
+
+        //
+        // Generate the added routes
+        //
+<span class="fc" id="L422">        mpNlriReachList.add(legacyNlri);</span>
+<span class="fc bfc" id="L423" title="All 2 branches covered.">        for (MpNlri mpNlri : mpNlriReachList) {</span>
+            BgpRouteEntry bgpRouteEntry;
+
+            // The added IPv4 routes
+<span class="fc bfc" id="L427" title="All 2 branches covered.">            for (Ip4Prefix prefix : mpNlri.nlri4) {</span>
+<span class="fc" id="L428">                bgpRouteEntry =</span>
+<span class="fc" id="L429">                    new BgpRouteEntry(bgpSession, prefix, mpNlri.nextHop4,</span>
+<span class="fc" id="L430">                                      origin.byteValue(), asPath, localPref);</span>
+<span class="fc" id="L431">                bgpRouteEntry.setMultiExitDisc(multiExitDisc);</span>
+<span class="pc bpc" id="L432" title="1 of 2 branches missed.">                if (bgpRouteEntry.hasAsPathLoop(bgpSession.localInfo().asNumber())) {</span>
+<span class="nc" id="L433">                    log.debug(&quot;BGP RX UPDATE message IGNORED from {}: {} &quot; +</span>
+                              &quot;nextHop {}: contains AS Path loop&quot;,
+<span class="nc" id="L435">                              bgpSession.remoteInfo().address(), prefix,</span>
+<span class="nc" id="L436">                              mpNlri.nextHop4);</span>
+<span class="nc" id="L437">                    continue;</span>
+                } else {
+<span class="fc" id="L439">                    log.debug(&quot;BGP RX UPDATE message ADDED from {}: {} nextHop {}&quot;,</span>
+<span class="fc" id="L440">                              bgpSession.remoteInfo().address(), prefix,</span>
+<span class="fc" id="L441">                              mpNlri.nextHop4);</span>
+                }
+                // Remove from the collection of deleted routes
+<span class="fc" id="L444">                decodedBgpRoutes.deletedUnicastRoutes4.remove(prefix);</span>
+<span class="fc" id="L445">                decodedBgpRoutes.addedUnicastRoutes4.put(prefix,</span>
+                                                         bgpRouteEntry);
+<span class="fc" id="L447">            }</span>
+
+            // The added IPv6 routes
+<span class="pc bpc" id="L450" title="1 of 2 branches missed.">            for (Ip6Prefix prefix : mpNlri.nlri6) {</span>
+<span class="nc" id="L451">                bgpRouteEntry =</span>
+<span class="nc" id="L452">                    new BgpRouteEntry(bgpSession, prefix, mpNlri.nextHop6,</span>
+<span class="nc" id="L453">                                      origin.byteValue(), asPath, localPref);</span>
+<span class="nc" id="L454">                bgpRouteEntry.setMultiExitDisc(multiExitDisc);</span>
+<span class="nc bnc" id="L455" title="All 2 branches missed.">                if (bgpRouteEntry.hasAsPathLoop(bgpSession.localInfo().asNumber())) {</span>
+<span class="nc" id="L456">                    log.debug(&quot;BGP RX UPDATE message IGNORED from {}: {} &quot; +</span>
+                              &quot;nextHop {}: contains AS Path loop&quot;,
+<span class="nc" id="L458">                              bgpSession.remoteInfo().address(), prefix,</span>
+<span class="nc" id="L459">                              mpNlri.nextHop6);</span>
+<span class="nc" id="L460">                    continue;</span>
+                } else {
+<span class="nc" id="L462">                    log.debug(&quot;BGP RX UPDATE message ADDED from {}: {} nextHop {}&quot;,</span>
+<span class="nc" id="L463">                              bgpSession.remoteInfo().address(), prefix,</span>
+<span class="nc" id="L464">                              mpNlri.nextHop6);</span>
+                }
+                // Remove from the collection of deleted routes
+<span class="nc" id="L467">                decodedBgpRoutes.deletedUnicastRoutes6.remove(prefix);</span>
+<span class="nc" id="L468">                decodedBgpRoutes.addedUnicastRoutes6.put(prefix,</span>
+                                                         bgpRouteEntry);
+<span class="nc" id="L470">            }</span>
+<span class="fc" id="L471">        }</span>
+<span class="fc" id="L472">    }</span>
+
+    /**
+     * Verifies BGP UPDATE Well-known Attributes.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param origin the ORIGIN well-known mandatory attribute
+     * @param asPath the AS_PATH well-known mandatory attribute
+     * @param localPref the LOCAL_PREF required attribute
+     * @param legacyNlri the legacy NLRI. Encapsulates the NEXT_HOP well-known
+     * mandatory attribute (mandatory if legacy NLRI is used).
+     * @param mpNlriReachList the Multiprotocol NLRI attributes
+     * @throws BgpMessage.BgpParseException
+     */
+    private static void verifyBgpUpdateWellKnownAttributes(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                Short origin,
+                                BgpRouteEntry.AsPath asPath,
+                                Long localPref,
+                                MpNlri legacyNlri,
+                                Collection&lt;MpNlri&gt; mpNlriReachList)
+        throws BgpMessage.BgpParseException {
+<span class="fc" id="L496">        boolean hasNlri = false;</span>
+<span class="fc" id="L497">        boolean hasLegacyNlri = false;</span>
+
+        //
+        // Convenience flags that are used to check for missing attributes.
+        //
+        // NOTE: The hasLegacyNlri flag is always set to true if the
+        // Multiprotocol Extensions are not enabled, even if the UPDATE
+        // message doesn't contain the legacy NLRI (per RFC 4271).
+        //
+<span class="pc bpc" id="L506" title="1 of 2 branches missed.">        if (!bgpSession.mpExtensions()) {</span>
+<span class="fc" id="L507">            hasNlri = true;</span>
+<span class="fc" id="L508">            hasLegacyNlri = true;</span>
+        } else {
+<span class="nc bnc" id="L510" title="All 2 branches missed.">            if (!legacyNlri.nlri4.isEmpty()) {</span>
+<span class="nc" id="L511">                hasNlri = true;</span>
+<span class="nc" id="L512">                hasLegacyNlri = true;</span>
+            }
+<span class="nc bnc" id="L514" title="All 2 branches missed.">            if (!mpNlriReachList.isEmpty()) {</span>
+<span class="nc" id="L515">                hasNlri = true;</span>
+            }
+        }
+
+        //
+        // Check for Missing Well-known Attributes
+        //
+<span class="pc bpc" id="L522" title="3 of 6 branches missed.">        if (hasNlri &amp;&amp; ((origin == null) || (origin == -1))) {</span>
+            // Missing Attribute Type Code ORIGIN
+<span class="nc" id="L524">            int type = BgpConstants.Update.Origin.TYPE;</span>
+<span class="nc" id="L525">            actionsBgpUpdateMissingWellKnownAttribute(bgpSession, ctx, type);</span>
+<span class="nc" id="L526">            String errorMsg = &quot;Missing Well-known Attribute: ORIGIN&quot;;</span>
+<span class="nc" id="L527">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="pc bpc" id="L529" title="2 of 4 branches missed.">        if (hasNlri &amp;&amp; (asPath == null)) {</span>
+            // Missing Attribute Type Code AS_PATH
+<span class="nc" id="L531">            int type = BgpConstants.Update.AsPath.TYPE;</span>
+<span class="nc" id="L532">            actionsBgpUpdateMissingWellKnownAttribute(bgpSession, ctx, type);</span>
+<span class="nc" id="L533">            String errorMsg = &quot;Missing Well-known Attribute: AS_PATH&quot;;</span>
+<span class="nc" id="L534">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="pc bpc" id="L536" title="2 of 4 branches missed.">        if (hasNlri &amp;&amp; (localPref == null)) {</span>
+            // Missing Attribute Type Code LOCAL_PREF
+            // NOTE: Required for iBGP
+<span class="nc" id="L539">            int type = BgpConstants.Update.LocalPref.TYPE;</span>
+<span class="nc" id="L540">            actionsBgpUpdateMissingWellKnownAttribute(bgpSession, ctx, type);</span>
+<span class="nc" id="L541">            String errorMsg = &quot;Missing Well-known Attribute: LOCAL_PREF&quot;;</span>
+<span class="nc" id="L542">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="pc bpc" id="L544" title="2 of 4 branches missed.">        if (hasLegacyNlri &amp;&amp; (legacyNlri.nextHop4 == null)) {</span>
+            // Missing Attribute Type Code NEXT_HOP
+<span class="nc" id="L546">            int type = BgpConstants.Update.NextHop.TYPE;</span>
+<span class="nc" id="L547">            actionsBgpUpdateMissingWellKnownAttribute(bgpSession, ctx, type);</span>
+<span class="nc" id="L548">            String errorMsg = &quot;Missing Well-known Attribute: NEXT_HOP&quot;;</span>
+<span class="nc" id="L549">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="fc" id="L551">    }</span>
+
+    /**
+     * Verifies the BGP UPDATE Attribute Flags.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @throws BgpMessage.BgpParseException
+     */
+    private static void verifyBgpUpdateAttributeFlags(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        //
+        // Assign the Attribute Type Name and the Well-known flag
+        //
+<span class="fc" id="L576">        String typeName = &quot;UNKNOWN&quot;;</span>
+<span class="fc" id="L577">        boolean isWellKnown = false;</span>
+<span class="pc bpc" id="L578" title="5 of 10 branches missed.">        switch (attrTypeCode) {</span>
+        case BgpConstants.Update.Origin.TYPE:
+<span class="fc" id="L580">            isWellKnown = true;</span>
+<span class="fc" id="L581">            typeName = &quot;ORIGIN&quot;;</span>
+<span class="fc" id="L582">            break;</span>
+        case BgpConstants.Update.AsPath.TYPE:
+<span class="fc" id="L584">            isWellKnown = true;</span>
+<span class="fc" id="L585">            typeName = &quot;AS_PATH&quot;;</span>
+<span class="fc" id="L586">            break;</span>
+        case BgpConstants.Update.NextHop.TYPE:
+<span class="fc" id="L588">            isWellKnown = true;</span>
+<span class="fc" id="L589">            typeName = &quot;NEXT_HOP&quot;;</span>
+<span class="fc" id="L590">            break;</span>
+        case BgpConstants.Update.MultiExitDisc.TYPE:
+<span class="fc" id="L592">            isWellKnown = false;</span>
+<span class="fc" id="L593">            typeName = &quot;MULTI_EXIT_DISC&quot;;</span>
+<span class="fc" id="L594">            break;</span>
+        case BgpConstants.Update.LocalPref.TYPE:
+<span class="fc" id="L596">            isWellKnown = true;</span>
+<span class="fc" id="L597">            typeName = &quot;LOCAL_PREF&quot;;</span>
+<span class="fc" id="L598">            break;</span>
+        case BgpConstants.Update.AtomicAggregate.TYPE:
+<span class="nc" id="L600">            isWellKnown = true;</span>
+<span class="nc" id="L601">            typeName = &quot;ATOMIC_AGGREGATE&quot;;</span>
+<span class="nc" id="L602">            break;</span>
+        case BgpConstants.Update.Aggregator.TYPE:
+<span class="nc" id="L604">            isWellKnown = false;</span>
+<span class="nc" id="L605">            typeName = &quot;AGGREGATOR&quot;;</span>
+<span class="nc" id="L606">            break;</span>
+        case BgpConstants.Update.MpReachNlri.TYPE:
+<span class="nc" id="L608">            isWellKnown = false;</span>
+<span class="nc" id="L609">            typeName = &quot;MP_REACH_NLRI&quot;;</span>
+<span class="nc" id="L610">            break;</span>
+        case BgpConstants.Update.MpUnreachNlri.TYPE:
+<span class="nc" id="L612">            isWellKnown = false;</span>
+<span class="nc" id="L613">            typeName = &quot;MP_UNREACH_NLRI&quot;;</span>
+<span class="nc" id="L614">            break;</span>
+        default:
+<span class="nc" id="L616">            isWellKnown = false;</span>
+<span class="nc" id="L617">            typeName = &quot;UNKNOWN(&quot; + attrTypeCode + &quot;)&quot;;</span>
+            break;
+        }
+
+        //
+        // Verify the Attribute Flags
+        //
+<span class="fc bfc" id="L624" title="All 2 branches covered.">        boolean optionalBit =       ((0x80 &amp; attrFlags) != 0);</span>
+<span class="fc bfc" id="L625" title="All 2 branches covered.">        boolean transitiveBit =     ((0x40 &amp; attrFlags) != 0);</span>
+<span class="pc bpc" id="L626" title="1 of 2 branches missed.">        boolean partialBit =        ((0x20 &amp; attrFlags) != 0);</span>
+<span class="pc bpc" id="L627" title="5 of 18 branches missed.">        if ((isWellKnown &amp;&amp; optionalBit) ||</span>
+            (isWellKnown &amp;&amp; (!transitiveBit)) ||
+            (isWellKnown &amp;&amp; partialBit) ||
+            (optionalBit &amp;&amp; (!transitiveBit) &amp;&amp; partialBit)) {
+            //
+            // ERROR: The Optional bit cannot be set for Well-known attributes
+            // ERROR: The Transtive bit MUST be 1 for well-known attributes
+            // ERROR: The Partial bit MUST be 0 for well-known attributes
+            // ERROR: The Partial bit MUST be 0 for optional non-transitive
+            //        attributes
+            //
+<span class="nc" id="L638">            actionsBgpUpdateAttributeFlagsError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L640">            String errorMsg = &quot;Attribute Flags Error for &quot; + typeName + &quot;: &quot; +</span>
+                attrFlags;
+<span class="nc" id="L642">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="fc" id="L644">    }</span>
+
+    /**
+     * Parses BGP UPDATE Attribute Type ORIGIN.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed ORIGIN value
+     * @throws BgpMessage.BgpParseException
+     */
+    private static short parseAttributeTypeOrigin(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        // Check the Attribute Length
+<span class="pc bpc" id="L668" title="1 of 2 branches missed.">        if (attrLen != BgpConstants.Update.Origin.LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L670">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L672">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L673">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="fc" id="L676">        message.markReaderIndex();</span>
+<span class="fc" id="L677">        short origin = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L678" title="1 of 2 branches missed.">        switch (origin) {</span>
+        case BgpConstants.Update.Origin.IGP:
+            // FALLTHROUGH
+        case BgpConstants.Update.Origin.EGP:
+            // FALLTHROUGH
+        case BgpConstants.Update.Origin.INCOMPLETE:
+<span class="fc" id="L684">            break;</span>
+        default:
+            // ERROR: Invalid ORIGIN Attribute
+<span class="nc" id="L687">            message.resetReaderIndex();</span>
+<span class="nc" id="L688">            actionsBgpUpdateInvalidOriginAttribute(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message,
+                origin);
+<span class="nc" id="L691">            String errorMsg = &quot;Invalid ORIGIN Attribute: &quot; + origin;</span>
+<span class="nc" id="L692">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="fc" id="L695">        return origin;</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute AS Path.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed AS Path
+     * @throws BgpMessage.BgpParseException
+     */
+    private static BgpRouteEntry.AsPath parseAttributeTypeAsPath(
+                                                BgpSession bgpSession,
+                                                ChannelHandlerContext ctx,
+                                                int attrTypeCode,
+                                                int attrLen,
+                                                int attrFlags,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+<span class="fc" id="L718">        ArrayList&lt;BgpRouteEntry.PathSegment&gt; pathSegments = new ArrayList&lt;&gt;();</span>
+
+        //
+        // Parse the message
+        //
+<span class="fc bfc" id="L723" title="All 2 branches covered.">        while (attrLen &gt; 0) {</span>
+<span class="pc bpc" id="L724" title="1 of 2 branches missed.">            if (attrLen &lt; 2) {</span>
+                // ERROR: Malformed AS_PATH
+<span class="nc" id="L726">                actionsBgpUpdateMalformedAsPath(bgpSession, ctx);</span>
+<span class="nc" id="L727">                String errorMsg = &quot;Malformed AS Path&quot;;</span>
+<span class="nc" id="L728">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+            // Get the Path Segment Type and Length (in number of ASes)
+<span class="fc" id="L731">            short pathSegmentType = message.readUnsignedByte();</span>
+<span class="fc" id="L732">            short pathSegmentLength = message.readUnsignedByte();</span>
+<span class="fc" id="L733">            attrLen -= 2;</span>
+
+            // Verify the Path Segment Type
+<span class="pc bpc" id="L736" title="1 of 2 branches missed.">            switch (pathSegmentType) {</span>
+            case BgpConstants.Update.AsPath.AS_SET:
+                // FALLTHROUGH
+            case BgpConstants.Update.AsPath.AS_SEQUENCE:
+                // FALLTHROUGH
+            case BgpConstants.Update.AsPath.AS_CONFED_SEQUENCE:
+                // FALLTHROUGH
+            case BgpConstants.Update.AsPath.AS_CONFED_SET:
+<span class="fc" id="L744">                break;</span>
+            default:
+                // ERROR: Invalid Path Segment Type
+                //
+                // NOTE: The BGP Spec (RFC 4271) doesn't contain Error Subcode
+                // for &quot;Invalid Path Segment Type&quot;, hence we return
+                // the error as &quot;Malformed AS_PATH&quot;.
+                //
+<span class="nc" id="L752">                actionsBgpUpdateMalformedAsPath(bgpSession, ctx);</span>
+<span class="nc" id="L753">                String errorMsg =</span>
+                    &quot;Invalid AS Path Segment Type: &quot; + pathSegmentType;
+<span class="nc" id="L755">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+
+            // 4-octet AS number handling.
+            int asPathLen;
+<span class="pc bpc" id="L760" title="1 of 2 branches missed.">            if (bgpSession.isAs4OctetCapable()) {</span>
+<span class="nc" id="L761">                asPathLen = BgpConstants.Update.AS_4OCTET_LENGTH;</span>
+            } else {
+<span class="fc" id="L763">                asPathLen = BgpConstants.Update.AS_LENGTH;</span>
+            }
+
+            // Parse the AS numbers
+<span class="pc bpc" id="L767" title="1 of 2 branches missed.">            if (asPathLen * pathSegmentLength &gt; attrLen) {</span>
+                // ERROR: Malformed AS_PATH
+<span class="nc" id="L769">                actionsBgpUpdateMalformedAsPath(bgpSession, ctx);</span>
+<span class="nc" id="L770">                String errorMsg = &quot;Malformed AS Path&quot;;</span>
+<span class="nc" id="L771">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+<span class="fc" id="L773">            attrLen -= (asPathLen * pathSegmentLength);</span>
+<span class="fc" id="L774">            ArrayList&lt;Long&gt; segmentAsNumbers = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L775" title="All 2 branches covered.">            while (pathSegmentLength-- &gt; 0) {</span>
+                long asNumber;
+<span class="pc bpc" id="L777" title="1 of 2 branches missed.">                if (asPathLen == BgpConstants.Update.AS_4OCTET_LENGTH) {</span>
+<span class="nc" id="L778">                    asNumber = message.readUnsignedInt();</span>
+                } else {
+<span class="fc" id="L780">                    asNumber = message.readUnsignedShort();</span>
+                }
+<span class="fc" id="L782">                segmentAsNumbers.add(asNumber);</span>
+<span class="fc" id="L783">            }</span>
+
+<span class="fc" id="L785">            BgpRouteEntry.PathSegment pathSegment =</span>
+                new BgpRouteEntry.PathSegment((byte) pathSegmentType,
+                                              segmentAsNumbers);
+<span class="fc" id="L788">            pathSegments.add(pathSegment);</span>
+<span class="fc" id="L789">        }</span>
+
+<span class="fc" id="L791">        return new BgpRouteEntry.AsPath(pathSegments);</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute Type NEXT_HOP.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed NEXT_HOP value
+     * @throws BgpMessage.BgpParseException
+     */
+    private static Ip4Address parseAttributeTypeNextHop(
+                                        BgpSession bgpSession,
+                                        ChannelHandlerContext ctx,
+                                        int attrTypeCode,
+                                        int attrLen,
+                                        int attrFlags,
+                                        ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        // Check the Attribute Length
+<span class="pc bpc" id="L816" title="1 of 2 branches missed.">        if (attrLen != BgpConstants.Update.NextHop.LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L818">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L820">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L821">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="fc" id="L824">        message.markReaderIndex();</span>
+<span class="fc" id="L825">        Ip4Address nextHopAddress =</span>
+<span class="fc" id="L826">            Ip4Address.valueOf((int) message.readUnsignedInt());</span>
+        //
+        // Check whether the NEXT_HOP IP address is semantically correct.
+        // As per RFC 4271, Section 6.3:
+        //
+        //  a) It MUST NOT be the IP address of the receiving speaker
+        //  b) In the case of an EBGP ....
+        //
+        // Here we check only (a), because (b) doesn't apply for us: all our
+        // peers are iBGP.
+        //
+<span class="pc bpc" id="L837" title="1 of 2 branches missed.">        if (nextHopAddress.equals(bgpSession.localInfo().ip4Address())) {</span>
+            // ERROR: Invalid NEXT_HOP Attribute
+<span class="nc" id="L839">            message.resetReaderIndex();</span>
+<span class="nc" id="L840">            actionsBgpUpdateInvalidNextHopAttribute(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message,
+                nextHopAddress);
+<span class="nc" id="L843">            String errorMsg = &quot;Invalid NEXT_HOP Attribute: &quot; + nextHopAddress;</span>
+<span class="nc" id="L844">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="fc" id="L847">        return nextHopAddress;</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute Type MULTI_EXIT_DISC.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed MULTI_EXIT_DISC value
+     * @throws BgpMessage.BgpParseException
+     */
+    private static long parseAttributeTypeMultiExitDisc(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        // Check the Attribute Length
+<span class="pc bpc" id="L872" title="1 of 2 branches missed.">        if (attrLen != BgpConstants.Update.MultiExitDisc.LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L874">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L876">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L877">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="fc" id="L880">        long multiExitDisc = message.readUnsignedInt();</span>
+<span class="fc" id="L881">        return multiExitDisc;</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute Type LOCAL_PREF.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed LOCAL_PREF value
+     * @throws BgpMessage.BgpParseException
+     */
+    private static long parseAttributeTypeLocalPref(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        // Check the Attribute Length
+<span class="pc bpc" id="L906" title="1 of 2 branches missed.">        if (attrLen != BgpConstants.Update.LocalPref.LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L908">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L910">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L911">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="fc" id="L914">        long localPref = message.readUnsignedInt();</span>
+<span class="fc" id="L915">        return localPref;</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute Type ATOMIC_AGGREGATE.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @throws BgpMessage.BgpParseException
+     */
+    private static void parseAttributeTypeAtomicAggregate(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        // Check the Attribute Length
+<span class="nc bnc" id="L939" title="All 2 branches missed.">        if (attrLen != BgpConstants.Update.AtomicAggregate.LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L941">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L943">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L944">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+        // Nothing to do: this attribute is primarily informational
+<span class="nc" id="L948">    }</span>
+
+    /**
+     * Parses BGP UPDATE Attribute Type AGGREGATOR.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed AGGREGATOR value: a tuple of &lt;AS-Number, IP-Address&gt;
+     * @throws BgpMessage.BgpParseException
+     */
+    private static Pair&lt;Long, Ip4Address&gt; parseAttributeTypeAggregator(
+                                                BgpSession bgpSession,
+                                                ChannelHandlerContext ctx,
+                                                int attrTypeCode,
+                                                int attrLen,
+                                                int attrFlags,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+        int expectedAttrLen;
+
+<span class="nc bnc" id="L972" title="All 2 branches missed.">        if (bgpSession.isAs4OctetCapable()) {</span>
+<span class="nc" id="L973">            expectedAttrLen = BgpConstants.Update.Aggregator.AS4_LENGTH;</span>
+        } else {
+<span class="nc" id="L975">            expectedAttrLen = BgpConstants.Update.Aggregator.AS2_LENGTH;</span>
+        }
+
+        // Check the Attribute Length
+<span class="nc bnc" id="L979" title="All 2 branches missed.">        if (attrLen != expectedAttrLen) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L981">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L983">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L984">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+        // The AGGREGATOR AS number
+        long aggregatorAsNumber;
+<span class="nc bnc" id="L989" title="All 2 branches missed.">        if (bgpSession.isAs4OctetCapable()) {</span>
+<span class="nc" id="L990">            aggregatorAsNumber = message.readUnsignedInt();</span>
+        } else {
+<span class="nc" id="L992">            aggregatorAsNumber = message.readUnsignedShort();</span>
+        }
+        // The AGGREGATOR IP address
+<span class="nc" id="L995">        Ip4Address aggregatorIpAddress =</span>
+<span class="nc" id="L996">            Ip4Address.valueOf((int) message.readUnsignedInt());</span>
+
+<span class="nc" id="L998">        Pair&lt;Long, Ip4Address&gt; aggregator = Pair.of(aggregatorAsNumber,</span>
+                                                    aggregatorIpAddress);
+<span class="nc" id="L1000">        return aggregator;</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute Type MP_REACH_NLRI.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed MP_REACH_NLRI information if recognized, otherwise
+     * null
+     * @throws BgpMessage.BgpParseException
+     */
+    private static MpNlri parseAttributeTypeMpReachNlri(
+                                                BgpSession bgpSession,
+                                                ChannelHandlerContext ctx,
+                                                int attrTypeCode,
+                                                int attrLen,
+                                                int attrFlags,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+<span class="nc" id="L1024">        int attributeEnd = message.readerIndex() + attrLen;</span>
+
+        // Check the Attribute Length
+<span class="nc bnc" id="L1027" title="All 2 branches missed.">        if (attrLen &lt; BgpConstants.Update.MpReachNlri.MIN_LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L1029">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L1031">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L1032">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="nc" id="L1035">        message.markReaderIndex();</span>
+<span class="nc" id="L1036">        int afi = message.readUnsignedShort();</span>
+<span class="nc" id="L1037">        int safi = message.readUnsignedByte();</span>
+<span class="nc" id="L1038">        int nextHopLen = message.readUnsignedByte();</span>
+
+        //
+        // Verify the AFI/SAFI, and skip the attribute if not recognized.
+        // NOTE: Currently, we support only IPv4/IPv6 UNICAST
+        //
+<span class="nc bnc" id="L1044" title="All 6 branches missed.">        if (((afi != BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4) &amp;&amp;</span>
+             (afi != BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6)) ||
+            (safi != BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST)) {
+            // Skip the attribute
+<span class="nc" id="L1048">            message.resetReaderIndex();</span>
+<span class="nc" id="L1049">            message.skipBytes(attrLen);</span>
+<span class="nc" id="L1050">            return null;</span>
+        }
+
+        //
+        // Verify the next-hop length
+        //
+<span class="nc" id="L1056">        int expectedNextHopLen = 0;</span>
+<span class="nc bnc" id="L1057" title="All 3 branches missed.">        switch (afi) {</span>
+        case BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4:
+<span class="nc" id="L1059">            expectedNextHopLen = Ip4Address.BYTE_LENGTH;</span>
+<span class="nc" id="L1060">            break;</span>
+        case BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6:
+<span class="nc" id="L1062">            expectedNextHopLen = Ip6Address.BYTE_LENGTH;</span>
+<span class="nc" id="L1063">            break;</span>
+        default:
+            // UNREACHABLE
+            break;
+        }
+<span class="nc bnc" id="L1068" title="All 2 branches missed.">        if (nextHopLen != expectedNextHopLen) {</span>
+            // ERROR: Optional Attribute Error
+<span class="nc" id="L1070">            message.resetReaderIndex();</span>
+<span class="nc" id="L1071">            actionsBgpUpdateOptionalAttributeError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L1073">            String errorMsg = &quot;Invalid next-hop network address length. &quot; +</span>
+                &quot;Received &quot; + nextHopLen + &quot; expected &quot; + expectedNextHopLen;
+<span class="nc" id="L1075">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+        // NOTE: We use &quot;+ 1&quot; to take into account the Reserved field (1 octet)
+<span class="nc bnc" id="L1078" title="All 2 branches missed.">        if (message.readerIndex() + nextHopLen + 1 &gt;= attributeEnd) {</span>
+            // ERROR: Optional Attribute Error
+<span class="nc" id="L1080">            message.resetReaderIndex();</span>
+<span class="nc" id="L1081">            actionsBgpUpdateOptionalAttributeError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L1083">            String errorMsg = &quot;Malformed next-hop network address&quot;;</span>
+<span class="nc" id="L1084">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+        //
+        // Get the Next-hop address, skip the Reserved field, and get the NLRI
+        //
+<span class="nc" id="L1090">        byte[] nextHopBuffer = new byte[nextHopLen];</span>
+<span class="nc" id="L1091">        message.readBytes(nextHopBuffer, 0, nextHopLen);</span>
+<span class="nc" id="L1092">        int reserved = message.readUnsignedByte();</span>
+<span class="nc" id="L1093">        MpNlri mpNlri = new MpNlri(afi, safi);</span>
+        try {
+<span class="nc bnc" id="L1095" title="All 3 branches missed.">            switch (afi) {</span>
+            case BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4:
+                // The next-hop address
+<span class="nc" id="L1098">                mpNlri.nextHop4 = Ip4Address.valueOf(nextHopBuffer);</span>
+                // The NLRI
+<span class="nc" id="L1100">                mpNlri.nlri4 = parsePackedIp4Prefixes(</span>
+<span class="nc" id="L1101">                                        attributeEnd - message.readerIndex(),</span>
+                                        message);
+<span class="nc" id="L1103">                break;</span>
+            case BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6:
+                // The next-hop address
+<span class="nc" id="L1106">                mpNlri.nextHop6 = Ip6Address.valueOf(nextHopBuffer);</span>
+                // The NLRI
+<span class="nc" id="L1108">                mpNlri.nlri6 = parsePackedIp6Prefixes(</span>
+<span class="nc" id="L1109">                                        attributeEnd - message.readerIndex(),</span>
+                                        message);
+<span class="nc" id="L1111">                break;</span>
+            default:
+                // UNREACHABLE
+                break;
+            }
+<span class="nc" id="L1116">        } catch (BgpMessage.BgpParseException e) {</span>
+            // ERROR: Optional Attribute Error
+<span class="nc" id="L1118">            message.resetReaderIndex();</span>
+<span class="nc" id="L1119">            actionsBgpUpdateOptionalAttributeError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L1121">            String errorMsg = &quot;Malformed network layer reachability information&quot;;</span>
+<span class="nc" id="L1122">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+<span class="nc" id="L1123">        }</span>
+
+<span class="nc" id="L1125">        return mpNlri;</span>
+    }
+
+    /**
+     * Parses BGP UPDATE Attribute Type MP_UNREACH_NLRI.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message to parse
+     * @return the parsed MP_UNREACH_NLRI information if recognized, otherwise
+     * null
+     * @throws BgpMessage.BgpParseException
+     */
+    private static MpNlri parseAttributeTypeMpUnreachNlri(
+                                                BgpSession bgpSession,
+                                                ChannelHandlerContext ctx,
+                                                int attrTypeCode,
+                                                int attrLen,
+                                                int attrFlags,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+<span class="nc" id="L1149">        int attributeEnd = message.readerIndex() + attrLen;</span>
+
+        // Check the Attribute Length
+<span class="nc bnc" id="L1152" title="All 2 branches missed.">        if (attrLen &lt; BgpConstants.Update.MpUnreachNlri.MIN_LENGTH) {</span>
+            // ERROR: Attribute Length Error
+<span class="nc" id="L1154">            actionsBgpUpdateAttributeLengthError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L1156">            String errorMsg = &quot;Attribute Length Error&quot;;</span>
+<span class="nc" id="L1157">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+
+<span class="nc" id="L1160">        message.markReaderIndex();</span>
+<span class="nc" id="L1161">        int afi = message.readUnsignedShort();</span>
+<span class="nc" id="L1162">        int safi = message.readUnsignedByte();</span>
+
+        //
+        // Verify the AFI/SAFI, and skip the attribute if not recognized.
+        // NOTE: Currently, we support only IPv4/IPv6 UNICAST
+        //
+<span class="nc bnc" id="L1168" title="All 6 branches missed.">        if (((afi != BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4) &amp;&amp;</span>
+             (afi != BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6)) ||
+            (safi != BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST)) {
+            // Skip the attribute
+<span class="nc" id="L1172">            message.resetReaderIndex();</span>
+<span class="nc" id="L1173">            message.skipBytes(attrLen);</span>
+<span class="nc" id="L1174">            return null;</span>
+        }
+
+        //
+        // Get the Withdrawn Routes
+        //
+<span class="nc" id="L1180">        MpNlri mpNlri = new MpNlri(afi, safi);</span>
+        try {
+<span class="nc bnc" id="L1182" title="All 3 branches missed.">            switch (afi) {</span>
+            case BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4:
+                // The Withdrawn Routes
+<span class="nc" id="L1185">                mpNlri.nlri4 = parsePackedIp4Prefixes(</span>
+<span class="nc" id="L1186">                                        attributeEnd - message.readerIndex(),</span>
+                                        message);
+<span class="nc" id="L1188">                break;</span>
+            case BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6:
+                // The Withdrawn Routes
+<span class="nc" id="L1191">                mpNlri.nlri6 = parsePackedIp6Prefixes(</span>
+<span class="nc" id="L1192">                                        attributeEnd - message.readerIndex(),</span>
+                                        message);
+<span class="nc" id="L1194">                break;</span>
+            default:
+                // UNREACHABLE
+                break;
+            }
+<span class="nc" id="L1199">        } catch (BgpMessage.BgpParseException e) {</span>
+            // ERROR: Optional Attribute Error
+<span class="nc" id="L1201">            message.resetReaderIndex();</span>
+<span class="nc" id="L1202">            actionsBgpUpdateOptionalAttributeError(</span>
+                bgpSession, ctx, attrTypeCode, attrLen, attrFlags, message);
+<span class="nc" id="L1204">            String errorMsg = &quot;Malformed withdrawn routes&quot;;</span>
+<span class="nc" id="L1205">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+<span class="nc" id="L1206">        }</span>
+
+<span class="nc" id="L1208">        return mpNlri;</span>
+    }
+
+    /**
+     * Parses a message that contains encoded IPv4 network prefixes.
+     * &lt;p&gt;
+     * The IPv4 prefixes are encoded in the form:
+     * &lt;Length, Prefix&gt; where Length is the length in bits of the IPv4 prefix,
+     * and Prefix is the IPv4 prefix (padded with trailing bits to the end
+     * of an octet).
+     *
+     * @param totalLength the total length of the data to parse
+     * @param message the message with data to parse
+     * @return a collection of parsed IPv4 network prefixes
+     * @throws BgpMessage.BgpParseException
+     */
+    private static Collection&lt;Ip4Prefix&gt; parsePackedIp4Prefixes(
+                                                int totalLength,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+<span class="fc" id="L1228">        Collection&lt;Ip4Prefix&gt; result = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L1230" title="All 2 branches covered.">        if (totalLength == 0) {</span>
+<span class="fc" id="L1231">            return result;</span>
+        }
+
+        // Parse the data
+<span class="fc" id="L1235">        byte[] buffer = new byte[Ip4Address.BYTE_LENGTH];</span>
+<span class="fc" id="L1236">        int dataEnd = message.readerIndex() + totalLength;</span>
+<span class="fc bfc" id="L1237" title="All 2 branches covered.">        while (message.readerIndex() &lt; dataEnd) {</span>
+<span class="fc" id="L1238">            int prefixBitlen = message.readUnsignedByte();</span>
+<span class="fc" id="L1239">            int prefixBytelen = (prefixBitlen + 7) / 8;     // Round-up</span>
+<span class="pc bpc" id="L1240" title="1 of 2 branches missed.">            if (message.readerIndex() + prefixBytelen &gt; dataEnd) {</span>
+<span class="nc" id="L1241">                String errorMsg = &quot;Malformed Network Prefixes&quot;;</span>
+<span class="nc" id="L1242">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+
+<span class="fc" id="L1245">            message.readBytes(buffer, 0, prefixBytelen);</span>
+<span class="fc" id="L1246">            Ip4Prefix prefix = Ip4Prefix.valueOf(Ip4Address.valueOf(buffer),</span>
+                                                 prefixBitlen);
+<span class="fc" id="L1248">            result.add(prefix);</span>
+<span class="fc" id="L1249">        }</span>
+
+<span class="fc" id="L1251">        return result;</span>
+    }
+
+    /**
+     * Parses a message that contains encoded IPv6 network prefixes.
+     * &lt;p&gt;
+     * The IPv6 prefixes are encoded in the form:
+     * &lt;Length, Prefix&gt; where Length is the length in bits of the IPv6 prefix,
+     * and Prefix is the IPv6 prefix (padded with trailing bits to the end
+     * of an octet).
+     *
+     * @param totalLength the total length of the data to parse
+     * @param message the message with data to parse
+     * @return a collection of parsed IPv6 network prefixes
+     * @throws BgpMessage.BgpParseException
+     */
+    private static Collection&lt;Ip6Prefix&gt; parsePackedIp6Prefixes(
+                                                int totalLength,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+<span class="nc" id="L1271">        Collection&lt;Ip6Prefix&gt; result = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L1273" title="All 2 branches missed.">        if (totalLength == 0) {</span>
+<span class="nc" id="L1274">            return result;</span>
+        }
+
+        // Parse the data
+<span class="nc" id="L1278">        byte[] buffer = new byte[Ip6Address.BYTE_LENGTH];</span>
+<span class="nc" id="L1279">        int dataEnd = message.readerIndex() + totalLength;</span>
+<span class="nc bnc" id="L1280" title="All 2 branches missed.">        while (message.readerIndex() &lt; dataEnd) {</span>
+<span class="nc" id="L1281">            int prefixBitlen = message.readUnsignedByte();</span>
+<span class="nc" id="L1282">            int prefixBytelen = (prefixBitlen + 7) / 8;     // Round-up</span>
+<span class="nc bnc" id="L1283" title="All 2 branches missed.">            if (message.readerIndex() + prefixBytelen &gt; dataEnd) {</span>
+<span class="nc" id="L1284">                String errorMsg = &quot;Malformed Network Prefixes&quot;;</span>
+<span class="nc" id="L1285">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+
+<span class="nc" id="L1288">            message.readBytes(buffer, 0, prefixBytelen);</span>
+<span class="nc" id="L1289">            Ip6Prefix prefix = Ip6Prefix.valueOf(Ip6Address.valueOf(buffer),</span>
+                                                 prefixBitlen);
+<span class="nc" id="L1291">            result.add(prefix);</span>
+<span class="nc" id="L1292">        }</span>
+
+<span class="nc" id="L1294">        return result;</span>
+    }
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Invalid Network Field Error: send NOTIFICATION and close the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     */
+    private static void actionsBgpUpdateInvalidNetworkField(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx) {
+<span class="nc" id="L1307">        log.debug(&quot;BGP RX UPDATE Error from {}: Invalid Network Field&quot;,</span>
+<span class="nc" id="L1308">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // ERROR: Invalid Network Field
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1314">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1315">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.INVALID_NETWORK_FIELD;</span>
+<span class="nc" id="L1316">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1317">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   null);
+<span class="nc" id="L1319">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1320">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1321">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Malformed Attribute List Error: send NOTIFICATION and close the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     */
+    private static void actionsBgpUpdateMalformedAttributeList(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx) {
+<span class="nc" id="L1333">        log.debug(&quot;BGP RX UPDATE Error from {}: Malformed Attribute List&quot;,</span>
+<span class="nc" id="L1334">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // ERROR: Malformed Attribute List
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1340">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1341">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.MALFORMED_ATTRIBUTE_LIST;</span>
+<span class="nc" id="L1342">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1343">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   null);
+<span class="nc" id="L1345">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1346">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1347">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Missing Well-known Attribute Error: send NOTIFICATION and close the
+     * channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param missingAttrTypeCode the missing attribute type code
+     */
+    private static void actionsBgpUpdateMissingWellKnownAttribute(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int missingAttrTypeCode) {
+<span class="nc" id="L1362">        log.debug(&quot;BGP RX UPDATE Error from {}: Missing Well-known Attribute: {}&quot;,</span>
+<span class="nc" id="L1363">                  bgpSession.remoteInfo().address(), missingAttrTypeCode);</span>
+
+        //
+        // ERROR: Missing Well-known Attribute
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1369">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1370">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.MISSING_WELL_KNOWN_ATTRIBUTE;</span>
+<span class="nc" id="L1371">        ChannelBuffer data = ChannelBuffers.buffer(1);</span>
+<span class="nc" id="L1372">        data.writeByte(missingAttrTypeCode);</span>
+<span class="nc" id="L1373">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1374">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1376">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1377">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1378">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Invalid ORIGIN Attribute Error: send NOTIFICATION and close the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     * @param origin the ORIGIN attribute value
+     */
+    private static void actionsBgpUpdateInvalidOriginAttribute(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message,
+                                short origin) {
+<span class="nc" id="L1400">        log.debug(&quot;BGP RX UPDATE Error from {}: Invalid ORIGIN Attribute&quot;,</span>
+<span class="nc" id="L1401">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // ERROR: Invalid ORIGIN Attribute
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1407">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1408">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.INVALID_ORIGIN_ATTRIBUTE;</span>
+<span class="nc" id="L1409">        ChannelBuffer data =</span>
+<span class="nc" id="L1410">            prepareBgpUpdateNotificationDataPayload(attrTypeCode, attrLen,</span>
+                                                    attrFlags, message);
+<span class="nc" id="L1412">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1413">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1415">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1416">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1417">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Attribute Flags Error: send NOTIFICATION and close the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     */
+    private static void actionsBgpUpdateAttributeFlagsError(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message) {
+<span class="nc" id="L1437">        log.debug(&quot;BGP RX UPDATE Error from {}: Attribute Flags Error&quot;,</span>
+<span class="nc" id="L1438">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // ERROR: Attribute Flags Error
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1444">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1445">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.ATTRIBUTE_FLAGS_ERROR;</span>
+<span class="nc" id="L1446">        ChannelBuffer data =</span>
+<span class="nc" id="L1447">            prepareBgpUpdateNotificationDataPayload(attrTypeCode, attrLen,</span>
+                                                    attrFlags, message);
+<span class="nc" id="L1449">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1450">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1452">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1453">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1454">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Invalid NEXT_HOP Attribute Error: send NOTIFICATION and close the
+     * channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     * @param nextHop the NEXT_HOP attribute value
+     */
+    private static void actionsBgpUpdateInvalidNextHopAttribute(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message,
+                                Ip4Address nextHop) {
+<span class="nc" id="L1477">        log.debug(&quot;BGP RX UPDATE Error from {}: Invalid NEXT_HOP Attribute {}&quot;,</span>
+<span class="nc" id="L1478">                  bgpSession.remoteInfo().address(), nextHop);</span>
+
+        //
+        // ERROR: Invalid NEXT_HOP Attribute
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1484">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1485">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.INVALID_NEXT_HOP_ATTRIBUTE;</span>
+<span class="nc" id="L1486">        ChannelBuffer data =</span>
+<span class="nc" id="L1487">            prepareBgpUpdateNotificationDataPayload(attrTypeCode, attrLen,</span>
+                                                    attrFlags, message);
+<span class="nc" id="L1489">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1490">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1492">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1493">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1494">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Unrecognized Well-known Attribute Error: send NOTIFICATION and close
+     * the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     */
+    private static void actionsBgpUpdateUnrecognizedWellKnownAttribute(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message) {
+<span class="nc" id="L1515">        log.debug(&quot;BGP RX UPDATE Error from {}: &quot; +</span>
+                  &quot;Unrecognized Well-known Attribute Error: {}&quot;,
+<span class="nc" id="L1517">                  bgpSession.remoteInfo().address(), attrTypeCode);</span>
+
+        //
+        // ERROR: Unrecognized Well-known Attribute
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1523">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1524">        int errorSubcode =</span>
+            BgpConstants.Notifications.UpdateMessageError.UNRECOGNIZED_WELL_KNOWN_ATTRIBUTE;
+<span class="nc" id="L1526">        ChannelBuffer data =</span>
+<span class="nc" id="L1527">            prepareBgpUpdateNotificationDataPayload(attrTypeCode, attrLen,</span>
+                                                    attrFlags, message);
+<span class="nc" id="L1529">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1530">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1532">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1533">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1534">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Optional Attribute Error: send NOTIFICATION and close
+     * the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     */
+    private static void actionsBgpUpdateOptionalAttributeError(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message) {
+<span class="nc" id="L1555">        log.debug(&quot;BGP RX UPDATE Error from {}: Optional Attribute Error: {}&quot;,</span>
+<span class="nc" id="L1556">                  bgpSession.remoteInfo().address(), attrTypeCode);</span>
+
+        //
+        // ERROR: Optional Attribute Error
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1562">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1563">        int errorSubcode =</span>
+            BgpConstants.Notifications.UpdateMessageError.OPTIONAL_ATTRIBUTE_ERROR;
+<span class="nc" id="L1565">        ChannelBuffer data =</span>
+<span class="nc" id="L1566">            prepareBgpUpdateNotificationDataPayload(attrTypeCode, attrLen,</span>
+                                                    attrFlags, message);
+<span class="nc" id="L1568">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1569">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1571">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1572">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1573">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Attribute Length Error: send NOTIFICATION and close the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     */
+    private static void actionsBgpUpdateAttributeLengthError(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx,
+                                int attrTypeCode,
+                                int attrLen,
+                                int attrFlags,
+                                ChannelBuffer message) {
+<span class="nc" id="L1593">        log.debug(&quot;BGP RX UPDATE Error from {}: Attribute Length Error&quot;,</span>
+<span class="nc" id="L1594">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // ERROR: Attribute Length Error
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1600">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1601">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.ATTRIBUTE_LENGTH_ERROR;</span>
+<span class="nc" id="L1602">        ChannelBuffer data =</span>
+<span class="nc" id="L1603">            prepareBgpUpdateNotificationDataPayload(attrTypeCode, attrLen,</span>
+                                                    attrFlags, message);
+<span class="nc" id="L1605">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1606">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   data);
+<span class="nc" id="L1608">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1609">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1610">    }</span>
+
+    /**
+     * Applies the appropriate actions after detecting BGP UPDATE
+     * Malformed AS_PATH Error: send NOTIFICATION and close the channel.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     */
+    private static void actionsBgpUpdateMalformedAsPath(
+                                BgpSession bgpSession,
+                                ChannelHandlerContext ctx) {
+<span class="nc" id="L1622">        log.debug(&quot;BGP RX UPDATE Error from {}: Malformed AS Path&quot;,</span>
+<span class="nc" id="L1623">                  bgpSession.remoteInfo().address());</span>
+
+        //
+        // ERROR: Malformed AS_PATH
+        //
+        // Send NOTIFICATION and close the connection
+<span class="nc" id="L1629">        int errorCode = BgpConstants.Notifications.UpdateMessageError.ERROR_CODE;</span>
+<span class="nc" id="L1630">        int errorSubcode = BgpConstants.Notifications.UpdateMessageError.MALFORMED_AS_PATH;</span>
+<span class="nc" id="L1631">        ChannelBuffer txMessage =</span>
+<span class="nc" id="L1632">            BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                   null);
+<span class="nc" id="L1634">        ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L1635">        bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L1636">    }</span>
+
+    /**
+     * Prepares BGP UPDATE Notification data payload.
+     *
+     * @param attrTypeCode the attribute type code
+     * @param attrLen the attribute length (in octets)
+     * @param attrFlags the attribute flags
+     * @param message the message with the data
+     * @return the buffer with the data payload for the BGP UPDATE Notification
+     */
+    private static ChannelBuffer prepareBgpUpdateNotificationDataPayload(
+                                        int attrTypeCode,
+                                        int attrLen,
+                                        int attrFlags,
+                                        ChannelBuffer message) {
+        // Compute the attribute length field octets
+<span class="nc bnc" id="L1653" title="All 2 branches missed.">        boolean extendedLengthBit = ((0x10 &amp; attrFlags) != 0);</span>
+<span class="nc" id="L1654">        int attrLenOctets = 1;</span>
+<span class="nc bnc" id="L1655" title="All 2 branches missed.">        if (extendedLengthBit) {</span>
+<span class="nc" id="L1656">            attrLenOctets = 2;</span>
+        }
+<span class="nc" id="L1658">        ChannelBuffer data =</span>
+<span class="nc" id="L1659">            ChannelBuffers.buffer(attrLen + attrLenOctets + 1);</span>
+<span class="nc" id="L1660">        data.writeByte(attrTypeCode);</span>
+<span class="nc bnc" id="L1661" title="All 2 branches missed.">        if (extendedLengthBit) {</span>
+<span class="nc" id="L1662">            data.writeShort(attrLen);</span>
+        } else {
+<span class="nc" id="L1664">            data.writeByte(attrLen);</span>
+        }
+<span class="nc" id="L1666">        data.writeBytes(message, attrLen);</span>
+<span class="nc" id="L1667">        return data;</span>
+    }
+
+    /**
+     * Helper class for storing Multiprotocol Network Layer Reachability
+     * information.
+     */
+    private static final class MpNlri {
+        private final int afi;
+        private final int safi;
+        private Ip4Address nextHop4;
+        private Ip6Address nextHop6;
+<span class="fc" id="L1679">        private Collection&lt;Ip4Prefix&gt; nlri4 = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L1680">        private Collection&lt;Ip6Prefix&gt; nlri6 = new ArrayList&lt;&gt;();</span>
+
+        /**
+         * Constructor.
+         *
+         * @param afi the Address Family Identifier
+         * @param safi the Subsequent Address Family Identifier
+         */
+<span class="fc" id="L1688">        private MpNlri(int afi, int safi) {</span>
+<span class="fc" id="L1689">            this.afi = afi;</span>
+<span class="fc" id="L1690">            this.safi = safi;</span>
+<span class="fc" id="L1691">        }</span>
+    }
+
+    /**
+     * Helper class for storing decoded BGP routing information.
+     */
+<span class="fc" id="L1697">    private static final class DecodedBgpRoutes {</span>
+<span class="fc" id="L1698">        private final Map&lt;Ip4Prefix, BgpRouteEntry&gt; addedUnicastRoutes4 =</span>
+            new HashMap&lt;&gt;();
+<span class="fc" id="L1700">        private final Map&lt;Ip6Prefix, BgpRouteEntry&gt; addedUnicastRoutes6 =</span>
+            new HashMap&lt;&gt;();
+<span class="fc" id="L1702">        private final Map&lt;Ip4Prefix, BgpRouteEntry&gt; deletedUnicastRoutes4 =</span>
+            new HashMap&lt;&gt;();
+<span class="fc" id="L1704">        private final Map&lt;Ip6Prefix, BgpRouteEntry&gt; deletedUnicastRoutes6 =</span>
+            new HashMap&lt;&gt;();
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

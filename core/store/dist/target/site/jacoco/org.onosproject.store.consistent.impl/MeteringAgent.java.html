@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MeteringAgent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">MeteringAgent.java</span></div><h1>MeteringAgent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Timer;
+import com.google.common.collect.Maps;
+import org.onlab.metrics.MetricsComponent;
+import org.onlab.metrics.MetricsFeature;
+import org.onlab.metrics.MetricsService;
+import org.onlab.osgi.DefaultServiceDirectory;
+
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Agent that implements usage and performance monitoring via the metrics service.
+ */
+public class MeteringAgent {
+
+    private Counter exceptionCounter;
+    private Counter perObjExceptionCounter;
+    private MetricsService metricsService;
+    private MetricsComponent metricsComponent;
+    private MetricsFeature metricsFeature;
+<span class="nc" id="L41">    private final Map&lt;String, Timer&gt; perObjOpTimers = Maps.newConcurrentMap();</span>
+<span class="nc" id="L42">    private final Map&lt;String, Timer&gt; perOpTimers = Maps.newConcurrentMap();</span>
+    private Timer perPrimitiveTimer;
+    private Timer perObjTimer;
+    private MetricsFeature wildcard;
+    private final boolean activated;
+    private Context nullTimer;
+
+    /**
+     * Constructs a new MeteringAgent for a given distributed primitive.
+     * Instantiates the metrics service
+     * Initializes all the general metrics for that object
+     *
+     * @param primitiveName Type of primitive to be metered
+     * @param objName Global name of the primitive
+     * @param activated boolean flag for whether metering is enabled or not
+     */
+<span class="nc" id="L58">    public MeteringAgent(String primitiveName, String objName, boolean activated) {</span>
+<span class="nc" id="L59">        checkNotNull(objName, &quot;Object name cannot be null&quot;);</span>
+<span class="nc" id="L60">        this.activated = activated;</span>
+<span class="nc" id="L61">        nullTimer = new Context(null, &quot;&quot;);</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        if (this.activated) {</span>
+<span class="nc" id="L63">            this.metricsService = DefaultServiceDirectory.getService(MetricsService.class);</span>
+<span class="nc" id="L64">            this.metricsComponent = metricsService.registerComponent(primitiveName);</span>
+<span class="nc" id="L65">            this.metricsFeature = metricsComponent.registerFeature(objName);</span>
+<span class="nc" id="L66">            this.wildcard = metricsComponent.registerFeature(&quot;*&quot;);</span>
+<span class="nc" id="L67">            this.perObjTimer = metricsService.createTimer(metricsComponent, metricsFeature, &quot;*&quot;);</span>
+<span class="nc" id="L68">            this.perPrimitiveTimer = metricsService.createTimer(metricsComponent, wildcard, &quot;*&quot;);</span>
+<span class="nc" id="L69">            this.perObjExceptionCounter = metricsService.createCounter(metricsComponent, metricsFeature, &quot;exceptions&quot;);</span>
+<span class="nc" id="L70">            this.exceptionCounter = metricsService.createCounter(metricsComponent, wildcard, &quot;exceptions&quot;);</span>
+        }
+<span class="nc" id="L72">    }</span>
+
+    /**
+     * Initializes a specific timer for a given operation.
+     *
+     * @param op Specific operation being metered
+     * @return timer context
+     */
+    public Context startTimer(String op) {
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (!activated) {</span>
+<span class="nc" id="L82">            return nullTimer;</span>
+        }
+        // Check if timer exists, if it doesn't creates it
+<span class="nc" id="L85">        final Timer currTimer = perObjOpTimers.computeIfAbsent(op, timer -&gt;</span>
+<span class="nc" id="L86">                metricsService.createTimer(metricsComponent, metricsFeature, op));</span>
+<span class="nc" id="L87">        perOpTimers.computeIfAbsent(op, timer -&gt; metricsService.createTimer(metricsComponent, wildcard, op));</span>
+        // Starts timer
+<span class="nc" id="L89">        return new Context(currTimer.time(), op);</span>
+    }
+
+    /**
+     * Timer.Context with a specific operation.
+     */
+    public class Context {
+        private final Timer.Context context;
+        private final String operation;
+
+        /**
+         * Constructs Context.
+         *
+         * @param context context
+         * @param operation operation name
+         */
+<span class="nc" id="L105">        public Context(Timer.Context context, String operation) {</span>
+<span class="nc" id="L106">            this.context = context;</span>
+<span class="nc" id="L107">            this.operation = operation;</span>
+<span class="nc" id="L108">        }</span>
+
+        /**
+         * Stops timer given a specific context and updates all related metrics.
+         * @param e throwable
+         */
+        public void stop(Throwable e) {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            if (!activated) {</span>
+<span class="nc" id="L116">                return;</span>
+            }
+<span class="nc bnc" id="L118" title="All 2 branches missed.">            if (e == null) {</span>
+                //Stop and updates timer with specific measurements per map, per operation
+<span class="nc" id="L120">                final long time = context.stop();</span>
+                //updates timer with aggregated measurements per map
+<span class="nc" id="L122">                perOpTimers.get(operation).update(time, TimeUnit.NANOSECONDS);</span>
+                //updates timer with aggregated measurements per map
+<span class="nc" id="L124">                perObjTimer.update(time, TimeUnit.NANOSECONDS);</span>
+                //updates timer with aggregated measurements per all Consistent Maps
+<span class="nc" id="L126">                perPrimitiveTimer.update(time, TimeUnit.NANOSECONDS);</span>
+<span class="nc" id="L127">            } else {</span>
+<span class="nc" id="L128">                exceptionCounter.inc();</span>
+<span class="nc" id="L129">                perObjExceptionCounter.inc();</span>
+            }
+<span class="nc" id="L131">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

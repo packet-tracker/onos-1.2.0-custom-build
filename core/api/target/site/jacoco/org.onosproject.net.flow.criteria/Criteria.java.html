@@ -1,0 +1,526 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Criteria.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.criteria</a> &gt; <span class="el_source">Criteria.java</span></div><h1>Criteria.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.criteria;
+
+import org.onlab.packet.EthType;
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.TpPort;
+import org.onlab.packet.VlanId;
+import org.onosproject.net.IndexedLambda;
+import org.onosproject.net.Lambda;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.OduSignalId;
+import org.onosproject.net.OduSignalType;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.criteria.Criterion.Type;
+import org.onosproject.net.OchSignalType;
+
+/**
+ * Factory class to create various traffic selection criteria.
+ */
+public final class Criteria {
+
+    //TODO: incomplete type implementation. Need to implement complete list from Criterion
+
+    // Ban construction
+<span class="fc" id="L42">    private Criteria() {</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * Creates a match on IN_PORT field using the specified value.
+     *
+     * @param port inport value
+     * @return match criterion
+     */
+    public static Criterion matchInPort(PortNumber port) {
+<span class="fc" id="L52">        return new PortCriterion(port, Type.IN_PORT);</span>
+    }
+
+    /**
+     * Creates a match on IN_PHY_PORT field using the specified value.
+     *
+     * @param port inport value
+     * @return match criterion
+     */
+    public static Criterion matchInPhyPort(PortNumber port) {
+<span class="fc" id="L62">        return new PortCriterion(port, Type.IN_PHY_PORT);</span>
+    }
+
+    /**
+     * Creates a match on METADATA field using the specified value.
+     *
+     * @param metadata metadata value (64 bits data)
+     * @return match criterion
+     */
+    public static Criterion matchMetadata(long metadata) {
+<span class="fc" id="L72">        return new MetadataCriterion(metadata);</span>
+    }
+
+    /**
+     * Creates a match on ETH_DST field using the specified value. This value
+     * may be a wildcard mask.
+     *
+     * @param mac MAC address value or wildcard mask
+     * @return match criterion
+     */
+    public static Criterion matchEthDst(MacAddress mac) {
+<span class="fc" id="L83">        return new EthCriterion(mac, Type.ETH_DST);</span>
+    }
+
+    /**
+     * Creates a match on ETH_SRC field using the specified value. This value
+     * may be a wildcard mask.
+     *
+     * @param mac MAC address value or wildcard mask
+     * @return match criterion
+     */
+    public static Criterion matchEthSrc(MacAddress mac) {
+<span class="fc" id="L94">        return new EthCriterion(mac, Type.ETH_SRC);</span>
+    }
+
+    /**
+     * Creates a match on ETH_TYPE field using the specified value.
+     *
+     * @param ethType eth type value (16 bits unsigned integer)
+     * @return match criterion
+     */
+    public static Criterion matchEthType(int ethType) {
+<span class="fc" id="L104">        return new EthTypeCriterion(ethType);</span>
+    }
+
+    /**
+     * Creates a match on ETH_TYPE field using the specified value.
+     *
+     * @param ethType eth type value
+     * @return match criterion
+     */
+    public static Criterion matchEthType(EthType ethType) {
+<span class="fc" id="L114">        return new EthTypeCriterion(ethType);</span>
+    }
+
+    /**
+     * Creates a match on VLAN ID field using the specified value.
+     *
+     * @param vlanId vlan id value
+     * @return match criterion
+     */
+    public static Criterion matchVlanId(VlanId vlanId) {
+<span class="fc" id="L124">        return new VlanIdCriterion(vlanId);</span>
+    }
+
+    /**
+     * Creates a match on VLAN PCP field using the specified value.
+     *
+     * @param vlanPcp vlan pcp value (3 bits)
+     * @return match criterion
+     */
+    public static Criterion matchVlanPcp(byte vlanPcp) {
+<span class="fc" id="L134">        return new VlanPcpCriterion(vlanPcp);</span>
+    }
+
+    /**
+     * Creates a match on IP DSCP field using the specified value.
+     *
+     * @param ipDscp ip dscp value (6 bits)
+     * @return match criterion
+     */
+    public static Criterion matchIPDscp(byte ipDscp) {
+<span class="fc" id="L144">        return new IPDscpCriterion(ipDscp);</span>
+    }
+
+    /**
+     * Creates a match on IP ECN field using the specified value.
+     *
+     * @param ipEcn ip ecn value (2 bits)
+     * @return match criterion
+     */
+    public static Criterion matchIPEcn(byte ipEcn) {
+<span class="fc" id="L154">        return new IPEcnCriterion(ipEcn);</span>
+    }
+
+    /**
+     * Creates a match on IP proto field using the specified value.
+     *
+     * @param proto ip protocol value (8 bits unsigned integer)
+     * @return match criterion
+     */
+    public static Criterion matchIPProtocol(short proto) {
+<span class="fc" id="L164">        return new IPProtocolCriterion(proto);</span>
+    }
+
+    /**
+     * Creates a match on IPv4 source field using the specified value.
+     *
+     * @param ip ipv4 source value
+     * @return match criterion
+     */
+    public static Criterion matchIPSrc(IpPrefix ip) {
+<span class="fc" id="L174">        return new IPCriterion(ip, Type.IPV4_SRC);</span>
+    }
+
+    /**
+     * Creates a match on IPv4 destination field using the specified value.
+     *
+     * @param ip ipv4 source value
+     * @return match criterion
+     */
+    public static Criterion matchIPDst(IpPrefix ip) {
+<span class="fc" id="L184">        return new IPCriterion(ip, Type.IPV4_DST);</span>
+    }
+
+    /**
+     * Creates a match on TCP source port field using the specified value.
+     *
+     * @param tcpPort TCP source port
+     * @return match criterion
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static Criterion matchTcpSrc(short tcpPort) {
+<span class="nc" id="L196">        return new TcpPortCriterion(TpPort.tpPort(tcpPort), Type.TCP_SRC);</span>
+    }
+
+    /**
+     * Creates a match on TCP source port field using the specified value.
+     *
+     * @param tcpPort TCP source port
+     * @return match criterion
+     */
+    public static Criterion matchTcpSrc(TpPort tcpPort) {
+<span class="fc" id="L206">        return new TcpPortCriterion(tcpPort, Type.TCP_SRC);</span>
+    }
+
+    /**
+     * Creates a match on TCP destination port field using the specified value.
+     *
+     * @param tcpPort TCP destination port
+     * @return match criterion
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static Criterion matchTcpDst(short tcpPort) {
+<span class="nc" id="L218">        return new TcpPortCriterion(TpPort.tpPort(tcpPort), Type.TCP_DST);</span>
+    }
+
+    /**
+     * Creates a match on TCP destination port field using the specified value.
+     *
+     * @param tcpPort TCP destination port
+     * @return match criterion
+     */
+    public static Criterion matchTcpDst(TpPort tcpPort) {
+<span class="fc" id="L228">        return new TcpPortCriterion(tcpPort, Type.TCP_DST);</span>
+    }
+
+    /**
+     * Creates a match on UDP source port field using the specified value.
+     *
+     * @param udpPort UDP source port
+     * @return match criterion
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static Criterion matchUdpSrc(short udpPort) {
+<span class="nc" id="L240">        return new UdpPortCriterion(TpPort.tpPort(udpPort), Type.UDP_SRC);</span>
+    }
+
+    /**
+     * Creates a match on UDP source port field using the specified value.
+     *
+     * @param udpPort UDP source port
+     * @return match criterion
+     */
+    public static Criterion matchUdpSrc(TpPort udpPort) {
+<span class="fc" id="L250">        return new UdpPortCriterion(udpPort, Type.UDP_SRC);</span>
+    }
+
+    /**
+     * Creates a match on UDP destination port field using the specified value.
+     *
+     * @param udpPort UDP destination port
+     * @return match criterion
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static Criterion matchUdpDst(short udpPort) {
+<span class="nc" id="L262">        return new UdpPortCriterion(TpPort.tpPort(udpPort), Type.UDP_DST);</span>
+    }
+
+    /**
+     * Creates a match on UDP destination port field using the specified value.
+     *
+     * @param udpPort UDP destination port
+     * @return match criterion
+     */
+    public static Criterion matchUdpDst(TpPort udpPort) {
+<span class="fc" id="L272">        return new UdpPortCriterion(udpPort, Type.UDP_DST);</span>
+    }
+
+    /**
+     * Creates a match on SCTP source port field using the specified value.
+     *
+     * @param sctpPort SCTP source port
+     * @return match criterion
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static Criterion matchSctpSrc(short sctpPort) {
+<span class="nc" id="L284">        return new SctpPortCriterion(TpPort.tpPort(sctpPort), Type.SCTP_SRC);</span>
+    }
+
+    /**
+     * Creates a match on SCTP source port field using the specified value.
+     *
+     * @param sctpPort SCTP source port
+     * @return match criterion
+     */
+    public static Criterion matchSctpSrc(TpPort sctpPort) {
+<span class="fc" id="L294">        return new SctpPortCriterion(sctpPort, Type.SCTP_SRC);</span>
+    }
+
+    /**
+     * Creates a match on SCTP destination port field using the specified
+     * value.
+     *
+     * @param sctpPort SCTP destination port
+     * @return match criterion
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static Criterion matchSctpDst(short sctpPort) {
+<span class="nc" id="L307">        return new SctpPortCriterion(TpPort.tpPort(sctpPort), Type.SCTP_DST);</span>
+    }
+
+    /**
+     * Creates a match on SCTP destination port field using the specified
+     * value.
+     *
+     * @param sctpPort SCTP destination port
+     * @return match criterion
+     */
+    public static Criterion matchSctpDst(TpPort sctpPort) {
+<span class="fc" id="L318">        return new SctpPortCriterion(sctpPort, Type.SCTP_DST);</span>
+    }
+
+    /**
+     * Creates a match on ICMP type field using the specified value.
+     *
+     * @param icmpType ICMP type (8 bits unsigned integer)
+     * @return match criterion
+     */
+    public static Criterion matchIcmpType(short icmpType) {
+<span class="fc" id="L328">        return new IcmpTypeCriterion(icmpType);</span>
+    }
+
+    /**
+     * Creates a match on ICMP code field using the specified value.
+     *
+     * @param icmpCode ICMP code (8 bits unsigned integer)
+     * @return match criterion
+     */
+    public static Criterion matchIcmpCode(short icmpCode) {
+<span class="fc" id="L338">        return new IcmpCodeCriterion(icmpCode);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 source field using the specified value.
+     *
+     * @param ip ipv6 source value
+     * @return match criterion
+     */
+    public static Criterion matchIPv6Src(IpPrefix ip) {
+<span class="fc" id="L348">        return new IPCriterion(ip, Type.IPV6_SRC);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 destination field using the specified value.
+     *
+     * @param ip ipv6 destination value
+     * @return match criterion
+     */
+    public static Criterion matchIPv6Dst(IpPrefix ip) {
+<span class="fc" id="L358">        return new IPCriterion(ip, Type.IPV6_DST);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 flow label field using the specified value.
+     *
+     * @param flowLabel IPv6 flow label (20 bits)
+     * @return match criterion
+     */
+    public static Criterion matchIPv6FlowLabel(int flowLabel) {
+<span class="fc" id="L368">        return new IPv6FlowLabelCriterion(flowLabel);</span>
+    }
+
+    /**
+     * Creates a match on ICMPv6 type field using the specified value.
+     *
+     * @param icmpv6Type ICMPv6 type (8 bits unsigned integer)
+     * @return match criterion
+     */
+    public static Criterion matchIcmpv6Type(short icmpv6Type) {
+<span class="fc" id="L378">        return new Icmpv6TypeCriterion(icmpv6Type);</span>
+    }
+
+    /**
+     * Creates a match on ICMPv6 code field using the specified value.
+     *
+     * @param icmpv6Code ICMPv6 code (8 bits unsigned integer)
+     * @return match criterion
+     */
+    public static Criterion matchIcmpv6Code(short icmpv6Code) {
+<span class="fc" id="L388">        return new Icmpv6CodeCriterion(icmpv6Code);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 Neighbor Discovery target address using the
+     * specified value.
+     *
+     * @param targetAddress IPv6 Neighbor Discovery target address
+     * @return match criterion
+     */
+    public static Criterion matchIPv6NDTargetAddress(Ip6Address targetAddress) {
+<span class="fc" id="L399">        return new IPv6NDTargetAddressCriterion(targetAddress);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 Neighbor Discovery source link-layer address
+     * using the specified value.
+     *
+     * @param mac IPv6 Neighbor Discovery source link-layer address
+     * @return match criterion
+     */
+    public static Criterion matchIPv6NDSourceLinkLayerAddress(MacAddress mac) {
+<span class="fc" id="L410">        return new IPv6NDLinkLayerAddressCriterion(mac, Type.IPV6_ND_SLL);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 Neighbor Discovery target link-layer address
+     * using the specified value.
+     *
+     * @param mac IPv6 Neighbor Discovery target link-layer address
+     * @return match criterion
+     */
+    public static Criterion matchIPv6NDTargetLinkLayerAddress(MacAddress mac) {
+<span class="fc" id="L421">        return new IPv6NDLinkLayerAddressCriterion(mac, Type.IPV6_ND_TLL);</span>
+    }
+
+    /**
+     * Creates a match on MPLS label.
+     *
+     * @param mplsLabel MPLS label (20 bits)
+     * @return match criterion
+     */
+    public static Criterion matchMplsLabel(MplsLabel mplsLabel) {
+<span class="fc" id="L431">        return new MplsCriterion(mplsLabel);</span>
+    }
+
+    /**
+     * Creates a match on MPLS Bottom-of-Stack indicator bit.
+     *
+     * @param mplsBos boolean value indicating true (BOS=1) or false (BOS=0)
+     * @return match criterion
+     */
+    public static Criterion matchMplsLabel(boolean mplsBos) {
+<span class="nc" id="L441">        return new MplsBosCriterion(mplsBos);</span>
+    }
+
+    /**
+     * Creates a match on Tunnel ID.
+     *
+     * @param tunnelId Tunnel ID (64 bits)
+     * @return match criterion
+     */
+    public static Criterion matchTunnelId(long tunnelId) {
+<span class="fc" id="L451">        return new TunnelIdCriterion(tunnelId);</span>
+    }
+
+    /**
+     * Creates a match on IPv6 Extension Header pseudo-field fiags.
+     * Those are defined in Criterion.IPv6ExthdrFlags.
+     *
+     * @param exthdrFlags IPv6 Extension Header pseudo-field flags (16 bits)
+     * @return match criterion
+     */
+    public static Criterion matchIPv6ExthdrFlags(int exthdrFlags) {
+<span class="fc" id="L462">        return new IPv6ExthdrFlagsCriterion(exthdrFlags);</span>
+    }
+
+    /**
+     * Creates a match on lambda using the specified value.
+     *
+     * @param lambda lambda
+     * @return match criterion
+     */
+    public static Criterion matchLambda(Lambda lambda) {
+<span class="fc bfc" id="L472" title="All 2 branches covered.">        if (lambda instanceof IndexedLambda) {</span>
+<span class="fc" id="L473">            return new IndexedLambdaCriterion((IndexedLambda) lambda);</span>
+<span class="pc bpc" id="L474" title="1 of 2 branches missed.">        } else if (lambda instanceof OchSignal) {</span>
+<span class="fc" id="L475">            return new OchSignalCriterion((OchSignal) lambda);</span>
+        } else {
+<span class="nc" id="L477">            throw new UnsupportedOperationException(String.format(&quot;Unsupported type of Lambda: %s&quot;, lambda));</span>
+        }
+    }
+
+    /**
+     * Create a match on OCh (Optical Channel) signal type.
+     *
+     * @param signalType OCh signal type
+     * @return match criterion
+     */
+    public static Criterion matchOchSignalType(OchSignalType signalType) {
+<span class="fc" id="L488">        return new OchSignalTypeCriterion(signalType);</span>
+    }
+
+    /**
+     * Creates a match on ODU (Optical channel Data Unit) signal ID using the specified value.
+     *
+     * @param oduSignalId ODU Signal Id
+     * @return match criterion
+     */
+    public static Criterion matchOduSignalId(OduSignalId oduSignalId) {
+<span class="fc" id="L498">        return new OduSignalIdCriterion(oduSignalId);</span>
+    }
+
+    /**
+     * Creates a match on ODU (Optical channel Data Unit) signal Type using the specified value.
+     *
+     * @param signalType ODU Signal Type
+     * @return match criterion
+     */
+    public static Criterion matchOduSignalType(OduSignalType signalType) {
+<span class="fc" id="L508">        return new OduSignalTypeCriterion(signalType);</span>
+    }
+
+    public static Criterion dummy() {
+<span class="fc" id="L512">        return new DummyCriterion();</span>
+    }
+
+    /**
+     * Dummy Criterion used with @see{FilteringObjective}.
+     */
+<span class="fc" id="L518">    private static class DummyCriterion implements Criterion {</span>
+
+        @Override
+        public Type type() {
+<span class="nc" id="L522">            return Type.DUMMY;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

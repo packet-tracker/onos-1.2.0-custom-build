@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalPortConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.basics</a> &gt; <span class="el_source">OpticalPortConfig.java</span></div><h1>OpticalPortConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.basics;
+
+import java.util.Optional;
+
+import org.onosproject.net.config.Config;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Port;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+
+/**
+ * Configurations for an optical port on a device.
+ */
+<span class="nc" id="L30">public class OpticalPortConfig extends Config&lt;ConnectPoint&gt; {</span>
+    // optical type {OMS, OCH, ODUClt, fiber}
+    public static final String TYPE = &quot;type&quot;;
+
+    // port name. &quot;name&quot; is the alphanumeric name of the port, but &quot;port&quot; refers
+    // to the port number used as a name string (i.e., for ports without
+    // alphanumeric names).
+    public static final String NAME = &quot;name&quot;;
+    public static final String PORT = &quot;port&quot;;
+    public static final String STATIC_PORT = &quot;staticPort&quot;;
+    public static final String STATIC_LAMBDA = &quot;staticLambda&quot;;
+
+    // **Linc-OE : remove if it's not needed after all.**
+    public static final String SPEED = &quot;speed&quot;;
+
+    /**
+     * Returns the Enum value representing the type of port.
+     *
+     * @return the port type, or null if invalid or unset
+     */
+    public Port.Type type() {
+<span class="nc" id="L51">        JsonNode type = object.path(TYPE);</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">        if (type.isMissingNode()) {</span>
+<span class="nc" id="L53">            return null;</span>
+        }
+<span class="nc" id="L55">        return Port.Type.valueOf(type.asText());</span>
+    }
+
+    /**
+     * Returns the port name associated with this port configuration. The Name
+     * is an alphanumeric string.
+     *
+     * @return the name of this port, else, an empty string
+     */
+    public String name() {
+<span class="nc" id="L65">        return getStringValue(NAME);</span>
+    }
+
+    /**
+     * Returns a stringified representation of the port number, configured in
+     * some port types without an alphanumeric name as the port name.
+     *
+     * @return A string representation of the port number
+     */
+    public String numberName() {
+<span class="nc" id="L75">        return getStringValue(PORT);</span>
+    }
+
+    /**
+     * Returns the string-representation of name of the output port. This is
+     * usually an OMS port for an OCH input ports, or an OCH port for ODU input
+     * ports.
+     *
+     * @return the name of this port, else, an empty string
+     */
+    public String staticPort() {
+<span class="nc" id="L86">        return getStringValue(STATIC_PORT);</span>
+    }
+
+    private String getStringValue(String field) {
+<span class="nc" id="L90">        JsonNode name = object.path(field);</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        return name.isMissingNode() ? &quot;&quot; : name.asText();</span>
+    }
+
+    /**
+     * Returns the output lambda configured for this port. The lambda value is
+     * expressed as a frequency value. If the port type doesn't have a notion of
+     * lambdas, this returns an empty Optional.
+     *
+     * @return an Optional that may contain a frequency value.
+     */
+    public Optional&lt;Long&gt; staticLambda() {
+<span class="nc" id="L102">        JsonNode sl = object.path(STATIC_LAMBDA);</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if (sl.isMissingNode()) {</span>
+<span class="nc" id="L104">            return Optional.empty();</span>
+        }
+<span class="nc" id="L106">        return Optional.of(sl.asLong());</span>
+    }
+
+    /**
+     * Returns the port speed configured for this port. If the port doesn't have
+     * a notion of speed, this returns an empty Optional.
+     *
+     * @return a port speed value whose default is 0.
+     */
+    public Optional&lt;Integer&gt; speed() {
+<span class="nc" id="L116">        JsonNode s = object.path(SPEED);</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        if (s.isMissingNode()) {</span>
+<span class="nc" id="L118">            return Optional.empty();</span>
+        }
+<span class="nc" id="L120">        return Optional.of(s.asInt());</span>
+    }
+
+    /**
+     * Sets the port type, or updates it if it's already set. A null argument removes
+     * this field.
+     *
+     * @param type the port type
+     * @return this OpticalPortConfig instance
+     */
+    public OpticalPortConfig portType(Port.Type type) {
+        // if unspecified, ideally fall back on FIBER or PACKET.
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        String pt = (type == null) ? null : type.toString();</span>
+<span class="nc" id="L133">        return (OpticalPortConfig) setOrClear(TYPE, pt);</span>
+    }
+
+    /**
+     * Sets the port name, or updates it if already set. A null argument removes
+     * this field.
+     *
+     * @param name the port's name
+     * @return this OpticalPortConfig instance
+     */
+    public OpticalPortConfig portName(String name) {
+<span class="nc" id="L144">        return (OpticalPortConfig) setOrClear(NAME, name);</span>
+    }
+
+    /**
+     * Sets the port name from port number, or updates it if already set. A null
+     * argument removes this field.
+     *
+     * @param name the port number, to be used as name
+     * @return this OpticalPortConfig instance
+     */
+    public OpticalPortConfig portNumberName(Long name) {
+<span class="nc" id="L155">        return (OpticalPortConfig) setOrClear(PORT, name);</span>
+    }
+
+    /**
+     * Sets the output port name, or updates it if already set. A null argument
+     * removes this field.
+     *
+     * @param name the output port's name
+     * @return this OpticalPortConfig instance
+     */
+    public OpticalPortConfig staticPort(String name) {
+<span class="nc" id="L166">        return (OpticalPortConfig) setOrClear(STATIC_PORT, name);</span>
+    }
+
+    /**
+     * Sets the output lambda index, or updates it if already set. A null argument
+     * removes this field.
+     *
+     * @param index the output lambda
+     * @return this OpticalPortConfig instance
+     */
+    public OpticalPortConfig staticLambda(Long index) {
+<span class="nc" id="L177">        return (OpticalPortConfig) setOrClear(STATIC_LAMBDA, index);</span>
+    }
+
+    /**
+     * Sets the port speed, or updates it if already set. A null argument
+     * removes this field.
+     *
+     * @param bw the port bandwidth
+     * @return this OpticalPortConfig instance
+     */
+    public OpticalPortConfig speed(Integer bw) {
+<span class="nc" id="L188">        return (OpticalPortConfig) setOrClear(SPEED, bw);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

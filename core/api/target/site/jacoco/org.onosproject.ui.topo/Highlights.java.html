@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Highlights.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.topo</a> &gt; <span class="el_source">Highlights.java</span></div><h1>Highlights.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.topo;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Encapsulates highlights to be applied to the topology view, such as
+ * highlighting links, displaying link labels, perhaps even decorating
+ * nodes with badges, etc.
+ */
+<span class="fc" id="L31">public class Highlights {</span>
+
+    private static final String EMPTY = &quot;&quot;;
+    private static final String MIN = &quot;min&quot;;
+    private static final String MAX = &quot;max&quot;;
+
+    /**
+     * A notion of amount.
+     */
+<span class="pc" id="L40">    public enum Amount {</span>
+<span class="fc" id="L41">        ZERO(EMPTY),</span>
+<span class="fc" id="L42">        MINIMALLY(MIN),</span>
+<span class="fc" id="L43">        MAXIMALLY(MAX);</span>
+
+        private final String s;
+<span class="fc" id="L46">        Amount(String str) {</span>
+<span class="fc" id="L47">            s = str;</span>
+<span class="fc" id="L48">        }</span>
+
+        @Override
+        public String toString() {
+<span class="fc" id="L52">            return s;</span>
+        }
+    }
+
+<span class="fc" id="L56">    private final Map&lt;String, DeviceHighlight&gt; devices = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L57">    private final Map&lt;String, HostHighlight&gt; hosts = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L58">    private final Map&lt;String, LinkHighlight&gt; links = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L60">    private Amount subdueLevel = Amount.ZERO;</span>
+
+
+    /**
+     * Adds highlighting information for a device.
+     *
+     * @param dh device highlight
+     * @return self, for chaining
+     */
+    public Highlights add(DeviceHighlight dh) {
+<span class="fc" id="L70">        devices.put(dh.elementId(), dh);</span>
+<span class="fc" id="L71">        return this;</span>
+    }
+
+    /**
+     * Adds highlighting information for a host.
+     *
+     * @param hh host highlight
+     * @return self, for chaining
+     */
+    public Highlights add(HostHighlight hh) {
+<span class="fc" id="L81">        hosts.put(hh.elementId(), hh);</span>
+<span class="fc" id="L82">        return this;</span>
+    }
+
+    /**
+     * Adds highlighting information for a link.
+     *
+     * @param lh link highlight
+     * @return self, for chaining
+     */
+    public Highlights add(LinkHighlight lh) {
+<span class="nc" id="L92">        links.put(lh.elementId(), lh);</span>
+<span class="nc" id="L93">        return this;</span>
+    }
+
+    /**
+     * Marks the amount by which all other elements (devices, hosts, links)
+     * not explicitly referenced here will be &quot;subdued&quot; visually.
+     *
+     * @param amount amount to subdue other elements
+     * @return self, for chaining
+     */
+    public Highlights subdueAllElse(Amount amount) {
+<span class="fc" id="L104">        subdueLevel = checkNotNull(amount);</span>
+<span class="fc" id="L105">        return this;</span>
+    }
+
+    /**
+     * Returns the collection of device highlights.
+     *
+     * @return device highlights
+     */
+    public Collection&lt;DeviceHighlight&gt; devices() {
+<span class="fc" id="L114">        return Collections.unmodifiableCollection(devices.values());</span>
+    }
+
+    /**
+     * Returns the collection of host highlights.
+     *
+     * @return host highlights
+     */
+    public Collection&lt;HostHighlight&gt; hosts() {
+<span class="fc" id="L123">        return Collections.unmodifiableCollection(hosts.values());</span>
+    }
+
+    /**
+     * Returns the collection of link highlights.
+     *
+     * @return link highlights
+     */
+    public Collection&lt;LinkHighlight&gt; links() {
+<span class="fc" id="L132">        return Collections.unmodifiableCollection(links.values());</span>
+    }
+
+    /**
+     * Returns the amount by which all other elements not explicitly
+     * referenced here should be &quot;subdued&quot;.
+     *
+     * @return amount to subdue other elements
+     */
+    public Amount subdueLevel() {
+<span class="fc" id="L142">        return subdueLevel;</span>
+    }
+
+    /**
+     * Returns the node highlight (device or host) for the given element
+     * identifier, or null if no match.
+     *
+     * @param id element identifier
+     * @return corresponding node highlight
+     */
+    public NodeHighlight getNode(String id) {
+<span class="fc" id="L153">        NodeHighlight nh = devices.get(id);</span>
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        return nh != null ? nh : hosts.get(id);</span>
+    }
+
+    /**
+     * Returns the device highlight for the given device identifier,
+     * or null if no match.
+     *
+     * @param id device identifier
+     * @return corresponding device highlight
+     */
+    public DeviceHighlight getDevice(String id) {
+<span class="fc" id="L165">        return devices.get(id);</span>
+    }
+
+    /**
+     * Returns the host highlight for the given host identifier,
+     * or null if no match.
+     *
+     * @param id host identifier
+     * @return corresponding host highlight
+     */
+    public HostHighlight getHost(String id) {
+<span class="fc" id="L176">        return hosts.get(id);</span>
+    }
+
+    /**
+     * Returns the link highlight for the given link identifier,
+     * or null if no match.
+     *
+     * @param id link identifier
+     * @return corresponding link highlight
+     */
+    public LinkHighlight getLink(String id) {
+<span class="nc" id="L187">        return links.get(id);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

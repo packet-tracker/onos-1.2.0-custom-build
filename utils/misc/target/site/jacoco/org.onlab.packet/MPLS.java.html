@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MPLS.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">MPLS.java</span></div><h1>MPLS.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+public class MPLS extends BasePacket {
+    public static final int HEADER_LENGTH = 4;
+
+    public static final byte PROTOCOL_IPV4 = 0x1;
+    public static final byte PROTOCOL_MPLS = 0x6;
+<span class="fc" id="L29">    static Map&lt;Byte, Deserializer&lt;? extends IPacket&gt;&gt; protocolDeserializerMap</span>
+            = new HashMap&lt;&gt;();
+
+    static {
+<span class="fc" id="L33">        protocolDeserializerMap.put(PROTOCOL_IPV4, IPv4.deserializer());</span>
+<span class="fc" id="L34">        protocolDeserializerMap.put(PROTOCOL_MPLS, MPLS.deserializer());</span>
+<span class="fc" id="L35">    }</span>
+
+    protected int label; //20bits
+    protected byte bos; //1bit
+    protected byte ttl; //8bits
+    protected byte protocol;
+
+    /**
+     * Default constructor that sets the version to 4.
+     */
+    public MPLS() {
+<span class="fc" id="L46">        super();</span>
+<span class="fc" id="L47">        this.bos = 1;</span>
+<span class="fc" id="L48">        this.protocol = PROTOCOL_IPV4;</span>
+<span class="fc" id="L49">    }</span>
+
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L53">        byte[] payloadData = null;</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        if (payload != null) {</span>
+<span class="nc" id="L55">            payload.setParent(this);</span>
+<span class="nc" id="L56">            payloadData = payload.serialize();</span>
+        }
+
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        byte[] data = new byte[(4 + ((payloadData != null) ? payloadData.length : 0)) ];</span>
+<span class="nc" id="L60">        ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="nc" id="L62">        bb.putInt(((this.label &amp; 0x000fffff) &lt;&lt; 12) | ((this.bos &amp; 0x1) &lt;&lt; 8 | (this.ttl &amp; 0xff)));</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L64">            bb.put(payloadData);</span>
+        }
+
+<span class="nc" id="L67">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L72">        ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="nc" id="L74">        int mplsheader = bb.getInt();</span>
+<span class="nc" id="L75">        this.label = ((mplsheader &amp; 0xfffff000) &gt;&gt; 12);</span>
+<span class="nc" id="L76">        this.bos = (byte) ((mplsheader &amp; 0x00000100) &gt;&gt; 8);</span>
+<span class="nc" id="L77">        this.bos = (byte) (mplsheader &amp; 0x000000ff);</span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        this.protocol = (this.bos == 1) ? PROTOCOL_IPV4 : PROTOCOL_MPLS;</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (protocolDeserializerMap.containsKey(this.protocol)) {</span>
+<span class="nc" id="L82">            deserializer = protocolDeserializerMap.get(this.protocol);</span>
+        } else {
+<span class="nc" id="L84">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L87">            this.payload = deserializer.deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+<span class="nc" id="L88">            this.payload.setParent(this);</span>
+<span class="nc" id="L89">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L90">            return this;</span>
+<span class="nc" id="L91">        }</span>
+
+<span class="nc" id="L93">        return this;</span>
+    }
+
+    /**
+     * Returns the MPLS label.
+     *
+     * @return MPLS label
+     */
+    public int getLabel() {
+<span class="nc" id="L102">        return label;</span>
+    }
+
+    /**
+     * Sets the MPLS label.
+     *
+     * @param label MPLS label
+     */
+    public void setLabel(int label) {
+<span class="nc" id="L111">        this.label = label;</span>
+<span class="nc" id="L112">    }</span>
+
+    /**
+     * Returns the MPLS TTL of the packet.
+     *
+     * @return MPLS TTL of the packet
+     */
+    public byte getTtl() {
+<span class="nc" id="L120">        return ttl;</span>
+    }
+
+    /**
+     * Sets the MPLS TTL of the packet.
+     *
+     * @param ttl MPLS TTL
+     */
+    public void setTtl(byte ttl) {
+<span class="nc" id="L129">        this.ttl = ttl;</span>
+<span class="nc" id="L130">    }</span>
+
+    /**
+     * Deserializer function for MPLS packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;MPLS&gt; deserializer() {
+<span class="fc" id="L138">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L139">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="fc" id="L141">            MPLS mpls = new MPLS();</span>
+<span class="fc" id="L142">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L144">            int mplsheader = bb.getInt();</span>
+<span class="fc" id="L145">            mpls.label = ((mplsheader &amp; 0xfffff000) &gt;&gt;&gt; 12);</span>
+<span class="fc" id="L146">            mpls.bos = (byte) ((mplsheader &amp; 0x00000100) &gt;&gt; 8);</span>
+<span class="fc" id="L147">            mpls.ttl = (byte) (mplsheader &amp; 0x000000ff);</span>
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">            mpls.protocol = (mpls.bos == 1) ? PROTOCOL_IPV4 : PROTOCOL_MPLS;</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L151" title="1 of 2 branches missed.">            if (protocolDeserializerMap.containsKey(mpls.protocol)) {</span>
+<span class="nc" id="L152">                deserializer = protocolDeserializerMap.get(mpls.protocol);</span>
+            } else {
+<span class="fc" id="L154">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L156">            mpls.payload = deserializer.deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+<span class="fc" id="L157">            mpls.payload.setParent(mpls);</span>
+
+<span class="fc" id="L159">            return mpls;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

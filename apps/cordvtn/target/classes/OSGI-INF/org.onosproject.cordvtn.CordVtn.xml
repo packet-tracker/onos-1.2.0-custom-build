@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?><components xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0">
+    <scr:component immediate="true" name="org.onosproject.cordvtn.CordVtn" activate="activate" deactivate="deactivate">
+        <implementation class="org.onosproject.cordvtn.CordVtn"/>
+        <service servicefactory="false">
+            <provide interface="org.onosproject.cordvtn.CordVtnService"/>
+        </service>
+        <property name="service.pid" value="org.onosproject.cordvtn.CordVtn"/>
+        <reference name="coreService" interface="org.onosproject.core.CoreService" cardinality="1..1" policy="static" bind="bindCoreService" unbind="unbindCoreService"/>
+        <reference name="storageService" interface="org.onosproject.store.service.StorageService" cardinality="1..1" policy="static" bind="bindStorageService" unbind="unbindStorageService"/>
+        <reference name="deviceService" interface="org.onosproject.net.device.DeviceService" cardinality="1..1" policy="static" bind="bindDeviceService" unbind="unbindDeviceService"/>
+        <reference name="hostService" interface="org.onosproject.net.host.HostService" cardinality="1..1" policy="static" bind="bindHostService" unbind="unbindHostService"/>
+        <reference name="mastershipService" interface="org.onosproject.mastership.MastershipService" cardinality="1..1" policy="static" bind="bindMastershipService" unbind="unbindMastershipService"/>
+        <reference name="controller" interface="org.onosproject.ovsdb.controller.OvsdbController" cardinality="1..1" policy="static" bind="bindController" unbind="unbindController"/>
+        <reference name="clusterService" interface="org.onosproject.cluster.ClusterService" cardinality="1..1" policy="static" bind="bindClusterService" unbind="unbindClusterService"/>
+    </scr:component>
+</components>

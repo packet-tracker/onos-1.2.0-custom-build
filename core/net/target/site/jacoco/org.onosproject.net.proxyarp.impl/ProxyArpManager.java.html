@@ -1,0 +1,529 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ProxyArpManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.proxyarp.impl</a> &gt; <span class="el_source">ProxyArpManager.java</span></div><h1>ProxyArpManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.proxyarp.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.ARP;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.ICMP6;
+import org.onlab.packet.IPv6;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+import org.onlab.packet.ndp.NeighborAdvertisement;
+import org.onlab.packet.ndp.NeighborDiscoveryOptions;
+import org.onlab.packet.ndp.NeighborSolicitation;
+import org.onosproject.incubator.net.intf.Interface;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Host;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.edge.EdgePortService;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.link.LinkService;
+import org.onosproject.net.packet.DefaultOutboundPacket;
+import org.onosproject.net.packet.InboundPacket;
+import org.onosproject.net.packet.PacketContext;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.net.proxyarp.ProxyArpService;
+import org.onosproject.net.proxyarp.ProxyArpStore;
+import org.slf4j.Logger;
+
+import java.nio.ByteBuffer;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.packet.VlanId.vlanId;
+import static org.onosproject.net.HostId.hostId;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+@Component(immediate = true)
+@Service
+<span class="fc" id="L68">public class ProxyArpManager implements ProxyArpService {</span>
+
+<span class="fc" id="L70">    private final Logger log = getLogger(getClass());</span>
+
+    private static final String MAC_ADDR_NULL = &quot;MAC address cannot be null.&quot;;
+    private static final String REQUEST_NULL = &quot;ARP or NDP request cannot be null.&quot;;
+    private static final String MSG_NOT_REQUEST = &quot;Message is not an ARP or NDP request&quot;;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected EdgePortService edgeService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PacketService packetService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkService linkService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ProxyArpStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected InterfaceService interfaceService;
+
+<span class="pc" id="L97">    private enum Protocol {</span>
+<span class="fc" id="L98">        ARP, NDP</span>
+    }
+
+<span class="pc" id="L101">    private enum MessageType {</span>
+<span class="fc" id="L102">        REQUEST, REPLY</span>
+    }
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L107">        store.setDelegate(this::sendTo);</span>
+<span class="fc" id="L108">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L109">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L113">        store.setDelegate(null);</span>
+<span class="nc" id="L114">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L115">    }</span>
+
+    @Override
+    public boolean isKnown(IpAddress addr) {
+<span class="fc" id="L119">        checkPermission(PACKET_READ);</span>
+
+<span class="fc" id="L121">        checkNotNull(addr, MAC_ADDR_NULL);</span>
+<span class="fc" id="L122">        Set&lt;Host&gt; hosts = hostService.getHostsByIp(addr);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        return !hosts.isEmpty();</span>
+    }
+
+    @Override
+    public void reply(Ethernet eth, ConnectPoint inPort) {
+<span class="fc" id="L128">        checkPermission(PACKET_WRITE);</span>
+
+<span class="fc" id="L130">        checkNotNull(eth, REQUEST_NULL);</span>
+
+<span class="fc" id="L132">        MessageContext context = createContext(eth, inPort);</span>
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (context != null) {</span>
+<span class="fc" id="L134">            replyInternal(context);</span>
+        }
+<span class="fc" id="L136">    }</span>
+
+    /**
+     * Handles a request message.
+     *
+     * If the MAC address of the target is known, we can reply directly to the
+     * requestor. Otherwise, we forward the request out other ports in an
+     * attempt to find the correct host.
+     *
+     * @param context request message context to process
+     */
+    private void replyInternal(MessageContext context) {
+<span class="fc" id="L148">        checkNotNull(context);</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">        checkArgument(context.type() == MessageType.REQUEST, MSG_NOT_REQUEST);</span>
+
+<span class="fc bfc" id="L151" title="All 2 branches covered.">        if (hasIpAddress(context.inPort())) {</span>
+            // If the request came from outside the network, only reply if it was
+            // for one of our external addresses.
+
+<span class="fc" id="L155">            interfaceService.getInterfacesByPort(context.inPort())</span>
+<span class="fc" id="L156">                    .stream()</span>
+<span class="fc" id="L157">                    .filter(intf -&gt; intf.ipAddresses()</span>
+<span class="fc" id="L158">                            .stream()</span>
+<span class="fc" id="L159">                            .anyMatch(ia -&gt; ia.ipAddress().equals(context.target())))</span>
+<span class="fc" id="L160">                    .forEach(intf -&gt; buildAndSendReply(context, intf.mac()));</span>
+
+            // Stop here and don't proxy ARPs if the port has an IP address
+<span class="fc" id="L163">            return;</span>
+        }
+
+        // See if we have the target host in the host store
+<span class="fc" id="L167">        Set&lt;Host&gt; hosts = hostService.getHostsByIp(context.target());</span>
+
+<span class="fc" id="L169">        Host dst = null;</span>
+<span class="fc" id="L170">        Host src = hostService.getHost(hostId(context.srcMac(), context.vlan()));</span>
+
+<span class="fc bfc" id="L172" title="All 2 branches covered.">        for (Host host : hosts) {</span>
+<span class="fc bfc" id="L173" title="All 2 branches covered.">            if (host.vlan().equals(context.vlan())) {</span>
+<span class="fc" id="L174">                dst = host;</span>
+<span class="fc" id="L175">                break;</span>
+            }
+<span class="fc" id="L177">        }</span>
+
+<span class="fc bfc" id="L179" title="All 4 branches covered.">        if (src != null &amp;&amp; dst != null) {</span>
+            // We know the target host so we can respond
+<span class="fc" id="L181">            buildAndSendReply(context, dst.mac());</span>
+<span class="fc" id="L182">            return;</span>
+        }
+
+        // If the source address matches one of our external addresses
+        // it could be a request from an internal host to an external
+        // address. Forward it over to the correct port.
+<span class="fc" id="L188">        boolean matched = false;</span>
+<span class="fc" id="L189">        Set&lt;Interface&gt; interfaces = interfaceService.getInterfacesByIp(context.sender());</span>
+<span class="fc bfc" id="L190" title="All 2 branches covered.">        for (Interface intf : interfaces) {</span>
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">            if (intf.vlan().equals(context.vlan())) {</span>
+<span class="fc" id="L192">                matched = true;</span>
+<span class="fc" id="L193">                sendTo(context.packet(), intf.connectPoint());</span>
+<span class="fc" id="L194">                break;</span>
+            }
+<span class="nc" id="L196">        }</span>
+
+<span class="fc bfc" id="L198" title="All 2 branches covered.">        if (matched) {</span>
+<span class="fc" id="L199">            return;</span>
+        }
+
+        // The request couldn't be resolved.
+        // Flood the request on all ports except the incoming port.
+<span class="fc" id="L204">        flood(context.packet(), context.inPort());</span>
+<span class="fc" id="L205">    }</span>
+
+    /**
+     * Builds and sends a reply message given a request context and the resolved
+     * MAC address to answer with.
+     *
+     * @param context message context of request
+     * @param targetMac MAC address to be given in the response
+     */
+    private void buildAndSendReply(MessageContext context, MacAddress targetMac) {
+<span class="pc bpc" id="L215" title="2 of 3 branches missed.">        switch (context.protocol()) {</span>
+        case ARP:
+<span class="fc" id="L217">            sendTo(ARP.buildArpReply((Ip4Address) context.target(),</span>
+<span class="fc" id="L218">                    targetMac, context.packet()), context.inPort());</span>
+<span class="fc" id="L219">            break;</span>
+        case NDP:
+<span class="nc" id="L221">            sendTo(buildNdpReply((Ip6Address) context.target(), targetMac,</span>
+<span class="nc" id="L222">                    context.packet()), context.inPort());</span>
+<span class="nc" id="L223">            break;</span>
+        default:
+            break;
+        }
+<span class="fc" id="L227">    }</span>
+
+    /**
+     * Outputs a packet out a specific port.
+     *
+     * @param packet  the packet to send
+     * @param outPort the port to send it out
+     */
+    private void sendTo(Ethernet packet, ConnectPoint outPort) {
+<span class="fc" id="L236">        sendTo(outPort, ByteBuffer.wrap(packet.serialize()));</span>
+<span class="fc" id="L237">    }</span>
+
+    /**
+     * Outputs a packet out a specific port.
+     *
+     * @param outPort port to send it out
+     * @param packet packet to send
+     */
+    private void sendTo(ConnectPoint outPort, ByteBuffer packet) {
+<span class="pc bpc" id="L246" title="1 of 2 branches missed.">        if (!edgeService.isEdgePoint(outPort)) {</span>
+            // Sanity check to make sure we don't send the packet out an
+            // internal port and create a loop (could happen due to
+            // misconfiguration).
+<span class="nc" id="L250">            return;</span>
+        }
+
+<span class="fc" id="L253">        TrafficTreatment.Builder builder = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L254">        builder.setOutput(outPort.port());</span>
+<span class="fc" id="L255">        packetService.emit(new DefaultOutboundPacket(outPort.deviceId(),</span>
+<span class="fc" id="L256">                builder.build(), packet));</span>
+<span class="fc" id="L257">    }</span>
+
+    /**
+     * Returns whether the given port has any IP addresses configured or not.
+     *
+     * @param port the port to check
+     * @return true if the port has at least one IP address configured,
+     * otherwise false
+     */
+    private boolean hasIpAddress(ConnectPoint port) {
+<span class="fc" id="L267">        return interfaceService.getInterfacesByPort(port)</span>
+<span class="fc" id="L268">                .stream()</span>
+<span class="fc" id="L269">                .map(intf -&gt; intf.ipAddresses())</span>
+<span class="fc" id="L270">                .findAny()</span>
+<span class="fc" id="L271">                .isPresent();</span>
+    }
+
+    @Override
+    public void forward(Ethernet eth, ConnectPoint inPort) {
+<span class="fc" id="L276">        checkPermission(PACKET_WRITE);</span>
+
+<span class="fc" id="L278">        checkNotNull(eth, REQUEST_NULL);</span>
+
+<span class="fc" id="L280">        Host h = hostService.getHost(hostId(eth.getDestinationMAC(),</span>
+<span class="fc" id="L281">                vlanId(eth.getVlanID())));</span>
+
+<span class="fc bfc" id="L283" title="All 2 branches covered.">        if (h == null) {</span>
+<span class="fc" id="L284">            flood(eth, inPort);</span>
+        } else {
+<span class="fc" id="L286">            Host subject = hostService.getHost(hostId(eth.getSourceMAC(),</span>
+<span class="fc" id="L287">                                                      vlanId(eth.getVlanID())));</span>
+<span class="fc" id="L288">            store.forward(h.location(), subject, ByteBuffer.wrap(eth.serialize()));</span>
+        }
+<span class="fc" id="L290">    }</span>
+
+    @Override
+    public boolean handlePacket(PacketContext context) {
+<span class="nc" id="L294">        checkPermission(PACKET_WRITE);</span>
+
+<span class="nc" id="L296">        InboundPacket pkt = context.inPacket();</span>
+<span class="nc" id="L297">        Ethernet ethPkt = pkt.parsed();</span>
+
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (ethPkt == null) {</span>
+<span class="nc" id="L300">            return false;</span>
+        }
+
+<span class="nc" id="L303">        MessageContext msgContext = createContext(ethPkt, pkt.receivedFrom());</span>
+
+<span class="nc bnc" id="L305" title="All 2 branches missed.">        if (msgContext == null) {</span>
+<span class="nc" id="L306">            return false;</span>
+        }
+
+<span class="pc bnc" id="L309" title="All 3 branches missed.">        switch (msgContext.type()) {</span>
+        case REPLY:
+<span class="nc" id="L311">            forward(msgContext.packet(), msgContext.inPort());</span>
+<span class="nc" id="L312">            break;</span>
+        case REQUEST:
+<span class="nc" id="L314">            replyInternal(msgContext);</span>
+<span class="nc" id="L315">            break;</span>
+        default:
+<span class="nc" id="L317">            return false;</span>
+        }
+
+<span class="nc" id="L320">        context.block();</span>
+<span class="nc" id="L321">        return true;</span>
+    }
+
+    /**
+     * Flood the arp request at all edges in the network.
+     *
+     * @param request the arp request
+     * @param inPort  the connect point the arp request was received on
+     */
+    private void flood(Ethernet request, ConnectPoint inPort) {
+<span class="fc" id="L331">        TrafficTreatment.Builder builder = null;</span>
+<span class="fc" id="L332">        ByteBuffer buf = ByteBuffer.wrap(request.serialize());</span>
+
+<span class="fc bfc" id="L334" title="All 2 branches covered.">        for (ConnectPoint connectPoint : edgeService.getEdgePoints()) {</span>
+<span class="pc bpc" id="L335" title="1 of 4 branches missed.">            if (hasIpAddress(connectPoint) || connectPoint.equals(inPort)) {</span>
+<span class="nc" id="L336">                continue;</span>
+            }
+
+<span class="fc" id="L339">            builder = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L340">            builder.setOutput(connectPoint.port());</span>
+<span class="fc" id="L341">            packetService.emit(new DefaultOutboundPacket(connectPoint.deviceId(),</span>
+<span class="fc" id="L342">                                                         builder.build(), buf));</span>
+<span class="fc" id="L343">        }</span>
+<span class="fc" id="L344">    }</span>
+
+    /**
+     * Builds an Neighbor Discovery reply based on a request.
+     *
+     * @param srcIp   the IP address to use as the reply source
+     * @param srcMac  the MAC address to use as the reply source
+     * @param request the Neighbor Solicitation request we got
+     * @return an Ethernet frame containing the Neighbor Advertisement reply
+     */
+    private Ethernet buildNdpReply(Ip6Address srcIp, MacAddress srcMac,
+                                   Ethernet request) {
+<span class="nc" id="L356">        Ethernet eth = new Ethernet();</span>
+<span class="nc" id="L357">        eth.setDestinationMACAddress(request.getSourceMAC());</span>
+<span class="nc" id="L358">        eth.setSourceMACAddress(srcMac);</span>
+<span class="nc" id="L359">        eth.setEtherType(Ethernet.TYPE_IPV6);</span>
+<span class="nc" id="L360">        eth.setVlanID(request.getVlanID());</span>
+
+<span class="nc" id="L362">        IPv6 requestIp = (IPv6) request.getPayload();</span>
+<span class="nc" id="L363">        IPv6 ipv6 = new IPv6();</span>
+<span class="nc" id="L364">        ipv6.setSourceAddress(srcIp.toOctets());</span>
+<span class="nc" id="L365">        ipv6.setDestinationAddress(requestIp.getSourceAddress());</span>
+<span class="nc" id="L366">        ipv6.setHopLimit((byte) 255);</span>
+
+<span class="nc" id="L368">        ICMP6 icmp6 = new ICMP6();</span>
+<span class="nc" id="L369">        icmp6.setIcmpType(ICMP6.NEIGHBOR_ADVERTISEMENT);</span>
+<span class="nc" id="L370">        icmp6.setIcmpCode((byte) 0);</span>
+
+<span class="nc" id="L372">        NeighborAdvertisement nadv = new NeighborAdvertisement();</span>
+<span class="nc" id="L373">        nadv.setTargetAddress(srcIp.toOctets());</span>
+<span class="nc" id="L374">        nadv.setSolicitedFlag((byte) 1);</span>
+<span class="nc" id="L375">        nadv.setOverrideFlag((byte) 1);</span>
+<span class="nc" id="L376">        nadv.addOption(NeighborDiscoveryOptions.TYPE_TARGET_LL_ADDRESS,</span>
+<span class="nc" id="L377">                       srcMac.toBytes());</span>
+
+<span class="nc" id="L379">        icmp6.setPayload(nadv);</span>
+<span class="nc" id="L380">        ipv6.setPayload(icmp6);</span>
+<span class="nc" id="L381">        eth.setPayload(ipv6);</span>
+<span class="nc" id="L382">        return eth;</span>
+    }
+
+    /**
+     * Attempts to create a MessageContext for the given Ethernet frame. If the
+     * frame is a valid ARP or NDP request or response, a context will be
+     * created.
+     *
+     * @param eth input Ethernet frame
+     * @param inPort in port
+     * @return MessageContext if the packet was ARP or NDP, otherwise null
+     */
+    private MessageContext createContext(Ethernet eth, ConnectPoint inPort) {
+<span class="pc bpc" id="L395" title="1 of 2 branches missed.">        if (eth.getEtherType() == Ethernet.TYPE_ARP) {</span>
+<span class="fc" id="L396">            return createArpContext(eth, inPort);</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        } else if (eth.getEtherType() == Ethernet.TYPE_IPV6) {</span>
+<span class="nc" id="L398">            return createNdpContext(eth, inPort);</span>
+        }
+
+<span class="nc" id="L401">        return null;</span>
+    }
+
+    /**
+     * Extracts context information from ARP packets.
+     *
+     * @param eth input Ethernet frame that is thought to be ARP
+     * @param inPort in port
+     * @return MessageContext object if the packet was a valid ARP packet,
+     * otherwise null
+     */
+    private MessageContext createArpContext(Ethernet eth, ConnectPoint inPort) {
+<span class="pc bpc" id="L413" title="1 of 2 branches missed.">        if (eth.getEtherType() != Ethernet.TYPE_ARP) {</span>
+<span class="nc" id="L414">            return null;</span>
+        }
+
+<span class="fc" id="L417">        ARP arp = (ARP) eth.getPayload();</span>
+
+<span class="fc" id="L419">        IpAddress target = Ip4Address.valueOf(arp.getTargetProtocolAddress());</span>
+<span class="fc" id="L420">        IpAddress sender = Ip4Address.valueOf(arp.getSenderProtocolAddress());</span>
+
+        MessageType type;
+<span class="pc bpc" id="L423" title="1 of 2 branches missed.">        if (arp.getOpCode() == ARP.OP_REQUEST) {</span>
+<span class="fc" id="L424">            type = MessageType.REQUEST;</span>
+<span class="nc bnc" id="L425" title="All 2 branches missed.">        } else if (arp.getOpCode() == ARP.OP_REPLY) {</span>
+<span class="nc" id="L426">            type = MessageType.REPLY;</span>
+        } else {
+<span class="nc" id="L428">            return null;</span>
+        }
+
+<span class="fc" id="L431">        return new MessageContext(eth, inPort, Protocol.ARP, type, target, sender);</span>
+    }
+
+    /**
+     * Extracts context information from NDP packets.
+     *
+     * @param eth input Ethernet frame that is thought to be NDP
+     * @param inPort in port
+     * @return MessageContext object if the packet was a valid NDP packet,
+     * otherwise null
+     */
+    private MessageContext createNdpContext(Ethernet eth, ConnectPoint inPort) {
+<span class="nc bnc" id="L443" title="All 2 branches missed.">        if (eth.getEtherType() != Ethernet.TYPE_IPV6) {</span>
+<span class="nc" id="L444">            return null;</span>
+        }
+<span class="nc" id="L446">        IPv6 ipv6 = (IPv6) eth.getPayload();</span>
+
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        if (ipv6.getNextHeader() != IPv6.PROTOCOL_ICMP6) {</span>
+<span class="nc" id="L449">            return null;</span>
+        }
+<span class="nc" id="L451">        ICMP6 icmpv6 = (ICMP6) ipv6.getPayload();</span>
+
+<span class="nc" id="L453">        IpAddress sender = Ip6Address.valueOf(ipv6.getSourceAddress());</span>
+<span class="nc" id="L454">        IpAddress target = null;</span>
+
+        MessageType type;
+<span class="nc bnc" id="L457" title="All 2 branches missed.">        if (icmpv6.getIcmpType() == ICMP6.NEIGHBOR_SOLICITATION) {</span>
+<span class="nc" id="L458">            type = MessageType.REQUEST;</span>
+<span class="nc" id="L459">            NeighborSolicitation nsol = (NeighborSolicitation) icmpv6.getPayload();</span>
+<span class="nc" id="L460">            target = Ip6Address.valueOf(nsol.getTargetAddress());</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">        } else if (icmpv6.getIcmpType() == ICMP6.NEIGHBOR_ADVERTISEMENT) {</span>
+<span class="nc" id="L462">            type = MessageType.REPLY;</span>
+        } else {
+<span class="nc" id="L464">            return null;</span>
+        }
+
+<span class="nc" id="L467">        return new MessageContext(eth, inPort, Protocol.NDP, type, target, sender);</span>
+    }
+
+    /**
+     * Provides context information for a particular ARP or NDP message, with
+     * a unified interface to access data regardless of protocol.
+     */
+    private class MessageContext {
+        private Protocol protocol;
+        private MessageType type;
+
+        private IpAddress target;
+        private IpAddress sender;
+
+        private Ethernet eth;
+        private ConnectPoint inPort;
+
+
+        public MessageContext(Ethernet eth, ConnectPoint inPort,
+                              Protocol protocol, MessageType type,
+<span class="fc" id="L487">                              IpAddress target, IpAddress sender) {</span>
+<span class="fc" id="L488">            this.eth = eth;</span>
+<span class="fc" id="L489">            this.inPort = inPort;</span>
+<span class="fc" id="L490">            this.protocol = protocol;</span>
+<span class="fc" id="L491">            this.type = type;</span>
+<span class="fc" id="L492">            this.target = target;</span>
+<span class="fc" id="L493">            this.sender = sender;</span>
+<span class="fc" id="L494">        }</span>
+
+        public ConnectPoint inPort() {
+<span class="fc" id="L497">            return inPort;</span>
+        }
+
+        public Ethernet packet() {
+<span class="fc" id="L501">            return eth;</span>
+        }
+
+        public Protocol protocol() {
+<span class="fc" id="L505">            return protocol;</span>
+        }
+
+        public MessageType type() {
+<span class="fc" id="L509">            return type;</span>
+        }
+
+        public VlanId vlan() {
+<span class="fc" id="L513">            return VlanId.vlanId(eth.getVlanID());</span>
+        }
+
+        public MacAddress srcMac() {
+<span class="fc" id="L517">            return MacAddress.valueOf(eth.getSourceMACAddress());</span>
+        }
+
+        public IpAddress target() {
+<span class="fc" id="L521">            return target;</span>
+        }
+
+        public IpAddress sender() {
+<span class="fc" id="L525">            return sender;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

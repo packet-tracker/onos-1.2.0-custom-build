@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultNextObjective.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flowobjective</a> &gt; <span class="el_source">DefaultNextObjective.java</span></div><h1>DefaultNextObjective.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flowobjective;
+
+import com.google.common.annotations.Beta;
+import com.google.common.collect.ImmutableList;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.flow.TrafficTreatment;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Default implementation of a next objective.
+ */
+@Beta
+public final class DefaultNextObjective implements NextObjective {
+
+    private final List&lt;TrafficTreatment&gt; treatments;
+    private final ApplicationId appId;
+    private final Type type;
+    private final Integer id;
+    private final Operation op;
+    private final Optional&lt;ObjectiveContext&gt; context;
+
+<span class="fc" id="L43">    private DefaultNextObjective(Builder builder) {</span>
+<span class="fc" id="L44">        this.treatments = builder.treatments;</span>
+<span class="fc" id="L45">        this.appId = builder.appId;</span>
+<span class="fc" id="L46">        this.type = builder.type;</span>
+<span class="fc" id="L47">        this.id = builder.id;</span>
+<span class="fc" id="L48">        this.op = builder.op;</span>
+<span class="fc" id="L49">        this.context = Optional.ofNullable(builder.context);</span>
+<span class="fc" id="L50">    }</span>
+
+    @Override
+    public Collection&lt;TrafficTreatment&gt; next() {
+<span class="fc" id="L54">        return treatments;</span>
+    }
+
+    @Override
+    public Type type() {
+<span class="fc" id="L59">        return type;</span>
+    }
+
+    @Override
+    public int id() {
+<span class="fc" id="L64">        return id;</span>
+    }
+
+    @Override
+    public int priority() {
+<span class="fc" id="L69">        return 0;</span>
+    }
+
+    @Override
+    public ApplicationId appId() {
+<span class="fc" id="L74">        return appId;</span>
+    }
+
+    @Override
+    public int timeout() {
+<span class="fc" id="L79">        return 0;</span>
+    }
+
+    @Override
+    public boolean permanent() {
+<span class="fc" id="L84">        return false;</span>
+    }
+
+    @Override
+    public Operation op() {
+<span class="fc" id="L89">        return op;</span>
+    }
+
+    @Override
+    public Optional&lt;ObjectiveContext&gt; context() {
+<span class="fc" id="L94">        return context;</span>
+    }
+
+    /**
+     * Returns a new builder.
+     *
+     * @return new builder
+     */
+    public static Builder builder() {
+<span class="fc" id="L103">        return new Builder();</span>
+    }
+
+<span class="fc" id="L106">    public static final class Builder implements NextObjective.Builder {</span>
+
+        private ApplicationId appId;
+        private Type type;
+        private Integer id;
+        private List&lt;TrafficTreatment&gt; treatments;
+        private Operation op;
+        private ObjectiveContext context;
+
+<span class="fc" id="L115">        private final ImmutableList.Builder&lt;TrafficTreatment&gt; listBuilder</span>
+<span class="fc" id="L116">                = ImmutableList.builder();</span>
+
+        @Override
+        public Builder withId(int nextId) {
+<span class="fc" id="L120">            this.id = nextId;</span>
+<span class="fc" id="L121">            return this;</span>
+        }
+
+        @Override
+        public Builder withType(Type type) {
+<span class="fc" id="L126">            this.type = type;</span>
+<span class="fc" id="L127">            return this;</span>
+        }
+
+        @Override
+        public Builder addTreatment(TrafficTreatment treatment) {
+<span class="fc" id="L132">            listBuilder.add(treatment);</span>
+<span class="fc" id="L133">            return this;</span>
+        }
+
+        /**
+         * Noop. This method has no effect.
+         *
+         * @param timeout a timeout
+         * @return a next objective builder
+         */
+        @Override
+        public Builder makeTemporary(int timeout) {
+<span class="fc" id="L144">            return this;</span>
+        }
+
+        /**
+         * Noop. This method has no effect.
+         *
+         * @return a next objective builder
+         */
+        @Override
+        public Builder makePermanent() {
+<span class="nc" id="L154">            return this;</span>
+        }
+
+        @Override
+        public Builder fromApp(ApplicationId appId) {
+<span class="fc" id="L159">            this.appId = appId;</span>
+<span class="fc" id="L160">            return this;</span>
+        }
+
+        /**
+         * Noop. This method has no effect.
+         *
+         * @param priority an integer
+         * @return a next objective builder
+         */
+        @Override
+        public Builder withPriority(int priority) {
+<span class="fc" id="L171">            return this;</span>
+        }
+
+        @Override
+        public NextObjective add() {
+<span class="fc" id="L176">            treatments = listBuilder.build();</span>
+<span class="fc" id="L177">            op = Operation.ADD;</span>
+<span class="fc" id="L178">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L179">            checkNotNull(id, &quot;id cannot be null&quot;);</span>
+<span class="fc" id="L180">            checkNotNull(type, &quot;The type cannot be null&quot;);</span>
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">            checkArgument(!treatments.isEmpty(), &quot;Must have at least one treatment&quot;);</span>
+
+<span class="fc" id="L183">            return new DefaultNextObjective(this);</span>
+        }
+
+        @Override
+        public NextObjective remove() {
+<span class="fc" id="L188">            treatments = listBuilder.build();</span>
+<span class="fc" id="L189">            op = Operation.REMOVE;</span>
+<span class="fc" id="L190">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L191">            checkNotNull(id, &quot;id cannot be null&quot;);</span>
+<span class="fc" id="L192">            checkNotNull(type, &quot;The type cannot be null&quot;);</span>
+
+<span class="fc" id="L194">            return new DefaultNextObjective(this);</span>
+        }
+
+        @Override
+        public NextObjective add(ObjectiveContext context) {
+<span class="fc" id="L199">            treatments = listBuilder.build();</span>
+<span class="fc" id="L200">            op = Operation.ADD;</span>
+<span class="fc" id="L201">            this.context = context;</span>
+<span class="fc" id="L202">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L203">            checkNotNull(id, &quot;id cannot be null&quot;);</span>
+<span class="fc" id="L204">            checkNotNull(type, &quot;The type cannot be null&quot;);</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">            checkArgument(!treatments.isEmpty(), &quot;Must have at least one treatment&quot;);</span>
+
+<span class="fc" id="L207">            return new DefaultNextObjective(this);</span>
+        }
+
+        @Override
+        public NextObjective remove(ObjectiveContext context) {
+<span class="fc" id="L212">            treatments = listBuilder.build();</span>
+<span class="fc" id="L213">            op = Operation.REMOVE;</span>
+<span class="fc" id="L214">            this.context = context;</span>
+<span class="fc" id="L215">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L216">            checkNotNull(id, &quot;id cannot be null&quot;);</span>
+<span class="fc" id="L217">            checkNotNull(type, &quot;The type cannot be null&quot;);</span>
+
+<span class="fc" id="L219">            return new DefaultNextObjective(this);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

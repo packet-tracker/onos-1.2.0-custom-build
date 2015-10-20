@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EncodeConstraintCodecHelper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">EncodeConstraintCodecHelper.java</span></div><h1>EncodeConstraintCodecHelper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.intent.Constraint;
+import org.onosproject.net.intent.constraint.AnnotationConstraint;
+import org.onosproject.net.intent.constraint.BandwidthConstraint;
+import org.onosproject.net.intent.constraint.LambdaConstraint;
+import org.onosproject.net.intent.constraint.LatencyConstraint;
+import org.onosproject.net.intent.constraint.LinkTypeConstraint;
+import org.onosproject.net.intent.constraint.ObstacleConstraint;
+import org.onosproject.net.intent.constraint.WaypointConstraint;
+
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Implementation of encoder for constraint JSON codec.
+ */
+public final class EncodeConstraintCodecHelper {
+
+    private final Constraint constraint;
+    private final CodecContext context;
+
+    /**
+     * Constructs a constraint encoder.
+     *
+     * @param constraint constraint to encode
+     * @param context to use for look ups
+     */
+<span class="fc" id="L49">    public EncodeConstraintCodecHelper(Constraint constraint, CodecContext context) {</span>
+<span class="fc" id="L50">        this.constraint = constraint;</span>
+<span class="fc" id="L51">        this.context = context;</span>
+<span class="fc" id="L52">    }</span>
+
+    /**
+     * Encodes a latency constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeLatencyConstraint() {
+<span class="fc" id="L60">        checkNotNull(constraint, &quot;Duration constraint cannot be null&quot;);</span>
+<span class="fc" id="L61">        final LatencyConstraint latencyConstraint =</span>
+                (LatencyConstraint) constraint;
+<span class="fc" id="L63">        return context.mapper().createObjectNode()</span>
+<span class="fc" id="L64">                .put(&quot;latencyMillis&quot;, latencyConstraint.latency().toMillis());</span>
+    }
+
+    /**
+     * Encodes an obstacle constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeObstacleConstraint() {
+<span class="fc" id="L73">        checkNotNull(constraint, &quot;Obstacle constraint cannot be null&quot;);</span>
+<span class="fc" id="L74">        final ObstacleConstraint obstacleConstraint =</span>
+                (ObstacleConstraint) constraint;
+
+<span class="fc" id="L77">        final ObjectNode result = context.mapper().createObjectNode();</span>
+<span class="fc" id="L78">        final ArrayNode jsonObstacles = result.putArray(&quot;obstacles&quot;);</span>
+
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        for (DeviceId did : obstacleConstraint.obstacles()) {</span>
+<span class="fc" id="L81">            jsonObstacles.add(did.toString());</span>
+<span class="fc" id="L82">        }</span>
+
+<span class="fc" id="L84">        return result;</span>
+    }
+
+    /**
+     * Encodes a waypoint constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeWaypointConstraint() {
+<span class="fc" id="L93">        checkNotNull(constraint, &quot;Waypoint constraint cannot be null&quot;);</span>
+<span class="fc" id="L94">        final WaypointConstraint waypointConstraint =</span>
+                (WaypointConstraint) constraint;
+
+<span class="fc" id="L97">        final ObjectNode result = context.mapper().createObjectNode();</span>
+<span class="fc" id="L98">        final ArrayNode jsonWaypoints = result.putArray(&quot;waypoints&quot;);</span>
+
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        for (DeviceId did : waypointConstraint.waypoints()) {</span>
+<span class="fc" id="L101">            jsonWaypoints.add(did.toString());</span>
+<span class="fc" id="L102">        }</span>
+
+<span class="fc" id="L104">        return result;</span>
+    }
+
+    /**
+     * Encodes a annotation constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeAnnotationConstraint() {
+<span class="fc" id="L113">        checkNotNull(constraint, &quot;Annotation constraint cannot be null&quot;);</span>
+<span class="fc" id="L114">        final AnnotationConstraint annotationConstraint =</span>
+                (AnnotationConstraint) constraint;
+<span class="fc" id="L116">        return context.mapper().createObjectNode()</span>
+<span class="fc" id="L117">                .put(&quot;key&quot;, annotationConstraint.key())</span>
+<span class="fc" id="L118">                .put(&quot;threshold&quot;, annotationConstraint.threshold());</span>
+    }
+
+    /**
+     * Encodes a bandwidth constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeBandwidthConstraint() {
+<span class="fc" id="L127">        checkNotNull(constraint, &quot;Bandwidth constraint cannot be null&quot;);</span>
+<span class="fc" id="L128">        final BandwidthConstraint bandwidthConstraint =</span>
+                (BandwidthConstraint) constraint;
+<span class="fc" id="L130">        return context.mapper().createObjectNode()</span>
+<span class="fc" id="L131">                .put(&quot;bandwidth&quot;, bandwidthConstraint.bandwidth().toDouble());</span>
+    }
+
+    /**
+     * Encodes a lambda constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeLambdaConstraint() {
+<span class="fc" id="L140">        checkNotNull(constraint, &quot;Lambda constraint cannot be null&quot;);</span>
+<span class="fc" id="L141">        final LambdaConstraint lambdaConstraint =</span>
+                (LambdaConstraint) constraint;
+
+<span class="fc" id="L144">        return context.mapper().createObjectNode()</span>
+<span class="fc" id="L145">                .put(&quot;lambda&quot;, lambdaConstraint.lambda().toInt());</span>
+    }
+
+    /**
+     * Encodes a link type constraint.
+     *
+     * @return JSON ObjectNode representing the constraint
+     */
+    private ObjectNode encodeLinkTypeConstraint() {
+<span class="nc" id="L154">        checkNotNull(constraint, &quot;Link type constraint cannot be null&quot;);</span>
+
+<span class="nc" id="L156">        final LinkTypeConstraint linkTypeConstraint =</span>
+                (LinkTypeConstraint) constraint;
+
+<span class="nc" id="L159">        final ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="nc" id="L160">                .put(ConstraintCodec.INCLUSIVE, linkTypeConstraint.isInclusive());</span>
+
+<span class="nc" id="L162">        final ArrayNode jsonTypes = result.putArray(ConstraintCodec.TYPES);</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if (linkTypeConstraint.types() != null) {</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            for (Link.Type type : linkTypeConstraint.types()) {</span>
+<span class="nc" id="L166">                jsonTypes.add(type.name());</span>
+<span class="nc" id="L167">            }</span>
+        }
+
+<span class="nc" id="L170">        return result;</span>
+    }
+
+    /**
+     * Encodes the constraint in JSON.
+     *
+     * @return JSON node
+     */
+    public ObjectNode encode() {
+        final ObjectNode result;
+<span class="fc bfc" id="L180" title="All 2 branches covered.">        if (constraint instanceof BandwidthConstraint) {</span>
+<span class="fc" id="L181">            result = encodeBandwidthConstraint();</span>
+<span class="fc bfc" id="L182" title="All 2 branches covered.">        } else if (constraint instanceof LambdaConstraint) {</span>
+<span class="fc" id="L183">            result = encodeLambdaConstraint();</span>
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        } else if (constraint instanceof LinkTypeConstraint) {</span>
+<span class="nc" id="L185">            result = encodeLinkTypeConstraint();</span>
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        } else if (constraint instanceof AnnotationConstraint) {</span>
+<span class="fc" id="L187">            result = encodeAnnotationConstraint();</span>
+<span class="fc bfc" id="L188" title="All 2 branches covered.">        } else if (constraint instanceof LatencyConstraint) {</span>
+<span class="fc" id="L189">            result = encodeLatencyConstraint();</span>
+<span class="fc bfc" id="L190" title="All 2 branches covered.">        } else if (constraint instanceof ObstacleConstraint) {</span>
+<span class="fc" id="L191">            result = encodeObstacleConstraint();</span>
+<span class="fc bfc" id="L192" title="All 2 branches covered.">        } else if (constraint instanceof WaypointConstraint) {</span>
+<span class="fc" id="L193">            result = encodeWaypointConstraint();</span>
+        } else {
+<span class="fc" id="L195">            result = context.mapper().createObjectNode();</span>
+        }
+
+<span class="fc" id="L198">        result.put(ConstraintCodec.TYPE, constraint.getClass().getSimpleName());</span>
+<span class="fc" id="L199">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

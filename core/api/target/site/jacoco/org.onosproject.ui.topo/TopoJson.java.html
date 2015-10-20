@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TopoJson.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.topo</a> &gt; <span class="el_source">TopoJson.java</span></div><h1>TopoJson.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.topo;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static org.onosproject.ui.JsonUtils.envelope;
+
+/**
+ * JSON utilities for the Topology View.
+ */
+public final class TopoJson {
+    // package-private for unit test access
+    static final String SHOW_HIGHLIGHTS = &quot;showHighlights&quot;;
+
+    static final String DEVICES = &quot;devices&quot;;
+    static final String HOSTS = &quot;hosts&quot;;
+    static final String LINKS = &quot;links&quot;;
+    static final String SUBDUE = &quot;subdue&quot;;
+
+    static final String ID = &quot;id&quot;;
+    static final String LABEL = &quot;label&quot;;
+    static final String CSS = &quot;css&quot;;
+
+    static final String TITLE = &quot;title&quot;;
+    static final String TYPE = &quot;type&quot;;
+    static final String PROP_ORDER = &quot;propOrder&quot;;
+    static final String PROPS = &quot;props&quot;;
+    static final String BUTTONS = &quot;buttons&quot;;
+
+
+<span class="fc" id="L48">    private static final ObjectMapper MAPPER = new ObjectMapper();</span>
+
+    private static ObjectNode objectNode() {
+<span class="fc" id="L51">        return MAPPER.createObjectNode();</span>
+    }
+
+    private static ArrayNode arrayNode() {
+<span class="fc" id="L55">        return MAPPER.createArrayNode();</span>
+    }
+
+    // non-instantiable
+<span class="nc" id="L59">    private TopoJson() { }</span>
+
+    /**
+     * Returns a formatted message ready to send to the topology view
+     * to render highlights.
+     *
+     * @param highlights highlights model to transform
+     * @return fully formatted &quot;show highlights&quot; message
+     */
+    public static ObjectNode highlightsMessage(Highlights highlights) {
+<span class="nc" id="L69">        return envelope(SHOW_HIGHLIGHTS, json(highlights));</span>
+    }
+
+    /**
+     * Transforms the given highlights model into a JSON message payload.
+     *
+     * @param highlights the model to transform
+     * @return JSON payload
+     */
+    public static ObjectNode json(Highlights highlights) {
+<span class="fc" id="L79">        ObjectNode payload = objectNode();</span>
+
+<span class="fc" id="L81">        ArrayNode devices = arrayNode();</span>
+<span class="fc" id="L82">        ArrayNode hosts = arrayNode();</span>
+<span class="fc" id="L83">        ArrayNode links = arrayNode();</span>
+
+<span class="fc" id="L85">        payload.set(DEVICES, devices);</span>
+<span class="fc" id="L86">        payload.set(HOSTS, hosts);</span>
+<span class="fc" id="L87">        payload.set(LINKS, links);</span>
+
+<span class="pc" id="L89">        highlights.devices().forEach(dh -&gt; devices.add(json(dh)));</span>
+<span class="pc" id="L90">        highlights.hosts().forEach(hh -&gt; hosts.add(json(hh)));</span>
+<span class="pc" id="L91">        highlights.links().forEach(lh -&gt; links.add(json(lh)));</span>
+
+<span class="fc" id="L93">        Highlights.Amount toSubdue = highlights.subdueLevel();</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (!toSubdue.equals(Highlights.Amount.ZERO)) {</span>
+<span class="fc" id="L95">            payload.put(SUBDUE, toSubdue.toString());</span>
+        }
+<span class="fc" id="L97">        return payload;</span>
+    }
+
+    private static ObjectNode json(DeviceHighlight dh) {
+<span class="nc" id="L101">        ObjectNode n = objectNode()</span>
+<span class="nc" id="L102">                .put(ID, dh.elementId());</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if (dh.subdued()) {</span>
+<span class="nc" id="L104">            n.put(SUBDUE, true);</span>
+        }
+<span class="nc" id="L106">        return n;</span>
+    }
+
+    private static ObjectNode json(HostHighlight hh) {
+<span class="nc" id="L110">        ObjectNode n = objectNode()</span>
+<span class="nc" id="L111">                .put(ID, hh.elementId());</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (hh.subdued()) {</span>
+<span class="nc" id="L113">            n.put(SUBDUE, true);</span>
+        }
+<span class="nc" id="L115">        return n;</span>
+    }
+
+    private static ObjectNode json(LinkHighlight lh) {
+<span class="nc" id="L119">        ObjectNode n = objectNode()</span>
+<span class="nc" id="L120">                .put(ID, lh.elementId())</span>
+<span class="nc" id="L121">                .put(LABEL, lh.label())</span>
+<span class="nc" id="L122">                .put(CSS, lh.cssClasses());</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (lh.subdued()) {</span>
+<span class="nc" id="L124">            n.put(SUBDUE, true);</span>
+        }
+<span class="nc" id="L126">        return n;</span>
+    }
+
+    /**
+     * Translates the given property panel into JSON, for returning
+     * to the client.
+     *
+     * @param pp the property panel model
+     * @return JSON payload
+     */
+    public static ObjectNode json(PropertyPanel pp) {
+<span class="nc" id="L137">        ObjectNode result = objectNode()</span>
+<span class="nc" id="L138">                .put(TITLE, pp.title())</span>
+<span class="nc" id="L139">                .put(TYPE, pp.typeId())</span>
+<span class="nc" id="L140">                .put(ID, pp.id());</span>
+
+<span class="nc" id="L142">        ObjectNode pnode = objectNode();</span>
+<span class="nc" id="L143">        ArrayNode porder = arrayNode();</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        for (PropertyPanel.Prop p : pp.properties()) {</span>
+<span class="nc" id="L145">            porder.add(p.key());</span>
+<span class="nc" id="L146">            pnode.put(p.key(), p.value());</span>
+<span class="nc" id="L147">        }</span>
+<span class="nc" id="L148">        result.set(PROP_ORDER, porder);</span>
+<span class="nc" id="L149">        result.set(PROPS, pnode);</span>
+
+<span class="nc" id="L151">        ArrayNode buttons = arrayNode();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        for (ButtonId b : pp.buttons()) {</span>
+<span class="nc" id="L153">            buttons.add(b.id());</span>
+<span class="nc" id="L154">        }</span>
+<span class="nc" id="L155">        result.set(BUTTONS, buttons);</span>
+<span class="nc" id="L156">        return result;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

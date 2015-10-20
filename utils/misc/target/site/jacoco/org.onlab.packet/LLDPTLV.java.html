@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LLDPTLV.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">LLDPTLV.java</span></div><h1>LLDPTLV.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+/**
+ *
+ *
+ */
+<span class="fc" id="L28">public class LLDPTLV {</span>
+    protected byte type;
+    protected short length;
+    protected byte[] value;
+
+    /**
+     * @return the type
+     */
+    public byte getType() {
+<span class="fc" id="L37">        return this.type;</span>
+    }
+
+    /**
+     * @param type
+     *            the type to set
+     * @return this
+     */
+    public LLDPTLV setType(final byte type) {
+<span class="nc" id="L46">        this.type = type;</span>
+<span class="nc" id="L47">        return this;</span>
+    }
+
+    /**
+     * @return the length
+     */
+    public short getLength() {
+<span class="fc" id="L54">        return this.length;</span>
+    }
+
+    /**
+     * @param length
+     *            the length to set
+     * @return this
+     */
+    public LLDPTLV setLength(final short length) {
+<span class="nc" id="L63">        this.length = length;</span>
+<span class="nc" id="L64">        return this;</span>
+    }
+
+    /**
+     * @return the value
+     */
+    public byte[] getValue() {
+<span class="fc" id="L71">        return this.value;</span>
+    }
+
+    /**
+     * @param value
+     *            the value to set
+     * @return this
+     */
+    public LLDPTLV setValue(final byte[] value) {
+<span class="nc" id="L80">        this.value = value;</span>
+<span class="nc" id="L81">        return this;</span>
+    }
+
+    public byte[] serialize() {
+        // type = 7 bits
+        // info string length 9 bits, each value == byte
+        // info string
+<span class="nc" id="L88">        final short scratch = (short) ((0x7f &amp; this.type) &lt;&lt; 9 | 0x1ff &amp; this.length);</span>
+<span class="nc" id="L89">        final byte[] data = new byte[2 + this.length];</span>
+<span class="nc" id="L90">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="nc" id="L91">        bb.putShort(scratch);</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (this.value != null) {</span>
+<span class="nc" id="L93">            bb.put(this.value);</span>
+        }
+<span class="nc" id="L95">        return data;</span>
+    }
+
+    public LLDPTLV deserialize(final ByteBuffer bb) throws DeserializationException {
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">        if (bb.remaining() &lt; 2) {</span>
+<span class="nc" id="L100">            throw new DeserializationException(</span>
+                    &quot;Not enough bytes to deserialize TLV type and length&quot;);
+        }
+        short typeLength;
+<span class="fc" id="L104">        typeLength = bb.getShort();</span>
+<span class="fc" id="L105">        this.type = (byte) (typeLength &gt;&gt; 9 &amp; 0x7f);</span>
+<span class="fc" id="L106">        this.length = (short) (typeLength &amp; 0x1ff);</span>
+
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        if (this.length &gt; 0) {</span>
+<span class="fc" id="L109">            this.value = new byte[this.length];</span>
+
+            // if there is an underrun just toss the TLV
+<span class="fc bfc" id="L112" title="All 2 branches covered.">            if (bb.remaining() &lt; this.length) {</span>
+<span class="fc" id="L113">                throw new DeserializationException(</span>
+                        &quot;Remaining bytes are less then the length of the TLV&quot;);
+            }
+<span class="fc" id="L116">            bb.get(this.value);</span>
+        }
+
+<span class="fc" id="L119">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L129">        final int prime = 1423;</span>
+<span class="nc" id="L130">        int result = 1;</span>
+<span class="nc" id="L131">        result = prime * result + this.length;</span>
+<span class="nc" id="L132">        result = prime * result + this.type;</span>
+<span class="nc" id="L133">        result = prime * result + Arrays.hashCode(this.value);</span>
+<span class="nc" id="L134">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L145">            return true;</span>
+        }
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if (obj == null) {</span>
+<span class="nc" id="L148">            return false;</span>
+        }
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (!(obj instanceof LLDPTLV)) {</span>
+<span class="nc" id="L151">            return false;</span>
+        }
+<span class="nc" id="L153">        final LLDPTLV other = (LLDPTLV) obj;</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (this.length != other.length) {</span>
+<span class="nc" id="L155">            return false;</span>
+        }
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (this.type != other.type) {</span>
+<span class="nc" id="L158">            return false;</span>
+        }
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (!Arrays.equals(this.value, other.value)) {</span>
+<span class="nc" id="L161">            return false;</span>
+        }
+<span class="nc" id="L163">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

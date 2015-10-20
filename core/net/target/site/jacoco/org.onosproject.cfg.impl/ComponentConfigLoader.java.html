@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ComponentConfigLoader.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.cfg.impl</a> &gt; <span class="el_source">ComponentConfigLoader.java</span></div><h1>ComponentConfigLoader.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.cfg.impl;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.cfg.ComponentConfigService;
+import org.slf4j.Logger;
+
+import java.io.File;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Component responsible for automatically loading configuration file from
+ * configuration directory.
+ */
+@Component(immediate = true)
+<span class="fc" id="L37">public class ComponentConfigLoader {</span>
+
+    private static final String CFG_JSON = &quot;../config/component-cfg.json&quot;;
+<span class="fc" id="L40">    static File cfgFile = new File(CFG_JSON);</span>
+
+<span class="fc" id="L42">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService configService;
+
+    private ObjectNode root;
+
+    @Activate
+    protected void activate() {
+<span class="fc" id="L51">        this.loadConfigs();</span>
+<span class="fc" id="L52">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L53">    }</span>
+
+    // Loads the configurations for each component from the file in
+    // ../config/component-cfg.json, using the preSetProperty method.
+    private void loadConfigs() {
+        try {
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">            if (cfgFile.exists()) {</span>
+<span class="fc" id="L60">                root = (ObjectNode) new ObjectMapper().readTree(cfgFile);</span>
+<span class="fc" id="L61">                root.fieldNames().</span>
+<span class="fc" id="L62">                        forEachRemaining(component -&gt; root.path(component).fieldNames()</span>
+<span class="fc" id="L63">                                .forEachRemaining(k -&gt; configService</span>
+<span class="fc" id="L64">                                        .preSetProperty(component, k,</span>
+<span class="fc" id="L65">                                                        root.path(component).path(k)</span>
+<span class="fc" id="L66">                                                                .asText())));</span>
+<span class="fc" id="L67">                log.info(&quot;Loaded initial component configuration from {}&quot;, cfgFile);</span>
+            }
+<span class="fc" id="L69">        } catch (Exception e) {</span>
+<span class="fc" id="L70">            log.warn(&quot;Unable to load initial component configuration from {}&quot;,</span>
+                     cfgFile, e);
+<span class="fc" id="L72">        }</span>
+<span class="fc" id="L73">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

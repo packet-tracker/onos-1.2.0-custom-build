@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultDistributedSet.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DefaultDistributedSet.java</span></div><h1>DefaultDistributedSet.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.DistributedSet;
+import org.onosproject.store.service.MapEvent;
+import org.onosproject.store.service.MapEventListener;
+import org.onosproject.store.service.SetEvent;
+import org.onosproject.store.service.SetEventListener;
+
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Implementation of distributed set that is backed by a ConsistentMap.
+
+ * @param &lt;E&gt; set element type
+ */
+public class DefaultDistributedSet&lt;E&gt; implements DistributedSet&lt;E&gt; {
+
+    private static final String CONTAINS = &quot;contains&quot;;
+    private static final String PRIMITIVE_NAME = &quot;distributedSet&quot;;
+    private static final String SIZE = &quot;size&quot;;
+    private static final String IS_EMPTY = &quot;isEmpty&quot;;
+    private static final String ITERATOR = &quot;iterator&quot;;
+    private static final String TO_ARRAY = &quot;toArray&quot;;
+    private static final String ADD = &quot;add&quot;;
+    private static final String REMOVE = &quot;remove&quot;;
+    private static final String CONTAINS_ALL = &quot;containsAll&quot;;
+    private static final String ADD_ALL = &quot;addAll&quot;;
+    private static final String RETAIN_ALL = &quot;retainAll&quot;;
+    private static final String REMOVE_ALL = &quot;removeAll&quot;;
+    private static final String CLEAR = &quot;clear&quot;;
+
+    private final String name;
+    private final ConsistentMap&lt;E, Boolean&gt; backingMap;
+<span class="nc" id="L55">    private final Map&lt;SetEventListener&lt;E&gt;, MapEventListener&lt;E, Boolean&gt;&gt; listenerMapping = Maps.newIdentityHashMap();</span>
+    private final MeteringAgent monitor;
+
+<span class="nc" id="L58">    public DefaultDistributedSet(String name, boolean meteringEnabled, ConsistentMap&lt;E, Boolean&gt; backingMap) {</span>
+<span class="nc" id="L59">        this.name = name;</span>
+<span class="nc" id="L60">        this.backingMap = backingMap;</span>
+<span class="nc" id="L61">        monitor = new MeteringAgent(PRIMITIVE_NAME, name, meteringEnabled);</span>
+<span class="nc" id="L62">    }</span>
+
+    @Override
+    public int size() {
+<span class="nc" id="L66">        final MeteringAgent.Context timer = monitor.startTimer(SIZE);</span>
+        try {
+<span class="nc" id="L68">            return backingMap.size();</span>
+        } finally {
+<span class="nc" id="L70">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public boolean isEmpty() {
+<span class="nc" id="L76">        final MeteringAgent.Context timer = monitor.startTimer(IS_EMPTY);</span>
+        try {
+<span class="nc" id="L78">            return backingMap.isEmpty();</span>
+        } finally {
+<span class="nc" id="L80">            timer.stop(null);</span>
+        }
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    @Override
+    public boolean contains(Object o) {
+<span class="nc" id="L87">        final MeteringAgent.Context timer = monitor.startTimer(CONTAINS);</span>
+        try {
+<span class="nc" id="L89">            return backingMap.containsKey((E) o);</span>
+        } finally {
+<span class="nc" id="L91">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public Iterator&lt;E&gt; iterator() {
+<span class="nc" id="L97">        final MeteringAgent.Context timer = monitor.startTimer(ITERATOR);</span>
+        //Do we have to measure this guy?
+        try {
+<span class="nc" id="L100">            return backingMap.keySet().iterator();</span>
+        } finally {
+<span class="nc" id="L102">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public Object[] toArray() {
+<span class="nc" id="L108">        final MeteringAgent.Context timer = monitor.startTimer(TO_ARRAY);</span>
+        try {
+<span class="nc" id="L110">            return backingMap.keySet().stream().toArray();</span>
+        } finally {
+<span class="nc" id="L112">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public &lt;T&gt; T[] toArray(T[] a) {
+<span class="nc" id="L118">        final MeteringAgent.Context timer = monitor.startTimer(TO_ARRAY);</span>
+        try {
+<span class="nc" id="L120">            return backingMap.keySet().stream().toArray(size -&gt; a);</span>
+        } finally {
+<span class="nc" id="L122">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public boolean add(E e) {
+<span class="nc" id="L128">        final MeteringAgent.Context timer = monitor.startTimer(ADD);</span>
+        try {
+<span class="nc bnc" id="L130" title="All 2 branches missed.">            return backingMap.putIfAbsent(e, true) == null;</span>
+        } finally {
+<span class="nc" id="L132">            timer.stop(null);</span>
+        }
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    @Override
+    public boolean remove(Object o) {
+<span class="nc" id="L139">        final MeteringAgent.Context timer = monitor.startTimer(REMOVE);</span>
+        try {
+<span class="nc bnc" id="L141" title="All 2 branches missed.">            return backingMap.remove((E) o) != null;</span>
+        } finally {
+<span class="nc" id="L143">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public boolean containsAll(Collection&lt;?&gt; c) {
+<span class="nc" id="L149">        final MeteringAgent.Context timer = monitor.startTimer(CONTAINS_ALL);</span>
+        try {
+<span class="nc" id="L151">           return c.stream()</span>
+<span class="nc" id="L152">                .allMatch(this::contains);</span>
+        } finally {
+<span class="nc" id="L154">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public boolean addAll(Collection&lt;? extends E&gt; c) {
+<span class="nc" id="L160">        final MeteringAgent.Context timer = monitor.startTimer(ADD_ALL);</span>
+        try {
+<span class="nc" id="L162">            return c.stream()</span>
+<span class="nc" id="L163">                .map(this::add)</span>
+<span class="nc" id="L164">                .reduce(Boolean::logicalOr)</span>
+<span class="nc" id="L165">                .orElse(false);</span>
+        } finally {
+<span class="nc" id="L167">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public boolean retainAll(Collection&lt;?&gt; c) {
+<span class="nc" id="L173">        final MeteringAgent.Context timer = monitor.startTimer(RETAIN_ALL);</span>
+        try {
+<span class="nc" id="L175">            Set&lt;?&gt; retainSet = Sets.newHashSet(c);</span>
+<span class="nc" id="L176">            return backingMap.keySet()</span>
+<span class="nc" id="L177">                .stream()</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                .filter(k -&gt; !retainSet.contains(k))</span>
+<span class="nc" id="L179">                .map(this::remove)</span>
+<span class="nc" id="L180">                .reduce(Boolean::logicalOr)</span>
+<span class="nc" id="L181">                .orElse(false);</span>
+        } finally {
+<span class="nc" id="L183">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public boolean removeAll(Collection&lt;?&gt; c) {
+<span class="nc" id="L189">        final MeteringAgent.Context timer = monitor.startTimer(REMOVE_ALL);</span>
+        try {
+<span class="nc" id="L191">            Set&lt;?&gt; removeSet = Sets.newHashSet(c);</span>
+<span class="nc" id="L192">            return backingMap.keySet()</span>
+<span class="nc" id="L193">                .stream()</span>
+<span class="nc" id="L194">                .filter(removeSet::contains)</span>
+<span class="nc" id="L195">                .map(this::remove)</span>
+<span class="nc" id="L196">                .reduce(Boolean::logicalOr)</span>
+<span class="nc" id="L197">                .orElse(false);</span>
+        } finally {
+<span class="nc" id="L199">            timer.stop(null);</span>
+        }
+    }
+
+    @Override
+    public void clear() {
+<span class="nc" id="L205">        final MeteringAgent.Context timer = monitor.startTimer(CLEAR);</span>
+        try {
+<span class="nc" id="L207">            backingMap.clear();</span>
+        } finally {
+<span class="nc" id="L209">            timer.stop(null);</span>
+<span class="nc" id="L210">        }</span>
+<span class="nc" id="L211">    }</span>
+
+    @Override
+    public void addListener(SetEventListener&lt;E&gt; listener) {
+<span class="nc" id="L215">        MapEventListener&lt;E, Boolean&gt; mapEventListener = mapEvent -&gt; {</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if (mapEvent.type() == MapEvent.Type.INSERT) {</span>
+<span class="nc" id="L217">                listener.event(new SetEvent&lt;&gt;(name, SetEvent.Type.ADD, mapEvent.key()));</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">            } else if (mapEvent.type() == MapEvent.Type.REMOVE) {</span>
+<span class="nc" id="L219">                listener.event(new SetEvent&lt;&gt;(name, SetEvent.Type.REMOVE, mapEvent.key()));</span>
+            }
+<span class="nc" id="L221">        };</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if (listenerMapping.putIfAbsent(listener, mapEventListener) == null) {</span>
+<span class="nc" id="L223">            backingMap.addListener(mapEventListener);</span>
+        }
+<span class="nc" id="L225">    }</span>
+
+    @Override
+    public void removeListener(SetEventListener&lt;E&gt; listener) {
+<span class="nc" id="L229">        MapEventListener&lt;E, Boolean&gt; mapEventListener = listenerMapping.remove(listener);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (mapEventListener != null) {</span>
+<span class="nc" id="L231">            backingMap.removeListener(mapEventListener);</span>
+        }
+<span class="nc" id="L233">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

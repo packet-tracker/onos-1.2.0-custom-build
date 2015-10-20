@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>L0ModificationInstruction.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.instructions</a> &gt; <span class="el_source">L0ModificationInstruction.java</span></div><h1>L0ModificationInstruction.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.instructions;
+
+import com.google.common.base.MoreObjects;
+import org.onosproject.net.OchSignal;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+import java.util.Objects;
+
+<span class="fc" id="L25">public abstract class L0ModificationInstruction implements Instruction {</span>
+
+    /**
+     * Represents the type of traffic treatment.
+     */
+<span class="pc" id="L30">    public enum L0SubType {</span>
+        /**
+         * Lambda modification.
+         */
+<span class="fc" id="L34">        LAMBDA,</span>
+        /**
+         * OCh (Optical Channel) modification.
+         */
+<span class="fc" id="L38">        OCH,</span>
+    }
+
+    public abstract L0SubType subtype();
+
+    @Override
+    public final Type type() {
+<span class="fc" id="L45">        return Type.L0MODIFICATION;</span>
+    }
+
+    /**
+     * Represents a L0 lambda modification instruction.
+     */
+    public static final class ModLambdaInstruction extends L0ModificationInstruction {
+
+        private final L0SubType subtype;
+        private final short lambda;
+
+<span class="fc" id="L56">        ModLambdaInstruction(L0SubType subType, short lambda) {</span>
+<span class="fc" id="L57">            this.subtype = subType;</span>
+<span class="fc" id="L58">            this.lambda = lambda;</span>
+<span class="fc" id="L59">        }</span>
+
+        @Override
+        public L0SubType subtype() {
+<span class="fc" id="L63">            return this.subtype;</span>
+        }
+
+        public short lambda() {
+<span class="fc" id="L67">            return this.lambda;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L72">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L73">                    .add(&quot;lambda&quot;, lambda).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L78">            return Objects.hash(type(), subtype, lambda);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L83" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L84">                return true;</span>
+            }
+<span class="fc bfc" id="L86" title="All 2 branches covered.">            if (obj instanceof ModLambdaInstruction) {</span>
+<span class="fc" id="L87">                ModLambdaInstruction that = (ModLambdaInstruction) obj;</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">                return  Objects.equals(lambda, that.lambda) &amp;&amp;</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">                        Objects.equals(subtype, that.subtype);</span>
+            }
+<span class="fc" id="L91">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents an L0 OCh (Optical Channel) modification instruction.
+     */
+    public static final class ModOchSignalInstruction extends L0ModificationInstruction {
+
+        private final OchSignal lambda;
+
+<span class="fc" id="L102">        ModOchSignalInstruction(OchSignal lambda) {</span>
+<span class="fc" id="L103">            this.lambda = lambda;</span>
+<span class="fc" id="L104">        }</span>
+
+        @Override
+        public L0SubType subtype() {
+<span class="nc" id="L108">            return L0SubType.OCH;</span>
+        }
+
+        public OchSignal lambda() {
+<span class="fc" id="L112">            return lambda;</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L117">            return Objects.hash(lambda);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L123">                return true;</span>
+            }
+<span class="fc bfc" id="L125" title="All 2 branches covered.">            if (!(obj instanceof ModOchSignalInstruction)) {</span>
+<span class="fc" id="L126">                return false;</span>
+            }
+<span class="fc" id="L128">            final ModOchSignalInstruction that = (ModOchSignalInstruction) obj;</span>
+<span class="fc" id="L129">            return Objects.equals(this.lambda, that.lambda);</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L134">            return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L135">                    .add(&quot;lambda&quot;, lambda)</span>
+<span class="fc" id="L136">                    .toString();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

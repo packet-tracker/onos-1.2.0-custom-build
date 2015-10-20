@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultGroup.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.group</a> &gt; <span class="el_source">DefaultGroup.java</span></div><h1>DefaultGroup.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.group;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+import java.util.Objects;
+
+import org.onosproject.core.GroupId;
+import org.onosproject.net.DeviceId;
+
+/**
+ * ONOS implementation of default group that is stored in the system.
+ */
+public class DefaultGroup extends DefaultGroupDescription
+    implements Group, StoredGroupEntry {
+
+    private GroupState state;
+    private boolean isGroupStateAddedFirstTime;
+    private long life;
+    private long packets;
+    private long bytes;
+    private long referenceCount;
+    private GroupId id;
+
+    /**
+     * Initializes default values.
+     *
+     * @param newId group id for new group
+     */
+    private void initialize(GroupId newId) {
+<span class="fc" id="L45">        id = newId;</span>
+<span class="fc" id="L46">        state = GroupState.PENDING_ADD;</span>
+<span class="fc" id="L47">        life = 0;</span>
+<span class="fc" id="L48">        packets = 0;</span>
+<span class="fc" id="L49">        bytes = 0;</span>
+<span class="fc" id="L50">        referenceCount = 0;</span>
+<span class="fc" id="L51">    }</span>
+
+    /**
+     * Default group object constructor with the parameters.
+     *
+     * @param id group identifier
+     * @param groupDesc group description parameters
+     */
+    public DefaultGroup(GroupId id, GroupDescription groupDesc) {
+<span class="fc" id="L60">        super(groupDesc);</span>
+<span class="fc" id="L61">        initialize(id);</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * Default group object constructor with the available information
+     * from data plane.
+     *
+     * @param id group identifier
+     * @param deviceId device identifier
+     * @param type type of the group
+     * @param buckets immutable list of group bucket
+     */
+    public DefaultGroup(GroupId id,
+                        DeviceId deviceId,
+                        GroupDescription.Type type,
+                        GroupBuckets buckets) {
+<span class="fc" id="L77">        super(deviceId, type, buckets);</span>
+<span class="fc" id="L78">        initialize(id);</span>
+<span class="fc" id="L79">    }</span>
+
+    /**
+     * Returns group identifier associated with a group object.
+     *
+     * @return GroupId Group Identifier
+     */
+    @Override
+    public GroupId id() {
+<span class="fc" id="L88">        return this.id;</span>
+    }
+
+    /**
+     * Returns current state of a group object.
+     *
+     * @return GroupState Group State
+     */
+    @Override
+    public GroupState state() {
+<span class="fc" id="L98">        return this.state;</span>
+    }
+
+    /**
+     * Returns the number of milliseconds this group has been alive.
+     *
+     * @return number of millis
+     */
+    @Override
+    public long life() {
+<span class="fc" id="L108">        return this.life;</span>
+    }
+
+    /**
+     * Returns the number of packets processed by this group.
+     *
+     * @return number of packets
+     */
+    @Override
+    public long packets() {
+<span class="fc" id="L118">        return this.packets;</span>
+    }
+
+    /**
+     * Returns the number of bytes processed by this group.
+     *
+     * @return number of bytes
+     */
+    @Override
+    public long bytes() {
+<span class="fc" id="L128">        return this.bytes;</span>
+    }
+
+    /**
+     * Sets the new state for this entry.
+     *
+     * @param newState new group entry state.
+     */
+    @Override
+    public void setState(Group.GroupState newState) {
+<span class="nc" id="L138">        this.state = newState;</span>
+<span class="nc" id="L139">    }</span>
+
+    /**
+     * Sets how long this entry has been entered in the system.
+     *
+     * @param life epoch time
+     */
+    @Override
+    public void setLife(long life) {
+<span class="nc" id="L148">        this.life = life;</span>
+<span class="nc" id="L149">    }</span>
+
+    /**
+     * Sets number of packets processed by this group entry.
+     *
+     * @param packets a long value
+     */
+    @Override
+    public void setPackets(long packets) {
+<span class="nc" id="L158">        this.packets = packets;</span>
+<span class="nc" id="L159">    }</span>
+
+    /**
+     * Sets number of bytes processed by this group entry.
+     *
+     * @param bytes a long value
+     */
+    @Override
+    public void setBytes(long bytes) {
+<span class="nc" id="L168">        this.bytes = bytes;</span>
+<span class="nc" id="L169">    }</span>
+
+    @Override
+    public void setReferenceCount(long referenceCount) {
+<span class="nc" id="L173">        this.referenceCount = referenceCount;</span>
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public long referenceCount() {
+<span class="fc" id="L178">        return referenceCount;</span>
+    }
+
+    /*
+     * The deviceId, type and buckets are used for hash.
+     *
+     * (non-Javadoc)
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public int hashCode() {
+<span class="fc" id="L189">        return super.hashCode() + Objects.hash(id);</span>
+    }
+
+    /*
+     * The deviceId, groupId, type and buckets should be same.
+     *
+     * (non-Javadoc)
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L200" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L201">            return true;</span>
+        }
+<span class="fc bfc" id="L203" title="All 2 branches covered.">       if (obj instanceof DefaultGroup) {</span>
+<span class="fc" id="L204">            DefaultGroup that = (DefaultGroup) obj;</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">            return super.equals(obj) &amp;&amp;</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">                    Objects.equals(id, that.id);</span>
+        }
+<span class="fc" id="L208">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L213">        return toStringHelper(this)</span>
+<span class="fc" id="L214">                .add(&quot;description&quot;, super.toString())</span>
+<span class="fc" id="L215">                .add(&quot;groupid&quot;, id)</span>
+<span class="fc" id="L216">                .add(&quot;state&quot;, state)</span>
+<span class="fc" id="L217">                .toString();</span>
+    }
+
+    @Override
+    public void setIsGroupStateAddedFirstTime(boolean isGroupStateAddedFirstTime) {
+<span class="nc" id="L222">        this.isGroupStateAddedFirstTime = isGroupStateAddedFirstTime;</span>
+<span class="nc" id="L223">    }</span>
+
+    @Override
+    public boolean isGroupStateAddedFirstTime() {
+<span class="nc" id="L227">        return isGroupStateAddedFirstTime;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

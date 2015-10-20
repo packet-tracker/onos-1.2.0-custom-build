@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelRangeVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLabelRangeVer1.java</span></div><h1>PcepLabelRangeVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLabelRange;
+import org.onosproject.pcepio.protocol.PcepLabelRangeObject;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Label Range.
+ */
+public class PcepLabelRangeVer1 implements PcepLabelRange {
+
+<span class="nc" id="L37">    protected static final Logger log = LoggerFactory.getLogger(PcepLabelRangeVer1.class);</span>
+
+    /*
+        &lt;label-range&gt; ::= &lt;SRP&gt;
+                          &lt;labelrange-list&gt;
+        Where
+                &lt;labelrange-list&gt;::=&lt;LABEL-RANGE&gt;[&lt;labelrange-list&gt;]
+     */
+
+    // PCEP SRP Object
+    private PcepSrpObject srpObject;
+    //&lt;labelrange-list&gt; of type PcepLabelRangeObject.
+    private LinkedList&lt;PcepLabelRangeObject&gt; llLabelRangeList;
+
+    /**
+     * Default Constructor.
+     */
+<span class="nc" id="L54">    public PcepLabelRangeVer1() {</span>
+<span class="nc" id="L55">        srpObject = null;</span>
+<span class="nc" id="L56">        llLabelRangeList = null;</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Constructor to initialize objects.
+     *
+     * @param srpObj PCEP Srp object.
+     * @param llLabelRangeList list of PcepLabelRangeObject.
+     */
+<span class="nc" id="L65">    PcepLabelRangeVer1(PcepSrpObject srpObj, LinkedList&lt;PcepLabelRangeObject&gt; llLabelRangeList) {</span>
+<span class="nc" id="L66">        this.srpObject = srpObj;</span>
+<span class="nc" id="L67">        this.llLabelRangeList = llLabelRangeList;</span>
+<span class="nc" id="L68">    }</span>
+
+    @Override
+    public PcepSrpObject getSrpObject() {
+<span class="nc" id="L72">        return srpObject;</span>
+    }
+
+    @Override
+    public void setSrpObject(PcepSrpObject srpObject) {
+<span class="nc" id="L77">        this.srpObject = srpObject;</span>
+
+<span class="nc" id="L79">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepLabelRangeObject&gt; getLabelRangeList() {
+<span class="nc" id="L83">        return llLabelRangeList;</span>
+    }
+
+    @Override
+    public void setLabelRangeList(LinkedList&lt;PcepLabelRangeObject&gt; ll) {
+<span class="nc" id="L88">        this.llLabelRangeList = ll;</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Reads channel buffer and returns object of PcepLabelRange.
+     *
+     * @param cb of type channel buffer.
+     * @return object of PcepLabelRange
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepLabelRange read(ChannelBuffer cb) throws PcepParseException {
+
+        //parse and store SRP mandatory object
+<span class="nc" id="L101">        PcepSrpObject srpObj = null;</span>
+<span class="nc" id="L102">        srpObj = PcepSrpObjectVer1.read(cb);</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if (srpObj == null) {</span>
+<span class="nc" id="L104">            throw new PcepParseException(&quot;Exception while parsing srp object&quot;);</span>
+        }
+
+<span class="nc" id="L107">        LinkedList&lt;PcepLabelRangeObject&gt; llLabelRangeList = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L108">        boolean bFoundLabelRangeObj = false;</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        while (0 &lt; cb.readableBytes()) {</span>
+            //parse and store &lt;labelrange-list&gt;
+            PcepLabelRangeObject lrObj;
+<span class="nc" id="L112">            lrObj = PcepLabelRangeObjectVer1.read(cb);</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">            if (lrObj == null) {</span>
+<span class="nc" id="L114">                throw new PcepParseException(&quot;Exception while parsing label range object&quot;);</span>
+            } else {
+<span class="nc" id="L116">                llLabelRangeList.add(lrObj);</span>
+<span class="nc" id="L117">                bFoundLabelRangeObj = true;</span>
+            }
+<span class="nc" id="L119">        }</span>
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (!bFoundLabelRangeObj) {</span>
+<span class="nc" id="L122">            throw new PcepParseException(&quot;At least one LABEL-RANGE MUST be present.&quot;);</span>
+        }
+<span class="nc" id="L124">        return new PcepLabelRangeVer1(srpObj, llLabelRangeList);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+        //write Object header
+<span class="nc" id="L130">        int objStartIndex = cb.writerIndex();</span>
+
+        //write &lt;SRP&gt;
+<span class="nc" id="L133">        int objLenIndex = srpObject.write(cb);</span>
+
+<span class="nc bnc" id="L135" title="All 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L136">            throw new PcepParseException(&quot;bjectLength is &quot; + objLenIndex);</span>
+        }
+
+        //write &lt;labelrange-list&gt;
+<span class="nc" id="L140">        ListIterator&lt;PcepLabelRangeObject&gt; listIterator = llLabelRangeList.listIterator();</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L142">            listIterator.next().write(cb);</span>
+        }
+
+        //Update object length now
+<span class="nc" id="L146">        int length = cb.writerIndex() - objStartIndex;</span>
+        // As per RFC the length of object should be
+        // multiples of 4
+<span class="nc" id="L149">        int pad = length % 4;</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (pad != 0) {</span>
+<span class="nc" id="L151">            pad = 4 - pad;</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            for (int i = 0; i &lt; pad; i++) {</span>
+<span class="nc" id="L153">                cb.writeByte((byte) 0);</span>
+            }
+<span class="nc" id="L155">            length = length + pad;</span>
+        }
+<span class="nc" id="L157">        cb.setShort(objLenIndex, (short) length);</span>
+<span class="nc" id="L158">        return length;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L163">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L164">                .add(&quot;srpObject&quot;, srpObject)</span>
+<span class="nc" id="L165">                .add(&quot;LabelRangeList&quot;, llLabelRangeList)</span>
+<span class="nc" id="L166">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

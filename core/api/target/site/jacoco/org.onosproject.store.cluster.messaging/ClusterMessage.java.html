@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ClusterMessage.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.cluster.messaging</a> &gt; <span class="el_source">ClusterMessage.java</span></div><h1>ClusterMessage.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.cluster.messaging;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Objects;
+
+import org.onlab.util.ByteArraySizeHashPrinter;
+import org.onosproject.cluster.NodeId;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.MoreObjects;
+
+// TODO: Should payload type be ByteBuffer?
+/**
+ * Base message for cluster-wide communications.
+ */
+public class ClusterMessage {
+
+    private final NodeId sender;
+    private final MessageSubject subject;
+    private final byte[] payload;
+    private transient byte[] response;
+
+    /**
+     * Creates a cluster message.
+     *
+     * @param sender  message sender
+     * @param subject message subject
+     * @param payload message payload
+     */
+<span class="fc" id="L46">    public ClusterMessage(NodeId sender, MessageSubject subject, byte[] payload) {</span>
+<span class="fc" id="L47">        this.sender = sender;</span>
+<span class="fc" id="L48">        this.subject = subject;</span>
+<span class="fc" id="L49">        this.payload = payload;</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     * Returns the id of the controller sending this message.
+     *
+     * @return message sender id.
+     */
+     public NodeId sender() {
+<span class="fc" id="L58">         return sender;</span>
+     }
+
+    /**
+     * Returns the message subject indicator.
+     *
+     * @return message subject
+     */
+    public MessageSubject subject() {
+<span class="fc" id="L67">        return subject;</span>
+    }
+
+    /**
+     * Returns the message payload.
+     *
+     * @return message payload.
+     */
+    public byte[] payload() {
+<span class="fc" id="L76">        return payload;</span>
+    }
+
+    /**
+     * Records the response to be sent to the sender.
+     *
+     * @param data response payload
+     */
+    public void respond(byte[] data) {
+<span class="fc" id="L85">        response = data;</span>
+<span class="fc" id="L86">    }</span>
+
+    /**
+     * Returns the response to be sent to the sender.
+     *
+     * @return response bytes
+     */
+    public byte[] response() {
+<span class="fc" id="L94">        return response;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L99">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L100">                .add(&quot;sender&quot;, sender)</span>
+<span class="fc" id="L101">                .add(&quot;subject&quot;, subject)</span>
+<span class="fc" id="L102">                .add(&quot;payload&quot;, ByteArraySizeHashPrinter.of(payload))</span>
+<span class="fc" id="L103">                .toString();</span>
+    }
+
+    @Override
+    public boolean equals(Object o) {
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        if (!(o instanceof ClusterMessage)) {</span>
+<span class="fc" id="L109">            return false;</span>
+        }
+
+<span class="fc" id="L112">        ClusterMessage that = (ClusterMessage) o;</span>
+
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">        return Objects.equals(this.sender, that.sender) &amp;&amp;</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">                Objects.equals(this.subject, that.subject) &amp;&amp;</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">                Arrays.equals(this.payload, that.payload);</span>
+    }
+
+    /**
+     * Serializes this instance.
+     * @return bytes
+     */
+    public byte[] getBytes() {
+<span class="fc" id="L124">        byte[] senderBytes = sender.toString().getBytes(Charsets.UTF_8);</span>
+<span class="fc" id="L125">        byte[] subjectBytes = subject.value().getBytes(Charsets.UTF_8);</span>
+<span class="fc" id="L126">        int capacity = 12 + senderBytes.length + subjectBytes.length + payload.length;</span>
+<span class="fc" id="L127">        ByteBuffer buffer = ByteBuffer.allocate(capacity);</span>
+<span class="fc" id="L128">        buffer.putInt(senderBytes.length);</span>
+<span class="fc" id="L129">        buffer.put(senderBytes);</span>
+<span class="fc" id="L130">        buffer.putInt(subjectBytes.length);</span>
+<span class="fc" id="L131">        buffer.put(subjectBytes);</span>
+<span class="fc" id="L132">        buffer.putInt(payload.length);</span>
+<span class="fc" id="L133">        buffer.put(payload);</span>
+<span class="fc" id="L134">        return buffer.array();</span>
+    }
+
+    /**
+     * Decodes a new ClusterMessage from raw bytes.
+     * @param bytes raw bytes
+     * @return cluster message
+     */
+    public static ClusterMessage fromBytes(byte[] bytes) {
+<span class="fc" id="L143">        ByteBuffer buffer = ByteBuffer.wrap(bytes);</span>
+<span class="fc" id="L144">        byte[] senderBytes = new byte[buffer.getInt()];</span>
+<span class="fc" id="L145">        buffer.get(senderBytes);</span>
+<span class="fc" id="L146">        byte[] subjectBytes = new byte[buffer.getInt()];</span>
+<span class="fc" id="L147">        buffer.get(subjectBytes);</span>
+<span class="fc" id="L148">        byte[] payloadBytes = new byte[buffer.getInt()];</span>
+<span class="fc" id="L149">        buffer.get(payloadBytes);</span>
+
+<span class="fc" id="L151">        return new ClusterMessage(new NodeId(new String(senderBytes, Charsets.UTF_8)),</span>
+                new MessageSubject(new String(subjectBytes, Charsets.UTF_8)),
+                payloadBytes);
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L158">        return Objects.hash(sender, subject, payload);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

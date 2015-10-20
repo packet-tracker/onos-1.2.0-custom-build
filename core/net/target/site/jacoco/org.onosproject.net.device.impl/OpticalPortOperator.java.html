@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalPortOperator.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.device.impl</a> &gt; <span class="el_source">OpticalPortOperator.java</span></div><h1>OpticalPortOperator.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.device.impl;
+
+import static org.slf4j.LoggerFactory.getLogger;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import org.onosproject.net.config.ConfigOperator;
+import org.onosproject.net.config.basics.OpticalPortConfig;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.OchPort;
+import org.onosproject.net.OduCltPort;
+import org.onosproject.net.OmsPort;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.SparseAnnotations;
+import org.onosproject.net.device.DefaultPortDescription;
+import org.onosproject.net.device.OchPortDescription;
+import org.onosproject.net.device.OduCltPortDescription;
+import org.onosproject.net.device.OmsPortDescription;
+import org.onosproject.net.device.PortDescription;
+import org.slf4j.Logger;
+
+/**
+ * Implementations of merge policies for various sources of optical port
+ * configuration information. This includes applications, provides, and network
+ * configurations.
+ */
+public final class OpticalPortOperator implements ConfigOperator {
+
+<span class="fc" id="L45">    private static final Logger log = getLogger(OpticalPortOperator.class);</span>
+
+<span class="nc" id="L47">    private OpticalPortOperator() {</span>
+<span class="nc" id="L48">    }</span>
+
+    /**
+     * Generates a PortDescription containing fields from a PortDescription and
+     * an OpticalPortConfig.
+     *
+     * @param opc the port config entity from network config
+     * @param descr a PortDescription
+     * @return PortDescription based on both sources
+     */
+    public static PortDescription combine(OpticalPortConfig opc, PortDescription descr) {
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">        if (opc == null) {</span>
+<span class="nc" id="L60">            return descr;</span>
+        }
+
+<span class="fc" id="L63">        PortNumber port = descr.portNumber();</span>
+<span class="fc" id="L64">        final String name = opc.name();</span>
+<span class="fc" id="L65">        final String numName = opc.numberName();</span>
+        // if the description is null, or the current description port name != config name,
+        // create a new PortNumber.
+<span class="fc" id="L68">        PortNumber newPort = null;</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        if (port == null) {</span>
+            // try to get the portNumber from the numName.
+<span class="fc bfc" id="L71" title="All 2 branches covered.">            if (!numName.isEmpty()) {</span>
+<span class="fc" id="L72">                final long pn = Long.parseLong(numName);</span>
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">                newPort = (!name.isEmpty()) ? PortNumber.portNumber(pn, name) : PortNumber.portNumber(pn);</span>
+<span class="fc" id="L74">            } else {</span>
+                // we don't have defining info (a port number value)
+<span class="fc" id="L76">                throw new RuntimeException(&quot;Possible misconfig, bailing on handling for: \n\t&quot; + descr);</span>
+            }
+<span class="pc bpc" id="L78" title="2 of 4 branches missed.">        } else if ((!name.isEmpty()) &amp;&amp; !name.equals(port.name())) {</span>
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">            final long pn = (numName.isEmpty()) ? port.toLong() : Long.parseLong(numName);</span>
+<span class="fc" id="L80">            newPort = PortNumber.portNumber(pn, name);</span>
+        }
+
+        // Port type won't change unless we're overwriting a port completely.
+        // Watch out for overwrites to avoid class cast craziness.
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">        boolean noOwrite = opc.type() == descr.type();</span>
+
+<span class="fc" id="L87">        SparseAnnotations sa = combine(opc, descr.annotations());</span>
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">        if (noOwrite) {</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">            return updateDescription((newPort == null) ? port : newPort, sa, descr);</span>
+        } else {
+            // TODO: must reconstruct a different type of PortDescription.
+<span class="nc" id="L92">            log.info(&quot;Type rewrite from {} to {} required&quot;, descr.type(), opc.type());</span>
+        }
+<span class="nc" id="L94">        return descr;</span>
+    }
+
+    // updates a port description whose port type has not changed.
+    private static PortDescription updateDescription(
+            PortNumber port, SparseAnnotations sa, PortDescription descr) {
+<span class="pc bpc" id="L100" title="4 of 5 branches missed.">        switch (descr.type()) {</span>
+            case OMS:
+<span class="nc" id="L102">                OmsPortDescription oms = (OmsPortDescription) descr;</span>
+<span class="nc" id="L103">                return new OmsPortDescription(port, oms.isEnabled(), oms.minFrequency(),</span>
+<span class="nc" id="L104">                        oms.maxFrequency(), oms.grid(), sa);</span>
+            case OCH:
+            // We might need to update lambda below with STATIC_LAMBDA.
+<span class="nc" id="L107">                OchPortDescription och = (OchPortDescription) descr;</span>
+<span class="nc" id="L108">                return new OchPortDescription(port, och.isEnabled(), och.signalType(),</span>
+<span class="nc" id="L109">                        och.isTunable(), och.lambda(), sa);</span>
+            case ODUCLT:
+<span class="fc" id="L111">                OduCltPortDescription odu = (OduCltPortDescription) descr;</span>
+<span class="fc" id="L112">                return new OduCltPortDescription(port, odu.isEnabled(), odu.signalType(), sa);</span>
+            case PACKET:
+            case FIBER:
+<span class="nc" id="L115">                return new DefaultPortDescription(port, descr.isEnabled(), descr.type(),</span>
+<span class="nc" id="L116">                        descr.portSpeed(), sa);</span>
+            default:
+                // this includes copper ports.
+<span class="nc" id="L119">                log.warn(&quot;Unsupported optical port type {} - can't update&quot;, descr.type());</span>
+<span class="nc" id="L120">                return descr;</span>
+        }
+    }
+
+    /**
+     * Generates an annotation from an existing annotation and OptcalPortConfig.
+     *
+     * @param opc the port config entity from network config
+     * @param an the annotation
+     * @return annotation combining both sources
+     */
+    public static SparseAnnotations combine(OpticalPortConfig opc, SparseAnnotations an) {
+<span class="fc" id="L132">        DefaultAnnotations.Builder b = DefaultAnnotations.builder();</span>
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (!opc.staticPort().isEmpty()) {</span>
+<span class="nc" id="L134">            b.set(AnnotationKeys.STATIC_PORT, opc.staticPort());</span>
+        }
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">        if (opc.staticLambda().isPresent()) {</span>
+<span class="fc" id="L137">            b.set(AnnotationKeys.STATIC_LAMBDA, String.valueOf(opc.staticLambda().get()));</span>
+        }
+        // The following may not need to be carried.
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">        if (!opc.name().isEmpty()) {</span>
+<span class="fc" id="L141">            b.set(AnnotationKeys.PORT_NAME, opc.name());</span>
+        }
+<span class="fc" id="L143">        return DefaultAnnotations.union(an, b.build());</span>
+    }
+
+    /**
+     * Returns a description built from an existing port.
+     *
+     * @param port the device port
+     * @return a PortDescription based on the port
+     */
+    public static PortDescription descriptionOf(Port port) {
+<span class="nc" id="L153">        checkNotNull(port, &quot;Must supply non-null Port&quot;);</span>
+<span class="nc" id="L154">        final boolean isUp = port.isEnabled();</span>
+<span class="nc" id="L155">        return descriptionOfPort(port, isUp);</span>
+    }
+
+    /**
+     * Returns a description built from an existing port and reported status.
+     *
+     * @param port port
+     * @param isEnabled true if enabled
+     * @return a PortDescription based on the port
+     */
+    static PortDescription descriptionOf(Port port, boolean isEnabled) {
+<span class="nc" id="L166">        checkNotNull(port, &quot;Must supply non-null Port&quot;);</span>
+<span class="nc" id="L167">        final boolean isup = isEnabled;</span>
+<span class="nc" id="L168">        return descriptionOfPort(port, isup);</span>
+    }
+
+    private static PortDescription descriptionOfPort(Port port, final boolean isup) {
+<span class="nc" id="L172">        final PortNumber ptn = port.number();</span>
+<span class="nc" id="L173">        final SparseAnnotations an = (SparseAnnotations) port.annotations();</span>
+<span class="nc bnc" id="L174" title="All 4 branches missed.">        switch (port.type()) {</span>
+            case OMS:
+<span class="nc" id="L176">                OmsPort oms = (OmsPort) port;</span>
+<span class="nc" id="L177">                return new OmsPortDescription(ptn, isup, oms.minFrequency(),</span>
+<span class="nc" id="L178">                        oms.maxFrequency(), oms.grid(), an);</span>
+            case OCH:
+<span class="nc" id="L180">                OchPort och = (OchPort) port;</span>
+<span class="nc" id="L181">                return new OchPortDescription(ptn, isup, och.signalType(),</span>
+<span class="nc" id="L182">                        och.isTunable(), och.lambda(), an);</span>
+            case ODUCLT:
+<span class="nc" id="L184">                OduCltPort odu = (OduCltPort) port;</span>
+<span class="nc" id="L185">                return new OduCltPortDescription(ptn, isup, odu.signalType(), an);</span>
+            default:
+<span class="nc" id="L187">                return new DefaultPortDescription(ptn, isup, port.type(), port.portSpeed(), an);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

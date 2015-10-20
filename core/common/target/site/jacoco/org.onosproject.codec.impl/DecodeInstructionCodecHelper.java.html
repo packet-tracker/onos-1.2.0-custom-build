@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DecodeInstructionCodecHelper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">DecodeInstructionCodecHelper.java</span></div><h1>DecodeInstructionCodecHelper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.TpPort;
+import org.onlab.packet.VlanId;
+import org.onosproject.net.ChannelSpacing;
+import org.onosproject.net.GridType;
+import org.onosproject.net.Lambda;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.PortNumber;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction;
+import org.onosproject.net.flow.instructions.L2ModificationInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction;
+import org.onosproject.net.flow.instructions.L4ModificationInstruction;
+
+import static org.onlab.util.Tools.nullIsIllegal;
+
+/**
+ * Decoding portion of the instruction codec.
+ */
+public final class DecodeInstructionCodecHelper {
+    private final ObjectNode json;
+
+    /**
+     * Creates a decode instruction codec object.
+     *
+     * @param json JSON object to decode
+     */
+<span class="fc" id="L50">    public DecodeInstructionCodecHelper(ObjectNode json) {</span>
+<span class="fc" id="L51">        this.json = json;</span>
+<span class="fc" id="L52">    }</span>
+
+    /**
+     * Decodes a Layer 2 instruction.
+     *
+     * @return instruction object decoded from the JSON
+     * @throws IllegalArgumentException if the JSON is invalid
+     */
+    private Instruction decodeL2() {
+<span class="fc" id="L61">        String subType = json.get(InstructionCodec.SUBTYPE).asText();</span>
+
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        if (subType.equals(L2ModificationInstruction.L2SubType.ETH_SRC.name())) {</span>
+<span class="fc" id="L64">            String mac = nullIsIllegal(json.get(InstructionCodec.MAC),</span>
+<span class="fc" id="L65">                    InstructionCodec.MAC + InstructionCodec.MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L66">            return Instructions.modL2Src(MacAddress.valueOf(mac));</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.ETH_DST.name())) {</span>
+<span class="fc" id="L68">            String mac = nullIsIllegal(json.get(InstructionCodec.MAC),</span>
+<span class="fc" id="L69">                    InstructionCodec.MAC + InstructionCodec.MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L70">            return Instructions.modL2Dst(MacAddress.valueOf(mac));</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.VLAN_ID.name())) {</span>
+<span class="fc" id="L72">            short vlanId = (short) nullIsIllegal(json.get(InstructionCodec.VLAN_ID),</span>
+<span class="fc" id="L73">                    InstructionCodec.VLAN_ID + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L74">            return Instructions.modVlanId(VlanId.vlanId(vlanId));</span>
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.VLAN_PCP.name())) {</span>
+<span class="fc" id="L76">            byte vlanPcp = (byte) nullIsIllegal(json.get(InstructionCodec.VLAN_PCP),</span>
+<span class="fc" id="L77">                    InstructionCodec.VLAN_PCP + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L78">            return Instructions.modVlanPcp(vlanPcp);</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.MPLS_LABEL.name())) {</span>
+<span class="fc" id="L80">            int label = nullIsIllegal(json.get(InstructionCodec.MPLS_LABEL),</span>
+<span class="fc" id="L81">                    InstructionCodec.MPLS_LABEL + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L82">            return Instructions.modMplsLabel(MplsLabel.mplsLabel(label));</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.MPLS_PUSH.name())) {</span>
+<span class="fc" id="L84">            return Instructions.pushMpls();</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.MPLS_POP.name())) {</span>
+<span class="fc" id="L86">            return Instructions.popMpls();</span>
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.DEC_MPLS_TTL.name())) {</span>
+<span class="fc" id="L88">            return Instructions.decMplsTtl();</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.VLAN_POP.name())) {</span>
+<span class="fc" id="L90">            return Instructions.popVlan();</span>
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.VLAN_PUSH.name())) {</span>
+<span class="fc" id="L92">            return Instructions.pushVlan();</span>
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">        } else if (subType.equals(L2ModificationInstruction.L2SubType.TUNNEL_ID.name())) {</span>
+<span class="fc" id="L94">            long tunnelId = nullIsIllegal(json.get(InstructionCodec.TUNNEL_ID),</span>
+<span class="fc" id="L95">                    InstructionCodec.TUNNEL_ID + InstructionCodec.MISSING_MEMBER_MESSAGE).asLong();</span>
+<span class="fc" id="L96">            return Instructions.modTunnelId(tunnelId);</span>
+        }
+<span class="nc" id="L98">        throw new IllegalArgumentException(&quot;L2 Instruction subtype &quot;</span>
+                + subType + &quot; is not supported&quot;);
+    }
+
+    /**
+     * Decodes a Layer 3 instruction.
+     *
+     * @return instruction object decoded from the JSON
+     * @throws IllegalArgumentException if the JSON is invalid
+     */
+    private Instruction decodeL3() {
+<span class="fc" id="L109">        String subType = json.get(InstructionCodec.SUBTYPE).asText();</span>
+
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (subType.equals(L3ModificationInstruction.L3SubType.IPV4_SRC.name())) {</span>
+<span class="fc" id="L112">            IpAddress ip = IpAddress.valueOf(nullIsIllegal(json.get(InstructionCodec.IP),</span>
+<span class="fc" id="L113">                    InstructionCodec.IP + InstructionCodec.MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L114">            return Instructions.modL3Src(ip);</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        } else if (subType.equals(L3ModificationInstruction.L3SubType.IPV4_DST.name())) {</span>
+<span class="fc" id="L116">            IpAddress ip = IpAddress.valueOf(nullIsIllegal(json.get(InstructionCodec.IP),</span>
+<span class="fc" id="L117">                    InstructionCodec.IP + InstructionCodec.MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L118">            return Instructions.modL3Dst(ip);</span>
+<span class="fc bfc" id="L119" title="All 2 branches covered.">        } else if (subType.equals(L3ModificationInstruction.L3SubType.IPV6_SRC.name())) {</span>
+<span class="fc" id="L120">            IpAddress ip = IpAddress.valueOf(nullIsIllegal(json.get(InstructionCodec.IP),</span>
+<span class="fc" id="L121">                    InstructionCodec.IP + InstructionCodec.MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L122">            return Instructions.modL3IPv6Src(ip);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        } else if (subType.equals(L3ModificationInstruction.L3SubType.IPV6_DST.name())) {</span>
+<span class="fc" id="L124">            IpAddress ip = IpAddress.valueOf(nullIsIllegal(json.get(InstructionCodec.IP),</span>
+<span class="fc" id="L125">                    InstructionCodec.IP + InstructionCodec.MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L126">            return Instructions.modL3IPv6Dst(ip);</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">        } else if (subType.equals(L3ModificationInstruction.L3SubType.IPV6_FLABEL.name())) {</span>
+<span class="fc" id="L128">            int flowLabel = nullIsIllegal(json.get(InstructionCodec.FLOW_LABEL),</span>
+<span class="fc" id="L129">                    InstructionCodec.FLOW_LABEL + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L130">            return Instructions.modL3IPv6FlowLabel(flowLabel);</span>
+        }
+<span class="nc" id="L132">        throw new IllegalArgumentException(&quot;L3 Instruction subtype &quot;</span>
+                + subType + &quot; is not supported&quot;);
+    }
+
+    /**
+     * Decodes a Layer 0 instruction.
+     *
+     * @return instruction object decoded from the JSON
+     * @throws IllegalArgumentException if the JSON is invalid
+     */
+    private Instruction decodeL0() {
+<span class="fc" id="L143">        String subType = json.get(InstructionCodec.SUBTYPE).asText();</span>
+
+
+<span class="fc bfc" id="L146" title="All 2 branches covered.">        if (subType.equals(L0ModificationInstruction.L0SubType.LAMBDA.name())) {</span>
+<span class="fc" id="L147">            int lambda = nullIsIllegal(json.get(InstructionCodec.LAMBDA),</span>
+<span class="fc" id="L148">                    InstructionCodec.LAMBDA + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L149">            return Instructions.modL0Lambda(Lambda.indexedLambda(lambda));</span>
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">        } else if (subType.equals(L0ModificationInstruction.L0SubType.OCH.name())) {</span>
+<span class="fc" id="L151">            String gridTypeString = nullIsIllegal(json.get(InstructionCodec.GRID_TYPE),</span>
+<span class="fc" id="L152">                    InstructionCodec.GRID_TYPE + InstructionCodec.MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L153">            GridType gridType = GridType.valueOf(gridTypeString);</span>
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">            if (gridType == null) {</span>
+<span class="nc" id="L155">                throw new IllegalArgumentException(&quot;Unknown grid type  &quot;</span>
+                        + gridTypeString);
+            }
+<span class="fc" id="L158">            String channelSpacingString = nullIsIllegal(json.get(InstructionCodec.CHANNEL_SPACING),</span>
+<span class="fc" id="L159">                    InstructionCodec.CHANNEL_SPACING + InstructionCodec.MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L160">            ChannelSpacing channelSpacing = ChannelSpacing.valueOf(channelSpacingString);</span>
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">            if (channelSpacing == null) {</span>
+<span class="nc" id="L162">                throw new IllegalArgumentException(&quot;Unknown channel spacing  &quot;</span>
+                        + channelSpacingString);
+            }
+<span class="fc" id="L165">            int spacingMultiplier = nullIsIllegal(json.get(InstructionCodec.SPACING_MULTIPLIER),</span>
+<span class="fc" id="L166">                    InstructionCodec.SPACING_MULTIPLIER + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L167">            int slotGranularity = nullIsIllegal(json.get(InstructionCodec.SLOT_GRANULARITY),</span>
+<span class="fc" id="L168">                    InstructionCodec.SLOT_GRANULARITY + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L169">            return Instructions.modL0Lambda(new OchSignal(gridType, channelSpacing,</span>
+                    spacingMultiplier, slotGranularity));
+        }
+<span class="nc" id="L172">        throw new IllegalArgumentException(&quot;L0 Instruction subtype &quot;</span>
+                + subType + &quot; is not supported&quot;);
+    }
+
+    /**
+     * Decodes a Layer 4 instruction.
+     *
+     * @return instruction object decoded from the JSON
+     * @throws IllegalArgumentException if the JSON is invalid
+     */
+    private Instruction decodeL4() {
+<span class="fc" id="L183">        String subType = json.get(InstructionCodec.SUBTYPE).asText();</span>
+
+<span class="fc bfc" id="L185" title="All 2 branches covered.">        if (subType.equals(L4ModificationInstruction.L4SubType.TCP_DST.name())) {</span>
+<span class="fc" id="L186">            TpPort tcpPort = TpPort.tpPort(nullIsIllegal(json.get(InstructionCodec.TCP_PORT),</span>
+<span class="fc" id="L187">                    InstructionCodec.TCP_PORT + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L188">            return Instructions.modTcpDst(tcpPort);</span>
+<span class="fc bfc" id="L189" title="All 2 branches covered.">        } else if (subType.equals(L4ModificationInstruction.L4SubType.TCP_SRC.name())) {</span>
+<span class="fc" id="L190">            TpPort tcpPort = TpPort.tpPort(nullIsIllegal(json.get(InstructionCodec.TCP_PORT),</span>
+<span class="fc" id="L191">                    InstructionCodec.TCP_PORT + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L192">            return Instructions.modTcpSrc(tcpPort);</span>
+<span class="fc bfc" id="L193" title="All 2 branches covered.">        } else if (subType.equals(L4ModificationInstruction.L4SubType.UDP_DST.name())) {</span>
+<span class="fc" id="L194">            TpPort udpPort = TpPort.tpPort(nullIsIllegal(json.get(InstructionCodec.UDP_PORT),</span>
+<span class="fc" id="L195">                    InstructionCodec.UDP_PORT + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L196">            return Instructions.modUdpDst(udpPort);</span>
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">        } else if (subType.equals(L4ModificationInstruction.L4SubType.UDP_SRC.name())) {</span>
+<span class="fc" id="L198">            TpPort udpPort = TpPort.tpPort(nullIsIllegal(json.get(InstructionCodec.UDP_PORT),</span>
+<span class="fc" id="L199">                    InstructionCodec.UDP_PORT + InstructionCodec.MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L200">            return Instructions.modUdpSrc(udpPort);</span>
+        }
+<span class="nc" id="L202">        throw new IllegalArgumentException(&quot;L4 Instruction subtype &quot;</span>
+                + subType + &quot; is not supported&quot;);
+    }
+
+    /**
+     * Decodes the JSON into an instruction object.
+     *
+     * @return Criterion object
+     * @throws IllegalArgumentException if the JSON is invalid
+     */
+    public Instruction decode() {
+<span class="fc" id="L213">        String type = json.get(InstructionCodec.TYPE).asText();</span>
+
+<span class="fc bfc" id="L215" title="All 2 branches covered.">        if (type.equals(Instruction.Type.OUTPUT.name())) {</span>
+<span class="fc" id="L216">            PortNumber portNumber =</span>
+<span class="fc" id="L217">                    PortNumber.portNumber(nullIsIllegal(json.get(InstructionCodec.PORT),</span>
+<span class="fc" id="L218">                            InstructionCodec.PORT + InstructionCodec.MISSING_MEMBER_MESSAGE).asLong());</span>
+<span class="fc" id="L219">            return Instructions.createOutput(portNumber);</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">        } else if (type.equals(Instruction.Type.DROP.name())) {</span>
+<span class="fc" id="L221">            return Instructions.createDrop();</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        } else if (type.equals(Instruction.Type.L0MODIFICATION.name())) {</span>
+<span class="fc" id="L223">            return decodeL0();</span>
+<span class="fc bfc" id="L224" title="All 2 branches covered.">        } else if (type.equals(Instruction.Type.L2MODIFICATION.name())) {</span>
+<span class="fc" id="L225">            return decodeL2();</span>
+<span class="fc bfc" id="L226" title="All 2 branches covered.">        } else if (type.equals(Instruction.Type.L3MODIFICATION.name())) {</span>
+<span class="fc" id="L227">            return decodeL3();</span>
+<span class="pc bpc" id="L228" title="1 of 2 branches missed.">        } else if (type.equals(Instruction.Type.L4MODIFICATION.name())) {</span>
+<span class="fc" id="L229">            return decodeL4();</span>
+        }
+<span class="nc" id="L231">        throw new IllegalArgumentException(&quot;Instruction type &quot;</span>
+                + type + &quot; is not supported&quot;);
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

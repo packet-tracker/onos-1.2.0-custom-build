@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>L3ModificationInstruction.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.instructions</a> &gt; <span class="el_source">L3ModificationInstruction.java</span></div><h1>L3ModificationInstruction.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.instructions;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+import java.util.Objects;
+
+import org.onlab.packet.IpAddress;
+
+/**
+ * Abstraction of a single traffic treatment step.
+ */
+<span class="fc" id="L27">public abstract class L3ModificationInstruction implements Instruction {</span>
+
+    /**
+     * Represents the type of traffic treatment.
+     */
+<span class="pc" id="L32">    public enum L3SubType {</span>
+        /**
+         * IPv4 src modification.
+         */
+<span class="fc" id="L36">        IPV4_SRC,</span>
+
+        /**
+         * IPv4 dst modification.
+         */
+<span class="fc" id="L41">        IPV4_DST,</span>
+
+        /**
+         * IPv6 src modification.
+         */
+<span class="fc" id="L46">        IPV6_SRC,</span>
+
+        /**
+         * IPv6 dst modification.
+         */
+<span class="fc" id="L51">        IPV6_DST,</span>
+
+        /**
+         * IPv6 flow label modification.
+         */
+<span class="fc" id="L56">        IPV6_FLABEL,</span>
+
+        /**
+         * Decrement TTL.
+         */
+<span class="fc" id="L61">        DEC_TTL,</span>
+
+        /**
+         * Copy TTL out.
+         */
+<span class="fc" id="L66">        TTL_OUT,</span>
+
+        /**
+         * Copy TTL in.
+         */
+<span class="fc" id="L71">        TTL_IN</span>
+
+        //TODO: remaining types
+    }
+
+    /**
+     * Returns the subtype of the modification instruction.
+     * @return type of instruction
+     */
+    public abstract L3SubType subtype();
+
+    @Override
+    public final Type type() {
+<span class="fc" id="L84">        return Type.L3MODIFICATION;</span>
+    }
+
+    /**
+     * Represents a L3 src/dst modification instruction.
+     */
+    public static final class ModIPInstruction extends L3ModificationInstruction {
+
+        private final L3SubType subtype;
+        private final IpAddress ip;
+
+<span class="fc" id="L95">        ModIPInstruction(L3SubType subType, IpAddress addr) {</span>
+
+<span class="fc" id="L97">            this.subtype = subType;</span>
+<span class="fc" id="L98">            this.ip = addr;</span>
+<span class="fc" id="L99">        }</span>
+
+        @Override
+        public L3SubType subtype() {
+<span class="fc" id="L103">            return this.subtype;</span>
+        }
+
+        public IpAddress ip() {
+<span class="fc" id="L107">            return this.ip;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L112">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L113">                    .add(&quot;ip&quot;, ip).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L118">            return Objects.hash(type(), subtype(), ip);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L123" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L124">                return true;</span>
+            }
+<span class="fc bfc" id="L126" title="All 2 branches covered.">            if (obj instanceof ModIPInstruction) {</span>
+<span class="fc" id="L127">                ModIPInstruction that = (ModIPInstruction) obj;</span>
+<span class="fc bfc" id="L128" title="All 2 branches covered.">                return  Objects.equals(ip, that.ip) &amp;&amp;</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">                        Objects.equals(this.subtype(), that.subtype());</span>
+            }
+<span class="fc" id="L131">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a L3 IPv6 Flow Label (RFC 6437) modification instruction
+     * (20 bits unsigned integer).
+     */
+    public static final class ModIPv6FlowLabelInstruction
+        extends L3ModificationInstruction {
+        private static final int MASK = 0xfffff;
+        private final int flowLabel;            // IPv6 flow label: 20 bits
+
+        /**
+         * Creates a new flow mod instruction.
+         *
+         * @param flowLabel the IPv6 flow label to set in the treatment (20 bits)
+         */
+<span class="fc" id="L149">        ModIPv6FlowLabelInstruction(int flowLabel) {</span>
+<span class="fc" id="L150">            this.flowLabel = flowLabel &amp; MASK;</span>
+<span class="fc" id="L151">        }</span>
+
+        @Override
+        public L3SubType subtype() {
+<span class="fc" id="L155">            return L3SubType.IPV6_FLABEL;</span>
+        }
+
+        /**
+         * Gets the IPv6 flow label to set in the treatment.
+         *
+         * @return the IPv6 flow label to set in the treatment (20 bits)
+         */
+        public int flowLabel() {
+<span class="fc" id="L164">            return this.flowLabel;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L169">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L170">                .add(&quot;flowLabel&quot;, Long.toHexString(flowLabel)).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L175">            return Objects.hash(type(), subtype(), flowLabel);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L180" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L181">                return true;</span>
+            }
+<span class="fc bfc" id="L183" title="All 2 branches covered.">            if (obj instanceof ModIPv6FlowLabelInstruction) {</span>
+<span class="fc" id="L184">                ModIPv6FlowLabelInstruction that =</span>
+                    (ModIPv6FlowLabelInstruction) obj;
+<span class="fc" id="L186">                return  Objects.equals(flowLabel, that.flowLabel);</span>
+            }
+<span class="fc" id="L188">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a L3 TTL modification instruction.
+     */
+    public static final class ModTtlInstruction extends L3ModificationInstruction {
+
+        private final L3SubType subtype;
+
+<span class="nc" id="L199">        ModTtlInstruction(L3SubType subtype) {</span>
+<span class="nc" id="L200">            this.subtype = subtype;</span>
+<span class="nc" id="L201">        }</span>
+
+        @Override
+        public L3SubType subtype() {
+<span class="nc" id="L205">            return this.subtype;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L210">            return toStringHelper(subtype().toString())</span>
+<span class="nc" id="L211">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L216">            return Objects.hash(type(), subtype());</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L222">                return true;</span>
+            }
+<span class="nc bnc" id="L224" title="All 2 branches missed.">            if (obj instanceof ModTtlInstruction) {</span>
+<span class="nc" id="L225">                ModTtlInstruction that = (ModTtlInstruction) obj;</span>
+<span class="nc" id="L226">                return  Objects.equals(this.subtype(), that.subtype());</span>
+            }
+<span class="nc" id="L228">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

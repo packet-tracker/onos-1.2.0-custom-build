@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LinkDiscovery.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-lldp-provider</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.lldp.impl</a> &gt; <span class="el_source">LinkDiscovery.java</span></div><h1>LinkDiscovery.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.lldp.impl;
+
+import com.google.common.collect.Sets;
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.ONOSLLDP;
+import org.onlab.util.Timer;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link.Type;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.link.DefaultLinkDescription;
+import org.onosproject.net.link.LinkDescription;
+import org.onosproject.net.packet.DefaultOutboundPacket;
+import org.onosproject.net.packet.OutboundPacket;
+import org.onosproject.net.packet.PacketContext;
+import org.slf4j.Logger;
+
+import java.nio.ByteBuffer;
+import java.util.Set;
+
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.onosproject.net.PortNumber.portNumber;
+import static org.onosproject.net.flow.DefaultTrafficTreatment.builder;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Run discovery process from a physical switch. Ports are initially labeled as
+ * slow ports. When an LLDP is successfully received, label the remote port as
+ * fast. Every probeRate milliseconds, loop over all fast ports and send an
+ * LLDP, send an LLDP for a single slow port. Based on FlowVisor topology
+ * discovery implementation.
+ */
+class LinkDiscovery implements TimerTask {
+
+<span class="fc" id="L55">    private final Logger log = getLogger(getClass());</span>
+
+    private static final String SRC_MAC = &quot;DE:AD:BE:EF:BA:11&quot;;
+
+    private final Device device;
+    private final DiscoveryContext context;
+
+    private final ONOSLLDP lldpPacket;
+    private final Ethernet ethPacket;
+    private Ethernet bddpEth;
+
+    private Timeout timeout;
+    private volatile boolean isStopped;
+
+    // Set of ports to be probed
+<span class="fc" id="L70">    private final Set&lt;Long&gt; ports = Sets.newConcurrentHashSet();</span>
+
+    /**
+     * Instantiates discovery manager for the given physical switch. Creates a
+     * generic LLDP packet that will be customized for the port it is sent out on.
+     * Starts the the timer for the discovery process.
+     *
+     * @param device  the physical switch
+     * @param context discovery context
+     */
+<span class="fc" id="L80">    LinkDiscovery(Device device, DiscoveryContext context) {</span>
+<span class="fc" id="L81">        this.device = device;</span>
+<span class="fc" id="L82">        this.context = context;</span>
+
+<span class="fc" id="L84">        lldpPacket = new ONOSLLDP();</span>
+<span class="fc" id="L85">        lldpPacket.setChassisId(device.chassisId());</span>
+<span class="fc" id="L86">        lldpPacket.setDevice(device.id().toString());</span>
+
+<span class="fc" id="L88">        ethPacket = new Ethernet();</span>
+<span class="fc" id="L89">        ethPacket.setEtherType(Ethernet.TYPE_LLDP);</span>
+<span class="fc" id="L90">        ethPacket.setDestinationMACAddress(ONOSLLDP.LLDP_NICIRA);</span>
+<span class="fc" id="L91">        ethPacket.setPayload(this.lldpPacket);</span>
+<span class="fc" id="L92">        ethPacket.setPad(true);</span>
+
+<span class="fc" id="L94">        bddpEth = new Ethernet();</span>
+<span class="fc" id="L95">        bddpEth.setPayload(lldpPacket);</span>
+<span class="fc" id="L96">        bddpEth.setEtherType(Ethernet.TYPE_BSN);</span>
+<span class="fc" id="L97">        bddpEth.setDestinationMACAddress(ONOSLLDP.BDDP_MULTICAST);</span>
+<span class="fc" id="L98">        bddpEth.setPad(true);</span>
+
+<span class="fc" id="L100">        isStopped = true;</span>
+<span class="fc" id="L101">        start();</span>
+<span class="fc" id="L102">        log.debug(&quot;Started discovery manager for switch {}&quot;, device.id());</span>
+
+<span class="fc" id="L104">    }</span>
+
+    synchronized void stop() {
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if (!isStopped) {</span>
+<span class="fc" id="L108">            isStopped = true;</span>
+<span class="fc" id="L109">            timeout.cancel();</span>
+        } else {
+<span class="fc" id="L111">            log.warn(&quot;LinkDiscovery stopped multiple times?&quot;);</span>
+        }
+<span class="fc" id="L113">    }</span>
+
+    synchronized void start() {
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">        if (isStopped) {</span>
+<span class="fc" id="L117">            isStopped = false;</span>
+<span class="fc" id="L118">            timeout = Timer.getTimer().newTimeout(this, 0, MILLISECONDS);</span>
+        } else {
+<span class="nc" id="L120">            log.warn(&quot;LinkDiscovery started multiple times?&quot;);</span>
+        }
+<span class="fc" id="L122">    }</span>
+
+    synchronized boolean isStopped() {
+<span class="pc bpc" id="L125" title="3 of 4 branches missed.">        return isStopped || timeout.isCancelled();</span>
+    }
+
+    /**
+     * Add physical port port to discovery process.
+     * Send out initial LLDP and label it as slow port.
+     *
+     * @param port the port
+     */
+    void addPort(Port port) {
+<span class="fc" id="L135">        boolean newPort = ports.add(port.number().toLong());</span>
+<span class="fc" id="L136">        boolean isMaster = context.mastershipService().isLocalMaster(device.id());</span>
+<span class="pc bpc" id="L137" title="2 of 4 branches missed.">        if (newPort &amp;&amp; isMaster) {</span>
+<span class="fc" id="L138">            log.debug(&quot;Sending initial probe to port {}@{}&quot;, port.number().toLong(), device.id());</span>
+<span class="fc" id="L139">            sendProbes(port.number().toLong());</span>
+        }
+<span class="fc" id="L141">    }</span>
+
+    /**
+     * Handles an incoming LLDP packet. Creates link in topology and adds the
+     * link for staleness tracking.
+     *
+     * @param packetContext packet context
+     * @return true if handled
+     */
+    boolean handleLLDP(PacketContext packetContext) {
+<span class="fc" id="L151">        Ethernet eth = packetContext.inPacket().parsed();</span>
+<span class="pc bpc" id="L152" title="1 of 2 branches missed.">        if (eth == null) {</span>
+<span class="nc" id="L153">            return false;</span>
+        }
+
+<span class="fc" id="L156">        ONOSLLDP onoslldp = ONOSLLDP.parseONOSLLDP(eth);</span>
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">        if (onoslldp != null) {</span>
+<span class="fc" id="L158">            PortNumber srcPort = portNumber(onoslldp.getPort());</span>
+<span class="fc" id="L159">            PortNumber dstPort = packetContext.inPacket().receivedFrom().port();</span>
+<span class="fc" id="L160">            DeviceId srcDeviceId = DeviceId.deviceId(onoslldp.getDeviceString());</span>
+<span class="fc" id="L161">            DeviceId dstDeviceId = packetContext.inPacket().receivedFrom().deviceId();</span>
+
+<span class="fc" id="L163">            ConnectPoint src = new ConnectPoint(srcDeviceId, srcPort);</span>
+<span class="fc" id="L164">            ConnectPoint dst = new ConnectPoint(dstDeviceId, dstPort);</span>
+
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">            LinkDescription ld = eth.getEtherType() == Ethernet.TYPE_LLDP ?</span>
+                    new DefaultLinkDescription(src, dst, Type.DIRECT) :
+                    new DefaultLinkDescription(src, dst, Type.INDIRECT);
+
+            try {
+<span class="fc" id="L171">                context.providerService().linkDetected(ld);</span>
+<span class="fc" id="L172">                context.touchLink(LinkKey.linkKey(src, dst));</span>
+<span class="nc" id="L173">            } catch (IllegalStateException e) {</span>
+<span class="nc" id="L174">                return true;</span>
+<span class="fc" id="L175">            }</span>
+<span class="fc" id="L176">            return true;</span>
+        }
+<span class="nc" id="L178">        return false;</span>
+    }
+
+
+    /**
+     * Execute this method every t milliseconds. Loops over all ports
+     * labeled as fast and sends out an LLDP. Send out an LLDP on a single slow
+     * port.
+     *
+     * @param t timeout
+     */
+    @Override
+    public void run(Timeout t) {
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (isStopped()) {</span>
+<span class="nc" id="L192">            return;</span>
+        }
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        if (context.mastershipService().isLocalMaster(device.id())) {</span>
+<span class="nc" id="L196">            log.trace(&quot;Sending probes from {}&quot;, device.id());</span>
+<span class="nc" id="L197">            ports.forEach(this::sendProbes);</span>
+        }
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if (!isStopped()) {</span>
+<span class="nc" id="L201">            timeout = Timer.getTimer().newTimeout(this, context.probeRate(), MILLISECONDS);</span>
+        }
+<span class="nc" id="L203">    }</span>
+
+    /**
+     * Creates packet_out LLDP for specified output port.
+     *
+     * @param port the port
+     * @return Packet_out message with LLDP data
+     */
+    private OutboundPacket createOutBoundLLDP(Long port) {
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L213">            return null;</span>
+        }
+<span class="fc" id="L215">        lldpPacket.setPortId(port.intValue());</span>
+<span class="fc" id="L216">        ethPacket.setSourceMACAddress(SRC_MAC);</span>
+<span class="fc" id="L217">        return new DefaultOutboundPacket(device.id(),</span>
+<span class="fc" id="L218">                                         builder().setOutput(portNumber(port)).build(),</span>
+<span class="fc" id="L219">                                         ByteBuffer.wrap(ethPacket.serialize()));</span>
+    }
+
+    /**
+     * Creates packet_out BDDP for specified output port.
+     *
+     * @param port the port
+     * @return Packet_out message with LLDP data
+     */
+    private OutboundPacket createOutBoundBDDP(Long port) {
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L230">            return null;</span>
+        }
+<span class="fc" id="L232">        lldpPacket.setPortId(port.intValue());</span>
+<span class="fc" id="L233">        bddpEth.setSourceMACAddress(SRC_MAC);</span>
+<span class="fc" id="L234">        return new DefaultOutboundPacket(device.id(),</span>
+<span class="fc" id="L235">                                         builder().setOutput(portNumber(port)).build(),</span>
+<span class="fc" id="L236">                                         ByteBuffer.wrap(bddpEth.serialize()));</span>
+    }
+
+    private void sendProbes(Long portNumber) {
+<span class="fc" id="L240">        log.trace(&quot;Sending probes out to {}@{}&quot;, portNumber, device.id());</span>
+<span class="fc" id="L241">        OutboundPacket pkt = createOutBoundLLDP(portNumber);</span>
+<span class="fc" id="L242">        context.packetService().emit(pkt);</span>
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">        if (context.useBDDP()) {</span>
+<span class="fc" id="L244">            OutboundPacket bpkt = createOutBoundBDDP(portNumber);</span>
+<span class="fc" id="L245">            context.packetService().emit(bpkt);</span>
+        }
+<span class="fc" id="L247">    }</span>
+
+    boolean containsPort(long portNumber) {
+<span class="fc" id="L250">        return ports.contains(portNumber);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

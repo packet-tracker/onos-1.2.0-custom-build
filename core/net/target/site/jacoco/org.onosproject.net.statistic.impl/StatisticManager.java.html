@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>StatisticManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.statistic.impl</a> &gt; <span class="el_source">StatisticManager.java</span></div><h1>StatisticManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.statistic.impl;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Predicate;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableSet;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.GroupId;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleEvent;
+import org.onosproject.net.flow.FlowRuleListener;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.statistic.DefaultLoad;
+import org.onosproject.net.statistic.Load;
+import org.onosproject.net.statistic.StatisticService;
+import org.onosproject.net.statistic.StatisticStore;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Provides an implementation of the Statistic Service.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L61">public class StatisticManager implements StatisticService {</span>
+
+<span class="nc" id="L63">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowRuleService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StatisticStore statisticStore;
+
+
+<span class="nc" id="L72">    private final InternalFlowRuleListener listener = new InternalFlowRuleListener();</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L76">        flowRuleService.addListener(listener);</span>
+<span class="nc" id="L77">        log.info(&quot;Started&quot;);</span>
+
+<span class="nc" id="L79">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L83">        flowRuleService.removeListener(listener);</span>
+<span class="nc" id="L84">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L85">    }</span>
+
+    @Override
+    public Load load(Link link) {
+<span class="nc" id="L89">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L91">        return load(link.src());</span>
+    }
+
+    @Override
+    public Load load(Link link, ApplicationId appId, Optional&lt;GroupId&gt; groupId) {
+<span class="nc" id="L96">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L98">        Statistics stats = getStatistics(link.src());</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (!stats.isValid()) {</span>
+<span class="nc" id="L100">            return new DefaultLoad();</span>
+        }
+
+<span class="nc" id="L103">        ImmutableSet&lt;FlowEntry&gt; current = FluentIterable.from(stats.current())</span>
+<span class="nc" id="L104">                .filter(hasApplicationId(appId))</span>
+<span class="nc" id="L105">                .filter(hasGroupId(groupId))</span>
+<span class="nc" id="L106">                .toSet();</span>
+<span class="nc" id="L107">        ImmutableSet&lt;FlowEntry&gt; previous = FluentIterable.from(stats.previous())</span>
+<span class="nc" id="L108">                .filter(hasApplicationId(appId))</span>
+<span class="nc" id="L109">                .filter(hasGroupId(groupId))</span>
+<span class="nc" id="L110">                .toSet();</span>
+
+<span class="nc" id="L112">        return new DefaultLoad(aggregate(current), aggregate(previous));</span>
+    }
+
+    @Override
+    public Load load(ConnectPoint connectPoint) {
+<span class="nc" id="L117">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L119">        return loadInternal(connectPoint);</span>
+    }
+
+    @Override
+    public Link max(Path path) {
+<span class="nc" id="L124">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc bnc" id="L126" title="All 2 branches missed.">        if (path.links().isEmpty()) {</span>
+<span class="nc" id="L127">            return null;</span>
+        }
+<span class="nc" id="L129">        Load maxLoad = new DefaultLoad();</span>
+<span class="nc" id="L130">        Link maxLink = null;</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        for (Link link : path.links()) {</span>
+<span class="nc" id="L132">            Load load = loadInternal(link.src());</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">            if (load.rate() &gt; maxLoad.rate()) {</span>
+<span class="nc" id="L134">                maxLoad = load;</span>
+<span class="nc" id="L135">                maxLink = link;</span>
+            }
+<span class="nc" id="L137">        }</span>
+<span class="nc" id="L138">        return maxLink;</span>
+    }
+
+    @Override
+    public Link min(Path path) {
+<span class="nc" id="L143">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        if (path.links().isEmpty()) {</span>
+<span class="nc" id="L146">            return null;</span>
+        }
+<span class="nc" id="L148">        Load minLoad = new DefaultLoad();</span>
+<span class="nc" id="L149">        Link minLink = null;</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        for (Link link : path.links()) {</span>
+<span class="nc" id="L151">            Load load = loadInternal(link.src());</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            if (load.rate() &lt; minLoad.rate()) {</span>
+<span class="nc" id="L153">                minLoad = load;</span>
+<span class="nc" id="L154">                minLink = link;</span>
+            }
+<span class="nc" id="L156">        }</span>
+<span class="nc" id="L157">        return minLink;</span>
+    }
+
+    @Override
+    public FlowRule highestHitter(ConnectPoint connectPoint) {
+<span class="nc" id="L162">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L164">        Set&lt;FlowEntry&gt; hitters = statisticStore.getCurrentStatistic(connectPoint);</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (hitters.isEmpty()) {</span>
+<span class="nc" id="L166">            return null;</span>
+        }
+
+<span class="nc" id="L169">        FlowEntry max = hitters.iterator().next();</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        for (FlowEntry entry : hitters) {</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            if (entry.bytes() &gt; max.bytes()) {</span>
+<span class="nc" id="L172">                max = entry;</span>
+            }
+<span class="nc" id="L174">        }</span>
+<span class="nc" id="L175">        return max;</span>
+    }
+
+    private Load loadInternal(ConnectPoint connectPoint) {
+<span class="nc" id="L179">        Statistics stats = getStatistics(connectPoint);</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (!stats.isValid()) {</span>
+<span class="nc" id="L181">            return new DefaultLoad();</span>
+        }
+
+<span class="nc" id="L184">        return new DefaultLoad(aggregate(stats.current), aggregate(stats.previous));</span>
+    }
+
+    /**
+     * Returns statistics of the specified port.
+     *
+     * @param connectPoint port to query
+     * @return statistics
+     */
+    private Statistics getStatistics(ConnectPoint connectPoint) {
+        Set&lt;FlowEntry&gt; current;
+        Set&lt;FlowEntry&gt; previous;
+<span class="nc" id="L196">        synchronized (statisticStore) {</span>
+<span class="nc" id="L197">            current = getCurrentStatistic(connectPoint);</span>
+<span class="nc" id="L198">            previous = getPreviousStatistic(connectPoint);</span>
+<span class="nc" id="L199">        }</span>
+
+<span class="nc" id="L201">        return new Statistics(current, previous);</span>
+    }
+
+    /**
+     * Returns the current statistic of the specified port.
+
+     * @param connectPoint port to query
+     * @return set of flow entries
+     */
+    private Set&lt;FlowEntry&gt; getCurrentStatistic(ConnectPoint connectPoint) {
+<span class="nc" id="L211">        Set&lt;FlowEntry&gt; stats = statisticStore.getCurrentStatistic(connectPoint);</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (stats == null) {</span>
+<span class="nc" id="L213">            return Collections.emptySet();</span>
+        } else {
+<span class="nc" id="L215">            return stats;</span>
+        }
+    }
+
+    /**
+     * Returns the previous statistic of the specified port.
+     *
+     * @param connectPoint port to query
+     * @return set of flow entries
+     */
+    private Set&lt;FlowEntry&gt; getPreviousStatistic(ConnectPoint connectPoint) {
+<span class="nc" id="L226">        Set&lt;FlowEntry&gt; stats = statisticStore.getPreviousStatistic(connectPoint);</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (stats == null) {</span>
+<span class="nc" id="L228">            return Collections.emptySet();</span>
+        } else {
+<span class="nc" id="L230">            return stats;</span>
+        }
+    }
+
+    // TODO: make aggregation function generic by passing a function
+    // (applying Java 8 Stream API?)
+    /**
+     * Aggregates a set of values.
+     * @param values the values to aggregate
+     * @return a long value
+     */
+    private long aggregate(Set&lt;FlowEntry&gt; values) {
+<span class="nc" id="L242">        long sum = 0;</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        for (FlowEntry f : values) {</span>
+<span class="nc" id="L244">            sum += f.bytes();</span>
+<span class="nc" id="L245">        }</span>
+<span class="nc" id="L246">        return sum;</span>
+    }
+
+    /**
+     * Internal flow rule event listener.
+     */
+<span class="nc" id="L252">    private class InternalFlowRuleListener implements FlowRuleListener {</span>
+
+        @Override
+        public void event(FlowRuleEvent event) {
+<span class="nc" id="L256">            FlowRule rule = event.subject();</span>
+<span class="nc bnc" id="L257" title="All 5 branches missed.">            switch (event.type()) {</span>
+                case RULE_ADDED:
+                case RULE_UPDATED:
+<span class="nc bnc" id="L260" title="All 2 branches missed.">                    if (rule instanceof FlowEntry) {</span>
+<span class="nc" id="L261">                        statisticStore.addOrUpdateStatistic((FlowEntry) rule);</span>
+                    }
+                    break;
+                case RULE_ADD_REQUESTED:
+<span class="nc" id="L265">                    statisticStore.prepareForStatistics(rule);</span>
+<span class="nc" id="L266">                    break;</span>
+                case RULE_REMOVE_REQUESTED:
+<span class="nc" id="L268">                    statisticStore.removeFromStatistics(rule);</span>
+<span class="nc" id="L269">                    break;</span>
+                case RULE_REMOVED:
+<span class="nc" id="L271">                    break;</span>
+                default:
+<span class="nc" id="L273">                    log.warn(&quot;Unknown flow rule event {}&quot;, event);</span>
+            }
+<span class="nc" id="L275">        }</span>
+    }
+
+    /**
+     * Internal data class holding two set of flow entries.
+     */
+    private static class Statistics {
+        private final ImmutableSet&lt;FlowEntry&gt; current;
+        private final ImmutableSet&lt;FlowEntry&gt; previous;
+
+<span class="nc" id="L285">        public Statistics(Set&lt;FlowEntry&gt; current, Set&lt;FlowEntry&gt; previous) {</span>
+<span class="nc" id="L286">            this.current = ImmutableSet.copyOf(checkNotNull(current));</span>
+<span class="nc" id="L287">            this.previous = ImmutableSet.copyOf(checkNotNull(previous));</span>
+<span class="nc" id="L288">        }</span>
+
+        /**
+         * Returns flow entries as the current value.
+         *
+         * @return flow entries as the current value
+         */
+        public ImmutableSet&lt;FlowEntry&gt; current() {
+<span class="nc" id="L296">            return current;</span>
+        }
+
+        /**
+         * Returns flow entries as the previous value.
+         *
+         * @return flow entries as the previous value
+         */
+        public ImmutableSet&lt;FlowEntry&gt; previous() {
+<span class="nc" id="L305">            return previous;</span>
+        }
+
+        /**
+         * Validates values are not empty.
+         *
+         * @return false if either of the sets is empty. Otherwise, true.
+         */
+        public boolean isValid() {
+<span class="nc bnc" id="L314" title="All 4 branches missed.">            return !(current.isEmpty() || previous.isEmpty());</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L319">            return Objects.hash(current, previous);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L324" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L325">                return true;</span>
+            }
+<span class="nc bnc" id="L327" title="All 2 branches missed.">            if (!(obj instanceof Statistics)) {</span>
+<span class="nc" id="L328">                return false;</span>
+            }
+<span class="nc" id="L330">            final Statistics other = (Statistics) obj;</span>
+<span class="nc bnc" id="L331" title="All 4 branches missed.">            return Objects.equals(this.current, other.current) &amp;&amp; Objects.equals(this.previous, other.previous);</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L336">            return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L337">                    .add(&quot;current&quot;, current)</span>
+<span class="nc" id="L338">                    .add(&quot;previous&quot;, previous)</span>
+<span class="nc" id="L339">                    .toString();</span>
+        }
+    }
+
+    /**
+     * Creates a predicate that checks the application ID of a flow entry is the same as
+     * the specified application ID.
+     *
+     * @param appId application ID to be checked
+     * @return predicate
+     */
+    private static Predicate&lt;FlowEntry&gt; hasApplicationId(ApplicationId appId) {
+<span class="nc bnc" id="L351" title="All 2 branches missed.">        return flowEntry -&gt; flowEntry.appId() == appId.id();</span>
+    }
+
+    /**
+     * Create a predicate that checks the group ID of a flow entry is the same as
+     * the specified group ID.
+     *
+     * @param groupId group ID to be checked
+     * @return predicate
+     */
+    private static Predicate&lt;FlowEntry&gt; hasGroupId(Optional&lt;GroupId&gt; groupId) {
+<span class="nc" id="L362">        return flowEntry -&gt; {</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">            if (!groupId.isPresent()) {</span>
+<span class="nc" id="L364">                return false;</span>
+            }
+            // FIXME: The left hand type and right hand type don't match
+            // FlowEntry.groupId() still returns a short value, not int.
+<span class="nc" id="L368">            return flowEntry.groupId().equals(groupId.get());</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

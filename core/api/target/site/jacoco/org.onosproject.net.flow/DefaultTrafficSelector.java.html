@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultTrafficSelector.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow</a> &gt; <span class="el_source">DefaultTrafficSelector.java</span></div><h1>DefaultTrafficSelector.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableSet;
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.TpPort;
+import org.onlab.packet.VlanId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.criteria.Criterion;
+
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+
+/**
+ * Default traffic selector implementation.
+ */
+public final class DefaultTrafficSelector implements TrafficSelector {
+
+<span class="fc" id="L43">    private static final Comparator&lt;? super Criterion&gt; TYPE_COMPARATOR =</span>
+<span class="fc" id="L44">            (c1, c2) -&gt; c1.type().compareTo(c2.type());</span>
+
+    private final Set&lt;Criterion&gt; criteria;
+
+<span class="fc" id="L48">    private static final TrafficSelector EMPTY</span>
+<span class="fc" id="L49">            = new DefaultTrafficSelector(Collections.emptySet());</span>
+
+    /**
+     * Creates a new traffic selector with the specified criteria.
+     *
+     * @param criteria criteria
+     */
+<span class="fc" id="L56">    private DefaultTrafficSelector(Set&lt;Criterion&gt; criteria) {</span>
+<span class="fc" id="L57">        TreeSet&lt;Criterion&gt; elements = new TreeSet&lt;&gt;(TYPE_COMPARATOR);</span>
+<span class="fc" id="L58">        elements.addAll(criteria);</span>
+<span class="fc" id="L59">        this.criteria = ImmutableSet.copyOf(elements);</span>
+<span class="fc" id="L60">    }</span>
+
+    @Override
+    public Set&lt;Criterion&gt; criteria() {
+<span class="fc" id="L64">        return criteria;</span>
+    }
+
+    @Override
+    public Criterion getCriterion(Criterion.Type type) {
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        for (Criterion c : criteria) {</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">            if (c.type() == type) {</span>
+<span class="fc" id="L71">                return c;</span>
+            }
+<span class="nc" id="L73">        }</span>
+<span class="nc" id="L74">        return null;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L79">        return criteria.hashCode();</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L85">            return true;</span>
+        }
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        if (obj instanceof DefaultTrafficSelector) {</span>
+<span class="fc" id="L88">            DefaultTrafficSelector that = (DefaultTrafficSelector) obj;</span>
+<span class="fc" id="L89">            return Objects.equals(criteria, that.criteria);</span>
+
+        }
+<span class="fc" id="L92">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L97">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L98">                .add(&quot;criteria&quot;, criteria)</span>
+<span class="fc" id="L99">                .toString();</span>
+    }
+
+    /**
+     * Returns a new traffic selector builder.
+     *
+     * @return traffic selector builder
+     */
+    public static TrafficSelector.Builder builder() {
+<span class="fc" id="L108">        return new Builder();</span>
+    }
+
+    /**
+     * Returns an empty traffic selector.
+     *
+     * @return empty traffic selector
+     */
+    public static TrafficSelector emptySelector() {
+<span class="fc" id="L117">        return EMPTY;</span>
+    }
+
+    /**
+     * Returns a new traffic selector builder primed to produce entities
+     * patterned after the supplied selector.
+     *
+     * @param selector base selector
+     * @return traffic selector builder
+     */
+    public static TrafficSelector.Builder builder(TrafficSelector selector) {
+<span class="nc" id="L128">        return new Builder(selector);</span>
+    }
+
+    /**
+     * Builder of traffic selector entities.
+     */
+    public static final class Builder implements TrafficSelector.Builder {
+
+<span class="pc" id="L136">        private final Map&lt;Criterion.Type, Criterion&gt; selector = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L138">        private Builder() {</span>
+<span class="fc" id="L139">        }</span>
+
+<span class="nc" id="L141">        private Builder(TrafficSelector selector) {</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            for (Criterion c : selector.criteria()) {</span>
+<span class="nc" id="L143">                add(c);</span>
+<span class="nc" id="L144">            }</span>
+<span class="nc" id="L145">        }</span>
+
+        @Override
+        public Builder add(Criterion criterion) {
+<span class="fc" id="L149">            selector.put(criterion.type(), criterion);</span>
+<span class="fc" id="L150">            return this;</span>
+        }
+
+        @Override
+        public Builder matchInPort(PortNumber port) {
+<span class="fc" id="L155">            return add(Criteria.matchInPort(port));</span>
+        }
+
+        @Override
+        public Builder matchInPhyPort(PortNumber port) {
+<span class="fc" id="L160">            return add(Criteria.matchInPhyPort(port));</span>
+        }
+
+        @Override
+        public Builder matchMetadata(long metadata) {
+<span class="fc" id="L165">            return add(Criteria.matchMetadata(metadata));</span>
+        }
+
+        @Override
+        public Builder matchEthDst(MacAddress addr) {
+<span class="fc" id="L170">            return add(Criteria.matchEthDst(addr));</span>
+        }
+
+        @Override
+        public Builder matchEthSrc(MacAddress addr) {
+<span class="fc" id="L175">            return add(Criteria.matchEthSrc(addr));</span>
+        }
+
+        @Override
+        public Builder matchEthType(short ethType) {
+<span class="fc" id="L180">            return add(Criteria.matchEthType(ethType));</span>
+        }
+
+        @Override
+        public Builder matchVlanId(VlanId vlanId) {
+<span class="fc" id="L185">            return add(Criteria.matchVlanId(vlanId));</span>
+        }
+
+        @Override
+        public Builder matchVlanPcp(byte vlanPcp) {
+<span class="fc" id="L190">            return add(Criteria.matchVlanPcp(vlanPcp));</span>
+        }
+
+        @Override
+        public Builder matchIPDscp(byte ipDscp) {
+<span class="fc" id="L195">            return add(Criteria.matchIPDscp(ipDscp));</span>
+        }
+
+        @Override
+        public Builder matchIPEcn(byte ipEcn) {
+<span class="fc" id="L200">            return add(Criteria.matchIPEcn(ipEcn));</span>
+        }
+
+        @Override
+        public Builder matchIPProtocol(byte proto) {
+<span class="fc" id="L205">            return add(Criteria.matchIPProtocol(proto));</span>
+        }
+
+        @Override
+        public Builder matchIPSrc(IpPrefix ip) {
+<span class="fc" id="L210">            return add(Criteria.matchIPSrc(ip));</span>
+        }
+
+        @Override
+        public Builder matchIPDst(IpPrefix ip) {
+<span class="fc" id="L215">            return add(Criteria.matchIPDst(ip));</span>
+        }
+
+        @Deprecated
+        @Override
+        public Builder matchTcpSrc(short tcpPort) {
+<span class="nc" id="L221">            return matchTcpSrc(TpPort.tpPort(tcpPort));</span>
+        }
+
+        @Override
+        public Builder matchTcpSrc(TpPort tcpPort) {
+<span class="fc" id="L226">            return add(Criteria.matchTcpSrc(tcpPort));</span>
+        }
+
+        @Deprecated
+        @Override
+        public Builder matchTcpDst(short tcpPort) {
+<span class="nc" id="L232">            return matchTcpDst(TpPort.tpPort(tcpPort));</span>
+        }
+
+        @Override
+        public Builder matchTcpDst(TpPort tcpPort) {
+<span class="fc" id="L237">            return add(Criteria.matchTcpDst(tcpPort));</span>
+        }
+
+        @Deprecated
+        @Override
+        public Builder matchUdpSrc(short udpPort) {
+<span class="nc" id="L243">            return matchUdpSrc(TpPort.tpPort(udpPort));</span>
+        }
+
+        @Override
+        public Builder matchUdpSrc(TpPort udpPort) {
+<span class="fc" id="L248">            return add(Criteria.matchUdpSrc(udpPort));</span>
+        }
+
+        @Deprecated
+        @Override
+        public Builder matchUdpDst(short udpPort) {
+<span class="nc" id="L254">            return matchUdpDst(TpPort.tpPort(udpPort));</span>
+        }
+
+        @Override
+        public Builder matchUdpDst(TpPort udpPort) {
+<span class="fc" id="L259">            return add(Criteria.matchUdpDst(udpPort));</span>
+        }
+
+        @Deprecated
+        @Override
+        public Builder matchSctpSrc(short sctpPort) {
+<span class="nc" id="L265">            return matchSctpSrc(TpPort.tpPort(sctpPort));</span>
+        }
+
+        @Override
+        public Builder matchSctpSrc(TpPort sctpPort) {
+<span class="fc" id="L270">            return add(Criteria.matchSctpSrc(sctpPort));</span>
+        }
+
+        @Deprecated
+        @Override
+        public Builder matchSctpDst(short sctpPort) {
+<span class="nc" id="L276">            return matchSctpDst(TpPort.tpPort(sctpPort));</span>
+        }
+
+        @Override
+        public Builder matchSctpDst(TpPort sctpPort) {
+<span class="fc" id="L281">            return add(Criteria.matchSctpDst(sctpPort));</span>
+        }
+
+        @Override
+        public Builder matchIcmpType(byte icmpType) {
+<span class="fc" id="L286">            return add(Criteria.matchIcmpType(icmpType));</span>
+        }
+
+        @Override
+        public Builder matchIcmpCode(byte icmpCode) {
+<span class="fc" id="L291">            return add(Criteria.matchIcmpCode(icmpCode));</span>
+        }
+
+        @Override
+        public Builder matchIPv6Src(IpPrefix ip) {
+<span class="fc" id="L296">            return add(Criteria.matchIPv6Src(ip));</span>
+        }
+
+        @Override
+        public Builder matchIPv6Dst(IpPrefix ip) {
+<span class="fc" id="L301">            return add(Criteria.matchIPv6Dst(ip));</span>
+        }
+
+        @Override
+        public Builder matchIPv6FlowLabel(int flowLabel) {
+<span class="fc" id="L306">            return add(Criteria.matchIPv6FlowLabel(flowLabel));</span>
+        }
+
+        @Override
+        public Builder matchIcmpv6Type(byte icmpv6Type) {
+<span class="fc" id="L311">            return add(Criteria.matchIcmpv6Type(icmpv6Type));</span>
+        }
+
+        @Override
+        public Builder matchIcmpv6Code(byte icmpv6Code) {
+<span class="nc" id="L316">            return add(Criteria.matchIcmpv6Code(icmpv6Code));</span>
+        }
+
+        @Override
+        public Builder matchIPv6NDTargetAddress(Ip6Address targetAddress) {
+<span class="fc" id="L321">            return add(Criteria.matchIPv6NDTargetAddress(targetAddress));</span>
+        }
+
+        @Override
+        public Builder matchIPv6NDSourceLinkLayerAddress(MacAddress mac) {
+<span class="fc" id="L326">            return add(Criteria.matchIPv6NDSourceLinkLayerAddress(mac));</span>
+        }
+
+        @Override
+        public Builder matchIPv6NDTargetLinkLayerAddress(MacAddress mac) {
+<span class="fc" id="L331">            return add(Criteria.matchIPv6NDTargetLinkLayerAddress(mac));</span>
+        }
+
+        @Override
+        public Builder matchMplsLabel(MplsLabel mplsLabel) {
+<span class="fc" id="L336">            return add(Criteria.matchMplsLabel(mplsLabel));</span>
+        }
+
+        @Override
+        public Builder matchMplsBos(boolean mplsBos) {
+<span class="nc" id="L341">            return add(Criteria.matchMplsLabel(mplsBos));</span>
+        }
+
+        @Override
+        public TrafficSelector.Builder matchTunnelId(long tunnelId) {
+<span class="nc" id="L346">            return add(Criteria.matchTunnelId(tunnelId));</span>
+        }
+
+        @Override
+        public Builder matchIPv6ExthdrFlags(short exthdrFlags) {
+<span class="fc" id="L351">            return add(Criteria.matchIPv6ExthdrFlags(exthdrFlags));</span>
+        }
+
+        @Override
+        public TrafficSelector build() {
+<span class="fc" id="L356">            return new DefaultTrafficSelector(ImmutableSet.copyOf(selector.values()));</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

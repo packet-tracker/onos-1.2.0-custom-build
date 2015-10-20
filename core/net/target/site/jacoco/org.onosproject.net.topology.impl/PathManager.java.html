@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PathManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.topology.impl</a> &gt; <span class="el_source">PathManager.java</span></div><h1>PathManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.topology.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultEdgeLink;
+import org.onosproject.net.DefaultPath;
+import org.onosproject.net.DisjointPath;
+import org.onosproject.net.DefaultDisjointPath;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.EdgeLink;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.topology.LinkWeight;
+import org.onosproject.net.topology.PathService;
+import org.onosproject.net.topology.Topology;
+import org.onosproject.net.topology.TopologyService;
+import org.slf4j.Logger;
+
+import java.util.List;
+import java.util.Set;
+import java.util.Map;
+
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Provides implementation of a path selection service atop the current
+ * topology and host services.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L66">public class PathManager implements PathService {</span>
+
+    private static final String ELEMENT_ID_NULL = &quot;Element ID cannot be null&quot;;
+
+<span class="fc" id="L70">    private static final ProviderId PID = new ProviderId(&quot;core&quot;, &quot;org.onosproject.core&quot;);</span>
+<span class="fc" id="L71">    private static final PortNumber P0 = PortNumber.portNumber(0);</span>
+
+<span class="fc" id="L73">    private static final EdgeLink NOT_HOST = new NotHost();</span>
+
+<span class="fc" id="L75">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyService topologyService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L85">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L86">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L90">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L91">    }</span>
+
+    @Override
+    public Set&lt;Path&gt; getPaths(ElementId src, ElementId dst) {
+<span class="fc" id="L95">        checkPermission(TOPOLOGY_READ);</span>
+
+<span class="fc" id="L97">        return getPaths(src, dst, null);</span>
+    }
+
+    @Override
+    public Set&lt;Path&gt; getPaths(ElementId src, ElementId dst, LinkWeight weight) {
+<span class="fc" id="L102">        checkPermission(TOPOLOGY_READ);</span>
+
+<span class="fc" id="L104">        checkNotNull(src, ELEMENT_ID_NULL);</span>
+<span class="fc" id="L105">        checkNotNull(dst, ELEMENT_ID_NULL);</span>
+
+        // Get the source and destination edge locations
+<span class="fc" id="L108">        EdgeLink srcEdge = getEdgeLink(src, true);</span>
+<span class="fc" id="L109">        EdgeLink dstEdge = getEdgeLink(dst, false);</span>
+
+        // If either edge is null, bail with no paths.
+<span class="pc bpc" id="L112" title="1 of 4 branches missed.">        if (srcEdge == null || dstEdge == null) {</span>
+<span class="fc" id="L113">            return ImmutableSet.of();</span>
+        }
+
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        DeviceId srcDevice = srcEdge != NOT_HOST ? srcEdge.dst().deviceId() : (DeviceId) src;</span>
+<span class="fc bfc" id="L117" title="All 2 branches covered.">        DeviceId dstDevice = dstEdge != NOT_HOST ? dstEdge.src().deviceId() : (DeviceId) dst;</span>
+
+        // If the source and destination are on the same edge device, there
+        // is just one path, so build it and return it.
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        if (srcDevice.equals(dstDevice)) {</span>
+<span class="fc" id="L122">            return edgeToEdgePaths(srcEdge, dstEdge);</span>
+        }
+
+        // Otherwise get all paths between the source and destination edge
+        // devices.
+<span class="fc" id="L127">        Topology topology = topologyService.currentTopology();</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        Set&lt;Path&gt; paths = weight == null ?</span>
+<span class="pc" id="L129">                topologyService.getPaths(topology, srcDevice, dstDevice) :</span>
+<span class="pc" id="L130">                topologyService.getPaths(topology, srcDevice, dstDevice, weight);</span>
+
+<span class="fc" id="L132">        return edgeToEdgePaths(srcEdge, dstEdge, paths);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(ElementId src, ElementId dst) {
+<span class="nc" id="L137">        return getDisjointPaths(src, dst, (LinkWeight) null);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(ElementId src, ElementId dst, LinkWeight weight) {
+<span class="nc" id="L142">        checkNotNull(src, ELEMENT_ID_NULL);</span>
+<span class="nc" id="L143">        checkNotNull(dst, ELEMENT_ID_NULL);</span>
+
+        // Get the source and destination edge locations
+<span class="nc" id="L146">        EdgeLink srcEdge = getEdgeLink(src, true);</span>
+<span class="nc" id="L147">        EdgeLink dstEdge = getEdgeLink(dst, false);</span>
+
+        // If either edge is null, bail with no paths.
+<span class="nc bnc" id="L150" title="All 4 branches missed.">        if (srcEdge == null || dstEdge == null) {</span>
+<span class="nc" id="L151">            return ImmutableSet.of();</span>
+        }
+
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        DeviceId srcDevice = srcEdge != NOT_HOST ? srcEdge.dst().deviceId() : (DeviceId) src;</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        DeviceId dstDevice = dstEdge != NOT_HOST ? dstEdge.src().deviceId() : (DeviceId) dst;</span>
+
+        // If the source and destination are on the same edge device, there
+        // is just one path, so build it and return it.
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (srcDevice.equals(dstDevice)) {</span>
+<span class="nc" id="L160">            return edgeToEdgePathsDisjoint(srcEdge, dstEdge);</span>
+        }
+
+        // Otherwise get all paths between the source and destination edge
+        // devices.
+<span class="nc" id="L165">        Topology topology = topologyService.currentTopology();</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        Set&lt;DisjointPath&gt; paths = weight == null ?</span>
+<span class="nc" id="L167">                topologyService.getDisjointPaths(topology, srcDevice, dstDevice) :</span>
+<span class="nc" id="L168">                topologyService.getDisjointPaths(topology, srcDevice, dstDevice, weight);</span>
+
+<span class="nc" id="L170">        return edgeToEdgePathsDisjoint(srcEdge, dstEdge, paths);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(ElementId src, ElementId dst,
+                                              Map&lt;Link, Object&gt; riskProfile) {
+<span class="nc" id="L176">        return getDisjointPaths(src, dst, null, riskProfile);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(ElementId src, ElementId dst, LinkWeight weight,
+                                              Map&lt;Link, Object&gt; riskProfile) {
+<span class="nc" id="L182">        checkNotNull(src, ELEMENT_ID_NULL);</span>
+<span class="nc" id="L183">        checkNotNull(dst, ELEMENT_ID_NULL);</span>
+
+        // Get the source and destination edge locations
+<span class="nc" id="L186">        EdgeLink srcEdge = getEdgeLink(src, true);</span>
+<span class="nc" id="L187">        EdgeLink dstEdge = getEdgeLink(dst, false);</span>
+
+        // If either edge is null, bail with no paths.
+<span class="nc bnc" id="L190" title="All 4 branches missed.">        if (srcEdge == null || dstEdge == null) {</span>
+<span class="nc" id="L191">            return ImmutableSet.of();</span>
+        }
+
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        DeviceId srcDevice = srcEdge != NOT_HOST ? srcEdge.dst().deviceId() : (DeviceId) src;</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        DeviceId dstDevice = dstEdge != NOT_HOST ? dstEdge.src().deviceId() : (DeviceId) dst;</span>
+
+        // If the source and destination are on the same edge device, there
+        // is just one path, so build it and return it.
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (srcDevice.equals(dstDevice)) {</span>
+<span class="nc" id="L200">            return edgeToEdgePathsDisjoint(srcEdge, dstEdge);</span>
+        }
+
+        // Otherwise get all paths between the source and destination edge
+        // devices.
+<span class="nc" id="L205">        Topology topology = topologyService.currentTopology();</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        Set&lt;DisjointPath&gt; paths = weight == null ?</span>
+<span class="nc" id="L207">                topologyService.getDisjointPaths(topology, srcDevice, dstDevice, riskProfile) :</span>
+<span class="nc" id="L208">                topologyService.getDisjointPaths(topology, srcDevice, dstDevice, weight, riskProfile);</span>
+
+<span class="nc" id="L210">        return edgeToEdgePathsDisjoint(srcEdge, dstEdge, paths);</span>
+    }
+
+    // Finds the host edge link if the element ID is a host id of an existing
+    // host. Otherwise, if the host does not exist, it returns null and if
+    // the element ID is not a host ID, returns NOT_HOST edge link.
+    private EdgeLink getEdgeLink(ElementId elementId, boolean isIngress) {
+<span class="fc bfc" id="L217" title="All 2 branches covered.">        if (elementId instanceof HostId) {</span>
+            // Resolve the host, return null.
+<span class="fc" id="L219">            Host host = hostService.getHost((HostId) elementId);</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">            if (host == null) {</span>
+<span class="fc" id="L221">                return null;</span>
+            }
+<span class="fc" id="L223">            return new DefaultEdgeLink(PID, new ConnectPoint(elementId, P0),</span>
+<span class="fc" id="L224">                                       host.location(), isIngress);</span>
+        }
+<span class="fc" id="L226">        return NOT_HOST;</span>
+    }
+
+    // Produces a set of edge-to-edge paths using the set of infrastructure
+    // paths and the given edge links.
+    private Set&lt;Path&gt; edgeToEdgePaths(EdgeLink srcLink, EdgeLink dstLink) {
+<span class="fc" id="L232">        Set&lt;Path&gt; endToEndPaths = Sets.newHashSetWithExpectedSize(1);</span>
+<span class="fc" id="L233">        endToEndPaths.add(edgeToEdgePath(srcLink, dstLink, null));</span>
+<span class="fc" id="L234">        return endToEndPaths;</span>
+    }
+
+    // Produces a set of edge-to-edge paths using the set of infrastructure
+    // paths and the given edge links.
+    private Set&lt;Path&gt; edgeToEdgePaths(EdgeLink srcLink, EdgeLink dstLink, Set&lt;Path&gt; paths) {
+<span class="fc" id="L240">        Set&lt;Path&gt; endToEndPaths = Sets.newHashSetWithExpectedSize(paths.size());</span>
+<span class="fc bfc" id="L241" title="All 2 branches covered.">        for (Path path : paths) {</span>
+<span class="fc" id="L242">            endToEndPaths.add(edgeToEdgePath(srcLink, dstLink, path));</span>
+<span class="fc" id="L243">        }</span>
+<span class="fc" id="L244">        return endToEndPaths;</span>
+    }
+
+    private Set&lt;DisjointPath&gt; edgeToEdgePathsDisjoint(EdgeLink srcLink, EdgeLink dstLink) {
+<span class="nc" id="L248">        Set&lt;DisjointPath&gt; endToEndPaths = Sets.newHashSetWithExpectedSize(1);</span>
+<span class="nc" id="L249">        endToEndPaths.add(edgeToEdgePathD(srcLink, dstLink, null));</span>
+<span class="nc" id="L250">        return endToEndPaths;</span>
+    }
+
+    private Set&lt;DisjointPath&gt; edgeToEdgePathsDisjoint(EdgeLink srcLink, EdgeLink dstLink, Set&lt;DisjointPath&gt; paths) {
+<span class="nc" id="L254">        Set&lt;DisjointPath&gt; endToEndPaths = Sets.newHashSetWithExpectedSize(paths.size());</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        for (DisjointPath path : paths) {</span>
+<span class="nc" id="L256">            endToEndPaths.add(edgeToEdgePathD(srcLink, dstLink, path));</span>
+<span class="nc" id="L257">        }</span>
+<span class="nc" id="L258">        return endToEndPaths;</span>
+    }
+
+    // Produces a direct edge-to-edge path.
+    private Path edgeToEdgePath(EdgeLink srcLink, EdgeLink dstLink, Path path) {
+<span class="fc" id="L263">        List&lt;Link&gt; links = Lists.newArrayListWithCapacity(2);</span>
+        // Add source and destination edge links only if they are real and
+        // add the infrastructure path only if it is not null.
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        if (srcLink != NOT_HOST) {</span>
+<span class="fc" id="L267">            links.add(srcLink);</span>
+        }
+<span class="fc bfc" id="L269" title="All 2 branches covered.">        if (path != null) {</span>
+<span class="fc" id="L270">            links.addAll(path.links());</span>
+        }
+<span class="fc bfc" id="L272" title="All 2 branches covered.">        if (dstLink != NOT_HOST) {</span>
+<span class="fc" id="L273">            links.add(dstLink);</span>
+        }
+<span class="fc" id="L275">        return new DefaultPath(PID, links, 2);</span>
+    }
+
+    // Produces a direct edge-to-edge path.
+    private DisjointPath edgeToEdgePathD(EdgeLink srcLink, EdgeLink dstLink, DisjointPath path) {
+<span class="nc" id="L280">        return new DefaultDisjointPath(PID, (DefaultPath) edgeToEdgePath(srcLink, dstLink, path.primary()),</span>
+<span class="nc" id="L281">                                       (DefaultPath) edgeToEdgePath(srcLink, dstLink, path.backup()));</span>
+    }
+
+
+    // Special value for edge link to represent that this is really not an
+    // edge link since the src or dst are really an infrastructure device.
+    private static class NotHost extends DefaultEdgeLink implements EdgeLink {
+        NotHost() {
+<span class="fc" id="L289">            super(PID, new ConnectPoint(HostId.NONE, P0),</span>
+<span class="fc" id="L290">                  new HostLocation(DeviceId.NONE, P0, 0L), false);</span>
+<span class="fc" id="L291">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

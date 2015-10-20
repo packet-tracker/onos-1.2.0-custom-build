@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UiExtension.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui</a> &gt; <span class="el_source">UiExtension.java</span></div><h1>UiExtension.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.ui;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * User interface extension.
+ */
+public final class UiExtension {
+
+<span class="fc" id="L33">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String VIEW_PREFIX = &quot;app/view/&quot;;
+    private static final String EMPTY = &quot;&quot;;
+    private static final String SLASH = &quot;/&quot;;
+    private static final String CSS_HTML = &quot;css.html&quot;;
+    private static final String JS_HTML = &quot;js.html&quot;;
+
+    private final ClassLoader classLoader;
+    private final String resourcePath;
+    private final List&lt;UiView&gt; views;
+    private final UiMessageHandlerFactory messageHandlerFactory;
+    private final UiTopoOverlayFactory topoOverlayFactory;
+
+
+    // private constructor - only the builder calls this
+    private UiExtension(ClassLoader cl, String path, List&lt;UiView&gt; views,
+                        UiMessageHandlerFactory mhFactory,
+<span class="fc" id="L51">                        UiTopoOverlayFactory toFactory) {</span>
+<span class="fc" id="L52">        this.classLoader = cl;</span>
+<span class="fc" id="L53">        this.resourcePath = path;</span>
+<span class="fc" id="L54">        this.views = views;</span>
+<span class="fc" id="L55">        this.messageHandlerFactory = mhFactory;</span>
+<span class="fc" id="L56">        this.topoOverlayFactory = toFactory;</span>
+<span class="fc" id="L57">    }</span>
+
+
+    /**
+     * Returns input stream containing CSS inclusion statements.
+     *
+     * @return CSS inclusion statements
+     */
+    public InputStream css() {
+<span class="fc" id="L66">        return getStream(resourcePath + CSS_HTML);</span>
+    }
+
+    /**
+     * Returns input stream containing JavaScript inclusion statements.
+     *
+     * @return JavaScript inclusion statements
+     */
+    public InputStream js() {
+<span class="fc" id="L75">        return getStream(resourcePath + JS_HTML);</span>
+    }
+
+    /**
+     * Returns list of user interface views contributed by this extension.
+     *
+     * @return contributed view descriptors
+     */
+    public List&lt;UiView&gt; views() {
+<span class="fc" id="L84">        return views;</span>
+    }
+
+    /**
+     * Returns input stream containing specified view-specific resource.
+     *
+     * @param viewId view identifier
+     * @param path   resource path, relative to the view directory
+     * @return resource input stream
+     */
+    public InputStream resource(String viewId, String path) {
+<span class="nc" id="L95">        return getStream(VIEW_PREFIX + viewId + SLASH + path);</span>
+    }
+
+    /**
+     * Returns message handler factory, if one was defined.
+     *
+     * @return message handler factory
+     */
+    public UiMessageHandlerFactory messageHandlerFactory() {
+<span class="fc" id="L104">        return messageHandlerFactory;</span>
+    }
+
+    /**
+     * Returns the topology overlay factory, if one was defined.
+     *
+     * @return topology overlay factory
+     */
+    public UiTopoOverlayFactory topoOverlayFactory() {
+<span class="fc" id="L113">        return topoOverlayFactory;</span>
+    }
+
+
+    // Returns the resource input stream from the specified class-loader.
+    private InputStream getStream(String path) {
+<span class="fc" id="L119">        InputStream stream = classLoader.getResourceAsStream(path);</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">        if (stream == null) {</span>
+<span class="nc" id="L121">            log.warn(&quot;Unable to find resource {}&quot;, path);</span>
+        }
+<span class="fc" id="L123">        return stream;</span>
+    }
+
+
+    /**
+     * UI Extension Builder.
+     */
+    public static class Builder {
+        private ClassLoader classLoader;
+
+<span class="fc" id="L133">        private String resourcePath = EMPTY;</span>
+<span class="fc" id="L134">        private List&lt;UiView&gt; views = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L135">        private UiMessageHandlerFactory messageHandlerFactory = null;</span>
+<span class="fc" id="L136">        private UiTopoOverlayFactory topoOverlayFactory = null;</span>
+
+        /**
+         * Create a builder with the given class loader.
+         * Resource path defaults to &quot;&quot;.
+         * Views defaults to an empty list.
+         * Both Message and TopoOverlay factories default to null.
+         *
+         * @param cl    the class loader
+         * @param views list of views contributed by this extension
+         */
+<span class="fc" id="L147">        public Builder(ClassLoader cl, List&lt;UiView&gt; views) {</span>
+<span class="fc" id="L148">            checkNotNull(cl, &quot;Must provide a class loader&quot;);</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">            checkArgument(views.size() &gt; 0, &quot;Must provide at least one view&quot;);</span>
+<span class="fc" id="L150">            this.classLoader = cl;</span>
+<span class="fc" id="L151">            this.views = views;</span>
+<span class="fc" id="L152">        }</span>
+
+        /**
+         * Set the resource path. That is, path to where the CSS and JS
+         * files are located. This value should
+         *
+         * @param path resource path
+         * @return self, for chaining
+         */
+        public Builder resourcePath(String path) {
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">            this.resourcePath = path == null ? EMPTY : path + SLASH;</span>
+<span class="fc" id="L163">            return this;</span>
+        }
+
+        /**
+         * Sets the message handler factory for this extension.
+         *
+         * @param mhFactory message handler factory
+         * @return self, for chaining
+         */
+        public Builder messageHandlerFactory(UiMessageHandlerFactory mhFactory) {
+<span class="fc" id="L173">            this.messageHandlerFactory = mhFactory;</span>
+<span class="fc" id="L174">            return this;</span>
+        }
+
+        /**
+         * Sets the topology overlay factory for this extension.
+         *
+         * @param toFactory topology overlay factory
+         * @return self, for chaining
+         */
+        public Builder topoOverlayFactory(UiTopoOverlayFactory toFactory) {
+<span class="fc" id="L184">            this.topoOverlayFactory = toFactory;</span>
+<span class="fc" id="L185">            return this;</span>
+        }
+
+        /**
+         * Builds the UI extension.
+         *
+         * @return UI extension instance
+         */
+        public UiExtension build() {
+<span class="fc" id="L194">            return new UiExtension(classLoader, resourcePath, views,</span>
+                                   messageHandlerFactory, topoOverlayFactory);
+        }
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

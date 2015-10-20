@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UiView.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui</a> &gt; <span class="el_source">UiView.java</span></div><h1>UiView.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.ui;
+
+import com.google.common.base.MoreObjects;
+
+import java.util.Objects;
+
+/**
+ * Represents user interface view addition.
+ */
+public class UiView {
+
+    /**
+     * Designates navigation menu category.
+     */
+<span class="pc" id="L30">    public enum Category {</span>
+        /**
+         * Represents platform related views.
+         */
+<span class="fc" id="L34">        PLATFORM(&quot;Platform&quot;),</span>
+
+        /**
+         * Represents network-control related views.
+         */
+<span class="fc" id="L39">        NETWORK(&quot;Network&quot;),</span>
+
+        /**
+         * Represents miscellaneous views.
+         */
+<span class="fc" id="L44">        OTHER(&quot;Other&quot;),</span>
+
+        /**
+         * Represents views that do not show in the navigation menu.
+         * This category should not be specified directly; rather, use
+         * the {@link UiViewHidden} constructor instead of {@link UiView}.
+         */
+<span class="fc" id="L51">        HIDDEN(&quot;(hidden)&quot;);</span>
+
+        private final String label;
+
+<span class="fc" id="L55">        Category(String label) {</span>
+<span class="fc" id="L56">            this.label = label;</span>
+<span class="fc" id="L57">        }</span>
+
+        /**
+         * Returns display label for the category.
+         *
+         * @return display label
+         */
+        public String label() {
+<span class="nc" id="L65">            return label;</span>
+        }
+    }
+
+    private final Category category;
+    private final String id;
+    private final String label;
+    private final String iconId;
+
+    /**
+     * Creates a new user interface view descriptor. The navigation item
+     * will appear in the navigation menu under the specified category.
+     *
+     * @param category view category
+     * @param id       view identifier
+     * @param label    view label
+     */
+    public UiView(Category category, String id, String label) {
+<span class="fc" id="L83">        this(category, id, label, null);</span>
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Creates a new user interface view descriptor. The navigation item
+     * will appear in the navigation menu under the specified category,
+     * with the specified icon adornment.
+     *
+     * @param category view category
+     * @param id       view identifier
+     * @param label    view label
+     * @param iconId   icon id
+     */
+<span class="fc" id="L96">    public UiView(Category category, String id, String label, String iconId) {</span>
+<span class="fc" id="L97">        this.category = category;</span>
+<span class="fc" id="L98">        this.id = id;</span>
+<span class="fc" id="L99">        this.label = label;</span>
+<span class="fc" id="L100">        this.iconId = iconId;</span>
+<span class="fc" id="L101">    }</span>
+
+    /**
+     * Returns the navigation category.
+     *
+     * @return navigation category
+     */
+    public Category category() {
+<span class="fc" id="L109">        return category;</span>
+    }
+
+    /**
+     * Returns the view identifier.
+     *
+     * @return view id
+     */
+    public String id() {
+<span class="fc" id="L118">        return id;</span>
+    }
+
+    /**
+     * Returns the view label.
+     *
+     * @return view label
+     */
+    public String label() {
+<span class="fc" id="L127">        return label;</span>
+    }
+
+    /**
+     * Returns the icon ID.
+     *
+     * @return icon ID
+     */
+    public String iconId() {
+<span class="nc" id="L136">        return iconId;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L141">        return Objects.hash(id);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L147">            return true;</span>
+        }
+<span class="nc bnc" id="L149" title="All 4 branches missed.">        if (obj == null || getClass() != obj.getClass()) {</span>
+<span class="nc" id="L150">            return false;</span>
+        }
+<span class="nc" id="L152">        final UiView other = (UiView) obj;</span>
+<span class="nc" id="L153">        return Objects.equals(this.id, other.id);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L158">        return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L159">                .add(&quot;category&quot;, category)</span>
+<span class="nc" id="L160">                .add(&quot;id&quot;, id)</span>
+<span class="nc" id="L161">                .add(&quot;label&quot;, label)</span>
+<span class="nc" id="L162">                .add(&quot;iconId&quot;, iconId)</span>
+<span class="nc" id="L163">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

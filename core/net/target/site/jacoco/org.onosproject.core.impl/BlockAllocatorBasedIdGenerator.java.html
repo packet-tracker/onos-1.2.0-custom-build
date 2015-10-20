@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BlockAllocatorBasedIdGenerator.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.core.impl</a> &gt; <span class="el_source">BlockAllocatorBasedIdGenerator.java</span></div><h1>BlockAllocatorBasedIdGenerator.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.core.impl;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.onosproject.core.IdBlock;
+import org.onosproject.core.IdGenerator;
+import org.onosproject.core.UnavailableIdException;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Base class of {@link IdGenerator} implementations which use {@link IdBlockAllocator} as
+ * backend.
+ */
+public class BlockAllocatorBasedIdGenerator implements IdGenerator {
+    protected final IdBlockAllocator allocator;
+    protected IdBlock idBlock;
+    protected AtomicBoolean initialized;
+
+
+    /**
+     * Constructs an ID generator which use {@link IdBlockAllocator} as backend.
+     *
+     * @param allocator the ID block allocator to use
+     */
+<span class="fc" id="L41">    protected BlockAllocatorBasedIdGenerator(IdBlockAllocator allocator) {</span>
+<span class="fc" id="L42">        this.allocator = checkNotNull(allocator, &quot;allocator cannot be null&quot;);</span>
+<span class="fc" id="L43">        this.initialized = new AtomicBoolean(false);</span>
+<span class="fc" id="L44">    }</span>
+
+    @Override
+    public long getNewId() {
+        try {
+<span class="fc bfc" id="L49" title="All 2 branches covered.">            if (!initialized.get()) {</span>
+<span class="fc" id="L50">                synchronized (allocator) {</span>
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">                    if (!initialized.get()) {</span>
+<span class="fc" id="L52">                        idBlock = allocator.allocateUniqueIdBlock();</span>
+<span class="fc" id="L53">                        initialized.set(true);</span>
+                    }
+<span class="pc" id="L55">                }</span>
+            }
+<span class="fc" id="L57">            return idBlock.getNextId();</span>
+<span class="fc" id="L58">        } catch (UnavailableIdException e) {</span>
+<span class="fc" id="L59">            synchronized (allocator) {</span>
+<span class="fc" id="L60">                idBlock = allocator.allocateUniqueIdBlock();</span>
+<span class="pc" id="L61">            }</span>
+<span class="fc" id="L62">            return idBlock.getNextId();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

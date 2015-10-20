@@ -1,0 +1,903 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GossipLinkStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.link.impl</a> &gt; <span class="el_source">GossipLinkStore.java</span></div><h1>GossipLinkStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.link.impl;
+
+import com.google.common.base.Function;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
+import org.apache.commons.lang3.RandomUtils;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.AnnotationsUtil;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.DefaultLink;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Link.Type;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.SparseAnnotations;
+import org.onosproject.net.device.DeviceClockService;
+import org.onosproject.net.link.DefaultLinkDescription;
+import org.onosproject.net.link.LinkDescription;
+import org.onosproject.net.link.LinkEvent;
+import org.onosproject.net.link.LinkStore;
+import org.onosproject.net.link.LinkStoreDelegate;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.Timestamp;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.ClusterMessage;
+import org.onosproject.store.cluster.messaging.ClusterMessageHandler;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.impl.Timestamped;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.serializers.custom.DistributedStoreSerializers;
+import org.slf4j.Logger;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Predicates.notNull;
+import static com.google.common.collect.Multimaps.synchronizedSetMultimap;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.minPriority;
+import static org.onosproject.cluster.ControllerNodeToNodeId.toNodeId;
+import static org.onosproject.net.DefaultAnnotations.merge;
+import static org.onosproject.net.DefaultAnnotations.union;
+import static org.onosproject.net.Link.State.ACTIVE;
+import static org.onosproject.net.Link.State.INACTIVE;
+import static org.onosproject.net.Link.Type.DIRECT;
+import static org.onosproject.net.Link.Type.INDIRECT;
+import static org.onosproject.net.LinkKey.linkKey;
+import static org.onosproject.net.link.LinkEvent.Type.*;
+import static org.onosproject.store.link.impl.GossipLinkStoreMessageSubjects.LINK_ANTI_ENTROPY_ADVERTISEMENT;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of infrastructure links in distributed data store
+ * that uses optimistic replication and gossip based techniques.
+ */
+@Component(immediate = true, enabled = false)
+@Service
+<span class="fc" id="L103">public class GossipLinkStore</span>
+        extends AbstractStore&lt;LinkEvent, LinkStoreDelegate&gt;
+        implements LinkStore {
+
+    // Timeout in milliseconds to process links on remote master node
+    private static final int REMOTE_MASTER_TIMEOUT = 1000;
+
+<span class="fc" id="L110">    private final Logger log = getLogger(getClass());</span>
+
+    // Link inventory
+<span class="fc" id="L113">    private final ConcurrentMap&lt;LinkKey, Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt;&gt; linkDescs =</span>
+        new ConcurrentHashMap&lt;&gt;();
+
+    // Link instance cache
+<span class="fc" id="L117">    private final ConcurrentMap&lt;LinkKey, Link&gt; links = new ConcurrentHashMap&lt;&gt;();</span>
+
+    // Egress and ingress link sets
+<span class="fc" id="L120">    private final SetMultimap&lt;DeviceId, LinkKey&gt; srcLinks = createSynchronizedHashMultiMap();</span>
+<span class="fc" id="L121">    private final SetMultimap&lt;DeviceId, LinkKey&gt; dstLinks = createSynchronizedHashMultiMap();</span>
+
+    // Remove links
+<span class="fc" id="L124">    private final Map&lt;LinkKey, Timestamp&gt; removedLinks = new ConcurrentHashMap&lt;&gt;();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceClockService deviceClockService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+<span class="fc" id="L138">    protected static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="fc" id="L141">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="fc" id="L142">                    .register(DistributedStoreSerializers.STORE_COMMON)</span>
+<span class="fc" id="L143">                    .nextId(DistributedStoreSerializers.STORE_CUSTOM_BEGIN)</span>
+<span class="fc" id="L144">                    .register(InternalLinkEvent.class)</span>
+<span class="fc" id="L145">                    .register(InternalLinkRemovedEvent.class)</span>
+<span class="fc" id="L146">                    .register(LinkAntiEntropyAdvertisement.class)</span>
+<span class="fc" id="L147">                    .register(LinkFragmentId.class)</span>
+<span class="fc" id="L148">                    .register(LinkInjectedEvent.class)</span>
+<span class="fc" id="L149">                    .build();</span>
+<span class="fc" id="L150">        }</span>
+    };
+
+    private ExecutorService executor;
+
+    private ScheduledExecutorService backgroundExecutors;
+
+    @Activate
+    public void activate() {
+
+<span class="fc" id="L160">        executor = Executors.newCachedThreadPool(groupedThreads(&quot;onos/link&quot;, &quot;fg-%d&quot;));</span>
+
+<span class="fc" id="L162">        backgroundExecutors =</span>
+<span class="fc" id="L163">                newSingleThreadScheduledExecutor(minPriority(groupedThreads(&quot;onos/link&quot;, &quot;bg-%d&quot;)));</span>
+
+<span class="fc" id="L165">        clusterCommunicator.addSubscriber(</span>
+                GossipLinkStoreMessageSubjects.LINK_UPDATE,
+                new InternalLinkEventListener(), executor);
+<span class="fc" id="L168">        clusterCommunicator.addSubscriber(</span>
+                GossipLinkStoreMessageSubjects.LINK_REMOVED,
+                new InternalLinkRemovedEventListener(), executor);
+<span class="fc" id="L171">        clusterCommunicator.addSubscriber(</span>
+                GossipLinkStoreMessageSubjects.LINK_ANTI_ENTROPY_ADVERTISEMENT,
+                new InternalLinkAntiEntropyAdvertisementListener(), backgroundExecutors);
+<span class="fc" id="L174">        clusterCommunicator.addSubscriber(</span>
+                GossipLinkStoreMessageSubjects.LINK_INJECTED,
+                new LinkInjectedEventListener(), executor);
+
+<span class="fc" id="L178">        long initialDelaySec = 5;</span>
+<span class="fc" id="L179">        long periodSec = 5;</span>
+        // start anti-entropy thread
+<span class="fc" id="L181">        backgroundExecutors.scheduleAtFixedRate(new SendAdvertisementTask(),</span>
+                    initialDelaySec, periodSec, TimeUnit.SECONDS);
+
+<span class="fc" id="L184">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L185">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+
+<span class="fc" id="L190">        executor.shutdownNow();</span>
+
+<span class="fc" id="L192">        backgroundExecutors.shutdownNow();</span>
+        try {
+<span class="pc bpc" id="L194" title="1 of 2 branches missed.">            if (!backgroundExecutors.awaitTermination(5, TimeUnit.SECONDS)) {</span>
+<span class="nc" id="L195">                log.error(&quot;Timeout during executor shutdown&quot;);</span>
+            }
+<span class="nc" id="L197">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L198">            log.error(&quot;Error during executor shutdown&quot;, e);</span>
+<span class="fc" id="L199">        }</span>
+
+<span class="fc" id="L201">        linkDescs.clear();</span>
+<span class="fc" id="L202">        links.clear();</span>
+<span class="fc" id="L203">        srcLinks.clear();</span>
+<span class="fc" id="L204">        dstLinks.clear();</span>
+<span class="fc" id="L205">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L206">    }</span>
+
+    @Override
+    public int getLinkCount() {
+<span class="fc" id="L210">        return links.size();</span>
+    }
+
+    @Override
+    public Iterable&lt;Link&gt; getLinks() {
+<span class="fc" id="L215">        return Collections.unmodifiableCollection(links.values());</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceEgressLinks(DeviceId deviceId) {
+        // lock for iteration
+<span class="fc" id="L221">        synchronized (srcLinks) {</span>
+<span class="fc" id="L222">            return FluentIterable.from(srcLinks.get(deviceId))</span>
+<span class="fc" id="L223">            .transform(lookupLink())</span>
+<span class="fc" id="L224">            .filter(notNull())</span>
+<span class="fc" id="L225">            .toSet();</span>
+<span class="nc" id="L226">        }</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceIngressLinks(DeviceId deviceId) {
+        // lock for iteration
+<span class="fc" id="L232">        synchronized (dstLinks) {</span>
+<span class="fc" id="L233">            return FluentIterable.from(dstLinks.get(deviceId))</span>
+<span class="fc" id="L234">            .transform(lookupLink())</span>
+<span class="fc" id="L235">            .filter(notNull())</span>
+<span class="fc" id="L236">            .toSet();</span>
+<span class="nc" id="L237">        }</span>
+    }
+
+    @Override
+    public Link getLink(ConnectPoint src, ConnectPoint dst) {
+<span class="fc" id="L242">        return links.get(linkKey(src, dst));</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getEgressLinks(ConnectPoint src) {
+<span class="fc" id="L247">        Set&lt;Link&gt; egress = new HashSet&lt;&gt;();</span>
+        //
+        // Change `srcLinks` to ConcurrentMap&lt;DeviceId, (Concurrent)Set&gt;
+        // to remove this synchronized block, if we hit performance issue.
+        // SetMultiMap#get returns wrapped collection to provide modifiable-view.
+        // And the wrapped collection is not concurrent access safe.
+        //
+        // Our use case here does not require returned collection to be modifiable,
+        // so the wrapped collection forces us to lock the whole multiset,
+        // for benefit we don't need.
+        //
+        // Same applies to `dstLinks`
+<span class="fc" id="L259">        synchronized (srcLinks) {</span>
+<span class="fc bfc" id="L260" title="All 2 branches covered.">            for (LinkKey linkKey : srcLinks.get(src.deviceId())) {</span>
+<span class="fc bfc" id="L261" title="All 2 branches covered.">                if (linkKey.src().equals(src)) {</span>
+<span class="fc" id="L262">                    Link link = links.get(linkKey);</span>
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">                    if (link != null) {</span>
+<span class="fc" id="L264">                        egress.add(link);</span>
+                    } else {
+<span class="nc" id="L266">                        log.debug(&quot;Egress link for {} was null, skipped&quot;, linkKey);</span>
+                    }
+                }
+<span class="fc" id="L269">            }</span>
+<span class="pc" id="L270">        }</span>
+<span class="fc" id="L271">        return egress;</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getIngressLinks(ConnectPoint dst) {
+<span class="fc" id="L276">        Set&lt;Link&gt; ingress = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L277">        synchronized (dstLinks) {</span>
+<span class="fc bfc" id="L278" title="All 2 branches covered.">            for (LinkKey linkKey : dstLinks.get(dst.deviceId())) {</span>
+<span class="fc bfc" id="L279" title="All 2 branches covered.">                if (linkKey.dst().equals(dst)) {</span>
+<span class="fc" id="L280">                    Link link = links.get(linkKey);</span>
+<span class="pc bpc" id="L281" title="1 of 2 branches missed.">                    if (link != null) {</span>
+<span class="fc" id="L282">                        ingress.add(link);</span>
+                    } else {
+<span class="nc" id="L284">                        log.debug(&quot;Ingress link for {} was null, skipped&quot;, linkKey);</span>
+                    }
+                }
+<span class="fc" id="L287">            }</span>
+<span class="pc" id="L288">        }</span>
+<span class="fc" id="L289">        return ingress;</span>
+    }
+
+    @Override
+    public LinkEvent createOrUpdateLink(ProviderId providerId,
+                                        LinkDescription linkDescription) {
+
+<span class="fc" id="L296">        final DeviceId dstDeviceId = linkDescription.dst().deviceId();</span>
+<span class="fc" id="L297">        final NodeId localNode = clusterService.getLocalNode().id();</span>
+<span class="fc" id="L298">        final NodeId dstNode = mastershipService.getMasterFor(dstDeviceId);</span>
+
+        // Process link update only if we're the master of the destination node,
+        // otherwise signal the actual master.
+<span class="fc" id="L302">        LinkEvent linkEvent = null;</span>
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">        if (localNode.equals(dstNode)) {</span>
+
+<span class="fc" id="L305">            Timestamp newTimestamp = deviceClockService.getTimestamp(dstDeviceId);</span>
+
+<span class="fc" id="L307">            final Timestamped&lt;LinkDescription&gt; deltaDesc = new Timestamped&lt;&gt;(linkDescription, newTimestamp);</span>
+
+<span class="fc" id="L309">            LinkKey key = linkKey(linkDescription.src(), linkDescription.dst());</span>
+            final Timestamped&lt;LinkDescription&gt; mergedDesc;
+<span class="fc" id="L311">            Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; map = getOrCreateLinkDescriptions(key);</span>
+
+<span class="fc" id="L313">            synchronized (map) {</span>
+<span class="fc" id="L314">                linkEvent = createOrUpdateLinkInternal(providerId, deltaDesc);</span>
+<span class="fc" id="L315">                mergedDesc = map.get(providerId);</span>
+<span class="pc" id="L316">            }</span>
+
+<span class="fc bfc" id="L318" title="All 2 branches covered.">            if (linkEvent != null) {</span>
+<span class="fc" id="L319">                log.debug(&quot;Notifying peers of a link update topology event from providerId: &quot;</span>
+                                + &quot;{}  between src: {} and dst: {}&quot;,
+<span class="fc" id="L321">                        providerId, linkDescription.src(), linkDescription.dst());</span>
+<span class="fc" id="L322">                notifyPeers(new InternalLinkEvent(providerId, mergedDesc));</span>
+            }
+
+<span class="fc" id="L325">        } else {</span>
+            // FIXME Temporary hack for NPE (ONOS-1171).
+            // Proper fix is to implement forwarding to master on ConfigProvider
+            // redo ONOS-490
+<span class="nc bnc" id="L329" title="All 2 branches missed.">            if (dstNode == null) {</span>
+                // silently ignore
+<span class="nc" id="L331">                return null;</span>
+            }
+
+
+<span class="nc" id="L335">            LinkInjectedEvent linkInjectedEvent = new LinkInjectedEvent(providerId, linkDescription);</span>
+
+            // TODO check unicast return value
+<span class="nc" id="L338">            clusterCommunicator.unicast(linkInjectedEvent,</span>
+                    GossipLinkStoreMessageSubjects.LINK_INJECTED,
+                    SERIALIZER::encode,
+                    dstNode);
+        }
+
+<span class="fc" id="L344">        return linkEvent;</span>
+    }
+
+    @Override
+    public LinkEvent removeOrDownLink(ConnectPoint src, ConnectPoint dst) {
+<span class="nc" id="L349">        Link link = getLink(src, dst);</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (link == null) {</span>
+<span class="nc" id="L351">            return null;</span>
+        }
+
+<span class="nc bnc" id="L354" title="All 2 branches missed.">        if (link.isDurable()) {</span>
+            // FIXME: this is not the right thing to call for the gossip store; will not sync link state!!!
+<span class="nc bnc" id="L356" title="All 2 branches missed.">            return link.state() == INACTIVE ? null :</span>
+<span class="nc" id="L357">                    updateLink(linkKey(link.src(), link.dst()), link,</span>
+<span class="nc" id="L358">                               new DefaultLink(link.providerId(),</span>
+<span class="nc" id="L359">                                               link.src(), link.dst(),</span>
+<span class="nc" id="L360">                                               link.type(), INACTIVE,</span>
+<span class="nc" id="L361">                                               link.isDurable(),</span>
+<span class="nc" id="L362">                                               link.annotations()));</span>
+        }
+<span class="nc" id="L364">        return removeLink(src, dst);</span>
+    }
+
+    private LinkEvent createOrUpdateLinkInternal(
+            ProviderId providerId,
+            Timestamped&lt;LinkDescription&gt; linkDescription) {
+
+<span class="fc" id="L371">        final LinkKey key = linkKey(linkDescription.value().src(),</span>
+<span class="fc" id="L372">                linkDescription.value().dst());</span>
+<span class="fc" id="L373">        Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; descs = getOrCreateLinkDescriptions(key);</span>
+
+<span class="fc" id="L375">        synchronized (descs) {</span>
+            // if the link was previously removed, we should proceed if and
+            // only if this request is more recent.
+<span class="fc" id="L378">            Timestamp linkRemovedTimestamp = removedLinks.get(key);</span>
+<span class="fc bfc" id="L379" title="All 2 branches covered.">            if (linkRemovedTimestamp != null) {</span>
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">                if (linkDescription.isNewerThan(linkRemovedTimestamp)) {</span>
+<span class="fc" id="L381">                    removedLinks.remove(key);</span>
+                } else {
+<span class="nc" id="L383">                    log.trace(&quot;Link {} was already removed ignoring.&quot;, key);</span>
+<span class="nc" id="L384">                    return null;</span>
+                }
+            }
+
+<span class="fc" id="L388">            final Link oldLink = links.get(key);</span>
+            // update description
+<span class="fc" id="L390">            createOrUpdateLinkDescription(descs, providerId, linkDescription);</span>
+<span class="fc" id="L391">            final Link newLink = composeLink(descs);</span>
+<span class="fc bfc" id="L392" title="All 2 branches covered.">            if (oldLink == null) {</span>
+<span class="fc" id="L393">                return createLink(key, newLink);</span>
+            }
+<span class="fc" id="L395">            return updateLink(key, oldLink, newLink);</span>
+<span class="nc" id="L396">        }</span>
+    }
+
+    // Guarded by linkDescs value (=locking each Link)
+    private Timestamped&lt;LinkDescription&gt; createOrUpdateLinkDescription(
+            Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; descs,
+            ProviderId providerId,
+            Timestamped&lt;LinkDescription&gt; linkDescription) {
+
+        // merge existing annotations
+<span class="fc" id="L406">        Timestamped&lt;LinkDescription&gt; existingLinkDescription = descs.get(providerId);</span>
+<span class="pc bpc" id="L407" title="1 of 4 branches missed.">        if (existingLinkDescription != null &amp;&amp; existingLinkDescription.isNewer(linkDescription)) {</span>
+<span class="nc" id="L408">            log.trace(&quot;local info is more up-to-date, ignoring {}.&quot;, linkDescription);</span>
+<span class="nc" id="L409">            return null;</span>
+        }
+<span class="fc" id="L411">        Timestamped&lt;LinkDescription&gt; newLinkDescription = linkDescription;</span>
+<span class="fc bfc" id="L412" title="All 2 branches covered.">        if (existingLinkDescription != null) {</span>
+            // we only allow transition from INDIRECT -&gt; DIRECT
+            final Type newType;
+<span class="fc bfc" id="L415" title="All 2 branches covered.">            if (existingLinkDescription.value().type() == DIRECT) {</span>
+<span class="fc" id="L416">                newType = DIRECT;</span>
+            } else {
+<span class="fc" id="L418">                newType = linkDescription.value().type();</span>
+            }
+<span class="fc" id="L420">            SparseAnnotations merged = union(existingLinkDescription.value().annotations(),</span>
+<span class="fc" id="L421">                    linkDescription.value().annotations());</span>
+<span class="fc" id="L422">            newLinkDescription = new Timestamped&lt;&gt;(</span>
+                    new DefaultLinkDescription(
+<span class="fc" id="L424">                        linkDescription.value().src(),</span>
+<span class="fc" id="L425">                        linkDescription.value().dst(),</span>
+                        newType, merged),
+<span class="fc" id="L427">                    linkDescription.timestamp());</span>
+        }
+<span class="fc" id="L429">        return descs.put(providerId, newLinkDescription);</span>
+    }
+
+    // Creates and stores the link and returns the appropriate event.
+    // Guarded by linkDescs value (=locking each Link)
+    private LinkEvent createLink(LinkKey key, Link newLink) {
+<span class="fc" id="L435">        links.put(key, newLink);</span>
+<span class="fc" id="L436">        srcLinks.put(newLink.src().deviceId(), key);</span>
+<span class="fc" id="L437">        dstLinks.put(newLink.dst().deviceId(), key);</span>
+<span class="fc" id="L438">        return new LinkEvent(LINK_ADDED, newLink);</span>
+    }
+
+    // Updates, if necessary the specified link and returns the appropriate event.
+    // Guarded by linkDescs value (=locking each Link)
+    private LinkEvent updateLink(LinkKey key, Link oldLink, Link newLink) {
+        // Note: INDIRECT -&gt; DIRECT transition only
+        // so that BDDP discovered Link will not overwrite LDDP Link
+<span class="pc bpc" id="L446" title="1 of 2 branches missed.">        if (oldLink.state() != newLink.state() ||</span>
+<span class="fc bfc" id="L447" title="All 4 branches covered.">            (oldLink.type() == INDIRECT &amp;&amp; newLink.type() == DIRECT) ||</span>
+<span class="fc bfc" id="L448" title="All 2 branches covered.">            !AnnotationsUtil.isEqual(oldLink.annotations(), newLink.annotations())) {</span>
+
+<span class="fc" id="L450">            links.put(key, newLink);</span>
+            // strictly speaking following can be omitted
+<span class="fc" id="L452">            srcLinks.put(oldLink.src().deviceId(), key);</span>
+<span class="fc" id="L453">            dstLinks.put(oldLink.dst().deviceId(), key);</span>
+<span class="fc" id="L454">            return new LinkEvent(LINK_UPDATED, newLink);</span>
+        }
+<span class="fc" id="L456">        return null;</span>
+    }
+
+    @Override
+    public LinkEvent removeLink(ConnectPoint src, ConnectPoint dst) {
+<span class="fc" id="L461">        final LinkKey key = linkKey(src, dst);</span>
+
+<span class="fc" id="L463">        DeviceId dstDeviceId = dst.deviceId();</span>
+<span class="fc" id="L464">        Timestamp timestamp = null;</span>
+        try {
+<span class="fc" id="L466">            timestamp = deviceClockService.getTimestamp(dstDeviceId);</span>
+<span class="nc" id="L467">        } catch (IllegalStateException e) {</span>
+<span class="nc" id="L468">            log.debug(&quot;Failed to remove link {}, was not the master&quot;, key);</span>
+            // there are times when this is called before mastership
+            // handoff correctly completes.
+<span class="nc" id="L471">            return null;</span>
+<span class="fc" id="L472">        }</span>
+
+<span class="fc" id="L474">        LinkEvent event = removeLinkInternal(key, timestamp);</span>
+
+<span class="fc bfc" id="L476" title="All 2 branches covered.">        if (event != null) {</span>
+<span class="fc" id="L477">            log.debug(&quot;Notifying peers of a link removed topology event for a link &quot;</span>
+                    + &quot;between src: {} and dst: {}&quot;, src, dst);
+<span class="fc" id="L479">            notifyPeers(new InternalLinkRemovedEvent(key, timestamp));</span>
+        }
+<span class="fc" id="L481">        return event;</span>
+    }
+
+    private static Timestamped&lt;LinkDescription&gt; getPrimaryDescription(
+                Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; linkDescriptions) {
+
+<span class="fc" id="L487">        synchronized (linkDescriptions) {</span>
+            for (Entry&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt;
+<span class="pc bpc" id="L489" title="1 of 2 branches missed.">                    e : linkDescriptions.entrySet()) {</span>
+
+<span class="pc bpc" id="L491" title="1 of 2 branches missed.">                if (!e.getKey().isAncillary()) {</span>
+<span class="fc" id="L492">                    return e.getValue();</span>
+                }
+<span class="nc" id="L494">            }</span>
+<span class="nc" id="L495">        }</span>
+<span class="nc" id="L496">        return null;</span>
+    }
+
+
+    // TODO: consider slicing out as Timestamp utils
+    /**
+     * Checks is timestamp is more recent than timestamped object.
+     *
+     * @param timestamp to check if this is more recent then other
+     * @param timestamped object to be tested against
+     * @return true if {@code timestamp} is more recent than {@code timestamped}
+     *         or {@code timestamped is null}
+     */
+    private static boolean isMoreRecent(Timestamp timestamp, Timestamped&lt;?&gt; timestamped) {
+<span class="fc" id="L510">        checkNotNull(timestamp);</span>
+<span class="pc bpc" id="L511" title="1 of 2 branches missed.">        if (timestamped == null) {</span>
+<span class="nc" id="L512">            return true;</span>
+        }
+<span class="pc bpc" id="L514" title="1 of 2 branches missed.">        return timestamp.compareTo(timestamped.timestamp()) &gt; 0;</span>
+    }
+
+    private LinkEvent removeLinkInternal(LinkKey key, Timestamp timestamp) {
+<span class="fc" id="L518">        Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; linkDescriptions</span>
+<span class="fc" id="L519">            = getOrCreateLinkDescriptions(key);</span>
+
+<span class="fc" id="L521">        synchronized (linkDescriptions) {</span>
+<span class="fc bfc" id="L522" title="All 2 branches covered.">            if (linkDescriptions.isEmpty()) {</span>
+                // never seen such link before. keeping timestamp for record
+<span class="fc" id="L524">                removedLinks.put(key, timestamp);</span>
+<span class="fc" id="L525">                return null;</span>
+            }
+            // accept removal request if given timestamp is newer than
+            // the latest Timestamp from Primary provider
+<span class="fc" id="L529">            Timestamped&lt;LinkDescription&gt; prim = getPrimaryDescription(linkDescriptions);</span>
+<span class="pc bpc" id="L530" title="1 of 2 branches missed.">            if (!isMoreRecent(timestamp, prim)) {</span>
+                // outdated remove request, ignore
+<span class="nc" id="L532">                return null;</span>
+            }
+<span class="fc" id="L534">            removedLinks.put(key, timestamp);</span>
+<span class="fc" id="L535">            Link link = links.remove(key);</span>
+<span class="fc" id="L536">            linkDescriptions.clear();</span>
+<span class="pc bpc" id="L537" title="1 of 2 branches missed.">            if (link != null) {</span>
+<span class="fc" id="L538">                srcLinks.remove(link.src().deviceId(), key);</span>
+<span class="fc" id="L539">                dstLinks.remove(link.dst().deviceId(), key);</span>
+<span class="fc" id="L540">                return new LinkEvent(LINK_REMOVED, link);</span>
+            }
+<span class="nc" id="L542">            return null;</span>
+<span class="nc" id="L543">        }</span>
+    }
+
+    /**
+     * Creates concurrent readable, synchronized HashMultimap.
+     *
+     * @return SetMultimap
+     */
+    private static &lt;K, V&gt; SetMultimap&lt;K, V&gt; createSynchronizedHashMultiMap() {
+<span class="fc" id="L552">        return synchronizedSetMultimap(</span>
+<span class="fc" id="L553">               Multimaps.newSetMultimap(new ConcurrentHashMap&lt;&gt;(),</span>
+<span class="fc" id="L554">                                       () -&gt; Sets.newConcurrentHashSet()));</span>
+    }
+
+    /**
+     * @return primary ProviderID, or randomly chosen one if none exists
+     */
+    private static ProviderId pickBaseProviderId(
+            Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; linkDescriptions) {
+
+<span class="fc" id="L563">        ProviderId fallBackPrimary = null;</span>
+<span class="fc bfc" id="L564" title="All 2 branches covered.">        for (Entry&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; e : linkDescriptions.entrySet()) {</span>
+<span class="fc bfc" id="L565" title="All 2 branches covered.">            if (!e.getKey().isAncillary()) {</span>
+                // found primary
+<span class="fc" id="L567">                return e.getKey();</span>
+<span class="pc bpc" id="L568" title="1 of 2 branches missed.">            } else if (fallBackPrimary == null) {</span>
+                // pick randomly as a fallback in case there is no primary
+<span class="fc" id="L570">                fallBackPrimary = e.getKey();</span>
+            }
+<span class="fc" id="L572">        }</span>
+<span class="fc" id="L573">        return fallBackPrimary;</span>
+    }
+
+    // Guarded by linkDescs value (=locking each Link)
+    private Link composeLink(Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; descs) {
+<span class="fc" id="L578">        ProviderId baseProviderId = pickBaseProviderId(descs);</span>
+<span class="fc" id="L579">        Timestamped&lt;LinkDescription&gt; base = descs.get(baseProviderId);</span>
+
+<span class="fc" id="L581">        ConnectPoint src = base.value().src();</span>
+<span class="fc" id="L582">        ConnectPoint dst = base.value().dst();</span>
+<span class="fc" id="L583">        Type type = base.value().type();</span>
+<span class="fc" id="L584">        DefaultAnnotations annotations = DefaultAnnotations.builder().build();</span>
+<span class="fc" id="L585">        annotations = merge(annotations, base.value().annotations());</span>
+
+<span class="fc bfc" id="L587" title="All 2 branches covered.">        for (Entry&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; e : descs.entrySet()) {</span>
+<span class="fc bfc" id="L588" title="All 2 branches covered.">            if (baseProviderId.equals(e.getKey())) {</span>
+<span class="fc" id="L589">                continue;</span>
+            }
+
+            // Note: In the long run we should keep track of Description timestamp
+            // and only merge conflicting keys when timestamp is newer
+            // Currently assuming there will never be a key conflict between
+            // providers
+
+            // annotation merging. not so efficient, should revisit later
+<span class="fc" id="L598">            annotations = merge(annotations, e.getValue().value().annotations());</span>
+<span class="fc" id="L599">        }</span>
+
+<span class="fc" id="L601">        boolean isDurable = Objects.equals(annotations.value(AnnotationKeys.DURABLE), &quot;true&quot;);</span>
+<span class="fc" id="L602">        return new DefaultLink(baseProviderId, src, dst, type, ACTIVE, isDurable, annotations);</span>
+    }
+
+    private Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; getOrCreateLinkDescriptions(LinkKey key) {
+        Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; r;
+<span class="fc" id="L607">        r = linkDescs.get(key);</span>
+<span class="fc bfc" id="L608" title="All 2 branches covered.">        if (r != null) {</span>
+<span class="fc" id="L609">            return r;</span>
+        }
+<span class="fc" id="L611">        r = new HashMap&lt;&gt;();</span>
+        final Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; concurrentlyAdded;
+<span class="fc" id="L613">        concurrentlyAdded = linkDescs.putIfAbsent(key, r);</span>
+<span class="pc bpc" id="L614" title="1 of 2 branches missed.">        if (concurrentlyAdded != null) {</span>
+<span class="nc" id="L615">            return concurrentlyAdded;</span>
+        } else {
+<span class="fc" id="L617">            return r;</span>
+        }
+    }
+
+<span class="fc" id="L621">    private final Function&lt;LinkKey, Link&gt; lookupLink = new LookupLink();</span>
+
+    /**
+     * Returns a Function to lookup Link instance using LinkKey from cache.
+     *
+     * @return lookup link function
+     */
+    private Function&lt;LinkKey, Link&gt; lookupLink() {
+<span class="fc" id="L629">        return lookupLink;</span>
+    }
+
+<span class="fc" id="L632">    private final class LookupLink implements Function&lt;LinkKey, Link&gt; {</span>
+        @Override
+        public Link apply(LinkKey input) {
+<span class="pc bpc" id="L635" title="1 of 2 branches missed.">            if (input == null) {</span>
+<span class="nc" id="L636">                return null;</span>
+            } else {
+<span class="fc" id="L638">                return links.get(input);</span>
+            }
+        }
+    }
+
+    private void notifyDelegateIfNotNull(LinkEvent event) {
+<span class="nc bnc" id="L644" title="All 2 branches missed.">        if (event != null) {</span>
+<span class="nc" id="L645">            notifyDelegate(event);</span>
+        }
+<span class="nc" id="L647">    }</span>
+
+    private void broadcastMessage(MessageSubject subject, Object event) {
+<span class="fc" id="L650">        clusterCommunicator.broadcast(event, subject, SERIALIZER::encode);</span>
+<span class="fc" id="L651">    }</span>
+
+    private void unicastMessage(NodeId recipient, MessageSubject subject, Object event) throws IOException {
+<span class="nc" id="L654">        clusterCommunicator.unicast(event, subject, SERIALIZER::encode, recipient);</span>
+<span class="nc" id="L655">    }</span>
+
+    private void notifyPeers(InternalLinkEvent event) {
+<span class="fc" id="L658">        broadcastMessage(GossipLinkStoreMessageSubjects.LINK_UPDATE, event);</span>
+<span class="fc" id="L659">    }</span>
+
+    private void notifyPeers(InternalLinkRemovedEvent event) {
+<span class="fc" id="L662">        broadcastMessage(GossipLinkStoreMessageSubjects.LINK_REMOVED, event);</span>
+<span class="fc" id="L663">    }</span>
+
+    // notify peer, silently ignoring error
+    private void notifyPeer(NodeId peer, InternalLinkEvent event) {
+        try {
+<span class="nc" id="L668">            unicastMessage(peer, GossipLinkStoreMessageSubjects.LINK_UPDATE, event);</span>
+<span class="nc" id="L669">        } catch (IOException e) {</span>
+<span class="nc" id="L670">            log.debug(&quot;Failed to notify peer {} with message {}&quot;, peer, event);</span>
+<span class="nc" id="L671">        }</span>
+<span class="nc" id="L672">    }</span>
+
+    // notify peer, silently ignoring error
+    private void notifyPeer(NodeId peer, InternalLinkRemovedEvent event) {
+        try {
+<span class="nc" id="L677">            unicastMessage(peer, GossipLinkStoreMessageSubjects.LINK_REMOVED, event);</span>
+<span class="nc" id="L678">        } catch (IOException e) {</span>
+<span class="nc" id="L679">            log.debug(&quot;Failed to notify peer {} with message {}&quot;, peer, event);</span>
+<span class="nc" id="L680">        }</span>
+<span class="nc" id="L681">    }</span>
+
+<span class="fc" id="L683">    private final class SendAdvertisementTask implements Runnable {</span>
+
+        @Override
+        public void run() {
+<span class="nc bnc" id="L687" title="All 2 branches missed.">            if (Thread.currentThread().isInterrupted()) {</span>
+<span class="nc" id="L688">                log.debug(&quot;Interrupted, quitting&quot;);</span>
+<span class="nc" id="L689">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L693">                final NodeId self = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L694">                Set&lt;ControllerNode&gt; nodes = clusterService.getNodes();</span>
+
+<span class="nc" id="L696">                ImmutableList&lt;NodeId&gt; nodeIds = FluentIterable.from(nodes)</span>
+<span class="nc" id="L697">                        .transform(toNodeId())</span>
+<span class="nc" id="L698">                        .toList();</span>
+
+<span class="nc bnc" id="L700" title="All 4 branches missed.">                if (nodeIds.size() == 1 &amp;&amp; nodeIds.get(0).equals(self)) {</span>
+<span class="nc" id="L701">                    log.trace(&quot;No other peers in the cluster.&quot;);</span>
+<span class="nc" id="L702">                    return;</span>
+                }
+
+                NodeId peer;
+                do {
+<span class="nc" id="L707">                    int idx = RandomUtils.nextInt(0, nodeIds.size());</span>
+<span class="nc" id="L708">                    peer = nodeIds.get(idx);</span>
+<span class="nc bnc" id="L709" title="All 2 branches missed.">                } while (peer.equals(self));</span>
+
+<span class="nc" id="L711">                LinkAntiEntropyAdvertisement ad = createAdvertisement();</span>
+
+<span class="nc bnc" id="L713" title="All 2 branches missed.">                if (Thread.currentThread().isInterrupted()) {</span>
+<span class="nc" id="L714">                    log.debug(&quot;Interrupted, quitting&quot;);</span>
+<span class="nc" id="L715">                    return;</span>
+                }
+
+                try {
+<span class="nc" id="L719">                    unicastMessage(peer, LINK_ANTI_ENTROPY_ADVERTISEMENT, ad);</span>
+<span class="nc" id="L720">                } catch (IOException e) {</span>
+<span class="nc" id="L721">                    log.debug(&quot;Failed to send anti-entropy advertisement to {}&quot;, peer);</span>
+<span class="nc" id="L722">                    return;</span>
+<span class="nc" id="L723">                }</span>
+<span class="nc" id="L724">            } catch (Exception e) {</span>
+                // catch all Exception to avoid Scheduled task being suppressed.
+<span class="nc" id="L726">                log.error(&quot;Exception thrown while sending advertisement&quot;, e);</span>
+<span class="nc" id="L727">            }</span>
+<span class="nc" id="L728">        }</span>
+    }
+
+    private LinkAntiEntropyAdvertisement createAdvertisement() {
+<span class="nc" id="L732">        final NodeId self = clusterService.getLocalNode().id();</span>
+
+<span class="nc" id="L734">        Map&lt;LinkFragmentId, Timestamp&gt; linkTimestamps = new HashMap&lt;&gt;(linkDescs.size());</span>
+<span class="nc" id="L735">        Map&lt;LinkKey, Timestamp&gt; linkTombstones = new HashMap&lt;&gt;(removedLinks.size());</span>
+
+<span class="nc" id="L737">        linkDescs.forEach((linkKey, linkDesc) -&gt; {</span>
+<span class="nc" id="L738">            synchronized (linkDesc) {</span>
+<span class="nc bnc" id="L739" title="All 2 branches missed.">                for (Map.Entry&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; e : linkDesc.entrySet()) {</span>
+<span class="nc" id="L740">                    linkTimestamps.put(new LinkFragmentId(linkKey, e.getKey()), e.getValue().timestamp());</span>
+<span class="nc" id="L741">                }</span>
+<span class="nc" id="L742">            }</span>
+<span class="nc" id="L743">        });</span>
+
+<span class="nc" id="L745">        linkTombstones.putAll(removedLinks);</span>
+
+<span class="nc" id="L747">        return new LinkAntiEntropyAdvertisement(self, linkTimestamps, linkTombstones);</span>
+    }
+
+    private void handleAntiEntropyAdvertisement(LinkAntiEntropyAdvertisement ad) {
+
+<span class="nc" id="L752">        final NodeId sender = ad.sender();</span>
+<span class="nc" id="L753">        boolean localOutdated = false;</span>
+
+        for (Entry&lt;LinkKey, Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt;&gt;
+<span class="nc bnc" id="L756" title="All 2 branches missed.">                l : linkDescs.entrySet()) {</span>
+
+<span class="nc" id="L758">            final LinkKey key = l.getKey();</span>
+<span class="nc" id="L759">            final Map&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; link = l.getValue();</span>
+<span class="nc" id="L760">            synchronized (link) {</span>
+<span class="nc" id="L761">                Timestamp localLatest = removedLinks.get(key);</span>
+
+<span class="nc bnc" id="L763" title="All 2 branches missed.">                for (Entry&lt;ProviderId, Timestamped&lt;LinkDescription&gt;&gt; p : link.entrySet()) {</span>
+<span class="nc" id="L764">                    final ProviderId providerId = p.getKey();</span>
+<span class="nc" id="L765">                    final Timestamped&lt;LinkDescription&gt; pDesc = p.getValue();</span>
+
+<span class="nc" id="L767">                    final LinkFragmentId fragId = new LinkFragmentId(key, providerId);</span>
+                    // remote
+<span class="nc" id="L769">                    Timestamp remoteTimestamp = ad.linkTimestamps().get(fragId);</span>
+<span class="nc bnc" id="L770" title="All 2 branches missed.">                    if (remoteTimestamp == null) {</span>
+<span class="nc" id="L771">                        remoteTimestamp = ad.linkTombstones().get(key);</span>
+                    }
+<span class="nc bnc" id="L773" title="All 2 branches missed.">                    if (remoteTimestamp == null ||</span>
+<span class="nc bnc" id="L774" title="All 2 branches missed.">                        pDesc.isNewerThan(remoteTimestamp)) {</span>
+                        // I have more recent link description. update peer.
+<span class="nc" id="L776">                        notifyPeer(sender, new InternalLinkEvent(providerId, pDesc));</span>
+                    } else {
+<span class="nc" id="L778">                        final Timestamp remoteLive = ad.linkTimestamps().get(fragId);</span>
+<span class="nc bnc" id="L779" title="All 2 branches missed.">                        if (remoteLive != null &amp;&amp;</span>
+<span class="nc bnc" id="L780" title="All 2 branches missed.">                            remoteLive.compareTo(pDesc.timestamp()) &gt; 0) {</span>
+                            // I have something outdated
+<span class="nc" id="L782">                            localOutdated = true;</span>
+                        }
+                    }
+
+                    // search local latest along the way
+<span class="nc bnc" id="L787" title="All 2 branches missed.">                    if (localLatest == null ||</span>
+<span class="nc bnc" id="L788" title="All 2 branches missed.">                        pDesc.isNewerThan(localLatest)) {</span>
+<span class="nc" id="L789">                        localLatest = pDesc.timestamp();</span>
+                    }
+<span class="nc" id="L791">                }</span>
+                // Tests if remote remove is more recent then local latest.
+<span class="nc" id="L793">                final Timestamp remoteRemove = ad.linkTombstones().get(key);</span>
+<span class="nc bnc" id="L794" title="All 2 branches missed.">                if (remoteRemove != null) {</span>
+<span class="nc bnc" id="L795" title="All 2 branches missed.">                    if (localLatest != null &amp;&amp;</span>
+<span class="nc bnc" id="L796" title="All 2 branches missed.">                        localLatest.compareTo(remoteRemove) &lt; 0) {</span>
+                        // remote remove is more recent
+<span class="nc" id="L798">                        notifyDelegateIfNotNull(removeLinkInternal(key, remoteRemove));</span>
+                    }
+                }
+<span class="nc" id="L801">            }</span>
+<span class="nc" id="L802">        }</span>
+
+        // populate remove info if not known locally
+<span class="nc bnc" id="L805" title="All 2 branches missed.">        for (Entry&lt;LinkKey, Timestamp&gt; remoteRm : ad.linkTombstones().entrySet()) {</span>
+<span class="nc" id="L806">            final LinkKey key = remoteRm.getKey();</span>
+<span class="nc" id="L807">            final Timestamp remoteRemove = remoteRm.getValue();</span>
+            // relying on removeLinkInternal to ignore stale info
+<span class="nc" id="L809">            notifyDelegateIfNotNull(removeLinkInternal(key, remoteRemove));</span>
+<span class="nc" id="L810">        }</span>
+
+<span class="nc bnc" id="L812" title="All 2 branches missed.">        if (localOutdated) {</span>
+            // send back advertisement to speed up convergence
+            try {
+<span class="nc" id="L815">                unicastMessage(sender, LINK_ANTI_ENTROPY_ADVERTISEMENT,</span>
+<span class="nc" id="L816">                                createAdvertisement());</span>
+<span class="nc" id="L817">            } catch (IOException e) {</span>
+<span class="nc" id="L818">                log.debug(&quot;Failed to send back active advertisement&quot;);</span>
+<span class="nc" id="L819">            }</span>
+        }
+<span class="nc" id="L821">    }</span>
+
+<span class="fc" id="L823">    private final class InternalLinkEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+
+<span class="nc" id="L828">            log.trace(&quot;Received link event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L829">            InternalLinkEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L831">            ProviderId providerId = event.providerId();</span>
+<span class="nc" id="L832">            Timestamped&lt;LinkDescription&gt; linkDescription = event.linkDescription();</span>
+
+            try {
+<span class="nc" id="L835">                notifyDelegateIfNotNull(createOrUpdateLinkInternal(providerId, linkDescription));</span>
+<span class="nc" id="L836">            } catch (Exception e) {</span>
+<span class="nc" id="L837">                log.warn(&quot;Exception thrown handling link event&quot;, e);</span>
+<span class="nc" id="L838">            }</span>
+<span class="nc" id="L839">        }</span>
+    }
+
+<span class="fc" id="L842">    private final class InternalLinkRemovedEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+
+<span class="nc" id="L847">            log.trace(&quot;Received link removed event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L848">            InternalLinkRemovedEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L850">            LinkKey linkKey = event.linkKey();</span>
+<span class="nc" id="L851">            Timestamp timestamp = event.timestamp();</span>
+
+            try {
+<span class="nc" id="L854">                notifyDelegateIfNotNull(removeLinkInternal(linkKey, timestamp));</span>
+<span class="nc" id="L855">            } catch (Exception e) {</span>
+<span class="nc" id="L856">                log.warn(&quot;Exception thrown handling link removed&quot;, e);</span>
+<span class="nc" id="L857">            }</span>
+<span class="nc" id="L858">        }</span>
+    }
+
+<span class="fc" id="L861">    private final class InternalLinkAntiEntropyAdvertisementListener</span>
+            implements ClusterMessageHandler {
+
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L866">            log.trace(&quot;Received Link Anti-Entropy advertisement from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L867">            LinkAntiEntropyAdvertisement advertisement = SERIALIZER.decode(message.payload());</span>
+            try {
+<span class="nc" id="L869">                handleAntiEntropyAdvertisement(advertisement);</span>
+<span class="nc" id="L870">            } catch (Exception e) {</span>
+<span class="nc" id="L871">                log.warn(&quot;Exception thrown while handling Link advertisements&quot;, e);</span>
+<span class="nc" id="L872">                throw e;</span>
+<span class="nc" id="L873">            }</span>
+<span class="nc" id="L874">        }</span>
+    }
+
+<span class="fc" id="L877">    private final class LinkInjectedEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+
+<span class="nc" id="L882">            log.trace(&quot;Received injected link event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L883">            LinkInjectedEvent linkInjectedEvent = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L885">            ProviderId providerId = linkInjectedEvent.providerId();</span>
+<span class="nc" id="L886">            LinkDescription linkDescription = linkInjectedEvent.linkDescription();</span>
+
+<span class="nc" id="L888">            final DeviceId deviceId = linkDescription.dst().deviceId();</span>
+<span class="nc bnc" id="L889" title="All 2 branches missed.">            if (!deviceClockService.isTimestampAvailable(deviceId)) {</span>
+                // workaround for ONOS-1208
+<span class="nc" id="L891">                log.warn(&quot;Not ready to accept update. Dropping {}&quot;, linkDescription);</span>
+<span class="nc" id="L892">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L896">                createOrUpdateLink(providerId, linkDescription);</span>
+<span class="nc" id="L897">            } catch (Exception e) {</span>
+<span class="nc" id="L898">                log.warn(&quot;Exception thrown while handling link injected event&quot;, e);</span>
+<span class="nc" id="L899">            }</span>
+<span class="nc" id="L900">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

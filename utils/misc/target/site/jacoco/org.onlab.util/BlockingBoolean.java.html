@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BlockingBoolean.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.util</a> &gt; <span class="el_source">BlockingBoolean.java</span></div><h1>BlockingBoolean.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.util;
+
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.AbstractQueuedSynchronizer;
+
+/**
+ * Mutable boolean that allows threads to wait for a specified value.
+ */
+public class BlockingBoolean extends AbstractQueuedSynchronizer {
+
+    private static final int TRUE = 1;
+    private static final int FALSE = 0;
+
+    /**
+     * Creates a new blocking boolean with the specified value.
+     *
+     * @param value the starting value
+     */
+<span class="fc" id="L34">    public BlockingBoolean(boolean value) {</span>
+<span class="fc bfc" id="L35" title="All 2 branches covered.">        setState(value ? TRUE : FALSE);</span>
+<span class="fc" id="L36">    }</span>
+
+    /**
+     * Causes the current thread to wait until the boolean equals the specified
+     * value unless the thread is {@linkplain Thread#interrupt interrupted}.
+     *
+     * @param value specified value
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public void await(boolean value) throws InterruptedException {
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        acquireSharedInterruptibly(value ? TRUE : FALSE);</span>
+<span class="fc" id="L47">    }</span>
+
+    /**
+     * Causes the current thread to wait until the boolean equals the specified
+     * value unless the thread is {@linkplain Thread#interrupt interrupted},
+     * or the specified waiting time elapses.
+     *
+     * @param value specified value
+     * @param timeout the maximum time to wait
+     * @param unit the time unit of the {@code timeout} argument
+     * @return {@code true} if the count reached zero and {@code false}
+     *         if the waiting time elapsed before the count reached zero
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public boolean await(boolean value, long timeout, TimeUnit unit)
+            throws InterruptedException {
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        return tryAcquireSharedNanos(value ? TRUE : FALSE, unit.toNanos(timeout));</span>
+    }
+
+    protected int tryAcquireShared(int acquires) {
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        return (getState() == acquires) ? 1 : -1;</span>
+    }
+
+    /**
+     * Sets the value of the blocking boolean.
+     *
+     * @param value new value
+     */
+    public void set(boolean value) {
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        releaseShared(value ? TRUE : FALSE);</span>
+<span class="fc" id="L77">    }</span>
+
+    /**
+     * Gets the value of the blocking boolean.
+     *
+     * @return current value
+     */
+    public boolean get() {
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        return getState() == TRUE;</span>
+    }
+
+    protected boolean tryReleaseShared(int releases) {
+        // Signal on state change only
+<span class="fc" id="L90">        int state = getState();</span>
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        if (state == releases) {</span>
+<span class="fc" id="L92">            return false;</span>
+        }
+<span class="fc" id="L94">        return compareAndSetState(state, releases);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

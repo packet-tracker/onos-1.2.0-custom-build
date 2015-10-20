@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Ip4Address.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">Ip4Address.java</span></div><h1>Ip4Address.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.net.InetAddress;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+import com.google.common.net.InetAddresses;
+
+/**
+ * A class representing an IPv4 address.
+ * This class is immutable.
+ */
+public final class Ip4Address extends IpAddress {
+<span class="fc" id="L31">    public static final IpAddress.Version VERSION = IpAddress.Version.INET;</span>
+    public static final int BYTE_LENGTH = IpAddress.INET_BYTE_LENGTH;
+    public static final int BIT_LENGTH = IpAddress.INET_BIT_LENGTH;
+
+    /**
+     * Constructor for given IP address version and address octets.
+     *
+     * @param value the IP address value stored in network byte order
+     * (i.e., the most significant byte first)
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    private Ip4Address(byte[] value) {
+<span class="fc" id="L43">        super(VERSION, value);</span>
+<span class="fc" id="L44">    }</span>
+
+    /**
+     * Returns the integer value of this IPv4 address.
+     *
+     * @return the IPv4 address's value as an integer
+     */
+    public int toInt() {
+<span class="fc" id="L52">        ByteBuffer bb = ByteBuffer.wrap(super.toOctets());</span>
+<span class="fc" id="L53">        return bb.getInt();</span>
+    }
+
+    /**
+     * Converts an integer into an IPv4 address.
+     *
+     * @param value an integer representing an IPv4 address value
+     * @return an IPv4 address
+     */
+    public static Ip4Address valueOf(int value) {
+<span class="fc" id="L63">        byte[] bytes =</span>
+<span class="fc" id="L64">            ByteBuffer.allocate(INET_BYTE_LENGTH).putInt(value).array();</span>
+<span class="fc" id="L65">        return new Ip4Address(bytes);</span>
+    }
+
+    /**
+     * Converts a byte array into an IPv4 address.
+     *
+     * @param value the IPv4 address value stored in network byte order
+     * (i.e., the most significant byte first)
+     * @return an IPv4 address
+     * @throws IllegalArgumentException if the argument is invalid
+     */
+    public static Ip4Address valueOf(byte[] value) {
+<span class="fc" id="L77">        return new Ip4Address(value);</span>
+    }
+
+    /**
+     * Converts a byte array and a given offset from the beginning of the
+     * array into an IPv4 address.
+     * &lt;p&gt;
+     * The IP address is stored in network byte order (i.e., the most
+     * significant byte first).
+     * &lt;/p&gt;
+     * @param value the value to use
+     * @param offset the offset in bytes from the beginning of the byte array
+     * @return an IPv4 address
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    public static Ip4Address valueOf(byte[] value, int offset) {
+<span class="fc" id="L93">        IpAddress.checkArguments(VERSION, value, offset);</span>
+<span class="fc" id="L94">        byte[] bc = Arrays.copyOfRange(value, offset, value.length);</span>
+<span class="fc" id="L95">        return Ip4Address.valueOf(bc);</span>
+    }
+
+    /**
+     * Converts an InetAddress into an IPv4 address.
+     *
+     * @param inetAddress the InetAddress value to use. It must contain an IPv4
+     * address
+     * @return an IPv4 address
+     * @throws IllegalArgumentException if the argument is invalid
+     */
+    public static Ip4Address valueOf(InetAddress inetAddress) {
+<span class="fc" id="L107">        byte[] bytes = inetAddress.getAddress();</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        if (inetAddress instanceof Inet4Address) {</span>
+<span class="fc" id="L109">            return new Ip4Address(bytes);</span>
+        }
+<span class="nc bnc" id="L111" title="All 4 branches missed.">        if ((inetAddress instanceof Inet6Address) ||</span>
+            (bytes.length == INET6_BYTE_LENGTH)) {
+<span class="nc" id="L113">            final String msg = &quot;Invalid IPv4 version address string: &quot; +</span>
+<span class="nc" id="L114">                inetAddress.toString();</span>
+<span class="nc" id="L115">            throw new IllegalArgumentException(msg);</span>
+        }
+        // Use the number of bytes as a hint
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (bytes.length == INET_BYTE_LENGTH) {</span>
+<span class="nc" id="L119">            return new Ip4Address(bytes);</span>
+        }
+<span class="nc" id="L121">        final String msg = &quot;Unrecognized IP version address string: &quot; +</span>
+<span class="nc" id="L122">            inetAddress.toString();</span>
+<span class="nc" id="L123">        throw new IllegalArgumentException(msg);</span>
+    }
+
+    /**
+     * Converts an IPv4 string literal (e.g., &quot;10.2.3.4&quot;) into an IP address.
+     *
+     * @param value an IPv4 address value in string form
+     * @return an IPv4 address
+     * @throws IllegalArgumentException if the argument is invalid
+     */
+    public static Ip4Address valueOf(String value) {
+<span class="fc" id="L134">        InetAddress inetAddress = null;</span>
+        try {
+<span class="fc" id="L136">            inetAddress = InetAddresses.forString(value);</span>
+<span class="fc" id="L137">        } catch (IllegalArgumentException e) {</span>
+<span class="fc" id="L138">            final String msg = &quot;Invalid IP address string: &quot; + value;</span>
+<span class="fc" id="L139">            throw new IllegalArgumentException(msg);</span>
+<span class="fc" id="L140">        }</span>
+<span class="fc" id="L141">        return valueOf(inetAddress);</span>
+    }
+
+    /**
+     * Creates an IPv4 network mask prefix.
+     *
+     * @param prefixLength the length of the mask prefix. Must be in the
+     * interval [0, 32]
+     * @return a new IPv4 address that contains a mask prefix of the
+     * specified length
+     * @throws IllegalArgumentException if the argument is invalid
+     */
+    public static Ip4Address makeMaskPrefix(int prefixLength) {
+<span class="fc" id="L154">        byte[] mask = IpAddress.makeMaskPrefixArray(VERSION, prefixLength);</span>
+<span class="fc" id="L155">        return new Ip4Address(mask);</span>
+    }
+
+    /**
+     * Creates an IPv4 address by masking it with a network mask of given
+     * mask length.
+     *
+     * @param address the address to mask
+     * @param prefixLength the length of the mask prefix. Must be in the
+     * interval [0, 32]
+     * @return a new IPv4 address that is masked with a mask prefix of the
+     * specified length
+     * @throws IllegalArgumentException if the prefix length is invalid
+     */
+    public static Ip4Address makeMaskedAddress(final Ip4Address address,
+                                               int prefixLength) {
+<span class="fc" id="L171">        byte[] net = makeMaskedAddressArray(address, prefixLength);</span>
+<span class="fc" id="L172">        return Ip4Address.valueOf(net);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

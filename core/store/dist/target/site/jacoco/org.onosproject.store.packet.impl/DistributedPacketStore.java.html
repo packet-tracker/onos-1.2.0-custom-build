@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedPacketStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.packet.impl</a> &gt; <span class="el_source">DistributedPacketStore.java</span></div><h1>DistributedPacketStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.packet.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.packet.OutboundPacket;
+import org.onosproject.net.packet.PacketEvent;
+import org.onosproject.net.packet.PacketEvent.Type;
+import org.onosproject.net.packet.PacketRequest;
+import org.onosproject.net.packet.PacketStore;
+import org.onosproject.net.packet.PacketStoreDelegate;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.ConsistentMapException;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.retryable;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Distributed packet store implementation allowing packets to be sent to
+ * remote instances.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L65">public class DistributedPacketStore</span>
+        extends AbstractStore&lt;PacketEvent, PacketStoreDelegate&gt;
+        implements PacketStore {
+
+<span class="nc" id="L69">    private final Logger log = getLogger(getClass());</span>
+
+    private static final int MAX_BACKOFF = 10;
+
+    // TODO: make this configurable.
+    private static final int MESSAGE_HANDLER_THREAD_POOL_SIZE = 4;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService communicationService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    private PacketRequestTracker tracker;
+
+<span class="nc" id="L90">    private static final MessageSubject PACKET_OUT_SUBJECT =</span>
+            new MessageSubject(&quot;packet-out&quot;);
+
+<span class="nc" id="L93">    private static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L96">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L97">                    .register(KryoNamespaces.API)</span>
+<span class="nc" id="L98">                    .nextId(KryoNamespaces.BEGIN_USER_CUSTOM_ID)</span>
+<span class="nc" id="L99">                    .build();</span>
+<span class="nc" id="L100">        }</span>
+    };
+
+    private ExecutorService messageHandlingExecutor;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L107">        messageHandlingExecutor = Executors.newFixedThreadPool(</span>
+                MESSAGE_HANDLER_THREAD_POOL_SIZE,
+<span class="nc" id="L109">                groupedThreads(&quot;onos/store/packet&quot;, &quot;message-handlers&quot;));</span>
+
+<span class="nc" id="L111">        communicationService.&lt;OutboundPacket&gt;addSubscriber(PACKET_OUT_SUBJECT,</span>
+                SERIALIZER::decode,
+<span class="nc" id="L113">                packet -&gt; notifyDelegate(new PacketEvent(Type.EMIT, packet)),</span>
+                messageHandlingExecutor);
+
+<span class="nc" id="L116">        tracker = new PacketRequestTracker();</span>
+
+<span class="nc" id="L118">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L119">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L123">        communicationService.removeSubscriber(PACKET_OUT_SUBJECT);</span>
+<span class="nc" id="L124">        messageHandlingExecutor.shutdown();</span>
+<span class="nc" id="L125">        tracker = null;</span>
+<span class="nc" id="L126">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L127">    }</span>
+
+    @Override
+    public void emit(OutboundPacket packet) {
+<span class="nc" id="L131">        NodeId myId = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L132">        NodeId master = mastershipService.getMasterFor(packet.sendThrough());</span>
+
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L135">            return;</span>
+        }
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (myId.equals(master)) {</span>
+<span class="nc" id="L139">            notifyDelegate(new PacketEvent(Type.EMIT, packet));</span>
+<span class="nc" id="L140">            return;</span>
+        }
+
+<span class="nc" id="L143">        communicationService.unicast(packet, PACKET_OUT_SUBJECT, SERIALIZER::encode, master)</span>
+<span class="nc" id="L144">                            .whenComplete((r, error) -&gt; {</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                                if (error != null) {</span>
+<span class="nc" id="L146">                                    log.warn(&quot;Failed to send packet-out to {}&quot;, master, error);</span>
+                                }
+<span class="nc" id="L148">                            });</span>
+<span class="nc" id="L149">    }</span>
+
+    @Override
+    public void requestPackets(PacketRequest request) {
+<span class="nc" id="L153">        tracker.add(request);</span>
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public void cancelPackets(PacketRequest request) {
+<span class="nc" id="L158">        tracker.remove(request);</span>
+<span class="nc" id="L159">    }</span>
+
+    @Override
+    public List&lt;PacketRequest&gt; existingRequests() {
+<span class="nc" id="L163">        return tracker.requests();</span>
+    }
+
+    private final class PacketRequestTracker {
+
+        private ConsistentMap&lt;TrafficSelector, Set&lt;PacketRequest&gt;&gt; requests;
+
+<span class="nc" id="L170">        private PacketRequestTracker() {</span>
+<span class="nc" id="L171">            requests = storageService.&lt;TrafficSelector, Set&lt;PacketRequest&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L172">                    .withName(&quot;onos-packet-requests&quot;)</span>
+<span class="nc" id="L173">                    .withPartitionsDisabled()</span>
+<span class="nc" id="L174">                    .withSerializer(Serializer.using(KryoNamespaces.API))</span>
+<span class="nc" id="L175">                    .build();</span>
+<span class="nc" id="L176">        }</span>
+
+        private void add(PacketRequest request) {
+<span class="nc" id="L179">            AtomicBoolean firstRequest =</span>
+<span class="nc" id="L180">                    retryable(this::addInternal, ConsistentMapException.class,</span>
+<span class="nc" id="L181">                              3, MAX_BACKOFF).apply(request);</span>
+<span class="nc bnc" id="L182" title="All 4 branches missed.">            if (firstRequest.get() &amp;&amp; delegate != null) {</span>
+                // The instance that makes the first request will push to all devices
+<span class="nc" id="L184">                delegate.requestPackets(request);</span>
+            }
+<span class="nc" id="L186">        }</span>
+
+        private AtomicBoolean addInternal(PacketRequest request) {
+<span class="nc" id="L189">            AtomicBoolean firstRequest = new AtomicBoolean(false);</span>
+<span class="nc" id="L190">            requests.compute(request.selector(), (s, existingRequests) -&gt; {</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">                if (existingRequests == null) {</span>
+<span class="nc" id="L192">                    firstRequest.set(true);</span>
+<span class="nc" id="L193">                    return ImmutableSet.of(request);</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">                } else if (!existingRequests.contains(request)) {</span>
+<span class="nc" id="L195">                    return ImmutableSet.&lt;PacketRequest&gt;builder()</span>
+<span class="nc" id="L196">                                       .addAll(existingRequests)</span>
+<span class="nc" id="L197">                                       .add(request)</span>
+<span class="nc" id="L198">                                       .build();</span>
+                } else {
+<span class="nc" id="L200">                    return existingRequests;</span>
+                }
+            });
+<span class="nc" id="L203">            return firstRequest;</span>
+        }
+
+        private void remove(PacketRequest request) {
+<span class="nc" id="L207">            AtomicBoolean removedLast =</span>
+<span class="nc" id="L208">                    retryable(this::removeInternal, ConsistentMapException.class,</span>
+<span class="nc" id="L209">                              3, MAX_BACKOFF).apply(request);</span>
+<span class="nc bnc" id="L210" title="All 4 branches missed.">            if (removedLast.get() &amp;&amp; delegate != null) {</span>
+                // The instance that removes the last request will remove from all devices
+<span class="nc" id="L212">                delegate.cancelPackets(request);</span>
+            }
+<span class="nc" id="L214">        }</span>
+
+        private AtomicBoolean removeInternal(PacketRequest request) {
+<span class="nc" id="L217">            AtomicBoolean removedLast = new AtomicBoolean(false);</span>
+<span class="nc" id="L218">            requests.computeIfPresent(request.selector(), (s, existingRequests) -&gt; {</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">                if (existingRequests.contains(request)) {</span>
+<span class="nc" id="L220">                    Set&lt;PacketRequest&gt; newRequests = Sets.newHashSet(existingRequests);</span>
+<span class="nc" id="L221">                    newRequests.remove(request);</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">                    if (newRequests.size() &gt; 0) {</span>
+<span class="nc" id="L223">                        return ImmutableSet.copyOf(newRequests);</span>
+                    } else {
+<span class="nc" id="L225">                        removedLast.set(true);</span>
+<span class="nc" id="L226">                        return null;</span>
+                    }
+                } else {
+<span class="nc" id="L229">                    return existingRequests;</span>
+                }
+            });
+<span class="nc" id="L232">            return removedLast;</span>
+        }
+
+        private List&lt;PacketRequest&gt; requests() {
+<span class="nc" id="L236">            List&lt;PacketRequest&gt; list = Lists.newArrayList();</span>
+<span class="nc" id="L237">            requests.values().forEach(v -&gt; list.addAll(v.value()));</span>
+<span class="nc" id="L238">            list.sort((o1, o2) -&gt; o1.priority().priorityValue() - o2.priority().priorityValue());</span>
+<span class="nc" id="L239">            return list;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

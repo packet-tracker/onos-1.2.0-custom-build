@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EncodeCriterionCodecHelper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">EncodeCriterionCodecHelper.java</span></div><h1>EncodeCriterionCodecHelper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import java.util.EnumMap;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.EthCriterion;
+import org.onosproject.net.flow.criteria.EthTypeCriterion;
+import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onosproject.net.flow.criteria.IPDscpCriterion;
+import org.onosproject.net.flow.criteria.IPEcnCriterion;
+import org.onosproject.net.flow.criteria.IPProtocolCriterion;
+import org.onosproject.net.flow.criteria.IPv6ExthdrFlagsCriterion;
+import org.onosproject.net.flow.criteria.IPv6FlowLabelCriterion;
+import org.onosproject.net.flow.criteria.IPv6NDLinkLayerAddressCriterion;
+import org.onosproject.net.flow.criteria.IPv6NDTargetAddressCriterion;
+import org.onosproject.net.flow.criteria.IcmpCodeCriterion;
+import org.onosproject.net.flow.criteria.IcmpTypeCriterion;
+import org.onosproject.net.flow.criteria.Icmpv6CodeCriterion;
+import org.onosproject.net.flow.criteria.Icmpv6TypeCriterion;
+import org.onosproject.net.flow.criteria.MetadataCriterion;
+import org.onosproject.net.flow.criteria.MplsCriterion;
+import org.onosproject.net.flow.criteria.OchSignalCriterion;
+import org.onosproject.net.flow.criteria.OchSignalTypeCriterion;
+import org.onosproject.net.flow.criteria.OduSignalIdCriterion;
+import org.onosproject.net.flow.criteria.OduSignalTypeCriterion;
+import org.onosproject.net.flow.criteria.PortCriterion;
+import org.onosproject.net.flow.criteria.SctpPortCriterion;
+import org.onosproject.net.flow.criteria.TcpPortCriterion;
+import org.onosproject.net.flow.criteria.TunnelIdCriterion;
+import org.onosproject.net.flow.criteria.UdpPortCriterion;
+import org.onosproject.net.flow.criteria.VlanIdCriterion;
+import org.onosproject.net.flow.criteria.VlanPcpCriterion;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Encode portion of the criterion codec.
+ */
+public final class EncodeCriterionCodecHelper {
+
+    private final Criterion criterion;
+    private final CodecContext context;
+
+    private final EnumMap&lt;Criterion.Type, CriterionTypeFormatter&gt; formatMap;
+
+    /**
+     * Creates an encoder object for a criterion.
+     * Initializes the formatter lookup map for the criterion subclasses.
+     *
+     * @param criterion Criterion to encode
+     * @param context context of the JSON encoding
+     */
+<span class="fc" id="L72">    public EncodeCriterionCodecHelper(Criterion criterion, CodecContext context) {</span>
+<span class="fc" id="L73">        this.criterion = criterion;</span>
+<span class="fc" id="L74">        this.context = context;</span>
+
+<span class="fc" id="L76">        formatMap = new EnumMap&lt;&gt;(Criterion.Type.class);</span>
+
+<span class="fc" id="L78">        formatMap.put(Criterion.Type.IN_PORT, new FormatInPort());</span>
+<span class="fc" id="L79">        formatMap.put(Criterion.Type.IN_PHY_PORT, new FormatInPort());</span>
+<span class="fc" id="L80">        formatMap.put(Criterion.Type.METADATA, new FormatMetadata());</span>
+<span class="fc" id="L81">        formatMap.put(Criterion.Type.ETH_DST, new FormatEth());</span>
+<span class="fc" id="L82">        formatMap.put(Criterion.Type.ETH_SRC, new FormatEth());</span>
+<span class="fc" id="L83">        formatMap.put(Criterion.Type.ETH_TYPE, new FormatEthType());</span>
+<span class="fc" id="L84">        formatMap.put(Criterion.Type.VLAN_VID, new FormatVlanVid());</span>
+<span class="fc" id="L85">        formatMap.put(Criterion.Type.VLAN_PCP, new FormatVlanPcp());</span>
+<span class="fc" id="L86">        formatMap.put(Criterion.Type.IP_DSCP, new FormatIpDscp());</span>
+<span class="fc" id="L87">        formatMap.put(Criterion.Type.IP_ECN, new FormatIpEcn());</span>
+<span class="fc" id="L88">        formatMap.put(Criterion.Type.IP_PROTO, new FormatIpProto());</span>
+<span class="fc" id="L89">        formatMap.put(Criterion.Type.IPV4_SRC, new FormatIp());</span>
+<span class="fc" id="L90">        formatMap.put(Criterion.Type.IPV4_DST, new FormatIp());</span>
+<span class="fc" id="L91">        formatMap.put(Criterion.Type.TCP_SRC, new FormatTcp());</span>
+<span class="fc" id="L92">        formatMap.put(Criterion.Type.TCP_DST, new FormatTcp());</span>
+<span class="fc" id="L93">        formatMap.put(Criterion.Type.UDP_SRC, new FormatUdp());</span>
+<span class="fc" id="L94">        formatMap.put(Criterion.Type.UDP_DST, new FormatUdp());</span>
+<span class="fc" id="L95">        formatMap.put(Criterion.Type.SCTP_SRC, new FormatSctp());</span>
+<span class="fc" id="L96">        formatMap.put(Criterion.Type.SCTP_DST, new FormatSctp());</span>
+<span class="fc" id="L97">        formatMap.put(Criterion.Type.ICMPV4_TYPE, new FormatIcmpV4Type());</span>
+<span class="fc" id="L98">        formatMap.put(Criterion.Type.ICMPV4_CODE, new FormatIcmpV4Code());</span>
+<span class="fc" id="L99">        formatMap.put(Criterion.Type.IPV6_SRC, new FormatIp());</span>
+<span class="fc" id="L100">        formatMap.put(Criterion.Type.IPV6_DST, new FormatIp());</span>
+<span class="fc" id="L101">        formatMap.put(Criterion.Type.IPV6_FLABEL, new FormatIpV6FLabel());</span>
+<span class="fc" id="L102">        formatMap.put(Criterion.Type.ICMPV6_TYPE, new FormatIcmpV6Type());</span>
+<span class="fc" id="L103">        formatMap.put(Criterion.Type.ICMPV6_CODE, new FormatIcmpV6Code());</span>
+<span class="fc" id="L104">        formatMap.put(Criterion.Type.IPV6_ND_TARGET, new FormatV6NDTarget());</span>
+<span class="fc" id="L105">        formatMap.put(Criterion.Type.IPV6_ND_SLL, new FormatV6NDTll());</span>
+<span class="fc" id="L106">        formatMap.put(Criterion.Type.IPV6_ND_TLL, new FormatV6NDTll());</span>
+<span class="fc" id="L107">        formatMap.put(Criterion.Type.MPLS_LABEL, new FormatMplsLabel());</span>
+<span class="fc" id="L108">        formatMap.put(Criterion.Type.IPV6_EXTHDR, new FormatIpV6Exthdr());</span>
+<span class="fc" id="L109">        formatMap.put(Criterion.Type.OCH_SIGID, new FormatOchSigId());</span>
+<span class="fc" id="L110">        formatMap.put(Criterion.Type.OCH_SIGTYPE, new FormatOchSigType());</span>
+<span class="fc" id="L111">        formatMap.put(Criterion.Type.TUNNEL_ID, new FormatTunnelId());</span>
+<span class="fc" id="L112">        formatMap.put(Criterion.Type.DUMMY, new FormatDummyType());</span>
+<span class="fc" id="L113">        formatMap.put(Criterion.Type.ODU_SIGID, new FormatOduSignalId());</span>
+<span class="fc" id="L114">        formatMap.put(Criterion.Type.ODU_SIGTYPE, new FormatOduSignalType());</span>
+        // Currently unimplemented
+<span class="fc" id="L116">        formatMap.put(Criterion.Type.ARP_OP, new FormatUnknown());</span>
+<span class="fc" id="L117">        formatMap.put(Criterion.Type.ARP_SPA, new FormatUnknown());</span>
+<span class="fc" id="L118">        formatMap.put(Criterion.Type.ARP_TPA, new FormatUnknown());</span>
+<span class="fc" id="L119">        formatMap.put(Criterion.Type.ARP_SHA, new FormatUnknown());</span>
+<span class="fc" id="L120">        formatMap.put(Criterion.Type.ARP_THA, new FormatUnknown());</span>
+<span class="fc" id="L121">        formatMap.put(Criterion.Type.MPLS_TC, new FormatUnknown());</span>
+<span class="fc" id="L122">        formatMap.put(Criterion.Type.MPLS_BOS, new FormatUnknown());</span>
+<span class="fc" id="L123">        formatMap.put(Criterion.Type.PBB_ISID, new FormatUnknown());</span>
+<span class="fc" id="L124">        formatMap.put(Criterion.Type.UNASSIGNED_40, new FormatUnknown());</span>
+<span class="fc" id="L125">        formatMap.put(Criterion.Type.PBB_UCA, new FormatUnknown());</span>
+<span class="fc" id="L126">        formatMap.put(Criterion.Type.TCP_FLAGS, new FormatUnknown());</span>
+<span class="fc" id="L127">        formatMap.put(Criterion.Type.ACTSET_OUTPUT, new FormatUnknown());</span>
+<span class="fc" id="L128">        formatMap.put(Criterion.Type.PACKET_TYPE, new FormatUnknown());</span>
+<span class="fc" id="L129">    }</span>
+
+    private interface CriterionTypeFormatter {
+        ObjectNode encodeCriterion(ObjectNode root, Criterion criterion);
+    }
+
+<span class="fc" id="L135">    private static class FormatUnknown implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="nc" id="L138">            return root;</span>
+        }
+    }
+
+<span class="fc" id="L142">    private static class FormatInPort implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L145">            final PortCriterion portCriterion = (PortCriterion) criterion;</span>
+<span class="fc" id="L146">            return root.put(CriterionCodec.PORT, portCriterion.port().toLong());</span>
+        }
+    }
+
+<span class="fc" id="L150">    private static class FormatMetadata implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L153">            final MetadataCriterion metadataCriterion =</span>
+                    (MetadataCriterion) criterion;
+<span class="fc" id="L155">            return root.put(CriterionCodec.METADATA, metadataCriterion.metadata());</span>
+        }
+    }
+
+<span class="fc" id="L159">    private static class FormatEth implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L162">            final EthCriterion ethCriterion = (EthCriterion) criterion;</span>
+<span class="fc" id="L163">            return root.put(CriterionCodec.MAC, ethCriterion.mac().toString());</span>
+        }
+    }
+
+<span class="fc" id="L167">    private static class FormatEthType implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L170">            final EthTypeCriterion ethTypeCriterion =</span>
+                    (EthTypeCriterion) criterion;
+<span class="fc" id="L172">            return root.put(CriterionCodec.ETH_TYPE, ethTypeCriterion.ethType().toShort());</span>
+        }
+    }
+
+<span class="fc" id="L176">    private static class FormatVlanVid implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L179">            final VlanIdCriterion vlanIdCriterion =</span>
+                    (VlanIdCriterion) criterion;
+<span class="fc" id="L181">            return root.put(CriterionCodec.VLAN_ID, vlanIdCriterion.vlanId().toShort());</span>
+        }
+    }
+
+<span class="fc" id="L185">    private static class FormatVlanPcp implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L188">            final VlanPcpCriterion vlanPcpCriterion =</span>
+                    (VlanPcpCriterion) criterion;
+<span class="fc" id="L190">            return root.put(CriterionCodec.PRIORITY, vlanPcpCriterion.priority());</span>
+        }
+    }
+
+<span class="fc" id="L194">    private static class FormatIpDscp implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L197">            final IPDscpCriterion ipDscpCriterion =</span>
+                    (IPDscpCriterion) criterion;
+<span class="fc" id="L199">            return root.put(CriterionCodec.IP_DSCP, ipDscpCriterion.ipDscp());</span>
+        }
+    }
+
+<span class="fc" id="L203">    private static class FormatIpEcn implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L206">            final IPEcnCriterion ipEcnCriterion =</span>
+                    (IPEcnCriterion) criterion;
+<span class="fc" id="L208">            return root.put(CriterionCodec.IP_ECN, ipEcnCriterion.ipEcn());</span>
+        }
+    }
+
+<span class="fc" id="L212">    private static class FormatIpProto implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L215">            final IPProtocolCriterion iPProtocolCriterion =</span>
+                    (IPProtocolCriterion) criterion;
+<span class="fc" id="L217">            return root.put(CriterionCodec.PROTOCOL, iPProtocolCriterion.protocol());</span>
+        }
+    }
+
+<span class="fc" id="L221">    private static class FormatIp implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L224">            final IPCriterion iPCriterion = (IPCriterion) criterion;</span>
+<span class="fc" id="L225">            return root.put(CriterionCodec.IP, iPCriterion.ip().toString());</span>
+        }
+    }
+
+<span class="fc" id="L229">    private static class FormatTcp implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L232">            final TcpPortCriterion tcpPortCriterion =</span>
+                    (TcpPortCriterion) criterion;
+<span class="fc" id="L234">            return root.put(CriterionCodec.TCP_PORT, tcpPortCriterion.tcpPort().toInt());</span>
+        }
+    }
+
+<span class="fc" id="L238">    private static class FormatUdp implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L241">            final UdpPortCriterion udpPortCriterion =</span>
+                    (UdpPortCriterion) criterion;
+<span class="fc" id="L243">            return root.put(CriterionCodec.UDP_PORT, udpPortCriterion.udpPort().toInt());</span>
+        }
+    }
+
+<span class="fc" id="L247">    private static class FormatSctp implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L250">            final SctpPortCriterion sctpPortCriterion =</span>
+                    (SctpPortCriterion) criterion;
+<span class="fc" id="L252">            return root.put(CriterionCodec.SCTP_PORT, sctpPortCriterion.sctpPort().toInt());</span>
+        }
+    }
+
+<span class="fc" id="L256">    private static class FormatIcmpV4Type implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L259">            final IcmpTypeCriterion icmpTypeCriterion =</span>
+                    (IcmpTypeCriterion) criterion;
+<span class="fc" id="L261">            return root.put(CriterionCodec.ICMP_TYPE, icmpTypeCriterion.icmpType());</span>
+        }
+    }
+
+<span class="fc" id="L265">    private static class FormatIcmpV4Code implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L268">            final IcmpCodeCriterion icmpCodeCriterion =</span>
+                    (IcmpCodeCriterion) criterion;
+<span class="fc" id="L270">            return root.put(CriterionCodec.ICMP_CODE, icmpCodeCriterion.icmpCode());</span>
+        }
+    }
+
+<span class="fc" id="L274">    private static class FormatIpV6FLabel implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L277">            final IPv6FlowLabelCriterion ipv6FlowLabelCriterion =</span>
+                    (IPv6FlowLabelCriterion) criterion;
+<span class="fc" id="L279">            return root.put(CriterionCodec.FLOW_LABEL, ipv6FlowLabelCriterion.flowLabel());</span>
+        }
+    }
+
+<span class="fc" id="L283">    private static class FormatIcmpV6Type implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L286">            final Icmpv6TypeCriterion icmpv6TypeCriterion =</span>
+                    (Icmpv6TypeCriterion) criterion;
+<span class="fc" id="L288">            return root.put(CriterionCodec.ICMPV6_TYPE, icmpv6TypeCriterion.icmpv6Type());</span>
+        }
+    }
+
+<span class="fc" id="L292">    private static class FormatIcmpV6Code implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L295">            final Icmpv6CodeCriterion icmpv6CodeCriterion =</span>
+                    (Icmpv6CodeCriterion) criterion;
+<span class="fc" id="L297">            return root.put(CriterionCodec.ICMPV6_CODE, icmpv6CodeCriterion.icmpv6Code());</span>
+        }
+    }
+
+<span class="fc" id="L301">    private static class FormatV6NDTarget implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L304">            final IPv6NDTargetAddressCriterion ipv6NDTargetAddressCriterion</span>
+                    = (IPv6NDTargetAddressCriterion) criterion;
+<span class="fc" id="L306">            return root.put(CriterionCodec.TARGET_ADDRESS, ipv6NDTargetAddressCriterion.targetAddress().toString());</span>
+        }
+    }
+
+<span class="fc" id="L310">    private static class FormatV6NDTll implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L313">            final IPv6NDLinkLayerAddressCriterion ipv6NDLinkLayerAddressCriterion</span>
+                    = (IPv6NDLinkLayerAddressCriterion) criterion;
+<span class="fc" id="L315">            return root.put(CriterionCodec.MAC, ipv6NDLinkLayerAddressCriterion.mac().toString());</span>
+        }
+    }
+
+<span class="fc" id="L319">    private static class FormatMplsLabel implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L322">            final MplsCriterion mplsCriterion =</span>
+                    (MplsCriterion) criterion;
+<span class="fc" id="L324">            return root.put(CriterionCodec.LABEL, mplsCriterion.label().toInt());</span>
+        }
+    }
+
+<span class="fc" id="L328">    private static class FormatIpV6Exthdr implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L331">            final IPv6ExthdrFlagsCriterion exthdrCriterion =</span>
+                    (IPv6ExthdrFlagsCriterion) criterion;
+<span class="fc" id="L333">            return root.put(CriterionCodec.EXT_HDR_FLAGS, exthdrCriterion.exthdrFlags());</span>
+        }
+    }
+
+<span class="fc" id="L337">    private static class FormatOchSigId implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L340">            OchSignal ochSignal = ((OchSignalCriterion) criterion).lambda();</span>
+<span class="fc" id="L341">            ObjectNode child = root.putObject(CriterionCodec.OCH_SIGNAL_ID);</span>
+
+<span class="fc" id="L343">            child.put(CriterionCodec.GRID_TYPE, ochSignal.gridType().name());</span>
+<span class="fc" id="L344">            child.put(CriterionCodec.CHANNEL_SPACING, ochSignal.channelSpacing().name());</span>
+<span class="fc" id="L345">            child.put(CriterionCodec.SPACING_MULIPLIER, ochSignal.spacingMultiplier());</span>
+<span class="fc" id="L346">            child.put(CriterionCodec.SLOT_GRANULARITY, ochSignal.slotGranularity());</span>
+
+<span class="fc" id="L348">            return root;</span>
+        }
+    }
+
+<span class="fc" id="L352">    private static class FormatOchSigType implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="fc" id="L355">            final OchSignalTypeCriterion ochSignalTypeCriterion =</span>
+                    (OchSignalTypeCriterion) criterion;
+<span class="fc" id="L357">            return root.put(CriterionCodec.OCH_SIGNAL_TYPE, ochSignalTypeCriterion.signalType().name());</span>
+        }
+    }
+
+<span class="fc" id="L361">    private static class FormatTunnelId implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="nc" id="L364">            final TunnelIdCriterion tunnelIdCriterion =</span>
+                    (TunnelIdCriterion) criterion;
+<span class="nc" id="L366">            return root.put(CriterionCodec.TUNNEL_ID, tunnelIdCriterion.tunnelId());</span>
+        }
+    }
+
+<span class="fc" id="L370">    private static class FormatOduSignalId implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="nc" id="L373">            final OduSignalIdCriterion oduSignalIdCriterion =</span>
+                    (OduSignalIdCriterion) criterion;
+<span class="nc" id="L375">            return root.put(CriterionCodec.ODU_SIGNAL_ID, oduSignalIdCriterion.oduSignalId().toString());</span>
+        }
+    }
+
+<span class="fc" id="L379">    private static class FormatOduSignalType implements CriterionTypeFormatter {</span>
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="nc" id="L382">            final OduSignalTypeCriterion oduSignalTypeCriterion =</span>
+                    (OduSignalTypeCriterion) criterion;
+<span class="nc" id="L384">            return root.put(CriterionCodec.ODU_SIGNAL_TYPE, oduSignalTypeCriterion.signalType().name());</span>
+        }
+    }
+
+<span class="fc" id="L388">    private class FormatDummyType implements CriterionTypeFormatter {</span>
+
+        @Override
+        public ObjectNode encodeCriterion(ObjectNode root, Criterion criterion) {
+<span class="nc" id="L392">            checkNotNull(criterion, &quot;Criterion cannot be null&quot;);</span>
+
+<span class="nc" id="L394">            return root.put(CriterionCodec.TYPE, criterion.type().toString());</span>
+
+        }
+    }
+
+    /**
+     * Encodes a criterion into a JSON node.
+     *
+     * @return encoded JSON object for the given criterion
+     */
+    public ObjectNode encode() {
+<span class="fc" id="L405">        final ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="fc" id="L406">                .put(CriterionCodec.TYPE, criterion.type().toString());</span>
+
+<span class="fc" id="L408">        CriterionTypeFormatter formatter =</span>
+<span class="fc" id="L409">                checkNotNull(</span>
+<span class="fc" id="L410">                        formatMap.get(criterion.type()),</span>
+                        &quot;No formatter found for criterion type &quot;
+<span class="fc" id="L412">                                + criterion.type().toString());</span>
+
+<span class="fc" id="L414">        return formatter.encodeCriterion(result, criterion);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

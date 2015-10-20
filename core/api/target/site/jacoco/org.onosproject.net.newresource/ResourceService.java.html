@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ResourceService.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.newresource</a> &gt; <span class="el_source">ResourceService.java</span></div><h1>ResourceService.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.newresource;
+
+import com.google.common.annotations.Beta;
+import com.google.common.collect.ImmutableList;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Service for allocating/releasing resource(s) and retrieving allocation(s) and availability.
+ */
+<span class="nc bnc" id="L31" title="All 2 branches missed.">@Beta</span>
+public interface ResourceService {
+    /**
+     * Allocates the specified resource to the specified user.
+     *
+     * @param consumer resource user which the resource is allocated to
+     * @param resource resource to be allocated
+     * @return allocation information enclosed by Optional. If the allocation fails, the return value is empty
+     */
+    default Optional&lt;ResourceAllocation&gt; allocate(ResourceConsumer consumer, ResourcePath resource) {
+<span class="nc" id="L41">        checkNotNull(consumer);</span>
+<span class="nc" id="L42">        checkNotNull(resource);</span>
+
+<span class="nc" id="L44">        List&lt;ResourceAllocation&gt; allocations = allocate(consumer, ImmutableList.of(resource));</span>
+<span class="nc bnc" id="L45" title="All 2 branches missed.">        if (allocations.isEmpty()) {</span>
+<span class="nc" id="L46">            return Optional.empty();</span>
+        }
+
+<span class="nc bnc" id="L49" title="All 6 branches missed.">        assert allocations.size() == 1;</span>
+
+<span class="nc" id="L51">        ResourceAllocation allocation = allocations.get(0);</span>
+
+<span class="nc bnc" id="L53" title="All 4 branches missed.">        assert allocation.resource().equals(resource);</span>
+
+        // cast is ensured by the assertions above
+<span class="nc" id="L56">        return Optional.of(allocation);</span>
+    }
+
+    /**
+     * Transactionally allocates the specified resources to the specified user.
+     * All allocations are made when this method succeeds, or no allocation is made when this method fails.
+     *
+     * @param consumer resource user which the resources are allocated to
+     * @param resources resources to be allocated
+     * @return non-empty list of allocation information if succeeded, otherwise empty list
+     */
+    List&lt;ResourceAllocation&gt; allocate(ResourceConsumer consumer, List&lt;ResourcePath&gt; resources);
+
+    /**
+     * Transactionally allocates the specified resources to the specified user.
+     * All allocations are made when this method succeeds, or no allocation is made when this method fails.
+     *
+     * @param consumer resource user which the resources are allocated to
+     * @param resources resources to be allocated
+     * @return non-empty list of allocation information if succeeded, otherwise empty list
+     */
+    default List&lt;ResourceAllocation&gt; allocate(ResourceConsumer consumer, ResourcePath... resources) {
+<span class="nc" id="L78">        checkNotNull(consumer);</span>
+<span class="nc" id="L79">        checkNotNull(resources);</span>
+
+<span class="nc" id="L81">        return allocate(consumer, Arrays.asList(resources));</span>
+    }
+
+    /**
+     * Releases the specified resource allocation.
+     *
+     * @param allocation resource allocation to be released
+     * @return true if succeeded, otherwise false
+     */
+    default boolean release(ResourceAllocation allocation) {
+<span class="nc" id="L91">        checkNotNull(allocation);</span>
+
+<span class="nc" id="L93">        return release(ImmutableList.of(allocation));</span>
+    }
+
+    /**
+     * Transactionally releases the specified resource allocations.
+     * All allocations are released when this method succeeded, or no allocation is released when this method fails.
+     *
+     * @param allocations resource allocations to be released
+     * @return true if succeeded, otherwise false
+     */
+    boolean release(List&lt;ResourceAllocation&gt; allocations);
+
+    /**
+     * Transactionally releases the specified resource allocations.
+     * All allocations are released when this method succeeded, or no allocation is released when this method fails.
+     *
+     * @param allocations resource allocations to be released
+     * @return true if succeeded, otherwise false
+     */
+    default boolean release(ResourceAllocation... allocations) {
+<span class="nc" id="L113">        checkNotNull(allocations);</span>
+
+<span class="nc" id="L115">        return release(ImmutableList.copyOf(allocations));</span>
+    }
+
+    /**
+     * Transactionally releases the resources allocated to the specified consumer.
+     * All allocations are released when this method succeeded, or no allocation is released when this method fails.
+     *
+     * @param consumer consumer whose allocated resources are to be released
+     * @return true if succeeded, otherwise false
+     */
+    boolean release(ResourceConsumer consumer);
+
+    /**
+     * Returns resource allocation of the specified resource.
+     *
+     * @param resource resource to check the allocation
+     * @return allocation information enclosed by Optional.
+     * If the resource is not allocated, the return value is empty.
+     */
+    Optional&lt;ResourceAllocation&gt; getResourceAllocation(ResourcePath resource);
+
+    /**
+     * Returns allocated resources being as children of the specified parent and being the specified resource type.
+     *
+     * @param parent parent resource path
+     * @param cls class to specify a type of resource
+     * @param &lt;T&gt; type of the resource
+     * @return non-empty collection of resource allocations if resources are allocated with the subject and type,
+     * empty collection if no resource is allocated with the subject and type
+     */
+    &lt;T&gt; Collection&lt;ResourceAllocation&gt; getResourceAllocations(ResourcePath parent, Class&lt;T&gt; cls);
+
+    /**
+     * Returns resources allocated to the specified consumer.
+     *
+     * @param consumer consumer whose allocated resources are to be returned
+     * @return resources allocated to the consumer
+     */
+    Collection&lt;ResourceAllocation&gt; getResourceAllocations(ResourceConsumer consumer);
+
+    /**
+     * Returns the availability of the specified resource.
+     *
+     * @param resource resource to check the availability
+     * @return true if available, otherwise false
+     */
+    boolean isAvailable(ResourcePath resource);
+
+    // TODO: listener and event mechanism need to be considered
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

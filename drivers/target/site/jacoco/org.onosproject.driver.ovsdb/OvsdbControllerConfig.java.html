@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OvsdbControllerConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.ovsdb</a> &gt; <span class="el_source">OvsdbControllerConfig.java</span></div><h1>OvsdbControllerConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.driver.ovsdb;
+
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.TpPort;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.behaviour.ControllerConfig;
+import org.onosproject.net.behaviour.ControllerInfo;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.driver.AbstractHandlerBehaviour;
+import org.onosproject.net.driver.DriverHandler;
+import org.onosproject.ovsdb.controller.OvsdbBridge;
+import org.onosproject.ovsdb.controller.OvsdbClientService;
+import org.onosproject.ovsdb.controller.OvsdbController;
+import org.onosproject.ovsdb.controller.OvsdbNodeId;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkState;
+import static org.onlab.util.Tools.delay;
+
+/**
+ * Implementation of controller config which allows to get and set controllers.
+ */
+<span class="fc" id="L44">public class OvsdbControllerConfig extends AbstractHandlerBehaviour implements ControllerConfig {</span>
+    @Override
+    public List&lt;ControllerInfo&gt; getControllers() {
+<span class="nc" id="L47">        DriverHandler handler = handler();</span>
+<span class="nc" id="L48">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L49">        Set&lt;ControllerInfo&gt; controllers = clientService.getControllers(</span>
+<span class="nc" id="L50">                handler().data().deviceId());</span>
+<span class="nc" id="L51">        return new ArrayList&lt;&gt;(controllers);</span>
+    }
+
+    @Override
+    public void setControllers(List&lt;ControllerInfo&gt; controllers) {
+<span class="nc" id="L56">        DriverHandler handler = handler();</span>
+<span class="nc" id="L57">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L58">        if (!clientService.getControllers(handler().data().deviceId())</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">                .equals(controllers)) {</span>
+<span class="nc" id="L60">            clientService.setControllersWithDeviceId(handler().</span>
+<span class="nc" id="L61">                    data().deviceId(), controllers);</span>
+        }
+<span class="nc" id="L63">    }</span>
+
+    // Used for getting OvsdbClientService.
+    private OvsdbClientService getOvsdbClientService(DriverHandler handler) {
+<span class="nc" id="L67">        OvsdbController ovsController = handler.get(OvsdbController.class);</span>
+<span class="nc" id="L68">        DeviceService deviceService = handler.get(DeviceService.class);</span>
+<span class="nc" id="L69">        DeviceId ofDeviceId = handler.data().deviceId();</span>
+<span class="nc" id="L70">        String[] mgmtAddress = deviceService.getDevice(ofDeviceId)</span>
+<span class="nc" id="L71">                .annotations().value(AnnotationKeys.MANAGEMENT_ADDRESS).split(&quot;:&quot;);</span>
+<span class="nc" id="L72">        String targetIp = mgmtAddress[0];</span>
+<span class="nc" id="L73">        TpPort targetPort = null;</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (mgmtAddress.length &gt; 1) {</span>
+<span class="nc" id="L75">            targetPort = TpPort.tpPort(Integer.parseInt(mgmtAddress[1]));</span>
+        }
+
+<span class="nc" id="L78">        List&lt;OvsdbNodeId&gt; nodeIds = ovsController.getNodeIds().stream()</span>
+<span class="nc" id="L79">                .filter(nodeId -&gt; nodeId.getIpAddress().equals(targetIp))</span>
+<span class="nc" id="L80">                .collect(Collectors.toList());</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (nodeIds.size() == 0) {</span>
+            //TODO decide what port?
+<span class="nc bnc" id="L83" title="All 2 branches missed.">            ovsController.connect(IpAddress.valueOf(targetIp),</span>
+<span class="nc" id="L84">                                  targetPort == null ? TpPort.tpPort(6640) : targetPort);</span>
+<span class="nc" id="L85">            delay(1000); //FIXME... connect is async</span>
+        }
+<span class="nc" id="L87">        List&lt;OvsdbClientService&gt; clientServices = ovsController.getNodeIds().stream()</span>
+<span class="nc" id="L88">                .filter(nodeId -&gt; nodeId.getIpAddress().equals(targetIp))</span>
+<span class="nc" id="L89">                .map(ovsController::getOvsdbClient)</span>
+<span class="nc" id="L90">                .filter(cs -&gt; cs.getBridges().stream().anyMatch(b -&gt; dpidMatches(b, ofDeviceId)))</span>
+<span class="nc" id="L91">                .collect(Collectors.toList());</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        checkState(clientServices.size() &gt; 0, &quot;No clientServices found&quot;);</span>
+        //FIXME add connection to management address if null --&gt; done ?
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        return clientServices.size() &gt; 0 ? clientServices.get(0) : null;</span>
+    }
+
+    private static boolean dpidMatches(OvsdbBridge bridge, DeviceId deviceId) {
+<span class="nc" id="L98">        String bridgeDpid = &quot;of:&quot; + bridge.datapathId().value();</span>
+<span class="nc" id="L99">        String ofDpid = deviceId.toString();</span>
+<span class="nc" id="L100">        return bridgeDpid.equals(ofDpid);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

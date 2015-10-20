@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RADIUS.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">RADIUS.java</span></div><h1>RADIUS.java</h1><pre class="source lang-java linenums">/*
+ *
+ *  * Copyright 2015 AT&amp;T Foundry
+ *  *
+ *  * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ *  * you may not use this file except in compliance with the License.
+ *  * You may obtain a copy of the License at
+ *  *
+ *  *     http://www.apache.org/licenses/LICENSE-2.0
+ *  *
+ *  * Unless required by applicable law or agreed to in writing, software
+ *  * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  * See the License for the specific language governing permissions and
+ *  * limitations under the License.
+ *
+ */
+
+package org.onlab.packet;
+
+import org.slf4j.Logger;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.onlab.packet.PacketUtils.checkHeaderLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * RADIUS packet.
+ */
+public class RADIUS extends BasePacket {
+    protected byte code;
+    protected byte identifier;
+<span class="nc" id="L43">    protected short length = RADIUS_MIN_LENGTH;</span>
+<span class="nc" id="L44">    protected byte[] authenticator = new byte[16];</span>
+<span class="nc" id="L45">    protected List&lt;RADIUSAttribute&gt; attributes = new ArrayList&lt;&gt;();</span>
+
+    // RADIUS parameters
+    public static final short RADIUS_MIN_LENGTH = 20;
+    public static final short MAX_ATTR_VALUE_LENGTH = 253;
+    public static final short RADIUS_MAX_LENGTH = 4096;
+
+    // RADIUS packet types
+    public static final byte RADIUS_CODE_ACCESS_REQUEST = 0x01;
+    public static final byte RADIUS_CODE_ACCESS_ACCEPT = 0x02;
+    public static final byte RADIUS_CODE_ACCESS_REJECT = 0x03;
+    public static final byte RADIUS_CODE_ACCOUNTING_REQUEST = 0x04;
+    public static final byte RADIUS_CODE_ACCOUNTING_RESPONSE = 0x05;
+    public static final byte RADIUS_CODE_ACCESS_CHALLENGE = 0x0b;
+
+<span class="nc" id="L60">    private final Logger log = getLogger(getClass());</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L65">    public RADIUS() {</span>
+<span class="nc" id="L66">    }</span>
+
+    /**
+     * Constructs a RADIUS packet with the given code and identifier.
+     *
+     * @param code code
+     * @param identifier identifier
+     */
+<span class="nc" id="L74">    public RADIUS(byte code, byte identifier) {</span>
+<span class="nc" id="L75">        this.code = code;</span>
+<span class="nc" id="L76">        this.identifier = identifier;</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Gets the code.
+     *
+     * @return code
+     */
+    public byte getCode() {
+<span class="nc" id="L85">        return this.code;</span>
+    }
+
+    /**
+     * Sets the code.
+     *
+     * @param code code
+     */
+    public void setCode(byte code) {
+<span class="nc" id="L94">        this.code = code;</span>
+<span class="nc" id="L95">    }</span>
+
+    /**
+     * Gets the identifier.
+     *
+     * @return identifier
+     */
+    public byte getIdentifier() {
+<span class="nc" id="L103">        return this.identifier;</span>
+    }
+
+    /**
+     * Sets the identifier.
+     *
+     * @param identifier identifier
+     */
+    public void setIdentifier(byte identifier) {
+<span class="nc" id="L112">        this.identifier = identifier;</span>
+<span class="nc" id="L113">    }</span>
+
+    /**
+     * Gets the authenticator.
+     *
+     * @return authenticator
+     */
+    public byte[] getAuthenticator() {
+<span class="nc" id="L121">        return this.authenticator;</span>
+    }
+
+    /**
+     * Sets the authenticator.
+     *
+     * @param authenticator authenticator
+     */
+    public void setAuthenticator(byte[] authenticator) {
+<span class="nc" id="L130">        this.authenticator = authenticator;</span>
+<span class="nc" id="L131">    }</span>
+
+    /**
+     * Generates an authenticator code.
+     *
+     * @return the authenticator
+     */
+    public byte[] generateAuthCode() {
+<span class="nc" id="L139">        new SecureRandom().nextBytes(this.authenticator);</span>
+<span class="nc" id="L140">        return this.authenticator;</span>
+    }
+
+    /**
+     * Checks if the packet's code field is valid.
+     *
+     * @return whether the code is valid
+     */
+    public boolean isValidCode() {
+<span class="nc bnc" id="L149" title="All 12 branches missed.">        return this.code == RADIUS_CODE_ACCESS_REQUEST ||</span>
+                this.code == RADIUS_CODE_ACCESS_ACCEPT ||
+                this.code == RADIUS_CODE_ACCESS_REJECT ||
+                this.code == RADIUS_CODE_ACCOUNTING_REQUEST ||
+                this.code == RADIUS_CODE_ACCOUNTING_RESPONSE ||
+                this.code == RADIUS_CODE_ACCESS_CHALLENGE;
+    }
+
+    /**
+     * Adds a message authenticator to the packet based on the given key.
+     *
+     * @param key key to generate message authenticator
+     * @return the messgae authenticator RADIUS attribute
+     */
+    public RADIUSAttribute addMessageAuthenticator(String key) {
+        // Message-Authenticator = HMAC-MD5 (Type, Identifier, Length,
+        // Request Authenticator, Attributes)
+        // When the message integrity check is calculated the signature string
+        // should be considered to be sixteen octets of zero.
+<span class="nc" id="L168">        byte[] hashOutput = new byte[16];</span>
+<span class="nc" id="L169">        Arrays.fill(hashOutput, (byte) 0);</span>
+
+<span class="nc" id="L171">        RADIUSAttribute authAttribute = this.getAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (authAttribute != null) {</span>
+            // If Message-Authenticator was already present, override it
+<span class="nc" id="L174">            this.log.warn(&quot;Attempted to add duplicate Message-Authenticator&quot;);</span>
+<span class="nc" id="L175">            authAttribute = this.updateAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH, hashOutput);</span>
+        } else {
+            // Else generate a new attribute padded with zeroes
+<span class="nc" id="L178">            authAttribute = this.setAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH, hashOutput);</span>
+        }
+        // Calculate the MD5 HMAC based on the message
+        try {
+<span class="nc" id="L182">            SecretKeySpec keySpec = new SecretKeySpec(key.getBytes(), &quot;HmacMD5&quot;);</span>
+<span class="nc" id="L183">            Mac mac = Mac.getInstance(&quot;HmacMD5&quot;);</span>
+<span class="nc" id="L184">            mac.init(keySpec);</span>
+<span class="nc" id="L185">            hashOutput = mac.doFinal(this.serialize());</span>
+            // Update HMAC in Message-Authenticator
+<span class="nc" id="L187">            authAttribute = this.updateAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH, hashOutput);</span>
+<span class="nc" id="L188">        } catch (Exception e) {</span>
+<span class="nc" id="L189">            this.log.error(&quot;Failed to generate message authenticator: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L190">        }</span>
+
+<span class="nc" id="L192">        return authAttribute;</span>
+    }
+
+    /**
+     * Checks the message authenticator in the packet with one generated from
+     * the given key.
+     *
+     * @param key key to generate message authenticator
+     * @return whether the message authenticators match or not
+     */
+    public boolean checkMessageAuthenticator(String key) {
+<span class="nc" id="L203">        byte[] newHash = new byte[16];</span>
+<span class="nc" id="L204">        Arrays.fill(newHash, (byte) 0);</span>
+<span class="nc" id="L205">        byte[] messageAuthenticator = this.getAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH).getValue();</span>
+<span class="nc" id="L206">        this.updateAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH, newHash);</span>
+        // Calculate the MD5 HMAC based on the message
+        try {
+<span class="nc" id="L209">            SecretKeySpec keySpec = new SecretKeySpec(key.getBytes(), &quot;HmacMD5&quot;);</span>
+<span class="nc" id="L210">            Mac mac = Mac.getInstance(&quot;HmacMD5&quot;);</span>
+<span class="nc" id="L211">            mac.init(keySpec);</span>
+<span class="nc" id="L212">            newHash = mac.doFinal(this.serialize());</span>
+<span class="nc" id="L213">        } catch (Exception e) {</span>
+<span class="nc" id="L214">            log.error(&quot;Failed to generate message authenticator: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L215">        }</span>
+<span class="nc" id="L216">        this.updateAttribute(RADIUSAttribute.RADIUS_ATTR_MESSAGE_AUTH, messageAuthenticator);</span>
+        // Compare the calculated Message-Authenticator with the one in the message
+<span class="nc" id="L218">        return Arrays.equals(newHash, messageAuthenticator);</span>
+    }
+
+    /**
+     * Encapsulates an EAP packet in this RADIUS packet.
+     *
+     * @param message EAP message object to be embedded in the RADIUS
+     *                EAP-Message attributed
+     */
+    public void encapsulateMessage(EAP message) {
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (message.length &lt;= MAX_ATTR_VALUE_LENGTH) {</span>
+            // Use the regular serialization method as it fits into one EAP-Message attribute
+<span class="nc" id="L230">            this.setAttribute(RADIUSAttribute.RADIUS_ATTR_EAP_MESSAGE,</span>
+<span class="nc" id="L231">                    message.serialize());</span>
+        } else {
+            // Segment the message into chucks and embed them in several EAP-Message attributes
+<span class="nc" id="L234">            short remainingLength = message.length;</span>
+<span class="nc" id="L235">            byte[] messageBuffer = message.serialize();</span>
+<span class="nc" id="L236">            final ByteBuffer bb = ByteBuffer.wrap(messageBuffer);</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">            while (bb.hasRemaining()) {</span>
+                byte[] messageAttributeData;
+<span class="nc bnc" id="L239" title="All 2 branches missed.">                if (remainingLength &gt; MAX_ATTR_VALUE_LENGTH) {</span>
+                    // The remaining data is still too long to fit into one attribute, keep going
+<span class="nc" id="L241">                    messageAttributeData = new byte[MAX_ATTR_VALUE_LENGTH];</span>
+<span class="nc" id="L242">                    bb.get(messageAttributeData, 0, MAX_ATTR_VALUE_LENGTH);</span>
+<span class="nc" id="L243">                    remainingLength -= MAX_ATTR_VALUE_LENGTH;</span>
+                } else {
+                    // The remaining data fits, this will be the last chunk
+<span class="nc" id="L246">                    messageAttributeData = new byte[remainingLength];</span>
+<span class="nc" id="L247">                    bb.get(messageAttributeData, 0, remainingLength);</span>
+                }
+<span class="nc" id="L249">                this.attributes.add(new RADIUSAttribute(RADIUSAttribute.RADIUS_ATTR_EAP_MESSAGE,</span>
+                        (byte) (messageAttributeData.length + 2), messageAttributeData));
+
+                // Adding the size of the data to the total RADIUS length
+<span class="nc" id="L253">                this.length += (short) (messageAttributeData.length &amp; 0xFF);</span>
+                // Adding the size of the overhead attribute type and length
+<span class="nc" id="L255">                this.length += 2;</span>
+<span class="nc" id="L256">            }</span>
+        }
+<span class="nc" id="L258">    }</span>
+
+    /**
+     * Decapsulates an EAP packet from the RADIUS packet.
+     *
+     * @return An EAP object containing the reassembled EAP message
+     */
+    public EAP decapsulateMessage() {
+<span class="nc" id="L266">        EAP message = new EAP();</span>
+<span class="nc" id="L267">        ByteArrayOutputStream messageStream = new ByteArrayOutputStream();</span>
+        // Iterating through EAP-Message attributes to concatenate their value
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        for (RADIUSAttribute ra : this.getAttributeList(RADIUSAttribute.RADIUS_ATTR_EAP_MESSAGE)) {</span>
+            try {
+<span class="nc" id="L271">                messageStream.write(ra.getValue());</span>
+<span class="nc" id="L272">            } catch (IOException e) {</span>
+<span class="nc" id="L273">                log.error(&quot;Error while reassembling EAP message: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L274">            }</span>
+<span class="nc" id="L275">        }</span>
+        // Assembling EAP object from the concatenated stream
+<span class="nc" id="L277">        message.deserialize(messageStream.toByteArray(), 0, messageStream.size());</span>
+<span class="nc" id="L278">        return message;</span>
+    }
+
+    /**
+     * Gets a list of attributes from the RADIUS packet.
+     *
+     * @param attrType the type field of the required attributes
+     * @return List of the attributes that matches the type or an empty list if there is none
+     */
+    public ArrayList&lt;RADIUSAttribute&gt; getAttributeList(byte attrType) {
+<span class="nc" id="L288">        ArrayList&lt;RADIUSAttribute&gt; attrList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        for (int i = 0; i &lt; this.attributes.size(); i++) {</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">            if (this.attributes.get(i).getType() == attrType) {</span>
+<span class="nc" id="L291">                attrList.add(this.attributes.get(i));</span>
+            }
+        }
+<span class="nc" id="L294">        return attrList;</span>
+    }
+
+    /**
+     * Gets an attribute from the RADIUS packet.
+     *
+     * @param attrType the type field of the required attribute
+     * @return the first attribute that matches the type or null if does not exist
+     */
+    public RADIUSAttribute getAttribute(byte attrType) {
+<span class="nc bnc" id="L304" title="All 2 branches missed.">        for (int i = 0; i &lt; this.attributes.size(); i++) {</span>
+<span class="nc bnc" id="L305" title="All 2 branches missed.">            if (this.attributes.get(i).getType() == attrType) {</span>
+<span class="nc" id="L306">                return this.attributes.get(i);</span>
+            }
+        }
+<span class="nc" id="L309">        return null;</span>
+    }
+
+    /**
+     * Sets an attribute in the RADIUS packet.
+     *
+     * @param attrType the type field of the attribute to set
+     * @param value value to be set
+     * @return reference to the attribute object
+     */
+    public RADIUSAttribute setAttribute(byte attrType, byte[] value) {
+<span class="nc" id="L320">        byte attrLength = (byte) (value.length + 2);</span>
+<span class="nc" id="L321">        RADIUSAttribute newAttribute = new RADIUSAttribute(attrType, attrLength, value);</span>
+<span class="nc" id="L322">        this.attributes.add(newAttribute);</span>
+<span class="nc" id="L323">        this.length += (short) (attrLength &amp; 0xFF);</span>
+<span class="nc" id="L324">        return newAttribute;</span>
+    }
+
+    /**
+     * Updates an attribute in the RADIUS packet.
+     *
+     * @param attrType the type field of the attribute to update
+     * @param value the value to update to
+     * @return reference to the attribute object
+     */
+    public RADIUSAttribute updateAttribute(byte attrType, byte[] value) {
+<span class="nc bnc" id="L335" title="All 2 branches missed.">        for (int i = 0; i &lt; this.attributes.size(); i++) {</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">            if (this.attributes.get(i).getType() == attrType) {</span>
+<span class="nc" id="L337">                this.length -= (short) (this.attributes.get(i).getLength() &amp; 0xFF);</span>
+<span class="nc" id="L338">                RADIUSAttribute newAttr = new RADIUSAttribute(attrType, (byte) (value.length + 2), value);</span>
+<span class="nc" id="L339">                this.attributes.set(i, newAttr);</span>
+<span class="nc" id="L340">                this.length += (short) (newAttr.getLength() &amp; 0xFF);</span>
+<span class="nc" id="L341">                return newAttr;</span>
+            }
+        }
+<span class="nc" id="L344">        return null;</span>
+    }
+
+    /**
+     * Deserializer for RADIUS packets.
+     *
+     * @return deserializer
+     */
+    public static Deserializer&lt;RADIUS&gt; deserializer() {
+<span class="nc" id="L353">        return (data, offset, length) -&gt; {</span>
+<span class="nc" id="L354">            checkInput(data, offset, length, RADIUS_MIN_LENGTH);</span>
+
+<span class="nc" id="L356">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L357">            RADIUS radius = new RADIUS();</span>
+<span class="nc" id="L358">            radius.code = bb.get();</span>
+<span class="nc" id="L359">            radius.identifier = bb.get();</span>
+<span class="nc" id="L360">            radius.length = bb.getShort();</span>
+<span class="nc" id="L361">            bb.get(radius.authenticator, 0, 16);</span>
+
+<span class="nc" id="L363">            checkHeaderLength(length, radius.length);</span>
+
+<span class="nc" id="L365">            int remainingLength = radius.length - RADIUS_MIN_LENGTH;</span>
+<span class="nc bnc" id="L366" title="All 4 branches missed.">            while (remainingLength &gt; 0 &amp;&amp; bb.hasRemaining()) {</span>
+
+<span class="nc" id="L368">                RADIUSAttribute attr = new RADIUSAttribute();</span>
+<span class="nc" id="L369">                attr.setType(bb.get());</span>
+<span class="nc" id="L370">                attr.setLength(bb.get());</span>
+<span class="nc" id="L371">                short attrLength = (short) (attr.length &amp; 0xff);</span>
+<span class="nc" id="L372">                attr.value = new byte[attrLength - 2];</span>
+<span class="nc" id="L373">                bb.get(attr.value, 0, attrLength - 2);</span>
+<span class="nc" id="L374">                radius.attributes.add(attr);</span>
+<span class="nc" id="L375">                remainingLength -= attr.length;</span>
+<span class="nc" id="L376">            }</span>
+<span class="nc" id="L377">            return radius;</span>
+        };
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L383">        final byte[] data = new byte[this.length];</span>
+<span class="nc" id="L384">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="nc" id="L386">        bb.put(this.code);</span>
+<span class="nc" id="L387">        bb.put(this.identifier);</span>
+<span class="nc" id="L388">        bb.putShort(this.length);</span>
+<span class="nc" id="L389">        bb.put(this.authenticator);</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">        for (int i = 0; i &lt; this.attributes.size(); i++) {</span>
+<span class="nc" id="L391">            RADIUSAttribute attr = this.attributes.get(i);</span>
+<span class="nc" id="L392">            bb.put(attr.getType());</span>
+<span class="nc" id="L393">            bb.put(attr.getLength());</span>
+<span class="nc" id="L394">            bb.put(attr.getValue());</span>
+        }
+
+<span class="nc" id="L397">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L403">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L404">        this.code = bb.get();</span>
+<span class="nc" id="L405">        this.identifier = bb.get();</span>
+<span class="nc" id="L406">        this.length = bb.getShort();</span>
+<span class="nc" id="L407">        bb.get(this.authenticator, 0, 16);</span>
+
+<span class="nc" id="L409">        int remainingLength = this.length - RADIUS_MIN_LENGTH;</span>
+<span class="nc bnc" id="L410" title="All 4 branches missed.">        while (remainingLength &gt; 0 &amp;&amp; bb.hasRemaining()) {</span>
+<span class="nc" id="L411">            RADIUSAttribute attr = new RADIUSAttribute();</span>
+<span class="nc" id="L412">            attr.setType(bb.get());</span>
+<span class="nc" id="L413">            attr.setLength(bb.get());</span>
+<span class="nc" id="L414">            short attrLength = (short) (attr.length &amp; 0xff);</span>
+<span class="nc" id="L415">            attr.value = new byte[attrLength - 2];</span>
+<span class="nc" id="L416">            bb.get(attr.value, 0, attrLength - 2);</span>
+<span class="nc" id="L417">            this.attributes.add(attr);</span>
+<span class="nc" id="L418">            remainingLength -= attr.length;</span>
+<span class="nc" id="L419">        }</span>
+<span class="nc" id="L420">        return this;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

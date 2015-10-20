@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Criterion.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.criteria</a> &gt; <span class="el_source">Criterion.java</span></div><h1>Criterion.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.criteria;
+
+
+/**
+ * Representation of a single header field selection.
+ */
+public interface Criterion {
+
+    /**
+     * Types of fields to which the selection criterion may apply.
+     */
+    // From page 75 of OpenFlow 1.5.0 spec
+<span class="pc" id="L28">    enum Type {</span>
+        /** Switch input port. */
+<span class="fc" id="L30">        IN_PORT,</span>
+        /** Switch physical input port. */
+<span class="fc" id="L32">        IN_PHY_PORT,</span>
+        /** Metadata passed between tables. */
+<span class="fc" id="L34">        METADATA,</span>
+        /** Ethernet destination address. */
+<span class="fc" id="L36">        ETH_DST,</span>
+        /** Ethernet source address. */
+<span class="fc" id="L38">        ETH_SRC,</span>
+        /** Ethernet frame type. */
+<span class="fc" id="L40">        ETH_TYPE,</span>
+        /** VLAN id. */
+<span class="fc" id="L42">        VLAN_VID,</span>
+        /** VLAN priority. */
+<span class="fc" id="L44">        VLAN_PCP,</span>
+        /** IP DSCP (6 bits in ToS field). */
+<span class="fc" id="L46">        IP_DSCP,</span>
+        /** IP ECN (2 bits in ToS field). */
+<span class="fc" id="L48">        IP_ECN,</span>
+        /** IP protocol. */
+<span class="fc" id="L50">        IP_PROTO,</span>
+        /** IPv4 source address. */
+<span class="fc" id="L52">        IPV4_SRC,</span>
+        /** IPv4 destination address. */
+<span class="fc" id="L54">        IPV4_DST,</span>
+        /** TCP source port. */
+<span class="fc" id="L56">        TCP_SRC,</span>
+        /** TCP destination port. */
+<span class="fc" id="L58">        TCP_DST,</span>
+        /** UDP source port. */
+<span class="fc" id="L60">        UDP_SRC,</span>
+        /** UDP destination port. */
+<span class="fc" id="L62">        UDP_DST,</span>
+        /** SCTP source port. */
+<span class="fc" id="L64">        SCTP_SRC,</span>
+        /** SCTP destination port. */
+<span class="fc" id="L66">        SCTP_DST,</span>
+        /** ICMP type. */
+<span class="fc" id="L68">        ICMPV4_TYPE,</span>
+        /** ICMP code. */
+<span class="fc" id="L70">        ICMPV4_CODE,</span>
+        /** ARP opcode. */
+<span class="fc" id="L72">        ARP_OP,</span>
+        /** ARP source IPv4 address. */
+<span class="fc" id="L74">        ARP_SPA,</span>
+        /** ARP target IPv4 address. */
+<span class="fc" id="L76">        ARP_TPA,</span>
+        /** ARP source hardware address. */
+<span class="fc" id="L78">        ARP_SHA,</span>
+        /** ARP target hardware address. */
+<span class="fc" id="L80">        ARP_THA,</span>
+        /** IPv6 source address. */
+<span class="fc" id="L82">        IPV6_SRC,</span>
+        /** IPv6 destination address. */
+<span class="fc" id="L84">        IPV6_DST,</span>
+        /** IPv6 Flow Label. */
+<span class="fc" id="L86">        IPV6_FLABEL,</span>
+        /** ICMPv6 type. */
+<span class="fc" id="L88">        ICMPV6_TYPE,</span>
+        /** ICMPv6 code. */
+<span class="fc" id="L90">        ICMPV6_CODE,</span>
+        /** Target address for ND. */
+<span class="fc" id="L92">        IPV6_ND_TARGET,</span>
+        /** Source link-layer for ND. */
+<span class="fc" id="L94">        IPV6_ND_SLL,</span>
+        /** Target link-layer for ND. */
+<span class="fc" id="L96">        IPV6_ND_TLL,</span>
+        /** MPLS label. */
+<span class="fc" id="L98">        MPLS_LABEL,</span>
+        /** MPLS TC. */
+<span class="fc" id="L100">        MPLS_TC,</span>
+        /** MPLS BoS bit. */
+<span class="fc" id="L102">        MPLS_BOS,</span>
+        /** PBB I-SID. */
+<span class="fc" id="L104">        PBB_ISID,</span>
+        /** Logical Port Metadata. */
+<span class="fc" id="L106">        TUNNEL_ID,</span>
+        /** IPv6 Extension Header pseudo-field. */
+<span class="fc" id="L108">        IPV6_EXTHDR,</span>
+        /** Unassigned value: 40. */
+<span class="fc" id="L110">        UNASSIGNED_40,</span>
+        /** PBB UCA header field. */
+<span class="fc" id="L112">        PBB_UCA,</span>
+        /** TCP flags. */
+<span class="fc" id="L114">        TCP_FLAGS,</span>
+        /** Output port from action set metadata. */
+<span class="fc" id="L116">        ACTSET_OUTPUT,</span>
+        /** Packet type value. */
+<span class="fc" id="L118">        PACKET_TYPE,</span>
+
+        //
+        // NOTE: Everything below is defined elsewhere: ONOS-specific,
+        // extensions, etc.
+        //
+        /** Optical channel signal ID (lambda). */
+<span class="fc" id="L125">        OCH_SIGID,</span>
+        /** Optical channel signal type (fixed or flexible). */
+<span class="fc" id="L127">        OCH_SIGTYPE,</span>
+        /** ODU (Optical channel Data Unit) signal ID. */
+<span class="fc" id="L129">        ODU_SIGID,</span>
+        /** ODU (Optical channel Data Unit) signal type. */
+<span class="fc" id="L131">        ODU_SIGTYPE,</span>
+
+        /**
+         * An empty criterion.
+         */
+<span class="fc" id="L136">        DUMMY</span>
+    }
+
+    /**
+     * Returns the type of criterion.
+     *
+     * @return type of criterion
+     */
+    Type type();
+
+    /**
+     * Bit definitions for IPv6 Extension Header pseudo-field.
+     * From page 79 of OpenFlow 1.5.0 spec.
+     */
+<span class="pc" id="L150">    enum IPv6ExthdrFlags {</span>
+        /** &quot;No next header&quot; encountered. */
+<span class="fc" id="L152">        NONEXT((short) (1 &lt;&lt; 0)),</span>
+        /** Encrypted Sec Payload header present. */
+<span class="fc" id="L154">        ESP((short) (1 &lt;&lt; 1)),</span>
+        /** Authentication header present. */
+<span class="fc" id="L156">        AUTH((short) (1 &lt;&lt; 2)),</span>
+        /** 1 or 2 dest headers present. */
+<span class="fc" id="L158">        DEST((short) (1 &lt;&lt; 3)),</span>
+        /** Fragment header present. */
+<span class="fc" id="L160">        FRAG((short) (1 &lt;&lt; 4)),</span>
+        /** Router header present. */
+<span class="fc" id="L162">        ROUTER((short) (1 &lt;&lt; 5)),</span>
+        /** Hop-by-hop header present. */
+<span class="fc" id="L164">        HOP((short) (1 &lt;&lt; 6)),</span>
+        /** Unexpected repeats encountered. */
+<span class="fc" id="L166">        UNREP((short) (1 &lt;&lt; 7)),</span>
+        /** Unexpected sequencing encountered. */
+<span class="fc" id="L168">        UNSEQ((short) (1 &lt;&lt; 8));</span>
+
+        private short value;
+
+<span class="fc" id="L172">        IPv6ExthdrFlags(short value) {</span>
+<span class="fc" id="L173">            this.value = value;</span>
+<span class="fc" id="L174">        }</span>
+
+        /**
+         * Gets the value as an integer.
+         *
+         * @return the value as an integer
+         */
+        public short getValue() {
+<span class="fc" id="L182">            return this.value;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

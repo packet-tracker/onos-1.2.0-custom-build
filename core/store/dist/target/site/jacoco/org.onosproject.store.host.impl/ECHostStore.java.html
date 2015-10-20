@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ECHostStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.host.impl</a> &gt; <span class="el_source">ECHostStore.java</span></div><h1>ECHostStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.host.impl;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+import static org.onosproject.net.DefaultAnnotations.merge;
+import static org.onosproject.net.host.HostEvent.Type.HOST_ADDED;
+import static org.onosproject.net.host.HostEvent.Type.HOST_REMOVED;
+import static org.onosproject.net.host.HostEvent.Type.HOST_MOVED;
+import static org.onosproject.net.host.HostEvent.Type.HOST_UPDATED;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.REMOVE;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.net.Annotations;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.DefaultHost;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
+import org.onosproject.net.host.HostDescription;
+import org.onosproject.net.host.HostEvent;
+import org.onosproject.net.host.HostStore;
+import org.onosproject.net.host.HostStoreDelegate;
+import org.onosproject.net.host.HostEvent.Type;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.LogicalClockService;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
+
+/**
+ * Manages the inventory of hosts using a {@code EventuallyConsistentMap}.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L81">public class ECHostStore</span>
+    extends AbstractStore&lt;HostEvent, HostStoreDelegate&gt;
+    implements HostStore {
+
+<span class="fc" id="L85">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LogicalClockService clockService;
+
+    // Hosts tracked by their location
+<span class="fc" id="L94">    private final SetMultimap&lt;ConnectPoint, Host&gt; locations =</span>
+<span class="fc" id="L95">            Multimaps.synchronizedSetMultimap(</span>
+<span class="fc" id="L96">                    HashMultimap.&lt;ConnectPoint, Host&gt;create());</span>
+
+    private EventuallyConsistentMap&lt;HostId, DefaultHost&gt; hosts;
+
+<span class="fc" id="L100">    private EventuallyConsistentMapListener&lt;HostId, DefaultHost&gt; hostLocationTracker =</span>
+            new HostLocationTracker();
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L105">        KryoNamespace.Builder hostSerializer = KryoNamespace.newBuilder()</span>
+<span class="fc" id="L106">                .register(KryoNamespaces.API);</span>
+
+<span class="fc" id="L108">        hosts = storageService.&lt;HostId, DefaultHost&gt;eventuallyConsistentMapBuilder()</span>
+<span class="fc" id="L109">                .withName(&quot;onos-hosts&quot;)</span>
+<span class="fc" id="L110">                .withSerializer(hostSerializer)</span>
+<span class="pc" id="L111">                .withTimestampProvider((k, v) -&gt; clockService.getTimestamp())</span>
+<span class="fc" id="L112">                .build();</span>
+
+<span class="fc" id="L114">        hosts.addListener(hostLocationTracker);</span>
+
+<span class="fc" id="L116">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L117">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L121">        hosts.removeListener(hostLocationTracker);</span>
+<span class="fc" id="L122">        hosts.destroy();</span>
+<span class="fc" id="L123">        locations.clear();</span>
+
+<span class="fc" id="L125">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L126">    }</span>
+
+    @Override
+    public HostEvent createOrUpdateHost(ProviderId providerId,
+                                        HostId hostId,
+                                        HostDescription hostDescription,
+                                        boolean replaceIPs) {
+        // TODO: We need a way to detect conflicting changes and abort update.
+        //       (BOC) Compute might do this for us.
+
+<span class="fc" id="L136">        final AtomicReference&lt;Type&gt; eventType = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L137">        final AtomicReference&lt;DefaultHost&gt; oldHost = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L138">        DefaultHost host = hosts.compute(hostId, (id, existingHost) -&gt; {</span>
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">            if (existingHost != null) {</span>
+<span class="nc" id="L140">                oldHost.set(existingHost);</span>
+<span class="nc" id="L141">                checkState(Objects.equals(hostDescription.hwAddress(), existingHost.mac()),</span>
+                           &quot;Existing and new MAC addresses differ.&quot;);
+<span class="nc" id="L143">                checkState(Objects.equals(hostDescription.vlan(), existingHost.vlan()),</span>
+                           &quot;Existing and new VLANs differ.&quot;);
+            }
+
+            // TODO do we ever want the existing location?
+<span class="fc" id="L148">            HostLocation location = hostDescription.location();</span>
+
+            final Set&lt;IpAddress&gt; addresses;
+<span class="pc bpc" id="L151" title="3 of 4 branches missed.">            if (existingHost == null || replaceIPs) {</span>
+<span class="fc" id="L152">                addresses = ImmutableSet.copyOf(hostDescription.ipAddress());</span>
+            } else {
+<span class="nc" id="L154">                addresses = Sets.newHashSet(existingHost.ipAddresses());</span>
+<span class="nc" id="L155">                addresses.addAll(hostDescription.ipAddress());</span>
+            }
+
+            final Annotations annotations;
+<span class="pc bpc" id="L159" title="1 of 2 branches missed.">            if (existingHost != null) {</span>
+<span class="nc" id="L160">                annotations = merge((DefaultAnnotations) existingHost.annotations(),</span>
+<span class="nc" id="L161">                                    hostDescription.annotations());</span>
+            } else {
+<span class="fc" id="L163">                annotations = hostDescription.annotations();</span>
+            }
+
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">            if (existingHost == null) {</span>
+<span class="fc" id="L167">                eventType.set(HOST_ADDED);</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            } else if (!Objects.equals(existingHost.location(), hostDescription.location())) {</span>
+<span class="nc" id="L169">                eventType.set(HOST_MOVED);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            } else if (!existingHost.ipAddresses().containsAll(hostDescription.ipAddress()) ||</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">                    !hostDescription.annotations().keys().isEmpty()) {</span>
+<span class="nc" id="L172">                eventType.set(HOST_UPDATED);</span>
+            } // else, eventType == null; this means we don't send an event
+
+<span class="fc" id="L175">            return new DefaultHost(providerId,</span>
+                                   hostId,
+<span class="fc" id="L177">                                   hostDescription.hwAddress(),</span>
+<span class="fc" id="L178">                                   hostDescription.vlan(),</span>
+                                   location,
+                                   addresses,
+                                   annotations);
+        });
+
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        if (oldHost.get() != null) {</span>
+<span class="nc" id="L185">            DefaultHost old = oldHost.get();</span>
+<span class="nc" id="L186">            locations.remove(old.location(), old);</span>
+        }
+<span class="fc" id="L188">        locations.put(host.location(), host);</span>
+
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">        return eventType.get() != null ? new HostEvent(eventType.get(), host) : null;</span>
+    }
+
+    @Override
+    public HostEvent removeHost(HostId hostId) {
+<span class="nc" id="L195">        Host host = hosts.remove(hostId);</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        return host != null ? new HostEvent(HOST_REMOVED, host) : null;</span>
+    }
+
+    @Override
+    public HostEvent removeIp(HostId hostId, IpAddress ipAddress) {
+<span class="fc" id="L201">        DefaultHost host = hosts.compute(hostId, (id, existingHost) -&gt; {</span>
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">            if (existingHost != null) {</span>
+<span class="fc" id="L203">                checkState(Objects.equals(hostId.mac(), existingHost.mac()),</span>
+                        &quot;Existing and new MAC addresses differ.&quot;);
+<span class="fc" id="L205">                checkState(Objects.equals(hostId.vlanId(), existingHost.vlan()),</span>
+                        &quot;Existing and new VLANs differ.&quot;);
+
+<span class="fc" id="L208">                Set&lt;IpAddress&gt; addresses = existingHost.ipAddresses();</span>
+<span class="pc bpc" id="L209" title="2 of 4 branches missed.">                if (addresses != null &amp;&amp; addresses.contains(ipAddress)) {</span>
+<span class="fc" id="L210">                    addresses = new HashSet&lt;&gt;(existingHost.ipAddresses());</span>
+<span class="fc" id="L211">                    addresses.remove(ipAddress);</span>
+<span class="fc" id="L212">                    return new DefaultHost(existingHost.providerId(),</span>
+                            hostId,
+<span class="fc" id="L214">                            existingHost.mac(),</span>
+<span class="fc" id="L215">                            existingHost.vlan(),</span>
+<span class="fc" id="L216">                            existingHost.location(),</span>
+<span class="fc" id="L217">                            ImmutableSet.copyOf(addresses),</span>
+<span class="fc" id="L218">                            existingHost.annotations());</span>
+                } else {
+<span class="nc" id="L220">                    return existingHost;</span>
+                }
+            }
+<span class="nc" id="L223">            return null;</span>
+        });
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">        return host != null ? new HostEvent(HOST_UPDATED, host) : null;</span>
+    }
+
+    @Override
+    public int getHostCount() {
+<span class="nc" id="L230">        return hosts.size();</span>
+    }
+
+    @Override
+    public Iterable&lt;Host&gt; getHosts() {
+<span class="nc" id="L235">        return ImmutableSet.copyOf(hosts.values());</span>
+    }
+
+    @Override
+    public Host getHost(HostId hostId) {
+<span class="fc" id="L240">        return hosts.get(hostId);</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getHosts(VlanId vlanId) {
+<span class="nc" id="L245">        return filter(hosts.values(), host -&gt; Objects.equals(host.vlan(), vlanId));</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getHosts(MacAddress mac) {
+<span class="nc" id="L250">        return filter(hosts.values(), host -&gt; Objects.equals(host.mac(), mac));</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getHosts(IpAddress ip) {
+<span class="nc" id="L255">        return filter(hosts.values(), host -&gt; host.ipAddresses().contains(ip));</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getConnectedHosts(ConnectPoint connectPoint) {
+<span class="nc" id="L260">        synchronized (locations) {</span>
+<span class="nc" id="L261">            return ImmutableSet.copyOf(locations.get(connectPoint));</span>
+<span class="nc" id="L262">        }</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getConnectedHosts(DeviceId deviceId) {
+        Set&lt;Host&gt; filtered;
+<span class="nc" id="L268">        synchronized (locations) {</span>
+<span class="nc" id="L269">            filtered = locations</span>
+<span class="nc" id="L270">                    .entries()</span>
+<span class="nc" id="L271">                    .stream()</span>
+<span class="nc" id="L272">                    .filter(entry -&gt; entry.getKey().deviceId().equals(deviceId))</span>
+<span class="nc" id="L273">                    .map(entry -&gt; entry.getValue())</span>
+<span class="nc" id="L274">                    .collect(Collectors.toSet());</span>
+<span class="nc" id="L275">        }</span>
+<span class="nc" id="L276">        return ImmutableSet.copyOf(filtered);</span>
+    }
+
+    private Set&lt;Host&gt; filter(Collection&lt;DefaultHost&gt; collection, Predicate&lt;DefaultHost&gt; predicate) {
+<span class="nc" id="L280">        return collection.stream().filter(predicate).collect(Collectors.toSet());</span>
+    }
+
+<span class="fc" id="L283">    private class HostLocationTracker implements EventuallyConsistentMapListener&lt;HostId, DefaultHost&gt; {</span>
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;HostId, DefaultHost&gt; event) {
+<span class="nc" id="L286">            DefaultHost host = checkNotNull(event.value());</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc" id="L288">                boolean isNew = locations.put(host.location(), host);</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">                notifyDelegate(new HostEvent(isNew ? HOST_ADDED : HOST_UPDATED, host));</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">            } else if (event.type() == REMOVE) {</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">                if (locations.remove(host.location(), host)) {</span>
+<span class="nc" id="L292">                    notifyDelegate(new HostEvent(HOST_REMOVED, host));</span>
+                }
+
+            }
+<span class="nc" id="L296">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepOpenMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepOpenMsgVer1.java</span></div><h1>PcepOpenMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepOpenMsg;
+import org.onosproject.pcepio.protocol.PcepOpenObject;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepErrorDetailInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP open message.
+ */
+public class PcepOpenMsgVer1 implements PcepOpenMsg {
+
+    /*
+     * &lt;Open Message&gt;::= &lt;Common Header&gt; &lt;OPEN&gt;
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Ver |  Flags  |  Message-Type |       Message-Length          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Ver |   Flags |   Keepalive   |  DeadTimer    |      SID      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    //                       Optional TLVs                         //
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L55">    protected static final Logger log = LoggerFactory.getLogger(PcepOpenMsgVer1.class);</span>
+
+    public static final byte PACKET_VERSION = 1;
+    public static final int PACKET_MINIMUM_LENGTH = 12;
+<span class="fc" id="L59">    public static final PcepType MSG_TYPE = PcepType.OPEN;</span>
+    private PcepOpenObject pcepOpenObj;
+
+<span class="fc" id="L62">    public static final PcepOpenMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Constructor to initialize PcepOpenObject.
+     *
+     * @param pcepOpenObj PCEP-OPEN-OBJECT
+     */
+<span class="fc" id="L69">    public PcepOpenMsgVer1(PcepOpenObject pcepOpenObj) {</span>
+<span class="fc" id="L70">        this.pcepOpenObj = pcepOpenObj;</span>
+<span class="fc" id="L71">    }</span>
+
+    @Override
+    public PcepOpenObject getPcepOpenObject() {
+<span class="fc" id="L75">        return this.pcepOpenObj;</span>
+    }
+
+    @Override
+    public void setPcepOpenObject(PcepOpenObject pcepOpenObj) {
+<span class="nc" id="L80">        this.pcepOpenObj = pcepOpenObj;</span>
+<span class="nc" id="L81">    }</span>
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L85">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L90">        return MSG_TYPE;</span>
+    }
+
+    /**
+     * Reader class for reading PCEP open message from channel buffer.
+     */
+<span class="fc" id="L96">    public static class Reader implements PcepMessageReader&lt;PcepOpenMsg&gt; {</span>
+
+        @Override
+        public PcepOpenMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L102">                throw new PcepParseException(&quot;Packet size is less than the minimum length.&quot;);</span>
+            }
+
+<span class="fc" id="L105">            byte version = cb.readByte();</span>
+<span class="fc" id="L106">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L108">                log.error(&quot;[readFrom] Invalid version: &quot; + version);</span>
+<span class="nc" id="L109">                throw new PcepParseException(PcepErrorDetailInfo.ERROR_TYPE_1, PcepErrorDetailInfo.ERROR_VALUE_1);</span>
+            }
+            // fixed value property type == 1
+<span class="fc" id="L112">            byte type = cb.readByte();</span>
+
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L115">                log.error(&quot;[readFrom] Unexpected type: &quot; + type);</span>
+<span class="nc" id="L116">                throw new PcepParseException(PcepErrorDetailInfo.ERROR_TYPE_1, PcepErrorDetailInfo.ERROR_VALUE_1);</span>
+            }
+<span class="fc" id="L118">            int length = cb.readShort();</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L120">                throw new PcepParseException(</span>
+                        &quot;Wrong length: Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, was: &quot; + length);
+            }
+<span class="fc" id="L123">            return new PcepOpenMsgVer1(PcepOpenObjectVer1.read(cb));</span>
+        }
+    }
+
+    /**
+     * Builder class for PCEP open message.
+     */
+<span class="nc" id="L130">    static class Builder implements PcepOpenMsg.Builder {</span>
+
+        private PcepOpenObject pcepOpenObj;
+
+        @Override
+        public PcepOpenMsg build() throws PcepParseException {
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            if (!(pcepOpenObj instanceof PcepOpenObjectVer1)) {</span>
+<span class="nc" id="L137">                throw new NullPointerException(&quot;PcepOpenObject is null.&quot;);</span>
+            }
+<span class="nc" id="L139">            return new PcepOpenMsgVer1(pcepOpenObj);</span>
+        }
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L144">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L149">            return PcepType.OPEN;</span>
+        }
+
+        @Override
+        public PcepOpenObject getPcepOpenObj() {
+<span class="nc" id="L154">            return this.pcepOpenObj;</span>
+        }
+
+        @Override
+        public Builder setPcepOpenObj(PcepOpenObject obj) {
+<span class="nc" id="L159">            this.pcepOpenObj = obj;</span>
+<span class="nc" id="L160">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L166">        WRITER.write(cb, this);</span>
+<span class="fc" id="L167">    }</span>
+
+<span class="fc" id="L169">    public static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing PCEP opne message to channel buffer.
+     */
+<span class="fc" id="L174">    public static class Writer implements PcepMessageWriter&lt;PcepOpenMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepOpenMsgVer1 message) throws PcepParseException {
+<span class="fc" id="L178">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="fc" id="L180">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+            // message type
+<span class="fc" id="L182">            cb.writeByte(MSG_TYPE.getType());</span>
+            // length is length of variable message, will be updated at the end
+            // Store the position of message
+            // length in buffer
+
+<span class="fc" id="L187">            int msgLenIndex = cb.writerIndex();</span>
+<span class="fc" id="L188">            cb.writeShort(0);</span>
+
+<span class="fc" id="L190">            message.getPcepOpenObject().write(cb);</span>
+
+            // update message length field
+<span class="fc" id="L193">            int iLength = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L194">            cb.setShort(msgLenIndex, (short) iLength);</span>
+<span class="fc" id="L195">        }</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L200">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L201">                .add(&quot;OpenObject&quot;, pcepOpenObj)</span>
+<span class="nc" id="L202">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

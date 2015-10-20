@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PropertyPanel.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.topo</a> &gt; <span class="el_source">PropertyPanel.java</span></div><h1>PropertyPanel.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.topo;
+
+import com.google.common.collect.Sets;
+
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Models a panel displayed on the Topology View.
+ */
+public class PropertyPanel {
+
+<span class="fc" id="L31">    private static final DecimalFormat DF0 = new DecimalFormat(&quot;#,###&quot;);</span>
+
+    private String title;
+    private String typeId;
+    private String id;
+<span class="fc" id="L36">    private List&lt;Prop&gt; properties = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L37">    private List&lt;ButtonId&gt; buttons = new ArrayList&lt;&gt;();</span>
+
+    /**
+     * Constructs a property panel model with the given title and
+     * type identifier (icon to display).
+     *
+     * @param title title text
+     * @param typeId type (icon) ID
+     */
+<span class="fc" id="L46">    public PropertyPanel(String title, String typeId) {</span>
+<span class="fc" id="L47">        this.title = title;</span>
+<span class="fc" id="L48">        this.typeId = typeId;</span>
+<span class="fc" id="L49">    }</span>
+
+    /**
+     * Adds an ID field to the panel data, to be included in
+     * the returned JSON data to the client.
+     *
+     * @param id the identifier
+     * @return self, for chaining
+     */
+    public PropertyPanel id(String id) {
+<span class="fc" id="L59">        this.id = id;</span>
+<span class="fc" id="L60">        return this;</span>
+    }
+
+    /**
+     * Adds a property to the panel data.
+     *
+     * @param key property key
+     * @param value property value
+     * @return self, for chaining
+     */
+    public PropertyPanel addProp(String key, String value) {
+<span class="fc" id="L71">        properties.add(new Prop(key, value));</span>
+<span class="fc" id="L72">        return this;</span>
+    }
+
+    /**
+     * Adds a property to the panel data, using a decimal formatter.
+     *
+     * @param key property key
+     * @param value property value
+     * @return self, for chaining
+     */
+    public PropertyPanel addProp(String key, int value) {
+<span class="fc" id="L83">        properties.add(new Prop(key, DF0.format(value)));</span>
+<span class="fc" id="L84">        return this;</span>
+    }
+
+    /**
+     * Adds a property to the panel data, using a decimal formatter.
+     *
+     * @param key property key
+     * @param value property value
+     * @return self, for chaining
+     */
+    public PropertyPanel addProp(String key, long value) {
+<span class="fc" id="L95">        properties.add(new Prop(key, DF0.format(value)));</span>
+<span class="fc" id="L96">        return this;</span>
+    }
+
+    /**
+     * Adds a property to the panel data. Note that the value's
+     * {@link Object#toString toString()} method is used to convert the
+     * value to a string.
+     *
+     * @param key property key
+     * @param value property value
+     * @return self, for chaining
+     */
+    public PropertyPanel addProp(String key, Object value) {
+<span class="fc" id="L109">        properties.add(new Prop(key, value.toString()));</span>
+<span class="fc" id="L110">        return this;</span>
+    }
+
+    /**
+     * Adds a property to the panel data. Note that the value's
+     * {@link Object#toString toString()} method is used to convert the
+     * value to a string, from which the characters defined in the given
+     * regular expression string are stripped.
+     *
+     * @param key property key
+     * @param value property value
+     * @param reStrip regexp characters to strip from value string
+     * @return self, for chaining
+     */
+    public PropertyPanel addProp(String key, Object value, String reStrip) {
+<span class="fc" id="L125">        String val = value.toString().replaceAll(reStrip, &quot;&quot;);</span>
+<span class="fc" id="L126">        properties.add(new Prop(key, val));</span>
+<span class="fc" id="L127">        return this;</span>
+    }
+
+    /**
+     * Adds a separator to the panel data.
+     *
+     * @return self, for chaining
+     */
+    public PropertyPanel addSeparator() {
+<span class="fc" id="L136">        properties.add(new Separator());</span>
+<span class="fc" id="L137">        return this;</span>
+    }
+
+    /**
+     * Returns the title text.
+     *
+     * @return title text
+     */
+    public String title() {
+<span class="fc" id="L146">        return title;</span>
+    }
+
+    /**
+     * Returns the type identifier.
+     *
+     * @return type identifier
+     */
+    public String typeId() {
+<span class="fc" id="L155">        return typeId;</span>
+    }
+
+    /**
+     * Returns the internal ID.
+     *
+     * @return the ID
+     */
+    public String id() {
+<span class="fc" id="L164">        return id;</span>
+    }
+
+    /**
+     * Returns the list of properties to be displayed.
+     *
+     * @return the property list
+     */
+    // TODO: consider protecting this?
+    public List&lt;Prop&gt; properties() {
+<span class="fc" id="L174">        return properties;</span>
+    }
+
+    /**
+     * Returns the list of button descriptors.
+     *
+     * @return the button list
+     */
+    // TODO: consider protecting this?
+    public List&lt;ButtonId&gt; buttons() {
+<span class="fc" id="L184">        return buttons;</span>
+    }
+
+    // == MUTATORS
+
+    /**
+     * Sets the title text.
+     *
+     * @param title title text
+     * @return self, for chaining
+     */
+    public PropertyPanel title(String title) {
+<span class="fc" id="L196">        this.title = title;</span>
+<span class="fc" id="L197">        return this;</span>
+    }
+
+    /**
+     * Sets the type identifier (icon ID).
+     *
+     * @param typeId type identifier
+     * @return self, for chaining
+     */
+    public PropertyPanel typeId(String typeId) {
+<span class="fc" id="L207">        this.typeId = typeId;</span>
+<span class="fc" id="L208">        return this;</span>
+    }
+
+    /**
+     * Removes properties with the given keys from the list.
+     *
+     * @param keys keys of properties to remove
+     * @return self, for chaining
+     */
+    public PropertyPanel removeProps(String... keys) {
+<span class="fc" id="L218">        Set&lt;String&gt; forRemoval = Sets.newHashSet(keys);</span>
+<span class="fc" id="L219">        List&lt;Prop&gt; toKeep = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">        for (Prop p: properties) {</span>
+<span class="fc bfc" id="L221" title="All 2 branches covered.">            if (!forRemoval.contains(p.key())) {</span>
+<span class="fc" id="L222">                toKeep.add(p);</span>
+            }
+<span class="fc" id="L224">        }</span>
+<span class="fc" id="L225">        properties = toKeep;</span>
+<span class="fc" id="L226">        return this;</span>
+    }
+
+    /**
+     * Removes all currently defined properties.
+     *
+     * @return self, for chaining
+     */
+    public PropertyPanel removeAllProps() {
+<span class="fc" id="L235">        properties.clear();</span>
+<span class="fc" id="L236">        return this;</span>
+    }
+
+    /**
+     * Adds the given button descriptor to the panel data.
+     *
+     * @param button button descriptor
+     * @return self, for chaining
+     */
+    public PropertyPanel addButton(ButtonId button) {
+<span class="fc" id="L246">        buttons.add(button);</span>
+<span class="fc" id="L247">        return this;</span>
+    }
+
+    /**
+     * Removes buttons with the given descriptors from the list.
+     *
+     * @param descriptors descriptors to remove
+     * @return self, for chaining
+     */
+    public PropertyPanel removeButtons(ButtonId... descriptors) {
+<span class="fc" id="L257">        Set&lt;ButtonId&gt; forRemoval = Sets.newHashSet(descriptors);</span>
+<span class="fc" id="L258">        List&lt;ButtonId&gt; toKeep = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L259" title="All 2 branches covered.">        for (ButtonId bd: buttons) {</span>
+<span class="fc bfc" id="L260" title="All 2 branches covered.">            if (!forRemoval.contains(bd)) {</span>
+<span class="fc" id="L261">                toKeep.add(bd);</span>
+            }
+<span class="fc" id="L263">        }</span>
+<span class="fc" id="L264">        buttons = toKeep;</span>
+<span class="fc" id="L265">        return this;</span>
+    }
+
+    /**
+     * Removes all currently defined buttons.
+     *
+     * @return self, for chaining
+     */
+    public PropertyPanel removeAllButtons() {
+<span class="fc" id="L274">        buttons.clear();</span>
+<span class="fc" id="L275">        return this;</span>
+    }
+
+    // ====================
+
+
+    /**
+     * Simple data carrier for a property, composed of a key/value pair.
+     */
+    public static class Prop {
+        private final String key;
+        private final String value;
+
+        /**
+         * Constructs a property data value.
+         *
+         * @param key property key
+         * @param value property value
+         */
+<span class="fc" id="L294">        public Prop(String key, String value) {</span>
+<span class="fc" id="L295">            this.key = key;</span>
+<span class="fc" id="L296">            this.value = value;</span>
+<span class="fc" id="L297">        }</span>
+
+        /**
+         * Returns the property's key.
+         *
+         * @return the key
+         */
+        public String key() {
+<span class="fc" id="L305">            return key;</span>
+        }
+
+        /**
+         * Returns the property's value.
+         *
+         * @return the value
+         */
+        public String value() {
+<span class="fc" id="L314">            return value;</span>
+        }
+
+        @Override
+        public boolean equals(Object o) {
+<span class="pc bpc" id="L319" title="1 of 2 branches missed.">            if (this == o) {</span>
+<span class="nc" id="L320">                return true;</span>
+            }
+<span class="pc bpc" id="L322" title="2 of 4 branches missed.">            if (o == null || getClass() != o.getClass()) {</span>
+<span class="nc" id="L323">                return false;</span>
+            }
+
+<span class="fc" id="L326">            Prop prop = (Prop) o;</span>
+<span class="pc bpc" id="L327" title="2 of 4 branches missed.">            return key.equals(prop.key) &amp;&amp; value.equals(prop.value);</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L332">            int result = key.hashCode();</span>
+<span class="nc" id="L333">            result = 31 * result + value.hashCode();</span>
+<span class="nc" id="L334">            return result;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L339">            return &quot;{&quot; + key + &quot; -&gt; &quot; + value + &quot;}&quot;;</span>
+        }
+    }
+
+    /**
+     * Auxiliary class representing a separator property.
+     */
+    public static class Separator extends Prop {
+        public Separator() {
+<span class="fc" id="L348">            super(&quot;-&quot;, &quot;&quot;);</span>
+<span class="fc" id="L349">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PointToPointIntent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">PointToPointIntent.java</span></div><h1>PointToPointIntent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import java.util.Collections;
+import java.util.List;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+
+import com.google.common.base.MoreObjects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Abstraction of point-to-point connectivity.
+ */
+@Beta
+public final class PointToPointIntent extends ConnectivityIntent {
+
+    private final ConnectPoint ingressPoint;
+    private final ConnectPoint egressPoint;
+
+    /**
+     * Returns a new point to point intent builder. The application id,
+     * ingress point and egress point are required fields.  If they are
+     * not set by calls to the appropriate methods, an exception will
+     * be thrown.
+     *
+     * @return point to point builder
+     */
+    public static PointToPointIntent.Builder builder() {
+<span class="fc" id="L50">        return new Builder();</span>
+    }
+
+    /**
+     * Builder of a point to point intent.
+     */
+    public static final class Builder extends ConnectivityIntent.Builder {
+        ConnectPoint ingressPoint;
+        ConnectPoint egressPoint;
+
+<span class="fc" id="L60">        private Builder() {</span>
+            // Hide constructor
+<span class="fc" id="L62">        }</span>
+
+        @Override
+        public Builder appId(ApplicationId appId) {
+<span class="fc" id="L66">            return (Builder) super.appId(appId);</span>
+        }
+
+        @Override
+        public Builder key(Key key) {
+<span class="nc" id="L71">            return (Builder) super.key(key);</span>
+        }
+
+        @Override
+        public Builder selector(TrafficSelector selector) {
+<span class="fc" id="L76">            return (Builder) super.selector(selector);</span>
+        }
+
+        @Override
+        public Builder treatment(TrafficTreatment treatment) {
+<span class="fc" id="L81">            return (Builder) super.treatment(treatment);</span>
+        }
+
+        @Override
+        public Builder constraints(List&lt;Constraint&gt; constraints) {
+<span class="nc" id="L86">            return (Builder) super.constraints(constraints);</span>
+        }
+
+        @Override
+        public Builder priority(int priority) {
+<span class="nc" id="L91">            return (Builder) super.priority(priority);</span>
+        }
+
+        /**
+         * Sets the ingress point of the point to point intent that will be built.
+         *
+         * @param ingressPoint ingress connect point
+         * @return this builder
+         */
+        public Builder ingressPoint(ConnectPoint ingressPoint) {
+<span class="fc" id="L101">            this.ingressPoint = ingressPoint;</span>
+<span class="fc" id="L102">            return this;</span>
+        }
+
+        /**
+         * Sets the egress point of the point to point intent that will be built.
+         *
+         * @param egressPoint egress connect point
+         * @return this builder
+         */
+        public Builder egressPoint(ConnectPoint egressPoint) {
+<span class="fc" id="L112">            this.egressPoint = egressPoint;</span>
+<span class="fc" id="L113">            return this;</span>
+        }
+
+        /**
+         * Builds a point to point intent from the accumulated parameters.
+         *
+         * @return point to point intent
+         */
+        public PointToPointIntent build() {
+
+<span class="fc" id="L123">            return new PointToPointIntent(</span>
+                    appId,
+                    key,
+                    selector,
+                    treatment,
+                    ingressPoint,
+                    egressPoint,
+                    constraints,
+                    priority
+            );
+        }
+    }
+
+
+
+    /**
+     * Creates a new point-to-point intent with the supplied ingress/egress
+     * ports and constraints.
+     *
+     * @param appId        application identifier
+     * @param key          key of the intent
+     * @param selector     traffic selector
+     * @param treatment    treatment
+     * @param ingressPoint ingress port
+     * @param egressPoint  egress port
+     * @param constraints  optional list of constraints
+     * @param priority     priority to use for flows generated by this intent
+     * @throws NullPointerException if {@code ingressPoint} or
+     *        {@code egressPoints} or {@code appId} is null.
+     */
+    private PointToPointIntent(ApplicationId appId,
+                              Key key,
+                              TrafficSelector selector,
+                              TrafficTreatment treatment,
+                              ConnectPoint ingressPoint,
+                              ConnectPoint egressPoint,
+                              List&lt;Constraint&gt; constraints,
+                              int priority) {
+<span class="fc" id="L161">        super(appId, key, Collections.emptyList(), selector, treatment, constraints,</span>
+                priority);
+
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">        checkArgument(!ingressPoint.equals(egressPoint),</span>
+                &quot;ingress and egress should be different (ingress: %s, egress: %s)&quot;, ingressPoint, egressPoint);
+
+<span class="fc" id="L167">        this.ingressPoint = checkNotNull(ingressPoint);</span>
+<span class="fc" id="L168">        this.egressPoint = checkNotNull(egressPoint);</span>
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * Constructor for serializer.
+     */
+    protected PointToPointIntent() {
+<span class="nc" id="L175">        super();</span>
+<span class="nc" id="L176">        this.ingressPoint = null;</span>
+<span class="nc" id="L177">        this.egressPoint = null;</span>
+<span class="nc" id="L178">    }</span>
+
+    /**
+     * Returns the port on which the ingress traffic should be connected to
+     * the egress.
+     *
+     * @return ingress port
+     */
+    public ConnectPoint ingressPoint() {
+<span class="fc" id="L187">        return ingressPoint;</span>
+    }
+
+    /**
+     * Returns the port on which the traffic should egress.
+     *
+     * @return egress port
+     */
+    public ConnectPoint egressPoint() {
+<span class="fc" id="L196">        return egressPoint;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L201">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L202">                .add(&quot;id&quot;, id())</span>
+<span class="nc" id="L203">                .add(&quot;key&quot;, key())</span>
+<span class="nc" id="L204">                .add(&quot;appId&quot;, appId())</span>
+<span class="nc" id="L205">                .add(&quot;priority&quot;, priority())</span>
+<span class="nc" id="L206">                .add(&quot;resources&quot;, resources())</span>
+<span class="nc" id="L207">                .add(&quot;selector&quot;, selector())</span>
+<span class="nc" id="L208">                .add(&quot;treatment&quot;, treatment())</span>
+<span class="nc" id="L209">                .add(&quot;ingress&quot;, ingressPoint)</span>
+<span class="nc" id="L210">                .add(&quot;egress&quot;, egressPoint)</span>
+<span class="nc" id="L211">                .add(&quot;constraints&quot;, constraints())</span>
+<span class="nc" id="L212">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

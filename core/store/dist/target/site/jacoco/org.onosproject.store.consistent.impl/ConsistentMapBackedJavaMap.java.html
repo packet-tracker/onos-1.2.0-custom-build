@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConsistentMapBackedJavaMap.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">ConsistentMapBackedJavaMap.java</span></div><h1>ConsistentMapBackedJavaMap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.Versioned;
+
+import com.google.common.collect.Collections2;
+import com.google.common.collect.Maps;
+
+/**
+ * Standard java Map backed by a ConsistentMap.
+ *
+ * @param &lt;K&gt; key type
+ * @param &lt;V&gt; value type
+ */
+public final class ConsistentMapBackedJavaMap&lt;K, V&gt; implements Map&lt;K, V&gt; {
+
+    private final ConsistentMap&lt;K, V&gt; backingMap;
+
+<span class="nc" id="L42">    public ConsistentMapBackedJavaMap(ConsistentMap&lt;K, V&gt; backingMap) {</span>
+<span class="nc" id="L43">        this.backingMap = backingMap;</span>
+<span class="nc" id="L44">    }</span>
+
+    @Override
+    public int size() {
+<span class="nc" id="L48">        return backingMap.size();</span>
+    }
+
+    @Override
+    public boolean isEmpty() {
+<span class="nc" id="L53">        return backingMap.isEmpty();</span>
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+<span class="nc" id="L58">        return backingMap.containsKey((K) key);</span>
+    }
+
+    @Override
+    public boolean containsValue(Object value) {
+<span class="nc" id="L63">        return backingMap.containsValue((V) value);</span>
+    }
+
+    @Override
+    public V get(Object key) {
+<span class="nc" id="L68">        return Versioned.valueOrElse(backingMap.get((K) key), null);</span>
+    }
+
+    @Override
+    public V getOrDefault(Object key, V defaultValue) {
+<span class="nc" id="L73">        return Versioned.valueOrElse(backingMap.get((K) key), defaultValue);</span>
+    }
+
+    @Override
+    public V put(K key, V value) {
+<span class="nc" id="L78">        return Versioned.valueOrElse(backingMap.put(key, value), null);</span>
+    }
+
+    @Override
+    public V putIfAbsent(K key, V value) {
+<span class="nc" id="L83">        return Versioned.valueOrElse(backingMap.putIfAbsent(key, value), null);</span>
+    }
+
+    @Override
+    public V remove(Object key) {
+<span class="nc" id="L88">        return Versioned.valueOrElse(backingMap.remove((K) key), null);</span>
+    }
+
+    @Override
+    public boolean remove(Object key, Object value) {
+<span class="nc" id="L93">        return backingMap.remove((K) key, (V) value);</span>
+    }
+
+    @Override
+    public V replace(K key, V value) {
+<span class="nc" id="L98">        throw new UnsupportedOperationException();</span>
+    }
+
+    @Override
+    public boolean replace(K key, V oldValue, V newValue) {
+<span class="nc" id="L103">        return  backingMap.replace(key, oldValue, newValue);</span>
+    }
+
+    @Override
+    public void putAll(Map&lt;? extends K, ? extends V&gt; m) {
+<span class="nc" id="L108">        m.forEach((k, v) -&gt; {</span>
+<span class="nc" id="L109">            backingMap.put(k, v);</span>
+<span class="nc" id="L110">        });</span>
+<span class="nc" id="L111">    }</span>
+
+    @Override
+    public void clear() {
+<span class="nc" id="L115">        backingMap.clear();</span>
+<span class="nc" id="L116">    }</span>
+
+    @Override
+    public V compute(K key, BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L120">        return Versioned.valueOrElse(backingMap.compute(key, remappingFunction), null);</span>
+    }
+
+    @Override
+    public V computeIfAbsent(K key, Function&lt;? super K, ? extends V&gt; mappingFunction) {
+<span class="nc" id="L125">        return Versioned.valueOrElse(backingMap.computeIfAbsent(key, mappingFunction), null);</span>
+    }
+
+    @Override
+    public V computeIfPresent(K key, BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L130">        return Versioned.valueOrElse(backingMap.computeIfPresent(key, remappingFunction), null);</span>
+    }
+
+    @Override
+    public Set&lt;K&gt; keySet() {
+<span class="nc" id="L135">        return backingMap.keySet();</span>
+    }
+
+    @Override
+    public Collection&lt;V&gt; values() {
+<span class="nc" id="L140">        return Collections2.transform(backingMap.values(), v -&gt; v.value());</span>
+    }
+
+    @Override
+    public Set&lt;java.util.Map.Entry&lt;K, V&gt;&gt; entrySet() {
+<span class="nc" id="L145">        return backingMap.entrySet()</span>
+<span class="nc" id="L146">                         .stream()</span>
+<span class="nc" id="L147">                         .map(entry -&gt; Maps.immutableEntry(entry.getKey(), entry.getValue().value()))</span>
+<span class="nc" id="L148">                         .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public void forEach(BiConsumer&lt;? super K, ? super V&gt; action) {
+<span class="nc" id="L153">        entrySet().forEach(e -&gt; action.accept(e.getKey(), e.getValue()));</span>
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public V merge(K key, V value, BiFunction&lt;? super V, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        return computeIfPresent(key, (k, v) -&gt; v == null ? value : remappingFunction.apply(v, value));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

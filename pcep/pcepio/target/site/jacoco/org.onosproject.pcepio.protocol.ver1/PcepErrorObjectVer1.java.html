@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepErrorObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepErrorObjectVer1.java</span></div><h1>PcepErrorObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepErrorObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Error Object.
+ */
+public class PcepErrorObjectVer1 implements PcepErrorObject {
+
+    /*
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |   Reserved    |      Flags    |   Error-Type  |  Error-value  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    //                         Optional TLVs                       //
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+<span class="fc" id="L49">    protected static final Logger log = LoggerFactory.getLogger(PcepErrorObjectVer1.class);</span>
+
+    public static final byte ERROR_OBJ_TYPE = 1;
+    public static final byte ERROR_OBJ_CLASS = 13;
+    public static final byte ERROR_OBJECT_VERSION = 1;
+    //ERROR_OBJ_MINIMUM_LENGTH = CommonHeaderLen(4)+ErrorObjectHeaderLen(4)
+    public static final short ERROR_OBJ_MINIMUM_LENGTH = 8;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+
+<span class="fc" id="L58">    public static final PcepObjectHeader DEFAULT_ERROR_OBJECT_HEADER = new PcepObjectHeader(ERROR_OBJ_CLASS,</span>
+            ERROR_OBJ_TYPE, PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED,
+            ERROR_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader errorObjHeader;
+    private byte yErrorType;
+    private byte yErrorValue;
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv; // Optional TLV
+
+    /**
+     * Constructor to initialize variables.
+     *
+     * @param errorObjHeader ERROR Object header
+     * @param yErrorType Error Type
+     * @param yErrorValue Error Value
+     * @param llOptionalTlv list of optional TLV
+     */
+
+    public PcepErrorObjectVer1(PcepObjectHeader errorObjHeader, byte yErrorType, byte yErrorValue,
+<span class="fc" id="L77">            LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+<span class="fc" id="L78">        this.errorObjHeader = errorObjHeader;</span>
+<span class="fc" id="L79">        this.yErrorType = yErrorType;</span>
+<span class="fc" id="L80">        this.yErrorValue = yErrorValue;</span>
+<span class="fc" id="L81">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L82">    }</span>
+
+    /**
+     * sets Object Header.
+     *
+     * @param obj Error-Object header
+     */
+    public void setLspObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L90">        this.errorObjHeader = obj;</span>
+<span class="nc" id="L91">    }</span>
+
+    @Override
+    public void setErrorType(byte yErrorType) {
+<span class="nc" id="L95">        this.yErrorType = yErrorType;</span>
+<span class="nc" id="L96">    }</span>
+
+    @Override
+    public void setErrorValue(byte yErrorValue) {
+<span class="nc" id="L100">        this.yErrorValue = yErrorValue;</span>
+<span class="nc" id="L101">    }</span>
+
+    /**
+     * returns object header.
+     *
+     * @return errorObjHeader Error-Object header
+     */
+    public PcepObjectHeader getErrorObjHeader() {
+<span class="nc" id="L109">        return this.errorObjHeader;</span>
+    }
+
+    @Override
+    public int getErrorType() {
+<span class="nc" id="L114">        return this.yErrorType;</span>
+    }
+
+    @Override
+    public byte getErrorValue() {
+<span class="nc" id="L119">        return this.yErrorValue;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L124">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L129">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L130">    }</span>
+
+    /**
+     * Reads from channel buffer and returns object of PcepErrorObject.
+     *
+     * @param cb of channel buffer.
+     * @return object of PCEP-ERROR-OBJECT
+     */
+    public static PcepErrorObject read(ChannelBuffer cb) {
+
+        PcepObjectHeader errorObjHeader;
+        byte yErrorType;
+        byte yErrorValue;
+        LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="fc" id="L145">        errorObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only ErrorObject buffer.
+<span class="fc" id="L148">        ChannelBuffer tempCb = cb.readBytes(errorObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+<span class="fc" id="L149">        tempCb.readByte(); //ignore Reserved</span>
+<span class="fc" id="L150">        tempCb.readByte(); //ignore Flags</span>
+<span class="fc" id="L151">        yErrorType = tempCb.readByte();</span>
+<span class="fc" id="L152">        yErrorValue = tempCb.readByte();</span>
+
+<span class="fc" id="L154">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+
+<span class="fc" id="L156">        return new PcepErrorObjectVer1(errorObjHeader, yErrorType, yErrorValue, llOptionalTlv);</span>
+    }
+
+    /**
+     * returns Linked list of optional tlvs.
+     *
+     * @param cb channel buffer.
+     * @return Linked list of optional tlvs
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) {
+
+<span class="fc" id="L167">        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L169">        byte[] yTemp = new byte[cb.readableBytes()];</span>
+<span class="fc" id="L170">        cb.readBytes(yTemp);</span>
+
+<span class="fc" id="L172">        return llOutOptionalTlv;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+        //write Object header
+<span class="fc" id="L179">        int objStartIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L181">        int objLenIndex = errorObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L184">            throw new PcepParseException(&quot;While writing Error Object Header.&quot;);</span>
+        }
+
+        //write Reserved
+<span class="fc" id="L188">        cb.writeByte(0);</span>
+        //write Flags
+<span class="fc" id="L190">        cb.writeByte(0);</span>
+        //write ErrorType and ErrorValue
+<span class="fc" id="L192">        cb.writeByte(this.yErrorType);</span>
+<span class="fc" id="L193">        cb.writeByte(this.yErrorValue);</span>
+
+        // Add optional TLV
+<span class="fc" id="L196">        packOptionalTlv(cb);</span>
+
+        //Update object length now
+<span class="fc" id="L199">        int length = cb.writerIndex() - objStartIndex;</span>
+        //will be helpful during print().
+<span class="fc" id="L201">        errorObjHeader.setObjLen((short) length);</span>
+        // As per RFC the length of object should be
+        // multiples of 4
+<span class="fc" id="L204">        int pad = length % 4;</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (pad != 0) {</span>
+<span class="nc" id="L206">            pad = 4 - pad;</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            for (int i = 0; i &lt; pad; i++) {</span>
+<span class="nc" id="L208">                cb.writeByte((byte) 0);</span>
+            }
+<span class="nc" id="L210">            length = length + pad;</span>
+        }
+
+<span class="fc" id="L213">        cb.setShort(objLenIndex, (short) length);</span>
+<span class="fc" id="L214">        return length;</span>
+    }
+
+    /**
+     * Pack the Optional tlvs.
+     *
+     * @param cb channel buffer.
+     * @return writer index.
+     */
+    protected int packOptionalTlv(ChannelBuffer cb) {
+
+<span class="fc" id="L225">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+<span class="fc" id="L226">        int startIndex = cb.writerIndex();</span>
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L228">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="nc bnc" id="L230" title="All 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L231">                log.debug(&quot;TLV is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L232">                continue;</span>
+            }
+<span class="nc" id="L234">            tlv.write(cb);</span>
+<span class="nc" id="L235">        }</span>
+
+<span class="fc" id="L237">        return cb.writerIndex() - startIndex;</span>
+    }
+
+    /**
+     * Builder class for PCEP error object.
+     */
+<span class="nc" id="L243">    public static class Builder implements PcepErrorObject.Builder {</span>
+
+<span class="nc" id="L245">        private boolean bIsHeaderSet = false;</span>
+
+        private PcepObjectHeader errorObjHeader;
+        private byte yErrorType;
+        private byte yErrorValue;
+
+<span class="nc" id="L251">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L254">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+<span class="nc" id="L257">        private LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+        @Override
+        public PcepErrorObject build() {
+
+<span class="nc bnc" id="L262" title="All 2 branches missed.">            PcepObjectHeader errorObjHeader = this.bIsHeaderSet ? this.errorObjHeader : DEFAULT_ERROR_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L265">                errorObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L268" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L269">                errorObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L272">            return new PcepErrorObjectVer1(errorObjHeader, yErrorType, yErrorValue, llOptionalTlv);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getErrorObjHeader() {
+<span class="nc" id="L277">            return this.errorObjHeader;</span>
+        }
+
+        @Override
+        public Builder setErrorObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L282">            this.errorObjHeader = obj;</span>
+<span class="nc" id="L283">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L284">            return this;</span>
+        }
+
+        @Override
+        public int getErrorType() {
+<span class="nc" id="L289">            return this.yErrorType;</span>
+        }
+
+        @Override
+        public Builder setErrorType(byte value) {
+<span class="nc" id="L294">            this.yErrorType = value;</span>
+<span class="nc" id="L295">            return this;</span>
+        }
+
+        @Override
+        public byte getErrorValue() {
+<span class="nc" id="L300">            return this.yErrorValue;</span>
+        }
+
+        @Override
+        public Builder setErrorValue(byte value) {
+<span class="nc" id="L305">            this.yErrorValue = value;</span>
+<span class="nc" id="L306">            return this;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L311">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L312">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L317">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L322">            this.bPFlag = value;</span>
+<span class="nc" id="L323">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L324">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L329">            this.bIFlag = value;</span>
+<span class="nc" id="L330">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L331">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L337">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L338">                .add(&quot;ObjectHeader&quot;, errorObjHeader).add(&quot;ErrorType&quot;, yErrorType)</span>
+<span class="nc" id="L339">                .add(&quot;ErrorValue&quot;, yErrorValue).add(&quot;OptionalTlv&quot;, llOptionalTlv).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

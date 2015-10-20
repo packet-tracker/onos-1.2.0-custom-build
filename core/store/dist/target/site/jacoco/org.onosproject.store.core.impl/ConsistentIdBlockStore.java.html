@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConsistentIdBlockStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.core.impl</a> &gt; <span class="el_source">ConsistentIdBlockStore.java</span></div><h1>ConsistentIdBlockStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.core.impl;
+
+import com.google.common.collect.Maps;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.Tools;
+import org.onosproject.core.IdBlock;
+import org.onosproject.core.IdBlockStore;
+import org.onosproject.store.service.AtomicCounter;
+import org.onosproject.store.service.StorageException;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import java.util.Map;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Implementation of {@code IdBlockStore} using {@code AtomicCounter}.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L43">public class ConsistentIdBlockStore implements IdBlockStore {</span>
+
+    private static final int MAX_TRIES = 5;
+    private static final int RETRY_DELAY_MS = 2_000;
+
+<span class="nc" id="L48">    private final Logger log = getLogger(getClass());</span>
+<span class="nc" id="L49">    private final Map&lt;String, AtomicCounter&gt; topicCounters = Maps.newConcurrentMap();</span>
+
+    private static final long DEFAULT_BLOCK_SIZE = 0x100000L;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L58">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L59">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L63">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L64">    }</span>
+
+    @Override
+    public IdBlock getIdBlock(String topic) {
+<span class="nc" id="L68">        AtomicCounter counter = topicCounters</span>
+<span class="nc" id="L69">                .computeIfAbsent(topic,</span>
+<span class="nc" id="L70">                                 name -&gt; storageService.atomicCounterBuilder()</span>
+<span class="nc" id="L71">                                         .withName(name)</span>
+<span class="nc" id="L72">                                         .build());</span>
+<span class="nc" id="L73">        Long blockBase = Tools.retryable(counter::getAndAdd,</span>
+                StorageException.class,
+                MAX_TRIES,
+<span class="nc" id="L76">                RETRY_DELAY_MS).apply(DEFAULT_BLOCK_SIZE);</span>
+<span class="nc" id="L77">        return new IdBlock(blockBase, DEFAULT_BLOCK_SIZE);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

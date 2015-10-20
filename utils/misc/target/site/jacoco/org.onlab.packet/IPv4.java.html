@@ -1,0 +1,734 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IPv4.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IPv4.java</span></div><h1>IPv4.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ *
+ */
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.*;
+
+/**
+ *
+ */
+public class IPv4 extends BasePacket {
+    public static final byte PROTOCOL_ICMP = 0x1;
+    public static final byte PROTOCOL_IGMP = 0x2;
+    public static final byte PROTOCOL_TCP = 0x6;
+    public static final byte PROTOCOL_UDP = 0x11;
+    public static final byte PROTOCOL_PIM = 0x67;
+<span class="fc" id="L39">    public static final Map&lt;Byte, Deserializer&lt;? extends IPacket&gt;&gt; PROTOCOL_DESERIALIZER_MAP =</span>
+            new HashMap&lt;&gt;();
+
+    static {
+<span class="fc" id="L43">        IPv4.PROTOCOL_DESERIALIZER_MAP.put(IPv4.PROTOCOL_ICMP, ICMP.deserializer());</span>
+<span class="fc" id="L44">        IPv4.PROTOCOL_DESERIALIZER_MAP.put(IPv4.PROTOCOL_IGMP, IGMP.deserializer());</span>
+<span class="fc" id="L45">        IPv4.PROTOCOL_DESERIALIZER_MAP.put(IPv4.PROTOCOL_TCP, TCP.deserializer());</span>
+<span class="fc" id="L46">        IPv4.PROTOCOL_DESERIALIZER_MAP.put(IPv4.PROTOCOL_UDP, UDP.deserializer());</span>
+<span class="fc" id="L47">        IPv4.PROTOCOL_DESERIALIZER_MAP.put(IPv4.PROTOCOL_PIM, PIM.deserializer());</span>
+<span class="fc" id="L48">    }</span>
+
+    private static final byte DSCP_MASK = 0x3f;
+    private static final byte DSCP_OFFSET = 2;
+    private static final byte ECN_MASK = 0x3;
+
+    private static final short HEADER_LENGTH = 20;
+
+    protected byte version;
+    protected byte headerLength;
+    protected byte diffServ;
+    protected short totalLength;
+    protected short identification;
+    protected byte flags;
+    protected short fragmentOffset;
+    protected byte ttl;
+    protected byte protocol;
+    protected short checksum;
+    protected int sourceAddress;
+    protected int destinationAddress;
+    protected byte[] options;
+
+    protected boolean isTruncated;
+
+    /**
+     * Default constructor that sets the version to 4.
+     */
+    public IPv4() {
+<span class="fc" id="L76">        super();</span>
+<span class="fc" id="L77">        this.version = 4;</span>
+<span class="fc" id="L78">        this.isTruncated = false;</span>
+<span class="fc" id="L79">    }</span>
+
+    /**
+     * @return the version
+     */
+    public byte getVersion() {
+<span class="fc" id="L85">        return this.version;</span>
+    }
+
+    /**
+     * @param version
+     *            the version to set
+     * @return this
+     */
+    public IPv4 setVersion(final byte version) {
+<span class="fc" id="L94">        this.version = version;</span>
+<span class="fc" id="L95">        return this;</span>
+    }
+
+    /**
+     * @return the headerLength
+     */
+    public byte getHeaderLength() {
+<span class="fc" id="L102">        return this.headerLength;</span>
+    }
+
+    /**
+     * Gets the DSCP value (6 bits).
+     *
+     * @return the DSCP value (6 bits)
+     */
+    public byte getDscp() {
+<span class="nc" id="L111">        return (byte) ((this.diffServ &gt;&gt;&gt; DSCP_OFFSET) &amp; DSCP_MASK);</span>
+    }
+
+    /**
+     * Sets the DSCP value (6 bits).
+     *
+     * @param dscp the DSCP value (6 bits)
+     * @return this
+     */
+    public IPv4 setDscp(byte dscp) {
+<span class="nc" id="L121">        this.diffServ &amp;= ~(DSCP_MASK &lt;&lt; DSCP_OFFSET);</span>
+<span class="nc" id="L122">        this.diffServ |= (dscp &amp; DSCP_MASK) &lt;&lt; DSCP_OFFSET;</span>
+<span class="nc" id="L123">        return this;</span>
+    }
+
+    /**
+     * Gets the ECN value (2 bits).
+     *
+     * @return the ECN value (2 bits)
+     */
+    public byte getEcn() {
+<span class="nc" id="L132">        return (byte) (this.diffServ &amp; ECN_MASK);</span>
+    }
+
+    /**
+     * Sets the ECN value (2 bits).
+     *
+     * @param ecn the ECN value (2 bits)
+     * @return this
+     */
+    public IPv4 setEcn(byte ecn) {
+<span class="nc" id="L142">        this.diffServ &amp;= ~ECN_MASK;</span>
+<span class="nc" id="L143">        this.diffServ |= (ecn &amp; ECN_MASK);</span>
+<span class="nc" id="L144">        return this;</span>
+    }
+
+    /**
+     * Gets the DiffServ octet (including the DSCP and ECN bits).
+     *
+     * @return the diffServ octet (including the DSCP and ECN bits)
+     */
+    public byte getDiffServ() {
+<span class="fc" id="L153">        return this.diffServ;</span>
+    }
+
+    /**
+     * Sets the DiffServ octet (including the DSCP and ECN bits).
+     *
+     * @param diffServ the diffServ octet to set (including the DSCP and ECN
+     * bits)
+     * @return this
+     */
+    public IPv4 setDiffServ(final byte diffServ) {
+<span class="fc" id="L164">        this.diffServ = diffServ;</span>
+<span class="fc" id="L165">        return this;</span>
+    }
+
+    /**
+     * @return the totalLength
+     */
+    public short getTotalLength() {
+<span class="fc" id="L172">        return this.totalLength;</span>
+    }
+
+    /**
+     * @return the identification
+     */
+    public short getIdentification() {
+<span class="fc" id="L179">        return this.identification;</span>
+    }
+
+    public boolean isTruncated() {
+<span class="fc" id="L183">        return this.isTruncated;</span>
+    }
+
+    public void setTruncated(final boolean isTruncated) {
+<span class="nc" id="L187">        this.isTruncated = isTruncated;</span>
+<span class="nc" id="L188">    }</span>
+
+    /**
+     * @param identification
+     *            the identification to set
+     * @return this
+     */
+    public IPv4 setIdentification(final short identification) {
+<span class="nc" id="L196">        this.identification = identification;</span>
+<span class="nc" id="L197">        return this;</span>
+    }
+
+    /**
+     * @return the flags
+     */
+    public byte getFlags() {
+<span class="fc" id="L204">        return this.flags;</span>
+    }
+
+    /**
+     * @param flags
+     *            the flags to set
+     * @return this
+s     */
+    public IPv4 setFlags(final byte flags) {
+<span class="nc" id="L213">        this.flags = flags;</span>
+<span class="nc" id="L214">        return this;</span>
+    }
+
+    /**
+     * @return the fragmentOffset
+     */
+    public short getFragmentOffset() {
+<span class="fc" id="L221">        return this.fragmentOffset;</span>
+    }
+
+    /**
+     * @param fragmentOffset
+     *            the fragmentOffset to set
+     * @return this
+     */
+    public IPv4 setFragmentOffset(final short fragmentOffset) {
+<span class="nc" id="L230">        this.fragmentOffset = fragmentOffset;</span>
+<span class="nc" id="L231">        return this;</span>
+    }
+
+    /**
+     * @return the ttl
+     */
+    public byte getTtl() {
+<span class="fc" id="L238">        return this.ttl;</span>
+    }
+
+    /**
+     * @param ttl
+     *            the ttl to set
+     * @return this
+     */
+    public IPv4 setTtl(final byte ttl) {
+<span class="nc" id="L247">        this.ttl = ttl;</span>
+<span class="nc" id="L248">        return this;</span>
+    }
+
+    /**
+     * @return the protocol
+     */
+    public byte getProtocol() {
+<span class="fc" id="L255">        return this.protocol;</span>
+    }
+
+    /**
+     * @param protocol
+     *            the protocol to set
+     * @return this
+     */
+    public IPv4 setProtocol(final byte protocol) {
+<span class="fc" id="L264">        this.protocol = protocol;</span>
+<span class="fc" id="L265">        return this;</span>
+    }
+
+    /**
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="fc" id="L272">        return this.checksum;</span>
+    }
+
+    /**
+     * @param checksum
+     *            the checksum to set
+     * @return this
+     */
+    public IPv4 setChecksum(final short checksum) {
+<span class="nc" id="L281">        this.checksum = checksum;</span>
+<span class="nc" id="L282">        return this;</span>
+    }
+
+    @Override
+    public void resetChecksum() {
+<span class="fc" id="L287">        this.checksum = 0;</span>
+<span class="fc" id="L288">        super.resetChecksum();</span>
+<span class="fc" id="L289">    }</span>
+
+    /**
+     * @return the sourceAddress
+     */
+    public int getSourceAddress() {
+<span class="fc" id="L295">        return this.sourceAddress;</span>
+    }
+
+    /**
+     * @param sourceAddress
+     *            the sourceAddress to set
+     * @return this
+     */
+    public IPv4 setSourceAddress(final int sourceAddress) {
+<span class="fc" id="L304">        this.sourceAddress = sourceAddress;</span>
+<span class="fc" id="L305">        return this;</span>
+    }
+
+    /**
+     * @param sourceAddress
+     *            the sourceAddress to set
+     * @return this
+     */
+    public IPv4 setSourceAddress(final String sourceAddress) {
+<span class="nc" id="L314">        this.sourceAddress = IPv4.toIPv4Address(sourceAddress);</span>
+<span class="nc" id="L315">        return this;</span>
+    }
+
+    /**
+     * @return the destinationAddress
+     */
+    public int getDestinationAddress() {
+<span class="fc" id="L322">        return this.destinationAddress;</span>
+    }
+
+    /**
+     * @param destinationAddress
+     *            the destinationAddress to set
+     * @return this
+     */
+    public IPv4 setDestinationAddress(final int destinationAddress) {
+<span class="fc" id="L331">        this.destinationAddress = destinationAddress;</span>
+<span class="fc" id="L332">        return this;</span>
+    }
+
+    /**
+     * @param destinationAddress
+     *            the destinationAddress to set
+     * @return this
+     */
+    public IPv4 setDestinationAddress(final String destinationAddress) {
+<span class="nc" id="L341">        this.destinationAddress = IPv4.toIPv4Address(destinationAddress);</span>
+<span class="nc" id="L342">        return this;</span>
+    }
+
+    /**
+     * @return the options
+     */
+    public byte[] getOptions() {
+<span class="nc" id="L349">        return this.options;</span>
+    }
+
+    /**
+     * @param options
+     *            the options to set
+     * @return this
+     */
+    public IPv4 setOptions(final byte[] options) {
+<span class="nc bnc" id="L358" title="All 4 branches missed.">        if (options != null &amp;&amp; options.length % 4 &gt; 0) {</span>
+<span class="nc" id="L359">            throw new IllegalArgumentException(</span>
+                    &quot;Options length must be a multiple of 4&quot;);
+        }
+<span class="nc" id="L362">        this.options = options;</span>
+<span class="nc" id="L363">        return this;</span>
+    }
+
+    /**
+     * Serializes the packet. Will compute and set the following fields if they
+     * are set to specific values at the time serialize is called: -checksum : 0
+     * -headerLength : 0 -totalLength : 0
+     */
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L373">        byte[] payloadData = null;</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        if (this.payload != null) {</span>
+<span class="nc" id="L375">            this.payload.setParent(this);</span>
+<span class="nc" id="L376">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="nc" id="L379">        int optionsLength = 0;</span>
+<span class="nc bnc" id="L380" title="All 2 branches missed.">        if (this.options != null) {</span>
+<span class="nc" id="L381">            optionsLength = this.options.length / 4;</span>
+        }
+<span class="nc" id="L383">        this.headerLength = (byte) (5 + optionsLength);</span>
+
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        this.totalLength = (short) (this.headerLength * 4 + (payloadData == null ? 0</span>
+                : payloadData.length));
+
+<span class="nc" id="L388">        final byte[] data = new byte[this.totalLength];</span>
+<span class="nc" id="L389">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="nc" id="L391">        bb.put((byte) ((this.version &amp; 0xf) &lt;&lt; 4 | this.headerLength &amp; 0xf));</span>
+<span class="nc" id="L392">        bb.put(this.diffServ);</span>
+<span class="nc" id="L393">        bb.putShort(this.totalLength);</span>
+<span class="nc" id="L394">        bb.putShort(this.identification);</span>
+<span class="nc" id="L395">        bb.putShort((short) ((this.flags &amp; 0x7) &lt;&lt; 13 | this.fragmentOffset &amp; 0x1fff));</span>
+<span class="nc" id="L396">        bb.put(this.ttl);</span>
+<span class="nc" id="L397">        bb.put(this.protocol);</span>
+<span class="nc" id="L398">        bb.putShort(this.checksum);</span>
+<span class="nc" id="L399">        bb.putInt(this.sourceAddress);</span>
+<span class="nc" id="L400">        bb.putInt(this.destinationAddress);</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">        if (this.options != null) {</span>
+<span class="nc" id="L402">            bb.put(this.options);</span>
+        }
+<span class="nc bnc" id="L404" title="All 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L405">            bb.put(payloadData);</span>
+        }
+
+        // compute checksum if needed
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        if (this.checksum == 0) {</span>
+<span class="nc" id="L410">            bb.rewind();</span>
+<span class="nc" id="L411">            int accumulation = 0;</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">            for (int i = 0; i &lt; this.headerLength * 2; ++i) {</span>
+<span class="nc" id="L413">                accumulation += 0xffff &amp; bb.getShort();</span>
+            }
+<span class="nc" id="L415">            accumulation = (accumulation &gt;&gt; 16 &amp; 0xffff)</span>
+                    + (accumulation &amp; 0xffff);
+<span class="nc" id="L417">            this.checksum = (short) (~accumulation &amp; 0xffff);</span>
+<span class="nc" id="L418">            bb.putShort(10, this.checksum);</span>
+        }
+<span class="nc" id="L420">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L426">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+        short sscratch;
+
+<span class="nc" id="L429">        this.version = bb.get();</span>
+<span class="nc" id="L430">        this.headerLength = (byte) (this.version &amp; 0xf);</span>
+<span class="nc" id="L431">        this.version = (byte) (this.version &gt;&gt; 4 &amp; 0xf);</span>
+<span class="nc" id="L432">        this.diffServ = bb.get();</span>
+<span class="nc" id="L433">        this.totalLength = bb.getShort();</span>
+<span class="nc" id="L434">        this.identification = bb.getShort();</span>
+<span class="nc" id="L435">        sscratch = bb.getShort();</span>
+<span class="nc" id="L436">        this.flags = (byte) (sscratch &gt;&gt; 13 &amp; 0x7);</span>
+<span class="nc" id="L437">        this.fragmentOffset = (short) (sscratch &amp; 0x1fff);</span>
+<span class="nc" id="L438">        this.ttl = bb.get();</span>
+<span class="nc" id="L439">        this.protocol = bb.get();</span>
+<span class="nc" id="L440">        this.checksum = bb.getShort();</span>
+<span class="nc" id="L441">        this.sourceAddress = bb.getInt();</span>
+<span class="nc" id="L442">        this.destinationAddress = bb.getInt();</span>
+
+<span class="nc bnc" id="L444" title="All 2 branches missed.">        if (this.headerLength &gt; 5) {</span>
+<span class="nc" id="L445">            final int optionsLength = (this.headerLength - 5) * 4;</span>
+<span class="nc" id="L446">            this.options = new byte[optionsLength];</span>
+<span class="nc" id="L447">            bb.get(this.options);</span>
+        }
+
+<span class="nc bnc" id="L450" title="All 2 branches missed.">        if (this.totalLength != length) {</span>
+<span class="nc" id="L451">            this.isTruncated = true;</span>
+        } else {
+<span class="nc" id="L453">            this.isTruncated = false;</span>
+        }
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L457" title="All 2 branches missed.">        if (IPv4.PROTOCOL_DESERIALIZER_MAP.containsKey(this.protocol)) {</span>
+<span class="nc" id="L458">            deserializer = IPv4.PROTOCOL_DESERIALIZER_MAP.get(this.protocol);</span>
+        } else {
+<span class="nc" id="L460">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L463">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L464">                                                    bb.limit() - bb.position());</span>
+<span class="nc" id="L465">            this.payload.setParent(this);</span>
+<span class="nc" id="L466">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L467">            return this;</span>
+<span class="nc" id="L468">        }</span>
+
+<span class="nc" id="L470">        return this;</span>
+    }
+
+    /**
+     * Accepts an IPv4 address of the form xxx.xxx.xxx.xxx, ie 192.168.0.1 and
+     * returns the corresponding 32 bit integer.
+     *
+     * @param ipAddress ip address in string form
+     * @return int ip address value
+     */
+    public static int toIPv4Address(final String ipAddress) {
+<span class="nc bnc" id="L481" title="All 2 branches missed.">        if (ipAddress == null) {</span>
+<span class="nc" id="L482">            throw new IllegalArgumentException(&quot;Specified IPv4 address must&quot;</span>
+                    + &quot;contain 4 sets of numerical digits separated by periods&quot;);
+        }
+<span class="nc" id="L485">        final String[] octets = ipAddress.split(&quot;\\.&quot;);</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">        if (octets.length != 4) {</span>
+<span class="nc" id="L487">            throw new IllegalArgumentException(&quot;Specified IPv4 address must&quot;</span>
+                    + &quot;contain 4 sets of numerical digits separated by periods&quot;);
+        }
+
+<span class="nc" id="L491">        int result = 0;</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">        for (int i = 0; i &lt; 4; ++i) {</span>
+<span class="nc" id="L493">            result |= Integer.parseInt(octets[i]) &lt;&lt; (3 - i) * 8;</span>
+        }
+<span class="nc" id="L495">        return result;</span>
+    }
+
+    /**
+     * Accepts an IPv4 address in a byte array and returns the corresponding
+     * 32-bit integer value.
+     *
+     * @param ipAddress ip address in byte form
+     * @return int ip address value
+     */
+    public static int toIPv4Address(final byte[] ipAddress) {
+<span class="fc" id="L506">        int ip = 0;</span>
+<span class="fc bfc" id="L507" title="All 2 branches covered.">        for (int i = 0; i &lt; 4; i++) {</span>
+<span class="fc" id="L508">            final int t = (ipAddress[i] &amp; 0xff) &lt;&lt; (3 - i) * 8;</span>
+<span class="fc" id="L509">            ip |= t;</span>
+        }
+<span class="fc" id="L511">        return ip;</span>
+    }
+
+    /**
+     * Accepts an IPv4 address and returns of string of the form xxx.xxx.xxx.xxx,
+     * e.g., 192.168.0.1.
+     *
+     * @param ipAddress ip address in form
+     * @return string form of ip address
+     */
+    public static String fromIPv4Address(final int ipAddress) {
+<span class="nc" id="L522">        final StringBuffer sb = new StringBuffer();</span>
+<span class="nc" id="L523">        int result = 0;</span>
+<span class="nc bnc" id="L524" title="All 2 branches missed.">        for (int i = 0; i &lt; 4; ++i) {</span>
+<span class="nc" id="L525">            result = ipAddress &gt;&gt; (3 - i) * 8 &amp; 0xff;</span>
+<span class="nc" id="L526">        sb.append(result);</span>
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        if (i != 3) {</span>
+<span class="nc" id="L528">            sb.append(&quot;.&quot;);</span>
+        }
+        }
+<span class="nc" id="L531">        return sb.toString();</span>
+    }
+
+    /**
+     * Accepts a collection of IPv4 addresses as integers and returns a single
+     * String useful in toString method's containing collections of IP
+     * addresses.
+     *
+     * @param ipAddresses
+     *            collection
+     * @return ip addresses in comma-separated string form
+     */
+    public static String fromIPv4AddressCollection(
+            final Collection&lt;Integer&gt; ipAddresses) {
+<span class="nc bnc" id="L545" title="All 2 branches missed.">        if (ipAddresses == null) {</span>
+<span class="nc" id="L546">            return &quot;null&quot;;</span>
+        }
+<span class="nc" id="L548">        final StringBuffer sb = new StringBuffer();</span>
+<span class="nc" id="L549">        sb.append(&quot;[&quot;);</span>
+<span class="nc bnc" id="L550" title="All 2 branches missed.">        for (final Integer ip : ipAddresses) {</span>
+<span class="nc" id="L551">            sb.append(IPv4.fromIPv4Address(ip));</span>
+<span class="nc" id="L552">            sb.append(&quot;,&quot;);</span>
+<span class="nc" id="L553">        }</span>
+<span class="nc" id="L554">        sb.replace(sb.length() - 1, sb.length(), &quot;]&quot;);</span>
+<span class="nc" id="L555">        return sb.toString();</span>
+    }
+
+    /**
+     * Accepts an IPv4 address of the form xxx.xxx.xxx.xxx, ie 192.168.0.1 and
+     * returns the corresponding byte array.
+     *
+     * @param ipAddress
+     *            The IP address in the form xx.xxx.xxx.xxx.
+     * @return The IP address separated into bytes
+     */
+    public static byte[] toIPv4AddressBytes(final String ipAddress) {
+<span class="nc" id="L567">        final String[] octets = ipAddress.split(&quot;\\.&quot;);</span>
+<span class="nc bnc" id="L568" title="All 2 branches missed.">        if (octets.length != 4) {</span>
+<span class="nc" id="L569">            throw new IllegalArgumentException(&quot;Specified IPv4 address must&quot;</span>
+                    + &quot;contain 4 sets of numerical digits separated by periods&quot;);
+        }
+
+<span class="nc" id="L573">        final byte[] result = new byte[4];</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">        for (int i = 0; i &lt; 4; ++i) {</span>
+<span class="nc" id="L575">            result[i] = Integer.valueOf(octets[i]).byteValue();</span>
+        }
+<span class="nc" id="L577">        return result;</span>
+    }
+
+    /**
+     * Accepts an IPv4 address in the form of an integer and returns the
+     * corresponding byte array.
+     *
+     * @param ipAddress
+     *            The IP address as an integer.
+     * @return The IP address separated into bytes.
+     */
+    public static byte[] toIPv4AddressBytes(final int ipAddress) {
+<span class="nc" id="L589">        return new byte[] {(byte) (ipAddress &gt;&gt;&gt; 24),</span>
+                (byte) (ipAddress &gt;&gt;&gt; 16), (byte) (ipAddress &gt;&gt;&gt; 8),
+                (byte) ipAddress};
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L601">        final int prime = 2521;</span>
+<span class="nc" id="L602">        int result = super.hashCode();</span>
+<span class="nc" id="L603">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L604">        result = prime * result + this.destinationAddress;</span>
+<span class="nc" id="L605">        result = prime * result + this.diffServ;</span>
+<span class="nc" id="L606">        result = prime * result + this.flags;</span>
+<span class="nc" id="L607">        result = prime * result + this.fragmentOffset;</span>
+<span class="nc" id="L608">        result = prime * result + this.headerLength;</span>
+<span class="nc" id="L609">        result = prime * result + this.identification;</span>
+<span class="nc" id="L610">        result = prime * result + Arrays.hashCode(this.options);</span>
+<span class="nc" id="L611">        result = prime * result + this.protocol;</span>
+<span class="nc" id="L612">        result = prime * result + this.sourceAddress;</span>
+<span class="nc" id="L613">        result = prime * result + this.totalLength;</span>
+<span class="nc" id="L614">        result = prime * result + this.ttl;</span>
+<span class="nc" id="L615">        result = prime * result + this.version;</span>
+<span class="nc" id="L616">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L626" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L627">            return true;</span>
+        }
+<span class="nc bnc" id="L629" title="All 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L630">            return false;</span>
+        }
+<span class="nc bnc" id="L632" title="All 2 branches missed.">        if (!(obj instanceof IPv4)) {</span>
+<span class="nc" id="L633">            return false;</span>
+        }
+<span class="nc" id="L635">        final IPv4 other = (IPv4) obj;</span>
+<span class="nc bnc" id="L636" title="All 2 branches missed.">        if (this.checksum != other.checksum) {</span>
+<span class="nc" id="L637">            return false;</span>
+        }
+<span class="nc bnc" id="L639" title="All 2 branches missed.">        if (this.destinationAddress != other.destinationAddress) {</span>
+<span class="nc" id="L640">            return false;</span>
+        }
+<span class="nc bnc" id="L642" title="All 2 branches missed.">        if (this.diffServ != other.diffServ) {</span>
+<span class="nc" id="L643">            return false;</span>
+        }
+<span class="nc bnc" id="L645" title="All 2 branches missed.">        if (this.flags != other.flags) {</span>
+<span class="nc" id="L646">            return false;</span>
+        }
+<span class="nc bnc" id="L648" title="All 2 branches missed.">        if (this.fragmentOffset != other.fragmentOffset) {</span>
+<span class="nc" id="L649">            return false;</span>
+        }
+<span class="nc bnc" id="L651" title="All 2 branches missed.">        if (this.headerLength != other.headerLength) {</span>
+<span class="nc" id="L652">            return false;</span>
+        }
+<span class="nc bnc" id="L654" title="All 2 branches missed.">        if (this.identification != other.identification) {</span>
+<span class="nc" id="L655">            return false;</span>
+        }
+<span class="nc bnc" id="L657" title="All 2 branches missed.">        if (!Arrays.equals(this.options, other.options)) {</span>
+<span class="nc" id="L658">            return false;</span>
+        }
+<span class="nc bnc" id="L660" title="All 2 branches missed.">        if (this.protocol != other.protocol) {</span>
+<span class="nc" id="L661">            return false;</span>
+        }
+<span class="nc bnc" id="L663" title="All 2 branches missed.">        if (this.sourceAddress != other.sourceAddress) {</span>
+<span class="nc" id="L664">            return false;</span>
+        }
+<span class="nc bnc" id="L666" title="All 2 branches missed.">        if (this.totalLength != other.totalLength) {</span>
+<span class="nc" id="L667">            return false;</span>
+        }
+<span class="nc bnc" id="L669" title="All 2 branches missed.">        if (this.ttl != other.ttl) {</span>
+<span class="nc" id="L670">            return false;</span>
+        }
+<span class="nc bnc" id="L672" title="All 2 branches missed.">        if (this.version != other.version) {</span>
+<span class="nc" id="L673">            return false;</span>
+        }
+<span class="nc" id="L675">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for IPv4 packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;IPv4&gt; deserializer() {
+<span class="fc" id="L684">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L685">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="fc" id="L687">            IPv4 ipv4 = new IPv4();</span>
+
+<span class="fc" id="L689">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L691">            byte versionByte = bb.get();</span>
+<span class="fc" id="L692">            ipv4.headerLength = (byte) (versionByte &amp; 0xf);</span>
+<span class="fc" id="L693">            ipv4.setVersion((byte) (versionByte &gt;&gt; 4 &amp; 0xf));</span>
+<span class="fc" id="L694">            ipv4.setDiffServ(bb.get());</span>
+<span class="fc" id="L695">            ipv4.totalLength = bb.getShort();</span>
+<span class="fc" id="L696">            ipv4.identification = bb.getShort();</span>
+<span class="fc" id="L697">            short flagsFragment = bb.getShort();</span>
+<span class="fc" id="L698">            ipv4.flags = (byte) (flagsFragment &gt;&gt; 13 &amp; 0x7);</span>
+<span class="fc" id="L699">            ipv4.fragmentOffset = (short) (flagsFragment &amp; 0x1fff);</span>
+<span class="fc" id="L700">            ipv4.ttl = bb.get();</span>
+<span class="fc" id="L701">            ipv4.protocol = bb.get();</span>
+<span class="fc" id="L702">            ipv4.checksum = bb.getShort();</span>
+<span class="fc" id="L703">            ipv4.sourceAddress = bb.getInt();</span>
+<span class="fc" id="L704">            ipv4.destinationAddress = bb.getInt();</span>
+
+<span class="pc bpc" id="L706" title="1 of 2 branches missed.">            if (ipv4.headerLength &gt; 5) {</span>
+<span class="fc" id="L707">                checkHeaderLength(length, ipv4.headerLength * 4);</span>
+
+<span class="fc" id="L709">                int optionsLength = (ipv4.headerLength - 5) * 4;</span>
+<span class="fc" id="L710">                ipv4.options = new byte[optionsLength];</span>
+<span class="fc" id="L711">                bb.get(ipv4.options);</span>
+            }
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L715" title="1 of 2 branches missed.">            if (IPv4.PROTOCOL_DESERIALIZER_MAP.containsKey(ipv4.protocol)) {</span>
+<span class="nc" id="L716">                deserializer = IPv4.PROTOCOL_DESERIALIZER_MAP.get(ipv4.protocol);</span>
+            } else {
+<span class="fc" id="L718">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L720">            ipv4.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L721">                                                    bb.limit() - bb.position());</span>
+<span class="fc" id="L722">            ipv4.payload.setParent(ipv4);</span>
+
+<span class="pc bpc" id="L724" title="1 of 2 branches missed.">            if (ipv4.totalLength != length) {</span>
+<span class="fc" id="L725">                ipv4.isTruncated = true;</span>
+            } else {
+<span class="nc" id="L727">                ipv4.isTruncated = false;</span>
+            }
+
+<span class="fc" id="L730">            return ipv4;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

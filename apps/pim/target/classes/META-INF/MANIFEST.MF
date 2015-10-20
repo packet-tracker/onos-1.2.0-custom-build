@@ -1,0 +1,27 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1445328570628
+Build-Jdk: 1.8.0_60
+Built-By: parallels
+Bundle-Description: Protocol Independent Multicast Emulation
+Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
+Bundle-ManifestVersion: 2
+Bundle-Name: onos-app-pim
+Bundle-SymbolicName: org.onosproject.onos-app-pim
+Bundle-Version: 1.4.0.SNAPSHOT
+Created-By: Apache Maven Bundle Plugin
+Export-Package: org.onosproject.pim.cli;uses:="org.apache.karaf.shell.co
+ mmands,org.onosproject.cli";version="1.4.0"
+Import-Package: org.slf4j;version="[1.7,2)",com.google.common.base;versi
+ on="[18.0,19)",org.apache.karaf.shell.commands;version="[3.0,4)",org.on
+ lab.packet;version="[1.4,2)",org.onlab.packet.pim;version="[1.4,2)",org
+ .onosproject.cli;version="[1.4,2)",org.onosproject.codec;version="[1.4,
+ 2)",org.onosproject.core;version="[1.4,2)",org.onosproject.net;version=
+ "[1.4,2)",org.onosproject.net.flow;version="[1.4,2)",org.onosproject.ne
+ t.packet;version="[1.4,2)",org.jboss.netty.util;version="[3.9,4)",org.o
+ sgi.framework,org.apache.karaf.shell.console;version="[3.0,4)"
+Require-Capability: osgi.service;effective:=active;filter:="(objectClass
+ =org.onosproject.net.packet.PacketService)",osgi.service;effective:=act
+ ive;filter:="(objectClass=org.onosproject.core.CoreService)",osgi.ee;fi
+ lter:="(&(osgi.ee=JavaSE)(version=1.8))"
+Service-Component: OSGI-INF/org.onosproject.pim.impl.PIMComponent.xml
+Tool: Bnd-2.4.0.201411031534

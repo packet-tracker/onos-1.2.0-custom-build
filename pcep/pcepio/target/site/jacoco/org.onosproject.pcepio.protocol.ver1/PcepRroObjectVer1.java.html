@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepRroObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepRroObjectVer1.java</span></div><h1>PcepRroObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepRroObject;
+import org.onosproject.pcepio.types.IPv4SubObject;
+import org.onosproject.pcepio.types.IPv6SubObject;
+import org.onosproject.pcepio.types.LabelSubObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP RRO object.
+ */
+public class PcepRroObjectVer1 implements PcepRroObject {
+
+    /*
+     * rfc3209
+          0                   1                   2                   3
+          0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         |                                                               |
+         //                        (Subobjects)                          //
+         |                                                               |
+         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+            Each subobject has its own Length
+            field.  The length contains the total length of the subobject in
+            bytes, including the Type and Length fields.  The length MUST always
+            be a multiple of 4, and at least 4.
+
+            An empty RRO with no subobjects is considered illegal.
+            Three kinds of subobjects are currently defined.
+
+           Subobject 1: IPv4 address
+
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |      Type     |     Length    | IPv4 address (4 bytes)        |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           | IPv4 address (continued)      | Prefix Length |      Flags    |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+           Subobject 2: IPv6 address
+
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |      Type     |     Length    | IPv6 address (16 bytes)       |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           | IPv6 address (continued)                                      |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           | IPv6 address (continued)                                      |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           | IPv6 address (continued)                                      |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           | IPv6 address (continued)      | Prefix Length |      Flags    |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+           Subobject 3, Label
+
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |     Type      |     Length    |    Flags      |   C-Type      |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |       Contents of Label Object                                |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+     */
+<span class="fc" id="L97">    protected static final Logger log = LoggerFactory.getLogger(PcepRroObjectVer1.class);</span>
+
+    public static final byte RRO_OBJ_TYPE = 1;
+    public static final byte RRO_OBJ_CLASS = 8;
+    public static final byte RRO_OBJECT_VERSION = 1;
+    public static final short RRO_OBJ_MINIMUM_LENGTH = 12;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+    public static final int YTYPE_SHIFT_VALUE = 0x7F;
+
+<span class="fc" id="L106">    static final PcepObjectHeader DEFAULT_RRO_OBJECT_HEADER = new PcepObjectHeader(RRO_OBJ_CLASS, RRO_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, RRO_OBJ_MINIMUM_LENGTH);
+
+<span class="pc" id="L109">    private short rroObjType = 0;</span>
+    private byte length;
+    private byte prefixLength;
+    private byte resvd;
+    PcepObjectHeader rroObjHeader;
+<span class="pc" id="L114">    private LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;&gt;();</span>
+
+    /**
+     * Reset variables.
+     */
+<span class="nc" id="L119">    public PcepRroObjectVer1() {</span>
+<span class="nc" id="L120">        this.rroObjHeader = null;</span>
+<span class="nc" id="L121">        this.rroObjType = 0;</span>
+<span class="nc" id="L122">        this.length = 0;</span>
+<span class="nc" id="L123">    }</span>
+
+    /**
+     * constructor to initialize parameters for RRO object.
+     *
+     * @param rroObjHeader RRO object header
+     * @param llSubObjects list of sub objects
+     */
+<span class="fc" id="L131">    public PcepRroObjectVer1(PcepObjectHeader rroObjHeader, LinkedList&lt;PcepValueType&gt; llSubObjects) {</span>
+<span class="fc" id="L132">        this.rroObjHeader = rroObjHeader;</span>
+<span class="fc" id="L133">        this.llSubObjects = llSubObjects;</span>
+<span class="fc" id="L134">    }</span>
+
+    /**
+     * Returns PCEP RRO Object Header.
+     *
+     * @return rroObjHeader RRO Object header
+     */
+    public PcepObjectHeader getRroObjHeader() {
+<span class="nc" id="L142">        return this.rroObjHeader;</span>
+    }
+
+    /**
+     * Sets PCEP RRO Object Header.
+     *
+     * @param obj Object header
+     */
+    public void setRroObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L151">        this.rroObjHeader = obj;</span>
+<span class="nc" id="L152">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getSubObjects() {
+<span class="nc" id="L156">        return this.llSubObjects;</span>
+    }
+
+    @Override
+    public void setSubObjects(LinkedList&lt;PcepValueType&gt; llSubObjects) {
+<span class="nc" id="L161">        this.llSubObjects = llSubObjects;</span>
+<span class="nc" id="L162">    }</span>
+
+    /**
+     * Reads the channel buffer and returns object of PcepRroObject.
+     *
+     * @param cb of type channel buffer
+     * @return object of PcepRroObject
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepRroObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader rroObjHeader;
+        LinkedList&lt;PcepValueType&gt; llSubObjects;
+<span class="fc" id="L175">        rroObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only RroObject buffer.
+<span class="fc" id="L178">        ChannelBuffer tempCb = cb.readBytes(rroObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+<span class="fc" id="L179">        llSubObjects = parseSubObjects(tempCb);</span>
+
+<span class="fc" id="L181">        return new PcepRroObjectVer1(rroObjHeader, llSubObjects);</span>
+    }
+
+    /**
+     * Returns list of sub objects.
+     *
+     * @param cb of type channel buffer
+     * @return list of sub objects
+     * @throws PcepParseException when fails to parse list of sub objects
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseSubObjects(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L193">        LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L195" title="All 2 branches covered.">        while (0 &lt; cb.readableBytes()) {</span>
+
+            //check the Type of the Sub objects
+<span class="fc" id="L198">            byte yType = cb.readByte();</span>
+<span class="fc" id="L199">            yType = (byte) (yType &amp; (YTYPE_SHIFT_VALUE));</span>
+<span class="fc" id="L200">            byte hLength = cb.readByte();</span>
+
+            PcepValueType subObj;
+
+<span class="pc bpc" id="L204" title="3 of 4 branches missed.">            switch (yType) {</span>
+
+            case IPv4SubObject.TYPE:
+<span class="fc" id="L207">                subObj = IPv4SubObject.read(cb);</span>
+<span class="fc" id="L208">                break;</span>
+            case IPv6SubObject.TYPE:
+<span class="nc" id="L210">                byte[] ipv6Value = new byte[IPv6SubObject.VALUE_LENGTH];</span>
+<span class="nc" id="L211">                cb.readBytes(ipv6Value, 0, IPv6SubObject.VALUE_LENGTH);</span>
+<span class="nc" id="L212">                subObj = new IPv6SubObject(ipv6Value);</span>
+<span class="nc" id="L213">                break;</span>
+            case LabelSubObject.TYPE:
+<span class="nc" id="L215">                subObj = LabelSubObject.read(cb);</span>
+<span class="nc" id="L216">                break;</span>
+            default:
+<span class="nc" id="L218">                throw new PcepParseException(&quot; Unexpected sub object. Type: &quot; + (int) yType);</span>
+            }
+            // Check for the padding
+<span class="fc" id="L221">            int pad = hLength % 4;</span>
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L223">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L225">                    cb.skipBytes(pad);</span>
+                }
+            }
+<span class="fc" id="L228">            llSubObjects.add(subObj);</span>
+<span class="fc" id="L229">        }</span>
+
+<span class="fc" id="L231">        return llSubObjects;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+        //write Object header
+<span class="fc" id="L237">        int objStartIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L239">        int objLenIndex = rroObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L242">            throw new PcepParseException(&quot; object Length Index&quot; + objLenIndex);</span>
+        }
+
+<span class="fc" id="L245">        ListIterator&lt;PcepValueType&gt; listIterator = llSubObjects.listIterator();</span>
+
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L248">            listIterator.next().write(cb);</span>
+        }
+
+        //Update object length now
+<span class="fc" id="L252">        int length = cb.writerIndex() - objStartIndex;</span>
+<span class="fc" id="L253">        cb.setShort(objLenIndex, (short) length);</span>
+        //will be helpful during print().
+<span class="fc" id="L255">        rroObjHeader.setObjLen((short) length);</span>
+
+        //As per RFC the length of object should be multiples of 4
+<span class="fc" id="L258">        int pad = length % 4;</span>
+
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">        if (0 != pad) {</span>
+<span class="nc" id="L261">            pad = 4 - pad;</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">            for (int i = 0; i &lt; pad; i++) {</span>
+<span class="nc" id="L263">                cb.writeByte((byte) 0);</span>
+            }
+<span class="nc" id="L265">            length = length + pad;</span>
+        }
+<span class="fc" id="L267">        objLenIndex = cb.writerIndex();</span>
+<span class="fc" id="L268">        return objLenIndex;</span>
+    }
+
+    /**
+     * Builder class for PCEP RRO object.
+     */
+<span class="nc" id="L274">    public static class Builder implements PcepRroObject.Builder {</span>
+<span class="nc" id="L275">        private boolean bIsHeaderSet = false;</span>
+
+        private PcepObjectHeader rroObjHeader;
+<span class="nc" id="L278">        LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L280">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L283">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepRroObject build() {
+
+<span class="nc bnc" id="L289" title="All 2 branches missed.">            PcepObjectHeader rroObjHeader = this.bIsHeaderSet ? this.rroObjHeader : DEFAULT_RRO_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L292">                rroObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L295" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L296">                rroObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L298">            return new PcepRroObjectVer1(rroObjHeader, this.llSubObjects);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getRroObjHeader() {
+<span class="nc" id="L303">            return this.rroObjHeader;</span>
+        }
+
+        @Override
+        public Builder setRroObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L308">            this.rroObjHeader = obj;</span>
+<span class="nc" id="L309">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L310">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getSubObjects() {
+<span class="nc" id="L315">            return this.llSubObjects;</span>
+        }
+
+        @Override
+        public Builder setSubObjects(LinkedList&lt;PcepValueType&gt; llSubObjects) {
+<span class="nc" id="L320">            this.llSubObjects = llSubObjects;</span>
+<span class="nc" id="L321">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L326">            this.bPFlag = value;</span>
+<span class="nc" id="L327">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L328">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L333">            this.bIFlag = value;</span>
+<span class="nc" id="L334">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L335">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L341">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L342">                .add(&quot;SubObjects&quot;, llSubObjects)</span>
+<span class="nc" id="L343">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

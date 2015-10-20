@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>CoreEventDispatcher.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.event.impl</a> &gt; <span class="el_source">CoreEventDispatcher.java</span></div><h1>CoreEventDispatcher.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.event.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.SharedExecutors;
+import org.onosproject.event.AbstractEvent;
+import org.onosproject.event.DefaultEventSinkRegistry;
+import org.onosproject.event.Event;
+import org.onosproject.event.EventDeliveryService;
+import org.onosproject.event.EventSink;
+import org.slf4j.Logger;
+
+import java.util.TimerTask;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Simple implementation of an event dispatching service.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L46">public class CoreEventDispatcher extends DefaultEventSinkRegistry</span>
+        implements EventDeliveryService {
+
+<span class="fc" id="L49">    private final Logger log = getLogger(getClass());</span>
+
+    // Default number of millis a sink can take to process an event.
+    private static final long DEFAULT_EXECUTE_MS = 5_000; // ms
+    private static final long WATCHDOG_MS = 250; // ms
+
+<span class="fc" id="L55">    private final BlockingQueue&lt;Event&gt; events = new LinkedBlockingQueue&lt;&gt;();</span>
+
+<span class="fc" id="L57">    private final ExecutorService executor =</span>
+<span class="fc" id="L58">            newSingleThreadExecutor(groupedThreads(&quot;onos/event&quot;, &quot;dispatch-%d&quot;));</span>
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L61">    private static final Event KILL_PILL = new AbstractEvent(null, 0) {</span>
+    };
+
+    private DispatchLoop dispatchLoop;
+<span class="fc" id="L65">    private long maxProcessMillis = DEFAULT_EXECUTE_MS;</span>
+
+    // Means to detect long-running sinks
+    private TimerTask watchdog;
+    private EventSink lastSink;
+<span class="fc" id="L70">    private long lastStart = 0;</span>
+    private Future&lt;?&gt; dispatchFuture;
+
+    @Override
+    public void post(Event event) {
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if (!events.add(event)) {</span>
+<span class="nc" id="L76">            log.error(&quot;Unable to post event {}&quot;, event);</span>
+        }
+<span class="fc" id="L78">    }</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L82">        dispatchLoop = new DispatchLoop();</span>
+<span class="fc" id="L83">        dispatchFuture = executor.submit(dispatchLoop);</span>
+<span class="fc" id="L84">        watchdog = new Watchdog();</span>
+<span class="fc" id="L85">        SharedExecutors.getTimer().schedule(watchdog, WATCHDOG_MS, WATCHDOG_MS);</span>
+<span class="fc" id="L86">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L87">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L91">        dispatchLoop.stop();</span>
+<span class="fc" id="L92">        watchdog.cancel();</span>
+<span class="fc" id="L93">        post(KILL_PILL);</span>
+<span class="fc" id="L94">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L95">    }</span>
+
+    @Override
+    public void setDispatchTimeLimit(long millis) {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        checkArgument(millis &gt;= WATCHDOG_MS,</span>
+<span class="nc" id="L100">                      &quot;Time limit must be greater than %s&quot;, WATCHDOG_MS);</span>
+<span class="nc" id="L101">        maxProcessMillis = millis;</span>
+<span class="nc" id="L102">    }</span>
+
+    @Override
+    public long getDispatchTimeLimit() {
+<span class="nc" id="L106">        return maxProcessMillis;</span>
+    }
+
+    // Auxiliary event dispatching loop that feeds off the events queue.
+<span class="fc" id="L110">    private class DispatchLoop implements Runnable {</span>
+        private volatile boolean stopped;
+
+        @Override
+        public void run() {
+<span class="fc" id="L115">            stopped = false;</span>
+<span class="fc" id="L116">            log.info(&quot;Dispatch loop initiated&quot;);</span>
+<span class="fc bfc" id="L117" title="All 2 branches covered.">            while (!stopped) {</span>
+                try {
+                    // Fetch the next event and if it is the kill-pill, bail
+<span class="fc" id="L120">                    Event event = events.take();</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">                    if (event == KILL_PILL) {</span>
+<span class="nc" id="L122">                        break;</span>
+                    }
+<span class="fc" id="L124">                    process(event);</span>
+<span class="nc" id="L125">                } catch (InterruptedException e) {</span>
+<span class="nc" id="L126">                    log.warn(&quot;Dispatch loop interrupted&quot;);</span>
+<span class="fc" id="L127">                } catch (Exception e) {</span>
+<span class="fc" id="L128">                    log.warn(&quot;Error encountered while dispatching event:&quot;, e);</span>
+<span class="pc" id="L129">                }</span>
+            }
+<span class="fc" id="L131">            log.info(&quot;Dispatch loop terminated&quot;);</span>
+<span class="fc" id="L132">        }</span>
+
+        // Locate the sink for the event class and use it to process the event
+        @SuppressWarnings(&quot;unchecked&quot;)
+        private void process(Event event) {
+<span class="fc" id="L137">            EventSink sink = getSink(event.getClass());</span>
+<span class="fc bfc" id="L138" title="All 2 branches covered.">            if (sink != null) {</span>
+<span class="fc" id="L139">                lastSink = sink;</span>
+<span class="fc" id="L140">                lastStart = System.currentTimeMillis();</span>
+<span class="fc" id="L141">                sink.process(event);</span>
+<span class="fc" id="L142">                lastStart = 0;</span>
+            } else {
+<span class="fc" id="L144">                log.warn(&quot;No sink registered for event class {}&quot;,</span>
+<span class="fc" id="L145">                         event.getClass().getName());</span>
+            }
+<span class="fc" id="L147">        }</span>
+
+        void stop() {
+<span class="fc" id="L150">            stopped = true;</span>
+<span class="fc" id="L151">        }</span>
+    }
+
+    // Monitors event sinks to make sure none take too long to execute.
+<span class="fc" id="L155">    private class Watchdog extends TimerTask {</span>
+        @Override
+        public void run() {
+<span class="nc" id="L158">            long delta = System.currentTimeMillis() - lastStart;</span>
+<span class="nc bnc" id="L159" title="All 4 branches missed.">            if (lastStart &gt; 0 &amp;&amp; delta &gt; maxProcessMillis) {</span>
+<span class="nc" id="L160">                lastStart = 0;</span>
+<span class="nc" id="L161">                log.warn(&quot;Event sink {} exceeded execution time limit: {} ms; spawning new dispatch loop&quot;,</span>
+<span class="nc" id="L162">                          lastSink.getClass().getName(), delta);</span>
+
+                // Notify the sink that it has exceeded its time limit.
+<span class="nc" id="L165">                lastSink.onProcessLimit();</span>
+
+                // Cancel the old dispatch loop and submit a new one.
+<span class="nc" id="L168">                dispatchLoop.stop();</span>
+<span class="nc" id="L169">                dispatchLoop = new DispatchLoop();</span>
+<span class="nc" id="L170">                dispatchFuture.cancel(true);</span>
+<span class="nc" id="L171">                dispatchFuture = executor.submit(dispatchLoop);</span>
+            }
+<span class="nc" id="L173">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

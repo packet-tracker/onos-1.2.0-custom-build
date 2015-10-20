@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentEvent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">IntentEvent.java</span></div><h1>IntentEvent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.event.AbstractEvent;
+
+/**
+ * A class to represent an intent related event.
+ */
+@Beta
+public class IntentEvent extends AbstractEvent&lt;IntentEvent.Type, Intent&gt; {
+
+<span class="pc" id="L27">    public enum Type {</span>
+        /**
+         * Signifies that an intent is to be installed or reinstalled.
+         */
+<span class="fc" id="L31">        INSTALL_REQ,</span>
+
+        /**
+         * Signifies that an intent has been successfully installed.
+         */
+<span class="fc" id="L36">        INSTALLED,</span>
+
+        /**
+         * Signifies that an intent has failed compilation and that it cannot
+         * be satisfied by the network at this time.
+         */
+<span class="fc" id="L42">        FAILED,</span>
+
+        /**
+         * Signifies that an intent will be withdrawn.
+         */
+<span class="fc" id="L47">        WITHDRAW_REQ,</span>
+
+        /**
+         * Signifies that an intent has been withdrawn from the system.
+         */
+<span class="fc" id="L52">        WITHDRAWN,</span>
+
+        /**
+         * Signifies that an intent has failed installation or withdrawal, but
+         * still hold some or all of its resources.
+         * (e.g. link reservations, flow rules on the data plane, etc.)
+         */
+<span class="fc" id="L59">        CORRUPT,</span>
+
+        /**
+         * Signifies that an intent has been purged from the system.
+         */
+<span class="fc" id="L64">        PURGED</span>
+    }
+
+    /**
+     * Creates an event of a given type and for the specified intent and the
+     * current time.
+     *
+     * @param type   event type
+     * @param intent subject intent
+     * @param time   time the event created in milliseconds since start of epoch
+     */
+    public IntentEvent(Type type, Intent intent, long time) {
+<span class="nc" id="L76">        super(type, intent, time);</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Creates an event of a given type and for the specified intent and the
+     * current time.
+     *
+     * @param type   event type
+     * @param intent subject intent
+     */
+    public IntentEvent(Type type, Intent intent) {
+<span class="fc" id="L87">        super(type, intent);</span>
+<span class="fc" id="L88">    }</span>
+
+    /**
+     * Creates an IntentEvent based on the state contained in the given intent
+     * data. Some states are not sent as external events, and these states will
+     * return null events.
+     *
+     * @param data the intent data to create an event for
+     * @return new intent event if the state is valid, otherwise null.
+     */
+    public static IntentEvent getEvent(IntentData data) {
+<span class="nc" id="L99">        return getEvent(data.state(), data.intent());</span>
+    }
+
+    /**
+     * Creates an IntentEvent based on the given state and intent. Some states
+     * are not sent as external events, and these states will return null events.
+     *
+     * @param state new state of the intent
+     * @param intent intent to put in event
+     * @return new intent event if the state is valid, otherwise null.
+     */
+    public static IntentEvent getEvent(IntentState state, Intent intent) {
+        Type type;
+<span class="nc bnc" id="L112" title="All 8 branches missed.">        switch (state) {</span>
+            case INSTALL_REQ:
+<span class="nc" id="L114">                type = Type.INSTALL_REQ;</span>
+<span class="nc" id="L115">                break;</span>
+            case INSTALLED:
+<span class="nc" id="L117">                type = Type.INSTALLED;</span>
+<span class="nc" id="L118">                break;</span>
+            case WITHDRAW_REQ:
+<span class="nc" id="L120">                type = Type.WITHDRAW_REQ;</span>
+<span class="nc" id="L121">                break;</span>
+            case WITHDRAWN:
+<span class="nc" id="L123">                type = Type.WITHDRAWN;</span>
+<span class="nc" id="L124">                break;</span>
+            case FAILED:
+<span class="nc" id="L126">                type = Type.FAILED;</span>
+<span class="nc" id="L127">                break;</span>
+            case CORRUPT:
+<span class="nc" id="L129">                type = Type.CORRUPT;</span>
+<span class="nc" id="L130">                break;</span>
+            case PURGE_REQ:
+<span class="nc" id="L132">                type = Type.PURGED;</span>
+<span class="nc" id="L133">                break;</span>
+
+            // fallthrough to default from here
+            case COMPILING:
+            case INSTALLING:
+            case RECOMPILING:
+            case WITHDRAWING:
+            default:
+<span class="nc" id="L141">                return null;</span>
+        }
+<span class="nc" id="L143">        return new IntentEvent(type, intent);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

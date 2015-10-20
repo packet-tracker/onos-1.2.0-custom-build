@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UDP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">UDP.java</span></div><h1>UDP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.*;
+
+/**
+ * Representation of a UDP packet.
+ */
+<span class="fc" id="L30">public class UDP extends BasePacket {</span>
+<span class="fc" id="L31">    public static final Map&lt;Integer, Deserializer&lt;? extends IPacket&gt;&gt; PORT_DESERIALIZER_MAP =</span>
+            new HashMap&lt;&gt;();
+    public static final int DHCP_SERVER_PORT = 67;
+    public static final int DHCP_CLIENT_PORT = 68;
+
+    private static final short UDP_HEADER_LENGTH = 8;
+
+    static {
+        /*
+         * Disable DHCP until the deserialize code is hardened to deal with
+         * garbage input
+         */
+<span class="fc" id="L43">        UDP.PORT_DESERIALIZER_MAP.put(UDP.DHCP_SERVER_PORT, DHCP.deserializer());</span>
+<span class="fc" id="L44">        UDP.PORT_DESERIALIZER_MAP.put(UDP.DHCP_CLIENT_PORT, DHCP.deserializer());</span>
+
+<span class="fc" id="L46">    }</span>
+
+    protected int sourcePort;
+    protected int destinationPort;
+    protected short length;
+    protected short checksum;
+
+    /**
+     * @return the sourcePort
+     */
+    public int getSourcePort() {
+<span class="fc" id="L57">        return this.sourcePort;</span>
+    }
+
+    /**
+     * @param sourcePort
+     *            the sourcePort to set (16 bits unsigned integer)
+     * @return this
+     */
+    public UDP setSourcePort(final int sourcePort) {
+<span class="fc" id="L66">        this.sourcePort = sourcePort;</span>
+<span class="fc" id="L67">        return this;</span>
+    }
+
+    /**
+     * @return the destinationPort
+     */
+    public int getDestinationPort() {
+<span class="fc" id="L74">        return this.destinationPort;</span>
+    }
+
+    /**
+     * @param destinationPort
+     *            the destinationPort to set (16 bits unsigned integer)
+     * @return this
+     */
+    public UDP setDestinationPort(final int destinationPort) {
+<span class="fc" id="L83">        this.destinationPort = destinationPort;</span>
+<span class="fc" id="L84">        return this;</span>
+    }
+
+    /**
+     * @return the length
+     */
+    public short getLength() {
+<span class="fc" id="L91">        return this.length;</span>
+    }
+
+    /**
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="fc" id="L98">        return this.checksum;</span>
+    }
+
+    /**
+     * @param checksum
+     *            the checksum to set
+     * @return this
+     */
+    public UDP setChecksum(final short checksum) {
+<span class="nc" id="L107">        this.checksum = checksum;</span>
+<span class="nc" id="L108">        return this;</span>
+    }
+
+    @Override
+    public void resetChecksum() {
+<span class="fc" id="L113">        this.checksum = 0;</span>
+<span class="fc" id="L114">        super.resetChecksum();</span>
+<span class="fc" id="L115">    }</span>
+
+    /**
+     * Serializes the packet. Will compute and set the following fields if they
+     * are set to specific values at the time serialize is called: -checksum : 0
+     * -length : 0
+     */
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L124">        byte[] payloadData = null;</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">        if (this.payload != null) {</span>
+<span class="fc" id="L126">            this.payload.setParent(this);</span>
+<span class="fc" id="L127">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        this.length = (short) (8 + (payloadData == null ? 0</span>
+                : payloadData.length));
+
+<span class="fc" id="L133">        final byte[] data = new byte[this.length];</span>
+<span class="fc" id="L134">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L136">        bb.putShort((short) (this.sourcePort &amp; 0xffff));</span>
+<span class="fc" id="L137">        bb.putShort((short) (this.destinationPort &amp; 0xffff));</span>
+<span class="fc" id="L138">        bb.putShort(this.length);</span>
+<span class="fc" id="L139">        bb.putShort(this.checksum);</span>
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        if (payloadData != null) {</span>
+<span class="fc" id="L141">            bb.put(payloadData);</span>
+        }
+
+<span class="fc bfc" id="L144" title="All 4 branches covered.">        if (this.parent != null &amp;&amp; this.parent instanceof IPv4) {</span>
+<span class="fc" id="L145">            ((IPv4) this.parent).setProtocol(IPv4.PROTOCOL_UDP);</span>
+        }
+
+        // compute checksum if needed
+<span class="fc bfc" id="L149" title="All 2 branches covered.">        if (this.checksum == 0) {</span>
+<span class="fc" id="L150">            bb.rewind();</span>
+<span class="fc" id="L151">            int accumulation = 0;</span>
+
+            // compute pseudo header mac
+<span class="fc bfc" id="L154" title="All 2 branches covered.">            if (this.parent != null) {</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">                if (this.parent instanceof IPv4) {</span>
+<span class="fc" id="L156">                    final IPv4 ipv4 = (IPv4) this.parent;</span>
+<span class="fc" id="L157">                    accumulation += (ipv4.getSourceAddress() &gt;&gt; 16 &amp; 0xffff)</span>
+<span class="fc" id="L158">                            + (ipv4.getSourceAddress() &amp; 0xffff);</span>
+<span class="fc" id="L159">                    accumulation += (ipv4.getDestinationAddress() &gt;&gt; 16 &amp; 0xffff)</span>
+<span class="fc" id="L160">                            + (ipv4.getDestinationAddress() &amp; 0xffff);</span>
+<span class="fc" id="L161">                    accumulation += ipv4.getProtocol() &amp; 0xff;</span>
+<span class="fc" id="L162">                    accumulation += length &amp; 0xffff;</span>
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">                } else if (this.parent instanceof IPv6) {</span>
+<span class="fc" id="L164">                    final IPv6 ipv6 = (IPv6) this.parent;</span>
+<span class="fc" id="L165">                    final int bbLength =</span>
+                            Ip6Address.BYTE_LENGTH * 2 // IPv6 src, dst
+                                    + 2  // nextHeader (with padding)
+                                    + 4; // length
+<span class="fc" id="L169">                    final ByteBuffer bbChecksum = ByteBuffer.allocate(bbLength);</span>
+<span class="fc" id="L170">                    bbChecksum.put(ipv6.getSourceAddress());</span>
+<span class="fc" id="L171">                    bbChecksum.put(ipv6.getDestinationAddress());</span>
+<span class="fc" id="L172">                    bbChecksum.put((byte) 0); // padding</span>
+<span class="fc" id="L173">                    bbChecksum.put(ipv6.getNextHeader());</span>
+<span class="fc" id="L174">                    bbChecksum.putInt(length);</span>
+<span class="fc" id="L175">                    bbChecksum.rewind();</span>
+<span class="fc bfc" id="L176" title="All 2 branches covered.">                    for (int i = 0; i &lt; bbLength / 2; ++i) {</span>
+<span class="fc" id="L177">                        accumulation += 0xffff &amp; bbChecksum.getShort();</span>
+                    }
+                }
+            }
+
+<span class="fc bfc" id="L182" title="All 2 branches covered.">            for (int i = 0; i &lt; this.length / 2; ++i) {</span>
+<span class="fc" id="L183">                accumulation += 0xffff &amp; bb.getShort();</span>
+            }
+            // pad to an even number of shorts
+<span class="fc bfc" id="L186" title="All 2 branches covered.">            if (this.length % 2 &gt; 0) {</span>
+<span class="fc" id="L187">                accumulation += (bb.get() &amp; 0xff) &lt;&lt; 8;</span>
+            }
+
+<span class="fc" id="L190">            accumulation = (accumulation &gt;&gt; 16 &amp; 0xffff)</span>
+                    + (accumulation &amp; 0xffff);
+<span class="fc" id="L192">            this.checksum = (short) (~accumulation &amp; 0xffff);</span>
+<span class="fc" id="L193">            bb.putShort(6, this.checksum);</span>
+        }
+<span class="fc" id="L195">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L201">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L202">        this.sourcePort = (bb.getShort() &amp; 0xffff);</span>
+<span class="nc" id="L203">        this.destinationPort = (bb.getShort() &amp; 0xffff);</span>
+<span class="nc" id="L204">        this.length = bb.getShort();</span>
+<span class="nc" id="L205">        this.checksum = bb.getShort();</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        if (UDP.PORT_DESERIALIZER_MAP.containsKey(this.destinationPort)) {</span>
+<span class="nc" id="L209">            deserializer = UDP.PORT_DESERIALIZER_MAP.get(this.destinationPort);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        } else if (UDP.PORT_DESERIALIZER_MAP.containsKey(this.sourcePort)) {</span>
+<span class="nc" id="L211">            deserializer = UDP.PORT_DESERIALIZER_MAP.get(this.sourcePort);</span>
+        } else {
+<span class="nc" id="L213">            deserializer = Data.deserializer();</span>
+        }
+
+        try {
+<span class="nc" id="L217">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L218">                                                   bb.limit() - bb.position());</span>
+<span class="nc" id="L219">            this.payload.setParent(this);</span>
+<span class="nc" id="L220">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L221">            return this;</span>
+<span class="nc" id="L222">        }</span>
+<span class="nc" id="L223">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L233">        final int prime = 5807;</span>
+<span class="nc" id="L234">        int result = super.hashCode();</span>
+<span class="nc" id="L235">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L236">        result = prime * result + this.destinationPort;</span>
+<span class="nc" id="L237">        result = prime * result + this.length;</span>
+<span class="nc" id="L238">        result = prime * result + this.sourcePort;</span>
+<span class="nc" id="L239">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L249" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L250">            return true;</span>
+        }
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L253">            return false;</span>
+        }
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">        if (!(obj instanceof UDP)) {</span>
+<span class="nc" id="L256">            return false;</span>
+        }
+<span class="fc" id="L258">        final UDP other = (UDP) obj;</span>
+<span class="pc bpc" id="L259" title="1 of 2 branches missed.">        if (this.checksum != other.checksum) {</span>
+<span class="nc" id="L260">            return false;</span>
+        }
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">        if (this.destinationPort != other.destinationPort) {</span>
+<span class="nc" id="L263">            return false;</span>
+        }
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">        if (this.length != other.length) {</span>
+<span class="nc" id="L266">            return false;</span>
+        }
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">        if (this.sourcePort != other.sourcePort) {</span>
+<span class="fc" id="L269">            return false;</span>
+        }
+<span class="nc" id="L271">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for UDP packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;UDP&gt; deserializer() {
+<span class="fc" id="L280">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L281">            checkInput(data, offset, length, UDP_HEADER_LENGTH);</span>
+
+<span class="fc" id="L283">            UDP udp = new UDP();</span>
+
+<span class="fc" id="L285">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L286">            udp.sourcePort = (bb.getShort() &amp; 0xffff);</span>
+<span class="fc" id="L287">            udp.destinationPort = (bb.getShort() &amp; 0xffff);</span>
+<span class="fc" id="L288">            udp.length = bb.getShort();</span>
+<span class="fc" id="L289">            udp.checksum = bb.getShort();</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L292" title="1 of 2 branches missed.">            if (UDP.PORT_DESERIALIZER_MAP.containsKey(udp.destinationPort)) {</span>
+<span class="nc" id="L293">                deserializer = UDP.PORT_DESERIALIZER_MAP.get(udp.destinationPort);</span>
+<span class="pc bpc" id="L294" title="1 of 2 branches missed.">            } else if (UDP.PORT_DESERIALIZER_MAP.containsKey(udp.sourcePort)) {</span>
+<span class="nc" id="L295">                deserializer = UDP.PORT_DESERIALIZER_MAP.get(udp.sourcePort);</span>
+            } else {
+<span class="fc" id="L297">                deserializer = Data.deserializer();</span>
+            }
+
+<span class="fc" id="L300">            udp.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L301">                                                   bb.limit() - bb.position());</span>
+<span class="fc" id="L302">            udp.payload.setParent(udp);</span>
+<span class="fc" id="L303">            return udp;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

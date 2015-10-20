@@ -1,0 +1,559 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AAA.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-aaa</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.aaa</a> &gt; <span class="el_source">AAA.java</span></div><h1>AAA.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 AT&amp;T Foundry
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.aaa;
+
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.EAP;
+import org.onlab.packet.EAPOL;
+import org.onlab.packet.EthType;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.RADIUS;
+import org.onlab.packet.RADIUSAttribute;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.config.ConfigFactory;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigRegistry;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.packet.DefaultOutboundPacket;
+import org.onosproject.net.packet.InboundPacket;
+import org.onosproject.net.packet.OutboundPacket;
+import org.onosproject.net.packet.PacketContext;
+import org.onosproject.net.packet.PacketProcessor;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.xosintegration.VoltTenantService;
+import org.slf4j.Logger;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import static org.onosproject.net.config.basics.SubjectFactories.APP_SUBJECT_FACTORY;
+import static org.onosproject.net.packet.PacketPriority.CONTROL;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * AAA application for ONOS.
+ */
+@Component(immediate = true)
+<span class="fc" id="L71">public class AAA {</span>
+
+    // for verbose output
+<span class="fc" id="L74">    private final Logger log = getLogger(getClass());</span>
+
+    // a list of our dependencies :
+    // to register with ONOS as an application - described next
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    // to receive Packet-in events that we'll respond to
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PacketService packetService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected VoltTenantService voltTenantService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigRegistry netCfgService;
+
+    // Parsed RADIUS server addresses
+    protected InetAddress radiusIpAddress;
+    protected String radiusMacAddress;
+
+    // NAS IP address
+    protected InetAddress nasIpAddress;
+    protected String nasMacAddress;
+
+    // RADIUS server secret
+    protected String radiusSecret;
+
+    // ID of RADIUS switch
+    protected String radiusSwitch;
+
+    // RADIUS port number
+    protected long radiusPort;
+
+    // RADIUS server TCP port number
+    protected short radiusServerPort;
+
+    // our application-specific event handler
+<span class="fc" id="L112">    private ReactivePacketProcessor processor = new ReactivePacketProcessor();</span>
+
+    // our unique identifier
+    private ApplicationId appId;
+
+    // Socket used for UDP communications with RADIUS server
+    private DatagramSocket radiusSocket;
+
+    // Executor for RADIUS communication thread
+    private ExecutorService executor;
+
+    // Configuration properties factory
+<span class="fc" id="L124">    private final ConfigFactory factory =</span>
+            new ConfigFactory&lt;ApplicationId, AAAConfig&gt;(APP_SUBJECT_FACTORY,
+                                                         AAAConfig.class,
+<span class="fc" id="L127">                                                         &quot;AAA&quot;) {</span>
+                @Override
+                public AAAConfig createConfig() {
+<span class="nc" id="L130">                    return new AAAConfig();</span>
+                }
+            };
+
+    // Listener for config changes
+<span class="fc" id="L135">    private final InternalConfigListener cfgListener = new InternalConfigListener();</span>
+
+    /**
+     * Builds an EAPOL packet based on the given parameters.
+     *
+     * @param dstMac    destination MAC address
+     * @param srcMac    source MAC address
+     * @param vlan      vlan identifier
+     * @param eapolType EAPOL type
+     * @param eap       EAP payload
+     * @return Ethernet frame
+     */
+    private static Ethernet buildEapolResponse(MacAddress dstMac, MacAddress srcMac,
+                                               short vlan, byte eapolType, EAP eap) {
+
+<span class="fc" id="L150">        Ethernet eth = new Ethernet();</span>
+<span class="fc" id="L151">        eth.setDestinationMACAddress(dstMac.toBytes());</span>
+<span class="fc" id="L152">        eth.setSourceMACAddress(srcMac.toBytes());</span>
+<span class="fc" id="L153">        eth.setEtherType(EthType.EtherType.EAPOL.ethType().toShort());</span>
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">        if (vlan != Ethernet.VLAN_UNTAGGED) {</span>
+<span class="fc" id="L155">            eth.setVlanID(vlan);</span>
+        }
+        //eapol header
+<span class="fc" id="L158">        EAPOL eapol = new EAPOL();</span>
+<span class="fc" id="L159">        eapol.setEapolType(eapolType);</span>
+<span class="fc" id="L160">        eapol.setPacketLength(eap.getLength());</span>
+
+        //eap part
+<span class="fc" id="L163">        eapol.setPayload(eap);</span>
+
+<span class="fc" id="L165">        eth.setPayload(eapol);</span>
+<span class="fc" id="L166">        eth.setPad(true);</span>
+<span class="fc" id="L167">        return eth;</span>
+    }
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L172">        netCfgService.addListener(cfgListener);</span>
+<span class="fc" id="L173">        netCfgService.registerConfigFactory(factory);</span>
+
+        // &quot;org.onosproject.aaa&quot; is the FQDN of our app
+<span class="fc" id="L176">        appId = coreService.registerApplication(&quot;org.onosproject.aaa&quot;);</span>
+
+<span class="fc" id="L178">        cfgListener.reconfigureNetwork(netCfgService.getConfig(appId, AAAConfig.class));</span>
+
+        // register our event handler
+<span class="fc" id="L181">        packetService.addProcessor(processor, PacketProcessor.director(2));</span>
+<span class="fc" id="L182">        requestIntercepts();</span>
+
+<span class="fc" id="L184">        StateMachine.initializeMaps();</span>
+
+        try {
+<span class="fc" id="L187">            radiusSocket = new DatagramSocket(radiusServerPort);</span>
+<span class="nc" id="L188">        } catch (Exception ex) {</span>
+<span class="nc" id="L189">            log.error(&quot;Can't open RADIUS socket&quot;, ex);</span>
+<span class="fc" id="L190">        }</span>
+
+<span class="fc" id="L192">        executor = Executors.newSingleThreadExecutor(</span>
+                new ThreadFactoryBuilder()
+<span class="fc" id="L194">                        .setNameFormat(&quot;AAA-radius-%d&quot;).build());</span>
+<span class="fc" id="L195">        executor.execute(radiusListener);</span>
+<span class="fc" id="L196">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L200">        appId = coreService.registerApplication(&quot;org.onosproject.aaa&quot;);</span>
+<span class="fc" id="L201">        withdrawIntercepts();</span>
+        // de-register and null our handler
+<span class="fc" id="L203">        packetService.removeProcessor(processor);</span>
+<span class="fc" id="L204">        processor = null;</span>
+<span class="fc" id="L205">        StateMachine.destroyMaps();</span>
+<span class="fc" id="L206">        radiusSocket.close();</span>
+<span class="fc" id="L207">        executor.shutdownNow();</span>
+<span class="fc" id="L208">    }</span>
+
+    protected void sendRADIUSPacket(RADIUS radiusPacket) {
+
+        try {
+<span class="nc" id="L213">            final byte[] data = radiusPacket.serialize();</span>
+<span class="nc" id="L214">            final DatagramSocket socket = radiusSocket;</span>
+
+<span class="nc" id="L216">            DatagramPacket packet =</span>
+                    new DatagramPacket(data, data.length,
+                                       radiusIpAddress, radiusServerPort);
+
+<span class="nc" id="L220">            socket.send(packet);</span>
+<span class="nc" id="L221">        } catch (IOException e) {</span>
+<span class="nc" id="L222">            log.info(&quot;Cannot send packet to RADIUS server&quot;, e);</span>
+<span class="nc" id="L223">        }</span>
+<span class="nc" id="L224">    }</span>
+
+    /**
+     * Request packet in via PacketService.
+     */
+    private void requestIntercepts() {
+<span class="fc" id="L230">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="fc" id="L231">        selector.matchEthType(EthType.EtherType.EAPOL.ethType().toShort());</span>
+<span class="fc" id="L232">        packetService.requestPackets(selector.build(),</span>
+                                     CONTROL, appId);
+<span class="fc" id="L234">    }</span>
+
+    /**
+     * Cancel request for packet in via PacketService.
+     */
+    private void withdrawIntercepts() {
+<span class="fc" id="L240">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="fc" id="L241">        selector.matchEthType(EthType.EtherType.EAPOL.ethType().toShort());</span>
+<span class="fc" id="L242">        packetService.cancelPackets(selector.build(), CONTROL, appId);</span>
+<span class="fc" id="L243">    }</span>
+
+    /**
+     * Send the ethernet packet to the supplicant.
+     *
+     * @param ethernetPkt  the ethernet packet
+     * @param connectPoint the connect point to send out
+     */
+    private void sendPacketToSupplicant(Ethernet ethernetPkt, ConnectPoint connectPoint) {
+<span class="fc" id="L252">        TrafficTreatment treatment = DefaultTrafficTreatment.builder().setOutput(connectPoint.port()).build();</span>
+<span class="fc" id="L253">        OutboundPacket packet = new DefaultOutboundPacket(connectPoint.deviceId(),</span>
+<span class="fc" id="L254">                                                          treatment, ByteBuffer.wrap(ethernetPkt.serialize()));</span>
+<span class="fc" id="L255">        packetService.emit(packet);</span>
+<span class="fc" id="L256">    }</span>
+
+    // our handler defined as a private inner class
+
+    /**
+     * Packet processor responsible for forwarding packets along their paths.
+     */
+<span class="fc" id="L263">    private class ReactivePacketProcessor implements PacketProcessor {</span>
+        @Override
+        public void process(PacketContext context) {
+
+            // Extract the original Ethernet frame from the packet information
+<span class="fc" id="L268">            InboundPacket pkt = context.inPacket();</span>
+<span class="fc" id="L269">            Ethernet ethPkt = pkt.parsed();</span>
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">            if (ethPkt == null) {</span>
+<span class="nc" id="L271">                return;</span>
+            }
+            try {
+                // identify if incoming packet comes from supplicant (EAP) or RADIUS
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">                switch (EthType.EtherType.lookup(ethPkt.getEtherType())) {</span>
+                    case EAPOL:
+<span class="fc" id="L277">                        handleSupplicantPacket(context.inPacket());</span>
+<span class="fc" id="L278">                        break;</span>
+                    default:
+<span class="nc" id="L280">                        log.trace(&quot;Skipping Ethernet packet type {}&quot;,</span>
+<span class="nc" id="L281">                                  EthType.EtherType.lookup(ethPkt.getEtherType()));</span>
+                }
+<span class="nc" id="L283">            } catch (StateMachineException e) {</span>
+<span class="nc" id="L284">                log.warn(&quot;Unable to process RADIUS packet:&quot;, e);</span>
+<span class="fc" id="L285">            }</span>
+<span class="fc" id="L286">        }</span>
+
+        /**
+         * Creates and initializes common fields of a RADIUS packet.
+         *
+         * @param stateMachine state machine for the request
+         * @param eapPacket  EAP packet
+         * @return RADIUS packet
+         */
+        private RADIUS getRadiusPayload(StateMachine stateMachine, byte identifier, EAP eapPacket) {
+<span class="fc" id="L296">            RADIUS radiusPayload =</span>
+                    new RADIUS(RADIUS.RADIUS_CODE_ACCESS_REQUEST,
+<span class="fc" id="L298">                               eapPacket.getIdentifier());</span>
+
+            // set Request Authenticator in StateMachine
+<span class="fc" id="L301">            stateMachine.setRequestAuthenticator(radiusPayload.generateAuthCode());</span>
+
+<span class="fc" id="L303">            radiusPayload.setIdentifier(identifier);</span>
+<span class="fc" id="L304">            radiusPayload.setAttribute(RADIUSAttribute.RADIUS_ATTR_USERNAME,</span>
+<span class="fc" id="L305">                                       stateMachine.username());</span>
+
+<span class="fc" id="L307">            radiusPayload.setAttribute(RADIUSAttribute.RADIUS_ATTR_NAS_IP,</span>
+<span class="fc" id="L308">                                       AAA.this.nasIpAddress.getAddress());</span>
+
+<span class="fc" id="L310">            radiusPayload.encapsulateMessage(eapPacket);</span>
+
+<span class="fc" id="L312">            return radiusPayload;</span>
+        }
+
+        /**
+         * Handles PAE packets (supplicant).
+         *
+         * @param inPacket Ethernet packet coming from the supplicant
+         */
+        private void handleSupplicantPacket(InboundPacket inPacket) throws StateMachineException {
+<span class="fc" id="L321">            Ethernet ethPkt = inPacket.parsed();</span>
+            // Where does it come from?
+<span class="fc" id="L323">            MacAddress srcMAC = ethPkt.getSourceMAC();</span>
+
+<span class="fc" id="L325">            DeviceId deviceId = inPacket.receivedFrom().deviceId();</span>
+<span class="fc" id="L326">            PortNumber portNumber = inPacket.receivedFrom().port();</span>
+<span class="fc" id="L327">            String sessionId = deviceId.toString() + portNumber.toString();</span>
+<span class="fc" id="L328">            StateMachine stateMachine = StateMachine.lookupStateMachineBySessionId(sessionId);</span>
+<span class="fc bfc" id="L329" title="All 2 branches covered.">            if (stateMachine == null) {</span>
+<span class="fc" id="L330">                stateMachine = new StateMachine(sessionId, voltTenantService);</span>
+            }
+
+
+<span class="fc" id="L334">            EAPOL eapol = (EAPOL) ethPkt.getPayload();</span>
+
+<span class="pc bpc" id="L336" title="1 of 3 branches missed.">            switch (eapol.getEapolType()) {</span>
+                case EAPOL.EAPOL_START:
+<span class="fc" id="L338">                    stateMachine.start();</span>
+<span class="fc" id="L339">                    stateMachine.setSupplicantConnectpoint(inPacket.receivedFrom());</span>
+
+                    //send an EAP Request/Identify to the supplicant
+<span class="fc" id="L342">                    EAP eapPayload = new EAP(EAP.REQUEST, stateMachine.identifier(), EAP.ATTR_IDENTITY, null);</span>
+<span class="fc" id="L343">                    Ethernet eth = buildEapolResponse(srcMAC, MacAddress.valueOf(nasMacAddress),</span>
+<span class="fc" id="L344">                                                      ethPkt.getVlanID(), EAPOL.EAPOL_PACKET,</span>
+                                                      eapPayload);
+<span class="fc" id="L346">                    stateMachine.setSupplicantAddress(srcMAC);</span>
+<span class="fc" id="L347">                    stateMachine.setVlanId(ethPkt.getVlanID());</span>
+
+<span class="fc" id="L349">                    sendPacketToSupplicant(eth, stateMachine.supplicantConnectpoint());</span>
+
+<span class="fc" id="L351">                    break;</span>
+                case EAPOL.EAPOL_PACKET:
+                    RADIUS radiusPayload;
+                    // check if this is a Response/Identify or  a Response/TLS
+<span class="fc" id="L355">                    EAP eapPacket = (EAP) eapol.getPayload();</span>
+
+<span class="fc" id="L357">                    byte dataType = eapPacket.getDataType();</span>
+<span class="pc bpc" id="L358" title="2 of 4 branches missed.">                    switch (dataType) {</span>
+
+                        case EAP.ATTR_IDENTITY:
+                            // request id access to RADIUS
+<span class="fc" id="L362">                            stateMachine.setUsername(eapPacket.getData());</span>
+
+<span class="fc" id="L364">                            radiusPayload = getRadiusPayload(stateMachine, stateMachine.identifier(), eapPacket);</span>
+<span class="fc" id="L365">                            radiusPayload.addMessageAuthenticator(AAA.this.radiusSecret);</span>
+
+<span class="fc" id="L367">                            sendRADIUSPacket(radiusPayload);</span>
+
+                            // change the state to &quot;PENDING&quot;
+<span class="fc" id="L370">                            stateMachine.requestAccess();</span>
+<span class="fc" id="L371">                            break;</span>
+                        case EAP.ATTR_MD5:
+                            // verify if the EAP identifier corresponds to the
+                            // challenge identifier from the client state
+                            // machine.
+<span class="pc bpc" id="L376" title="1 of 2 branches missed.">                            if (eapPacket.getIdentifier() == stateMachine.challengeIdentifier()) {</span>
+                                //send the RADIUS challenge response
+<span class="fc" id="L378">                                radiusPayload =</span>
+<span class="fc" id="L379">                                        getRadiusPayload(stateMachine,</span>
+<span class="fc" id="L380">                                                         stateMachine.identifier(),</span>
+                                                         eapPacket);
+
+<span class="fc" id="L383">                                radiusPayload.setAttribute(RADIUSAttribute.RADIUS_ATTR_STATE,</span>
+<span class="fc" id="L384">                                                           stateMachine.challengeState());</span>
+<span class="fc" id="L385">                                radiusPayload.addMessageAuthenticator(AAA.this.radiusSecret);</span>
+<span class="fc" id="L386">                                sendRADIUSPacket(radiusPayload);</span>
+                            }
+                            break;
+                        case EAP.ATTR_TLS:
+                            // request id access to RADIUS
+<span class="nc" id="L391">                            radiusPayload = getRadiusPayload(stateMachine, stateMachine.identifier(), eapPacket);</span>
+
+<span class="nc" id="L393">                            radiusPayload.setAttribute(RADIUSAttribute.RADIUS_ATTR_STATE,</span>
+<span class="nc" id="L394">                                                       stateMachine.challengeState());</span>
+<span class="nc" id="L395">                            stateMachine.setRequestAuthenticator(radiusPayload.generateAuthCode());</span>
+
+<span class="nc" id="L397">                            sendRADIUSPacket(radiusPayload);</span>
+<span class="nc" id="L398">                            radiusPayload.addMessageAuthenticator(AAA.this.radiusSecret);</span>
+                            // TODO: this gets called on every fragment, should only be called at TLS-Start
+<span class="nc" id="L400">                            stateMachine.requestAccess();</span>
+
+<span class="nc" id="L402">                            break;</span>
+                        default:
+<span class="nc" id="L404">                            return;</span>
+                    }
+                    break;
+                default:
+<span class="nc" id="L408">                    log.trace(&quot;Skipping EAPOL message {}&quot;, eapol.getEapolType());</span>
+            }
+
+<span class="fc" id="L411">        }</span>
+    }
+
+<span class="fc" id="L414">    class RadiusListener implements Runnable {</span>
+
+        /**
+         * Handles RADIUS packets.
+         *
+         * @param radiusPacket RADIUS packet coming from the RADIUS server.
+         */
+        protected void handleRadiusPacket(RADIUS radiusPacket) throws StateMachineException {
+<span class="fc" id="L422">            StateMachine stateMachine = StateMachine.lookupStateMachineById(radiusPacket.getIdentifier());</span>
+<span class="pc bpc" id="L423" title="1 of 2 branches missed.">            if (stateMachine == null) {</span>
+<span class="nc" id="L424">                log.error(&quot;Invalid session identifier, exiting...&quot;);</span>
+<span class="nc" id="L425">                return;</span>
+            }
+
+            EAP eapPayload;
+            Ethernet eth;
+<span class="pc bpc" id="L430" title="2 of 4 branches missed.">            switch (radiusPacket.getCode()) {</span>
+                case RADIUS.RADIUS_CODE_ACCESS_CHALLENGE:
+<span class="fc" id="L432">                    byte[] challengeState =</span>
+<span class="fc" id="L433">                            radiusPacket.getAttribute(RADIUSAttribute.RADIUS_ATTR_STATE).getValue();</span>
+<span class="fc" id="L434">                    eapPayload = radiusPacket.decapsulateMessage();</span>
+<span class="fc" id="L435">                    stateMachine.setChallengeInfo(eapPayload.getIdentifier(), challengeState);</span>
+<span class="fc" id="L436">                    eth = buildEapolResponse(stateMachine.supplicantAddress(),</span>
+<span class="fc" id="L437">                                             MacAddress.valueOf(nasMacAddress),</span>
+<span class="fc" id="L438">                                             stateMachine.vlanId(),</span>
+                                             EAPOL.EAPOL_PACKET,
+                                             eapPayload);
+<span class="fc" id="L441">                    sendPacketToSupplicant(eth, stateMachine.supplicantConnectpoint());</span>
+<span class="fc" id="L442">                    break;</span>
+                case RADIUS.RADIUS_CODE_ACCESS_ACCEPT:
+                    //send an EAPOL - Success to the supplicant.
+<span class="fc" id="L445">                    byte[] eapMessage =</span>
+<span class="fc" id="L446">                            radiusPacket.getAttribute(RADIUSAttribute.RADIUS_ATTR_EAP_MESSAGE).getValue();</span>
+<span class="fc" id="L447">                    eapPayload = new EAP();</span>
+<span class="fc" id="L448">                    eapPayload = (EAP) eapPayload.deserialize(eapMessage, 0, eapMessage.length);</span>
+<span class="fc" id="L449">                    eth = buildEapolResponse(stateMachine.supplicantAddress(),</span>
+<span class="fc" id="L450">                                             MacAddress.valueOf(nasMacAddress),</span>
+<span class="fc" id="L451">                                             stateMachine.vlanId(),</span>
+                                             EAPOL.EAPOL_PACKET,
+                                             eapPayload);
+<span class="fc" id="L454">                    sendPacketToSupplicant(eth, stateMachine.supplicantConnectpoint());</span>
+
+<span class="fc" id="L456">                    stateMachine.authorizeAccess();</span>
+<span class="fc" id="L457">                    break;</span>
+                case RADIUS.RADIUS_CODE_ACCESS_REJECT:
+<span class="nc" id="L459">                    stateMachine.denyAccess();</span>
+<span class="nc" id="L460">                    break;</span>
+                default:
+<span class="nc" id="L462">                    log.warn(&quot;Unknown RADIUS message received with code: {}&quot;, radiusPacket.getCode());</span>
+            }
+<span class="fc" id="L464">        }</span>
+
+
+        @Override
+        public void run() {
+<span class="fc" id="L469">            boolean done = false;</span>
+<span class="fc" id="L470">            int packetNumber = 1;</span>
+
+<span class="fc" id="L472">            log.info(&quot;UDP listener thread starting up&quot;);</span>
+            RADIUS inboundRadiusPacket;
+<span class="fc bfc" id="L474" title="All 2 branches covered.">            while (!done) {</span>
+                try {
+<span class="nc" id="L476">                    DatagramPacket inboundBasePacket = new DatagramPacket(new byte[1000], 1000);</span>
+<span class="nc" id="L477">                    DatagramSocket socket = radiusSocket;</span>
+<span class="nc" id="L478">                    socket.receive(inboundBasePacket);</span>
+<span class="nc" id="L479">                    log.info(&quot;Packet #{} received&quot;, packetNumber++);</span>
+                    try {
+                        inboundRadiusPacket =
+<span class="nc" id="L482">                                RADIUS.deserializer()</span>
+<span class="nc" id="L483">                                        .deserialize(inboundBasePacket.getData(),</span>
+                                                     0,
+<span class="nc" id="L485">                                                     inboundBasePacket.getLength());</span>
+<span class="nc" id="L486">                        handleRadiusPacket(inboundRadiusPacket);</span>
+<span class="nc" id="L487">                    } catch (DeserializationException dex) {</span>
+<span class="nc" id="L488">                        log.error(&quot;Cannot deserialize packet&quot;, dex);</span>
+<span class="nc" id="L489">                    } catch (StateMachineException sme) {</span>
+<span class="nc" id="L490">                        log.error(&quot;Illegal state machine operation&quot;, sme);</span>
+<span class="nc" id="L491">                    }</span>
+
+<span class="fc" id="L493">                } catch (IOException e) {</span>
+<span class="fc" id="L494">                    log.info(&quot;Socket was closed, exiting listener thread&quot;);</span>
+<span class="fc" id="L495">                    done = true;</span>
+<span class="pc" id="L496">                }</span>
+            }
+<span class="fc" id="L498">        }</span>
+    }
+
+<span class="fc" id="L501">    RadiusListener radiusListener = new RadiusListener();</span>
+
+<span class="fc" id="L503">    private class InternalConfigListener implements NetworkConfigListener {</span>
+
+        /**
+         * Reconfigures the DHCP Server according to the configuration parameters passed.
+         *
+         * @param cfg configuration object
+         */
+        private void reconfigureNetwork(AAAConfig cfg) {
+            AAAConfig newCfg;
+<span class="pc bpc" id="L512" title="1 of 2 branches missed.">            if (cfg == null) {</span>
+<span class="nc" id="L513">                newCfg = new AAAConfig();</span>
+            } else {
+<span class="fc" id="L515">                newCfg = cfg;</span>
+            }
+<span class="pc bpc" id="L517" title="1 of 2 branches missed.">            if (newCfg.nasIp() != null) {</span>
+<span class="fc" id="L518">                nasIpAddress = newCfg.nasIp();</span>
+            }
+<span class="pc bpc" id="L520" title="1 of 2 branches missed.">            if (newCfg.radiusIp() != null) {</span>
+<span class="fc" id="L521">                radiusIpAddress = newCfg.radiusIp();</span>
+            }
+<span class="pc bpc" id="L523" title="1 of 2 branches missed.">            if (newCfg.radiusMac() != null) {</span>
+<span class="fc" id="L524">                radiusMacAddress = newCfg.radiusMac();</span>
+            }
+<span class="pc bpc" id="L526" title="1 of 2 branches missed.">            if (newCfg.nasMac() != null) {</span>
+<span class="fc" id="L527">                nasMacAddress = newCfg.nasMac();</span>
+            }
+<span class="pc bpc" id="L529" title="1 of 2 branches missed.">            if (newCfg.radiusSecret() != null) {</span>
+<span class="fc" id="L530">                radiusSecret = newCfg.radiusSecret();</span>
+            }
+<span class="pc bpc" id="L532" title="1 of 2 branches missed.">            if (newCfg.radiusSwitch() != null) {</span>
+<span class="fc" id="L533">                radiusSwitch = newCfg.radiusSwitch();</span>
+            }
+<span class="pc bpc" id="L535" title="1 of 2 branches missed.">            if (newCfg.radiusPort() != -1) {</span>
+<span class="fc" id="L536">                radiusPort = newCfg.radiusPort();</span>
+            }
+<span class="pc bpc" id="L538" title="1 of 2 branches missed.">            if (newCfg.radiusServerUDPPort() != -1) {</span>
+<span class="fc" id="L539">                radiusServerPort = newCfg.radiusServerUDPPort();</span>
+            }
+<span class="fc" id="L541">        }</span>
+
+        @Override
+        public void event(NetworkConfigEvent event) {
+
+<span class="nc bnc" id="L546" title="All 2 branches missed.">            if ((event.type() == NetworkConfigEvent.Type.CONFIG_ADDED ||</span>
+<span class="nc bnc" id="L547" title="All 2 branches missed.">                    event.type() == NetworkConfigEvent.Type.CONFIG_UPDATED) &amp;&amp;</span>
+<span class="nc bnc" id="L548" title="All 2 branches missed.">                    event.configClass().equals(AAAConfig.class)) {</span>
+
+<span class="nc" id="L550">                AAAConfig cfg = netCfgService.getConfig(appId, AAAConfig.class);</span>
+<span class="nc" id="L551">                reconfigureNetwork(cfg);</span>
+<span class="nc" id="L552">                log.info(&quot;Reconfigured&quot;);</span>
+            }
+<span class="nc" id="L554">        }</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

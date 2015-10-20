@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ErrorObjListWithOpen.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">ErrorObjListWithOpen.java</span></div><h1>ErrorObjListWithOpen.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepErrorObject;
+import org.onosproject.pcepio.protocol.PcepOpenObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provide the error object list with open object.
+ */
+public class ErrorObjListWithOpen {
+    //errorObjList is mandatory
+    private LinkedList&lt;PcepErrorObject&gt; llerrorObjList;
+    // openObject is optional
+    private PcepOpenObject openObject;
+    // flag to check if open object is set or not
+    private boolean isOpenObjectSet;
+<span class="fc" id="L40">    protected static final Logger log = LoggerFactory.getLogger(ErrorObjListWithOpen.class);</span>
+
+    /**
+     * Constructor to initialize Error and OPEN object.
+     *
+     * @param errObj ERROR object list
+     * @param openObj OPEN object
+     */
+<span class="fc" id="L48">    public ErrorObjListWithOpen(LinkedList&lt;PcepErrorObject&gt; errObj, PcepOpenObject openObj) {</span>
+<span class="fc" id="L49">        this.llerrorObjList = errObj;</span>
+<span class="fc" id="L50">        this.openObject = openObj;</span>
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (openObj != null) {</span>
+<span class="fc" id="L52">            isOpenObjectSet = true;</span>
+        } else {
+<span class="nc" id="L54">            isOpenObjectSet = false;</span>
+        }
+<span class="fc" id="L56">    }</span>
+
+    /**
+     * Constructor to initialize ERROR Object.
+     *
+     * @param errObj ERROR Object list
+     */
+<span class="fc" id="L63">    public ErrorObjListWithOpen(LinkedList&lt;PcepErrorObject&gt; errObj) {</span>
+<span class="fc" id="L64">        this.llerrorObjList = errObj;</span>
+<span class="fc" id="L65">        this.openObject = null;</span>
+<span class="fc" id="L66">        isOpenObjectSet = false;</span>
+<span class="fc" id="L67">    }</span>
+
+    /**
+     * Return list of Error Types.
+     *
+     * @return error types list
+     */
+    public LinkedList&lt;Integer&gt; getErrorType() {
+<span class="nc" id="L75">        LinkedList&lt;Integer&gt; errorType = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        if (llerrorObjList != null) {</span>
+<span class="nc" id="L77">            ListIterator&lt;PcepErrorObject&gt; errObjListIterator = llerrorObjList.listIterator();</span>
+            int error;
+            PcepErrorObject errorObj;
+<span class="nc bnc" id="L80" title="All 2 branches missed.">            while (errObjListIterator.hasNext()) {</span>
+<span class="nc" id="L81">                errorObj = errObjListIterator.next();</span>
+<span class="nc" id="L82">                error = errorObj.getErrorType();</span>
+<span class="nc" id="L83">                errorType.add(error);</span>
+            }
+        }
+<span class="nc" id="L86">        return errorType;</span>
+    }
+
+    /**
+     * Return list of Error Values.
+     *
+     * @return error values list
+     */
+    public LinkedList&lt;Integer&gt; getErrorValue() {
+<span class="nc" id="L95">        LinkedList&lt;Integer&gt; errorValue = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        if (llerrorObjList != null) {</span>
+<span class="nc" id="L97">            ListIterator&lt;PcepErrorObject&gt; errObjListIterator = llerrorObjList.listIterator();</span>
+            int error;
+            PcepErrorObject errorObj;
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            while (errObjListIterator.hasNext()) {</span>
+<span class="nc" id="L101">                errorObj = errObjListIterator.next();</span>
+<span class="nc" id="L102">                error = errorObj.getErrorValue();</span>
+<span class="nc" id="L103">                errorValue.add(error);</span>
+            }
+        }
+<span class="nc" id="L106">        return errorValue;</span>
+    }
+
+    /**
+     * Checks whether ERROR Object list is empty or not.
+     *
+     * @return true if ERROR Object list is empty otherwise false
+     */
+    public boolean isErrorObjListWithOpenPresent() {
+        // ( &lt;error-obj-list&gt; [&lt;Open&gt;]
+        // At least in this case &lt;error-obj-list&gt; should be present.
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">        return !this.llerrorObjList.isEmpty();</span>
+    }
+
+    /**
+     * Write Error Object List and Open Object to channel buffer.
+     *
+     * @param cb output channel buffer
+     * @return length of written Error object list with open
+     * @throws PcepParseException when mandatory fields are not set
+     */
+    public int write(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L128">        int iLenStartIndex = cb.writerIndex();</span>
+<span class="fc" id="L129">        boolean bIsErrObjListFound = false;</span>
+
+        //&lt;error-obj-list&gt; is mandatory , if not present throw exception.
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if (llerrorObjList != null) {</span>
+<span class="fc" id="L133">            ListIterator&lt;PcepErrorObject&gt; errObjListIterator = llerrorObjList.listIterator();</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">            while (errObjListIterator.hasNext()) {</span>
+<span class="fc" id="L135">                errObjListIterator.next().write(cb);</span>
+<span class="fc" id="L136">                bIsErrObjListFound = true;</span>
+            }
+        }
+
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">        if (!bIsErrObjListFound) {</span>
+<span class="nc" id="L141">            throw new PcepParseException(&quot;&lt;error-obj-list&gt; is mandatory.&quot;);</span>
+        }
+
+        //Open Object is optional , if present write.
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (openObject != null) {</span>
+<span class="fc" id="L146">            openObject.write(cb);</span>
+        }
+
+<span class="fc" id="L149">        return cb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L154">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L155">                .omitNullValues()</span>
+<span class="nc" id="L156">                .add(&quot;ErrorObjList&quot;, llerrorObjList)</span>
+<span class="nc" id="L157">                .add(&quot;Open&quot;, openObject)</span>
+<span class="nc" id="L158">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OchPortDescription.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.device</a> &gt; <span class="el_source">OchPortDescription.java</span></div><h1>OchPortDescription.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.device;
+
+import com.google.common.base.MoreObjects;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.OduSignalType;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.SparseAnnotations;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Default implementation of immutable OCh port description.
+ */
+public class OchPortDescription extends DefaultPortDescription {
+
+    private final OduSignalType signalType;
+    private final boolean isTunable;
+    private final OchSignal lambda;
+
+    /**
+     * Creates OCH port description based on the supplied information.
+     *
+     * @param number      port number
+     * @param isEnabled   port enabled state
+     * @param signalType  ODU signal type
+     * @param isTunable   tunable wavelength capability
+     * @param lambda      OCh signal
+     * @param annotations optional key/value annotations map
+     */
+    public OchPortDescription(PortNumber number, boolean isEnabled, OduSignalType signalType,
+                              boolean isTunable, OchSignal lambda, SparseAnnotations... annotations) {
+<span class="nc" id="L48">        super(number, isEnabled, Port.Type.OCH, 0, annotations);</span>
+<span class="nc" id="L49">        this.signalType = signalType;</span>
+<span class="nc" id="L50">        this.isTunable = isTunable;</span>
+<span class="nc" id="L51">        this.lambda = checkNotNull(lambda);</span>
+<span class="nc" id="L52">    }</span>
+
+    /**
+     * Creates OCH port description based on the supplied information.
+     *
+     * @param base        PortDescription to get basic information from
+     * @param signalType  ODU signal type
+     * @param isTunable   tunable wavelength capability
+     * @param lambda      OCh signal
+     * @param annotations optional key/value annotations map
+     */
+    public OchPortDescription(PortDescription base, OduSignalType signalType, boolean isTunable,
+                              OchSignal lambda, SparseAnnotations annotations) {
+<span class="nc" id="L65">        super(base, annotations);</span>
+<span class="nc" id="L66">        this.signalType = signalType;</span>
+<span class="nc" id="L67">        this.isTunable = isTunable;</span>
+<span class="nc" id="L68">        this.lambda = checkNotNull(lambda);</span>
+<span class="nc" id="L69">    }</span>
+
+    /**
+     * Returns ODU signal type.
+     *
+     * @return ODU signal type
+     */
+    public OduSignalType signalType() {
+<span class="nc" id="L77">        return signalType;</span>
+    }
+
+    /**
+     * Returns true if port is wavelength tunable.
+     *
+     * @return tunable wavelength capability
+     */
+    public boolean isTunable() {
+<span class="nc" id="L86">        return isTunable;</span>
+    }
+
+    /**
+     * Returns OCh signal.
+     *
+     * @return OCh signal
+     */
+    public OchSignal lambda() {
+<span class="nc" id="L95">        return lambda;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L100">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L101">                .add(&quot;number&quot;, portNumber())</span>
+<span class="nc" id="L102">                .add(&quot;isEnabled&quot;, isEnabled())</span>
+<span class="nc" id="L103">                .add(&quot;type&quot;, type())</span>
+<span class="nc" id="L104">                .add(&quot;signalType&quot;, signalType)</span>
+<span class="nc" id="L105">                .add(&quot;isTunable&quot;, isTunable)</span>
+<span class="nc" id="L106">                .add(&quot;lambda&quot;, lambda)</span>
+<span class="nc" id="L107">                .add(&quot;annotations&quot;, annotations())</span>
+<span class="nc" id="L108">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

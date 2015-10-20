@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SelectorLoop.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio</a> &gt; <span class="el_source">SelectorLoop.java</span></div><h1>SelectorLoop.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.channels.Selector;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.System.currentTimeMillis;
+
+/**
+ * Abstraction of an I/O processing loop based on an NIO selector.
+ */
+public abstract class SelectorLoop implements Runnable {
+
+<span class="fc" id="L32">    protected final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    /**
+     * Selector used by this loop to pace the I/O operations.
+     */
+    protected final Selector selector;
+
+    /**
+     * Selection operations timeout; specified in millis.
+     */
+    protected long selectTimeout;
+
+    /**
+     * Retains the error that caused the loop to exit prematurely.
+     */
+    private Throwable error;
+
+    // State indicator
+<span class="pc" id="L50">    private enum State { STARTING, STARTED, STOPPING, STOPPED };</span>
+<span class="fc" id="L51">    private volatile State state = State.STOPPED;</span>
+
+    /**
+     * Creates a new selector loop with the given selection timeout.
+     *
+     * @param selectTimeout selection timeout; specified in millis
+     * @throws IOException if the backing selector cannot be opened
+     */
+<span class="fc" id="L59">    public SelectorLoop(long selectTimeout) throws IOException {</span>
+<span class="pc bpc" id="L60" title="1 of 2 branches missed.">        checkArgument(selectTimeout &gt; 0, &quot;Timeout must be positive&quot;);</span>
+<span class="fc" id="L61">        this.selectTimeout = selectTimeout;</span>
+<span class="fc" id="L62">        this.selector = openSelector();</span>
+<span class="fc" id="L63">    }</span>
+
+    /**
+     * Opens a new selector for the use by the loop.
+     *
+     * @return newly open selector
+     * @throws IOException if the backing selector cannot be opened
+     */
+    protected Selector openSelector() throws IOException {
+<span class="fc" id="L72">        return Selector.open();</span>
+    }
+
+    /**
+     * Indicates that the loop is marked to run.
+     * @return true if the loop is marked to run
+     */
+    protected boolean isRunning() {
+<span class="pc bpc" id="L80" title="1 of 4 branches missed.">        return state == State.STARTED || state == State.STARTING;</span>
+    }
+
+    /**
+     * Returns the error, if there was one, that caused the loop to terminate
+     * prematurely.
+     *
+     * @return error or null if there was none
+     */
+    public Throwable getError() {
+<span class="nc" id="L90">        return error;</span>
+    }
+
+    /**
+     * Contains the body of the I/O selector loop.
+     *
+     * @throws IOException if an error is encountered while selecting I/O
+     */
+    protected abstract void loop() throws IOException;
+
+    @Override
+    public void run() {
+<span class="fc" id="L102">        error = null;</span>
+<span class="fc" id="L103">        state = State.STARTING;</span>
+        try {
+<span class="fc" id="L105">            loop();</span>
+<span class="nc" id="L106">        } catch (Exception e) {</span>
+<span class="nc" id="L107">            error = e;</span>
+<span class="nc" id="L108">            log.error(&quot;Loop aborted&quot;, e);</span>
+<span class="fc" id="L109">        }</span>
+<span class="fc" id="L110">        notifyDone();</span>
+<span class="fc" id="L111">    }</span>
+
+    /**
+     * Notifies observers waiting for loop to become ready.
+     */
+    protected synchronized void notifyReady() {
+<span class="fc" id="L117">        state = State.STARTED;</span>
+<span class="fc" id="L118">        notifyAll();</span>
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * Triggers loop shutdown.
+     */
+    public void shutdown() {
+        // Mark the loop as no longer running and wake up the selector.
+<span class="fc" id="L126">        state = State.STOPPING;</span>
+<span class="fc" id="L127">        selector.wakeup();</span>
+<span class="fc" id="L128">    }</span>
+
+    /**
+     * Notifies observers waiting for loop to fully stop.
+     */
+    private synchronized void notifyDone() {
+<span class="fc" id="L134">        state = State.STOPPED;</span>
+<span class="fc" id="L135">        notifyAll();</span>
+<span class="fc" id="L136">    }</span>
+
+    /**
+     * Waits for the loop execution to start.
+     *
+     * @param timeout number of milliseconds to wait
+     * @return true if loop started in time
+     */
+    public final synchronized boolean awaitStart(long timeout) {
+<span class="nc" id="L145">        long max = currentTimeMillis() + timeout;</span>
+<span class="nc bnc" id="L146" title="All 4 branches missed.">        while (state != State.STARTED &amp;&amp; (currentTimeMillis() &lt; max)) {</span>
+            try {
+<span class="nc" id="L148">                wait(timeout);</span>
+<span class="nc" id="L149">            } catch (InterruptedException e) {</span>
+<span class="nc" id="L150">                throw new RuntimeException(&quot;Interrupted&quot;, e);</span>
+<span class="nc" id="L151">            }</span>
+        }
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        return state == State.STARTED;</span>
+    }
+
+    /**
+     * Waits for the loop execution to stop.
+     *
+     * @param timeout number of milliseconds to wait
+     * @return true if loop finished in time
+     */
+    public final synchronized boolean awaitStop(long timeout) {
+<span class="nc" id="L163">        long max = currentTimeMillis() + timeout;</span>
+<span class="nc bnc" id="L164" title="All 4 branches missed.">        while (state != State.STOPPED &amp;&amp; (currentTimeMillis() &lt; max)) {</span>
+            try {
+<span class="nc" id="L166">                wait(timeout);</span>
+<span class="nc" id="L167">            } catch (InterruptedException e) {</span>
+<span class="nc" id="L168">                throw new RuntimeException(&quot;Interrupted&quot;, e);</span>
+<span class="nc" id="L169">            }</span>
+        }
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        return state == State.STOPPED;</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

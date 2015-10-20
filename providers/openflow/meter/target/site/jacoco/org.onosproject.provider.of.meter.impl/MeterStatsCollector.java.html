@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MeterStatsCollector.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-meter</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.meter.impl</a> &gt; <span class="el_source">MeterStatsCollector.java</span></div><h1>MeterStatsCollector.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.provider.of.meter.impl;
+
+import org.jboss.netty.util.HashedWheelTimer;
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.util.Timer;
+import org.onosproject.openflow.controller.OpenFlowSwitch;
+import org.onosproject.openflow.controller.RoleState;
+import org.projectfloodlight.openflow.protocol.OFMeterStatsRequest;
+import org.slf4j.Logger;
+
+import java.util.concurrent.TimeUnit;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/*
+ * Sends Meter Stats Request and collect the Meter statistics with a time interval.
+ */
+public class MeterStatsCollector implements TimerTask {
+
+<span class="nc" id="L37">    private final HashedWheelTimer timer = Timer.getTimer();</span>
+    private final OpenFlowSwitch sw;
+<span class="nc" id="L39">    private final Logger log = getLogger(getClass());</span>
+    private final int refreshInterval;
+
+    private Timeout timeout;
+
+<span class="nc" id="L44">    private boolean stopTimer = false;</span>
+
+    /**
+     * Creates a GroupStatsCollector object.
+     *
+     * @param sw Open Flow switch
+     * @param interval time interval for collecting group statistic
+     */
+<span class="nc" id="L52">    public MeterStatsCollector(OpenFlowSwitch sw, int interval) {</span>
+<span class="nc" id="L53">        this.sw = sw;</span>
+<span class="nc" id="L54">        this.refreshInterval = interval;</span>
+<span class="nc" id="L55">    }</span>
+
+    @Override
+    public void run(Timeout timeout) throws Exception {
+<span class="nc" id="L59">        log.trace(&quot;Collecting stats for {}&quot;, sw.getStringId());</span>
+
+<span class="nc" id="L61">        sendMeterStatistic();</span>
+
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (!this.stopTimer) {</span>
+<span class="nc" id="L64">            log.trace(&quot;Scheduling stats collection in {} seconds for {}&quot;,</span>
+<span class="nc" id="L65">                    this.refreshInterval, this.sw.getStringId());</span>
+<span class="nc" id="L66">            timeout.getTimer().newTimeout(this, refreshInterval,</span>
+                    TimeUnit.SECONDS);
+        }
+<span class="nc" id="L69">    }</span>
+
+    private void sendMeterStatistic() {
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L73">            log.trace(&quot;sendMeterStatistics {}:{}&quot;, sw.getStringId(), sw.getRole());</span>
+        }
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (sw.getRole() != RoleState.MASTER) {</span>
+<span class="nc" id="L76">            return;</span>
+        }
+
+<span class="nc" id="L79">        OFMeterStatsRequest.Builder builder =</span>
+<span class="nc" id="L80">                sw.factory().buildMeterStatsRequest();</span>
+<span class="nc" id="L81">        builder.setXid(0).setMeterId(0xFFFFFFFF);</span>
+
+<span class="nc" id="L83">        sw.sendMsg(builder.build());</span>
+
+<span class="nc" id="L85">    }</span>
+
+    /**
+     * Starts the collector.
+     */
+    public void start() {
+<span class="nc" id="L91">        log.info(&quot;Starting Meter Stats collection thread for {}&quot;, sw.getStringId());</span>
+<span class="nc" id="L92">        timeout = timer.newTimeout(this, 1, TimeUnit.SECONDS);</span>
+<span class="nc" id="L93">    }</span>
+
+    /**
+     * Stops the collector.
+     */
+    public void stop() {
+<span class="nc" id="L99">        log.info(&quot;Stopping Meter Stats collection thread for {}&quot;, sw.getStringId());</span>
+<span class="nc" id="L100">        this.stopTimer = true;</span>
+<span class="nc" id="L101">        timeout.cancel();</span>
+<span class="nc" id="L102">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

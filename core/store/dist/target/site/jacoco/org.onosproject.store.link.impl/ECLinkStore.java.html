@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ECLinkStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.link.impl</a> &gt; <span class="el_source">ECLinkStore.java</span></div><h1>ECLinkStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.link.impl;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.net.DefaultAnnotations.merge;
+import static org.onosproject.net.DefaultAnnotations.union;
+import static org.onosproject.net.Link.State.ACTIVE;
+import static org.onosproject.net.Link.State.INACTIVE;
+import static org.onosproject.net.Link.Type.DIRECT;
+import static org.onosproject.net.Link.Type.INDIRECT;
+import static org.onosproject.net.LinkKey.linkKey;
+import static org.onosproject.net.link.LinkEvent.Type.LINK_ADDED;
+import static org.onosproject.net.link.LinkEvent.Type.LINK_REMOVED;
+import static org.onosproject.net.link.LinkEvent.Type.LINK_UPDATED;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.REMOVE;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.SharedExecutors;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.AnnotationsUtil;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.DefaultLink;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.Link.Type;
+import org.onosproject.net.device.DeviceClockService;
+import org.onosproject.net.link.DefaultLinkDescription;
+import org.onosproject.net.link.LinkDescription;
+import org.onosproject.net.link.LinkEvent;
+import org.onosproject.net.link.LinkStore;
+import org.onosproject.net.link.LinkStoreDelegate;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.impl.MastershipBasedTimestamp;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.serializers.custom.DistributedStoreSerializers;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.Futures;
+
+/**
+ * Manages the inventory of links using a {@code EventuallyConsistentMap}.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L90">public class ECLinkStore</span>
+    extends AbstractStore&lt;LinkEvent, LinkStoreDelegate&gt;
+    implements LinkStore {
+
+<span class="nc" id="L94">    private final Logger log = getLogger(getClass());</span>
+
+<span class="nc" id="L96">    private final Map&lt;LinkKey, Link&gt; links = Maps.newConcurrentMap();</span>
+    private EventuallyConsistentMap&lt;Provided&lt;LinkKey&gt;, LinkDescription&gt; linkDescriptions;
+
+<span class="nc" id="L99">    private static final MessageSubject LINK_INJECT_MESSAGE = new MessageSubject(&quot;inject-link-request&quot;);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceClockService deviceClockService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+<span class="nc" id="L116">    private EventuallyConsistentMapListener&lt;Provided&lt;LinkKey&gt;, LinkDescription&gt; linkTracker =</span>
+            new InternalLinkTracker();
+
+<span class="nc" id="L119">    protected static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L122">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L123">                    .register(DistributedStoreSerializers.STORE_COMMON)</span>
+<span class="nc" id="L124">                    .nextId(DistributedStoreSerializers.STORE_CUSTOM_BEGIN)</span>
+<span class="nc" id="L125">                    .register(Provided.class)</span>
+<span class="nc" id="L126">                    .build();</span>
+<span class="nc" id="L127">        }</span>
+    };
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L132">        KryoNamespace.Builder serializer = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L133">                .register(KryoNamespaces.API)</span>
+<span class="nc" id="L134">                .register(MastershipBasedTimestamp.class)</span>
+<span class="nc" id="L135">                .register(Provided.class);</span>
+
+<span class="nc" id="L137">        linkDescriptions = storageService.&lt;Provided&lt;LinkKey&gt;, LinkDescription&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L138">                .withName(&quot;onos-link-descriptions&quot;)</span>
+<span class="nc" id="L139">                .withSerializer(serializer)</span>
+<span class="nc" id="L140">                .withTimestampProvider((k, v) -&gt; {</span>
+                    try {
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                        return v == null ? null : deviceClockService.getTimestamp(v.dst().deviceId());</span>
+<span class="nc" id="L143">                    } catch (IllegalStateException e) {</span>
+<span class="nc" id="L144">                        return null;</span>
+                    }
+<span class="nc" id="L146">                }).build();</span>
+
+<span class="nc" id="L148">        clusterCommunicator.addSubscriber(LINK_INJECT_MESSAGE,</span>
+                SERIALIZER::decode,
+                this::injectLink,
+                SERIALIZER::encode,
+<span class="nc" id="L152">                SharedExecutors.getPoolThreadExecutor());</span>
+
+<span class="nc" id="L154">        linkDescriptions.addListener(linkTracker);</span>
+
+<span class="nc" id="L156">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L157">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L161">        linkDescriptions.removeListener(linkTracker);</span>
+<span class="nc" id="L162">        linkDescriptions.destroy();</span>
+<span class="nc" id="L163">        links.clear();</span>
+<span class="nc" id="L164">        clusterCommunicator.removeSubscriber(LINK_INJECT_MESSAGE);</span>
+
+<span class="nc" id="L166">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L167">    }</span>
+
+    @Override
+    public int getLinkCount() {
+<span class="nc" id="L171">        return links.size();</span>
+    }
+
+    @Override
+    public Iterable&lt;Link&gt; getLinks() {
+<span class="nc" id="L176">        return links.values();</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceEgressLinks(DeviceId deviceId) {
+<span class="nc" id="L181">        return filter(links.values(), link -&gt; deviceId.equals(link.src().deviceId()));</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceIngressLinks(DeviceId deviceId) {
+<span class="nc" id="L186">        return filter(links.values(), link -&gt; deviceId.equals(link.dst().deviceId()));</span>
+    }
+
+    @Override
+    public Link getLink(ConnectPoint src, ConnectPoint dst) {
+<span class="nc" id="L191">        return links.get(linkKey(src, dst));</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getEgressLinks(ConnectPoint src) {
+<span class="nc" id="L196">        return filter(links.values(), link -&gt; src.equals(link.src()));</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getIngressLinks(ConnectPoint dst) {
+<span class="nc" id="L201">        return filter(links.values(), link -&gt; dst.equals(link.dst()));</span>
+    }
+
+    @Override
+    public LinkEvent createOrUpdateLink(ProviderId providerId,
+                                        LinkDescription linkDescription) {
+<span class="nc" id="L207">        final DeviceId dstDeviceId = linkDescription.dst().deviceId();</span>
+<span class="nc" id="L208">        final NodeId dstNodeId = mastershipService.getMasterFor(dstDeviceId);</span>
+
+        // Process link update only if we're the master of the destination node,
+        // otherwise signal the actual master.
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (clusterService.getLocalNode().id().equals(dstNodeId)) {</span>
+<span class="nc" id="L213">            LinkKey linkKey = linkKey(linkDescription.src(), linkDescription.dst());</span>
+<span class="nc" id="L214">            Provided&lt;LinkKey&gt; internalLinkKey = getProvided(linkKey, providerId);</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            if (internalLinkKey == null) {</span>
+<span class="nc" id="L216">                return null;</span>
+            }
+<span class="nc" id="L218">            linkDescriptions.compute(internalLinkKey, (k, v) -&gt; createOrUpdateLinkInternal(v  , linkDescription));</span>
+<span class="nc" id="L219">            return refreshLinkCache(linkKey);</span>
+        } else {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">            if (dstNodeId == null) {</span>
+<span class="nc" id="L222">                return null;</span>
+            }
+<span class="nc" id="L224">            return Futures.getUnchecked(clusterCommunicator.sendAndReceive(new Provided&lt;&gt;(linkDescription, providerId),</span>
+                    LINK_INJECT_MESSAGE,
+                    SERIALIZER::encode,
+                    SERIALIZER::decode,
+                    dstNodeId));
+        }
+    }
+
+    private Provided&lt;LinkKey&gt; getProvided(LinkKey linkKey, ProviderId provId) {
+<span class="nc" id="L233">        ProviderId bpid = getBaseProviderId(linkKey);</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (provId == null) {</span>
+            // The LinkService didn't know who this LinkKey belongs to.
+            // A fix is to either modify the getProvider() in LinkService classes
+            // or expose the contents of linkDescriptions to the LinkService.
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            return (bpid == null) ? null : new Provided&lt;&gt;(linkKey, bpid);</span>
+        } else {
+<span class="nc" id="L240">            return new Provided&lt;&gt;(linkKey, provId);</span>
+        }
+    }
+
+    private LinkDescription createOrUpdateLinkInternal(LinkDescription current, LinkDescription updated) {
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (current != null) {</span>
+            // we only allow transition from INDIRECT -&gt; DIRECT
+<span class="nc" id="L247">            return  new DefaultLinkDescription(</span>
+<span class="nc" id="L248">                        current.src(),</span>
+<span class="nc" id="L249">                        current.dst(),</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">                        current.type() == DIRECT ? DIRECT : updated.type(),</span>
+<span class="nc" id="L251">                        union(current.annotations(), updated.annotations()));</span>
+        }
+<span class="nc" id="L253">        return updated;</span>
+    }
+
+    private LinkEvent refreshLinkCache(LinkKey linkKey) {
+<span class="nc" id="L257">        AtomicReference&lt;LinkEvent.Type&gt; eventType = new AtomicReference&lt;&gt;();</span>
+<span class="nc" id="L258">        Link link = links.compute(linkKey, (key, existingLink) -&gt; {</span>
+<span class="nc" id="L259">            Link newLink = composeLink(linkKey);</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">            if (existingLink == null) {</span>
+<span class="nc" id="L261">                eventType.set(LINK_ADDED);</span>
+<span class="nc" id="L262">                return newLink;</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            } else if (existingLink.state() != newLink.state() ||</span>
+<span class="nc bnc" id="L264" title="All 4 branches missed.">                        (existingLink.type() == INDIRECT &amp;&amp; newLink.type() == DIRECT) ||</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                        !AnnotationsUtil.isEqual(existingLink.annotations(), newLink.annotations())) {</span>
+<span class="nc" id="L266">                    eventType.set(LINK_UPDATED);</span>
+<span class="nc" id="L267">                    return newLink;</span>
+            } else {
+<span class="nc" id="L269">                return existingLink;</span>
+            }
+        });
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        return eventType.get() != null ? new LinkEvent(eventType.get(), link) : null;</span>
+    }
+
+    private Set&lt;ProviderId&gt; getAllProviders(LinkKey linkKey) {
+<span class="nc" id="L276">        return linkDescriptions.keySet()</span>
+<span class="nc" id="L277">                               .stream()</span>
+<span class="nc" id="L278">                               .filter(key -&gt; key.key().equals(linkKey))</span>
+<span class="nc" id="L279">                               .map(key -&gt; key.providerId())</span>
+<span class="nc" id="L280">                               .collect(Collectors.toSet());</span>
+    }
+
+    private ProviderId getBaseProviderId(LinkKey linkKey) {
+<span class="nc" id="L284">        Set&lt;ProviderId&gt; allProviders = getAllProviders(linkKey);</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (allProviders.size() &gt; 0) {</span>
+<span class="nc" id="L286">            return allProviders.stream()</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">                               .filter(p -&gt; !p.isAncillary())</span>
+<span class="nc" id="L288">                               .findFirst()</span>
+<span class="nc" id="L289">                               .orElse(Iterables.getFirst(allProviders, null));</span>
+        }
+<span class="nc" id="L291">        return null;</span>
+    }
+
+    private Link composeLink(LinkKey linkKey) {
+
+<span class="nc" id="L296">        ProviderId baseProviderId = checkNotNull(getBaseProviderId(linkKey));</span>
+<span class="nc" id="L297">        LinkDescription base = linkDescriptions.get(new Provided&lt;&gt;(linkKey, baseProviderId));</span>
+
+<span class="nc" id="L299">        ConnectPoint src = base.src();</span>
+<span class="nc" id="L300">        ConnectPoint dst = base.dst();</span>
+<span class="nc" id="L301">        Type type = base.type();</span>
+<span class="nc" id="L302">        AtomicReference&lt;DefaultAnnotations&gt; annotations = new AtomicReference&lt;&gt;(DefaultAnnotations.builder().build());</span>
+<span class="nc" id="L303">        annotations.set(merge(annotations.get(), base.annotations()));</span>
+
+<span class="nc" id="L305">        getAllProviders(linkKey).stream()</span>
+<span class="nc" id="L306">                                .map(p -&gt; new Provided&lt;&gt;(linkKey, p))</span>
+<span class="nc" id="L307">                                .forEach(key -&gt; {</span>
+<span class="nc" id="L308">                                    annotations.set(merge(annotations.get(),</span>
+<span class="nc" id="L309">                                                          linkDescriptions.get(key).annotations()));</span>
+<span class="nc" id="L310">        });</span>
+
+<span class="nc" id="L312">        boolean isDurable = Objects.equals(annotations.get().value(AnnotationKeys.DURABLE), &quot;true&quot;);</span>
+<span class="nc" id="L313">        return new DefaultLink(baseProviderId, src, dst, type, ACTIVE, isDurable, annotations.get());</span>
+    }
+
+    // Updates, if necessary the specified link and returns the appropriate event.
+    // Guarded by linkDescs value (=locking each Link)
+    private LinkEvent updateLink(LinkKey key, Link oldLink, Link newLink) {
+        // Note: INDIRECT -&gt; DIRECT transition only
+        // so that BDDP discovered Link will not overwrite LDDP Link
+<span class="nc bnc" id="L321" title="All 2 branches missed.">        if (oldLink.state() != newLink.state() ||</span>
+<span class="nc bnc" id="L322" title="All 4 branches missed.">            (oldLink.type() == INDIRECT &amp;&amp; newLink.type() == DIRECT) ||</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">            !AnnotationsUtil.isEqual(oldLink.annotations(), newLink.annotations())) {</span>
+
+<span class="nc" id="L325">            links.put(key, newLink);</span>
+<span class="nc" id="L326">            return new LinkEvent(LINK_UPDATED, newLink);</span>
+        }
+<span class="nc" id="L328">        return null;</span>
+    }
+
+    @Override
+    public LinkEvent removeOrDownLink(ConnectPoint src, ConnectPoint dst) {
+<span class="nc" id="L333">        Link link = getLink(src, dst);</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">        if (link == null) {</span>
+<span class="nc" id="L335">            return null;</span>
+        }
+
+<span class="nc bnc" id="L338" title="All 2 branches missed.">        if (link.isDurable()) {</span>
+            // FIXME: this will not sync link state!!!
+<span class="nc bnc" id="L340" title="All 2 branches missed.">            return link.state() == INACTIVE ? null :</span>
+<span class="nc" id="L341">                    updateLink(linkKey(link.src(), link.dst()), link,</span>
+<span class="nc" id="L342">                               new DefaultLink(link.providerId(),</span>
+<span class="nc" id="L343">                                               link.src(), link.dst(),</span>
+<span class="nc" id="L344">                                               link.type(), INACTIVE,</span>
+<span class="nc" id="L345">                                               link.isDurable(),</span>
+<span class="nc" id="L346">                                               link.annotations()));</span>
+        }
+<span class="nc" id="L348">        return removeLink(src, dst);</span>
+    }
+
+    @Override
+    public LinkEvent removeLink(ConnectPoint src, ConnectPoint dst) {
+<span class="nc" id="L353">        final LinkKey linkKey = LinkKey.linkKey(src, dst);</span>
+<span class="nc" id="L354">        ProviderId primaryProviderId = getBaseProviderId(linkKey);</span>
+        // Stop if there is no base provider.
+<span class="nc bnc" id="L356" title="All 2 branches missed.">        if (primaryProviderId == null) {</span>
+<span class="nc" id="L357">            return null;</span>
+        }
+<span class="nc" id="L359">        LinkDescription removedLinkDescription =</span>
+<span class="nc" id="L360">                linkDescriptions.remove(new Provided&lt;&gt;(linkKey, primaryProviderId));</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (removedLinkDescription != null) {</span>
+<span class="nc" id="L362">            return purgeLinkCache(linkKey);</span>
+        }
+<span class="nc" id="L364">        return null;</span>
+    }
+
+    private LinkEvent purgeLinkCache(LinkKey linkKey) {
+<span class="nc" id="L368">        Link removedLink = links.remove(linkKey);</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        if (removedLink != null) {</span>
+<span class="nc" id="L370">            getAllProviders(linkKey).forEach(p -&gt; linkDescriptions.remove(new Provided&lt;&gt;(linkKey, p)));</span>
+<span class="nc" id="L371">            return new LinkEvent(LINK_REMOVED, removedLink);</span>
+        }
+<span class="nc" id="L373">        return null;</span>
+    }
+
+    private Set&lt;Link&gt; filter(Collection&lt;Link&gt; links, Predicate&lt;Link&gt; predicate) {
+<span class="nc" id="L377">        return links.stream().filter(predicate).collect(Collectors.toSet());</span>
+    }
+
+    private LinkEvent injectLink(Provided&lt;LinkDescription&gt; linkInjectRequest) {
+<span class="nc" id="L381">        log.trace(&quot;Received request to inject link {}&quot;, linkInjectRequest);</span>
+
+<span class="nc" id="L383">        ProviderId providerId = linkInjectRequest.providerId();</span>
+<span class="nc" id="L384">        LinkDescription linkDescription = linkInjectRequest.key();</span>
+
+<span class="nc" id="L386">        final DeviceId deviceId = linkDescription.dst().deviceId();</span>
+<span class="nc bnc" id="L387" title="All 2 branches missed.">        if (!deviceClockService.isTimestampAvailable(deviceId)) {</span>
+            // workaround for ONOS-1208
+<span class="nc" id="L389">            log.warn(&quot;Not ready to accept update. Dropping {}&quot;, linkInjectRequest);</span>
+<span class="nc" id="L390">            return null;</span>
+        }
+<span class="nc" id="L392">        return createOrUpdateLink(providerId, linkDescription);</span>
+    }
+
+<span class="nc" id="L395">    private class InternalLinkTracker implements EventuallyConsistentMapListener&lt;Provided&lt;LinkKey&gt;, LinkDescription&gt; {</span>
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;Provided&lt;LinkKey&gt;, LinkDescription&gt; event) {
+<span class="nc bnc" id="L398" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc" id="L399">                notifyDelegate(refreshLinkCache(event.key().key()));</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">            } else if (event.type() == REMOVE) {</span>
+<span class="nc" id="L401">                notifyDelegate(purgeLinkCache(event.key().key()));</span>
+            }
+<span class="nc" id="L403">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

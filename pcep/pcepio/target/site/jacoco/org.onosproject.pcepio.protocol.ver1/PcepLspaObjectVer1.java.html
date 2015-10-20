@@ -1,0 +1,530 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLspaObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLspaObjectVer1.java</span></div><h1>PcepLspaObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLspaObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP label Object .
+ */
+public class PcepLspaObjectVer1 implements PcepLspaObject {
+
+    /* LSPA Object Body Format
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                       Exclude-any                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                       Include-any                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                       Include-all                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |  Setup Prio   |  Holding Prio |     Flags   |L|   Reserved    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |                      Optional TLVs                            |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L56">    protected static final Logger log = LoggerFactory.getLogger(PcepLspaObjectVer1.class);</span>
+
+    public static final byte LSPA_OBJ_TYPE = 1;
+    public static final byte LSPA_OBJ_CLASS = 9;
+    public static final byte LSPA_OBJECT_VERSION = 1;
+    public static final short LSPA_OBJ_MINIMUM_LENGTH = 20;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+
+<span class="fc" id="L64">    static final PcepObjectHeader DEFAULT_LSPA_OBJECT_HEADER = new PcepObjectHeader(LSPA_OBJ_CLASS, LSPA_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, LSPA_OBJ_MINIMUM_LENGTH);
+
+    public static final int SETUP_PRIORITY_SHIFT_VALUE = 24;
+    public static final int HOLD_PRIORITY_SHIFT_VALUE = 16;
+    public static final int BFLAG_SHIFT_VALUE = 8;
+    public static final int LFLAG_SET = 1;
+    public static final int LFLAG_RESET = 0;
+    private PcepObjectHeader lspaObjHeader;
+    private int iExcludeAny;
+    private int iIncludeAny;
+    private int iIncludeAll;
+    private byte cSetupPriority;
+    private byte cHoldPriority;
+    private boolean bLFlag;
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv; //Optional TLV
+
+    /**
+     * Constructor to initialize member variables.
+     *
+     * @param lspaObjHeader lspa object header
+     * @param bLFlag b l flag
+     * @param iExcludeAny excludeAny value
+     * @param iIncludeAny includeAny value
+     * @param iIncludeAll includeAll value
+     * @param cSetupPriority setup priority value
+     * @param cHoldPriority hold priority value
+     * @param llOptionalTlv list of optional tlv
+     */
+    public PcepLspaObjectVer1(PcepObjectHeader lspaObjHeader, boolean bLFlag, int iExcludeAny, int iIncludeAny,
+<span class="fc" id="L94">            int iIncludeAll, byte cSetupPriority, byte cHoldPriority, LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+
+<span class="fc" id="L96">        this.lspaObjHeader = lspaObjHeader;</span>
+<span class="fc" id="L97">        this.bLFlag = bLFlag;</span>
+<span class="fc" id="L98">        this.iExcludeAny = iExcludeAny;</span>
+<span class="fc" id="L99">        this.iIncludeAny = iIncludeAny;</span>
+<span class="fc" id="L100">        this.iIncludeAll = iIncludeAll;</span>
+<span class="fc" id="L101">        this.cSetupPriority = cSetupPriority;</span>
+<span class="fc" id="L102">        this.cHoldPriority = cHoldPriority;</span>
+<span class="fc" id="L103">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L104">    }</span>
+
+    /**
+     * Sets Object Header.
+     *
+     * @param obj lspa object header
+     */
+    public void setLspaObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L112">        this.lspaObjHeader = obj;</span>
+<span class="nc" id="L113">    }</span>
+
+    @Override
+    public void setExcludeAny(int iExcludeAny) {
+<span class="nc" id="L117">        this.iExcludeAny = iExcludeAny;</span>
+<span class="nc" id="L118">    }</span>
+
+    @Override
+    public void setIncludeAny(int iIncludeAny) {
+<span class="nc" id="L122">        this.iIncludeAny = iIncludeAny;</span>
+<span class="nc" id="L123">    }</span>
+
+    @Override
+    public void setSetupPriority(byte cSetupPriority) {
+<span class="nc" id="L127">        this.cSetupPriority = cSetupPriority;</span>
+<span class="nc" id="L128">    }</span>
+
+    @Override
+    public void setHoldPriority(byte cHoldPriority) {
+<span class="nc" id="L132">        this.cHoldPriority = cHoldPriority;</span>
+<span class="nc" id="L133">    }</span>
+
+    @Override
+    public void setLFlag(boolean bLFlag) {
+<span class="nc" id="L137">        this.bLFlag = bLFlag;</span>
+<span class="nc" id="L138">    }</span>
+
+    /**
+     * Returns lspa Object Header.
+     *
+     * @return lspa Object Header
+     */
+    public PcepObjectHeader getLspaObjHeader() {
+<span class="nc" id="L146">        return this.lspaObjHeader;</span>
+    }
+
+    @Override
+    public int getExcludeAny() {
+<span class="nc" id="L151">        return this.iExcludeAny;</span>
+    }
+
+    @Override
+    public int getIncludeAny() {
+<span class="nc" id="L156">        return this.iIncludeAny;</span>
+    }
+
+    @Override
+    public int getIncludeAll() {
+<span class="nc" id="L161">        return this.iIncludeAll;</span>
+    }
+
+    @Override
+    public byte getSetupPriority() {
+<span class="nc" id="L166">        return this.cSetupPriority;</span>
+    }
+
+    @Override
+    public byte getHoldPriority() {
+<span class="nc" id="L171">        return this.cHoldPriority;</span>
+    }
+
+    @Override
+    public boolean getLFlag() {
+<span class="nc" id="L176">        return this.bLFlag;</span>
+    }
+
+    @Override
+    public void setIncludeAll(int value) {
+<span class="nc" id="L181">        this.iIncludeAll = value;</span>
+
+<span class="nc" id="L183">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L187">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L192">        this.llOptionalTlv = llOptionalTlv;</span>
+
+<span class="nc" id="L194">    }</span>
+
+    /**
+     * Reads channel buffer and returns object of PcepLspaObject.
+     *
+     * @param cb of type channel buffer.
+     * @return object of PcepLspaObject
+     * @throws PcepParseException while parsing lspa object from channel buffer
+     */
+    public static PcepLspaObject read(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L205">        log.debug(&quot;LspaObject::read&quot;);</span>
+        PcepObjectHeader lspaObjHeader;
+        int iExcludeAny;
+        int iIncludeAny;
+        int iIncludeAll;
+        byte cSetupPriority;
+        byte cHoldPriority;
+        boolean bLFlag;
+        byte flags;
+
+        // Optional TLV
+        LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="fc" id="L218">        lspaObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only Lspa Object buffer.
+<span class="fc" id="L221">        ChannelBuffer tempCb = cb.readBytes(lspaObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+<span class="fc" id="L222">        iExcludeAny = tempCb.readInt();</span>
+<span class="fc" id="L223">        iIncludeAny = tempCb.readInt();</span>
+<span class="fc" id="L224">        iIncludeAll = tempCb.readInt();</span>
+<span class="fc" id="L225">        cSetupPriority = tempCb.readByte();</span>
+<span class="fc" id="L226">        cHoldPriority = tempCb.readByte();</span>
+<span class="fc" id="L227">        flags = tempCb.readByte();</span>
+<span class="fc" id="L228">        tempCb.readByte();</span>
+
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">        bLFlag = (flags &amp; (byte) LFLAG_SET) == LFLAG_SET;</span>
+
+<span class="fc" id="L232">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+
+<span class="fc" id="L234">        return new PcepLspaObjectVer1(lspaObjHeader, bLFlag, iExcludeAny, iIncludeAny, iIncludeAll, cSetupPriority,</span>
+                cHoldPriority, llOptionalTlv);
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+        //write Object header
+<span class="fc" id="L242">        int objStartIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L244">        int objLenIndex = lspaObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L246" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L247">            throw new PcepParseException(&quot;Failed to write lspa object header. Index &quot; + objLenIndex);</span>
+        }
+
+<span class="fc" id="L250">        cb.writeInt(iExcludeAny);</span>
+<span class="fc" id="L251">        cb.writeInt(iIncludeAny);</span>
+<span class="fc" id="L252">        cb.writeInt(iIncludeAll);</span>
+
+<span class="fc" id="L254">        int iTemp = cSetupPriority &lt;&lt; SETUP_PRIORITY_SHIFT_VALUE;</span>
+<span class="fc" id="L255">        iTemp = iTemp | (cHoldPriority &lt;&lt; HOLD_PRIORITY_SHIFT_VALUE);</span>
+        byte bFlag;
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">        bFlag = (bLFlag) ? (byte) LFLAG_SET : LFLAG_RESET;</span>
+<span class="fc" id="L258">        iTemp = iTemp | (bFlag &lt;&lt; BFLAG_SHIFT_VALUE);</span>
+<span class="fc" id="L259">        cb.writeInt(iTemp);</span>
+
+        // Add optional TLV
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">        if (!packOptionalTlv(cb)) {</span>
+<span class="nc" id="L263">            throw new PcepParseException(&quot;Faild to write lspa objects tlv to channel buffer&quot;);</span>
+        }
+
+<span class="fc" id="L266">        short length = (short) (cb.writerIndex() - objStartIndex);</span>
+
+<span class="fc" id="L268">        lspaObjHeader.setObjLen(length); //will be helpful during print().</span>
+
+        //As per RFC the length of object should be multiples of 4
+<span class="fc" id="L271">        short pad = (short) (length % 4);</span>
+
+<span class="pc bpc" id="L273" title="1 of 2 branches missed.">        if (pad != 0) {</span>
+<span class="nc" id="L274">            pad = (short) (4 - pad);</span>
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            for (int i = 0; i &lt; pad; i++) {</span>
+<span class="nc" id="L276">                cb.writeByte((byte) 0);</span>
+            }
+<span class="nc" id="L278">            length = (short) (length + pad);</span>
+        }
+<span class="fc" id="L280">        cb.setShort(objLenIndex, length);</span>
+<span class="fc" id="L281">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Parse list of optional tlvs.
+     *
+     * @param cb channel buffer
+     * @return list of optional tlvs.
+     * @throws PcepParseException when fails to parse optional tlv list.
+     */
+    public static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L293">        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L295">        return llOutOptionalTlv;</span>
+    }
+
+    /**
+     * Writes optional tlvs to channel buffer.
+     *
+     * @param cb channel buffer
+     * @return true
+     */
+    protected boolean packOptionalTlv(ChannelBuffer cb) {
+        int hTlvType;
+        int hTlvLength;
+
+<span class="fc" id="L308">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L310">            PcepValueType tlv = listIterator.next();</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L312">                log.debug(&quot;Warning: tlv is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L313">                continue;</span>
+            }
+<span class="nc" id="L315">            hTlvType = tlv.getType();</span>
+<span class="nc" id="L316">            hTlvLength = tlv.getLength();</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            if (0 == hTlvLength) {</span>
+<span class="nc" id="L318">                log.debug(&quot;Warning: invalid length in tlv of OptionalTlv list&quot;);</span>
+<span class="nc" id="L319">                continue;</span>
+            }
+
+<span class="nc" id="L322">            cb.writeShort(hTlvType);</span>
+<span class="nc" id="L323">            cb.writeShort(hTlvLength);</span>
+
+<span class="nc" id="L325">            switch (hTlvType) {</span>
+            //TODO: optional TLV for LSPA to be added
+
+            default:
+<span class="nc" id="L329">                log.debug(&quot;Warning: PcepLspaObject: unknown tlv&quot;);</span>
+            }
+
+            // As per RFC the length of object should
+            // be multiples of 4
+<span class="nc" id="L334">            int pad = hTlvLength % 4;</span>
+
+<span class="nc bnc" id="L336" title="All 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L337">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L339">                    cb.skipBytes(pad);</span>
+                }
+            }
+<span class="nc" id="L342">        }</span>
+<span class="fc" id="L343">        return true;</span>
+    }
+
+    /**
+     * Builder class for PCEP lspa object.
+     */
+<span class="nc" id="L349">    public static class Builder implements PcepLspaObject.Builder {</span>
+<span class="nc" id="L350">        private boolean bIsHeaderSet = false;</span>
+
+        private PcepObjectHeader lspaObjHeader;
+
+        private boolean bLFlag;
+        private int iExcludeAny;
+<span class="nc" id="L356">        private boolean bIsExcludeAnySet = false;</span>
+        private int iIncludeAny;
+<span class="nc" id="L358">        private boolean bIsIncludeAnySet = false;</span>
+        private int iIncludeAll;
+<span class="nc" id="L360">        private boolean bIsIncludeAllSet = false;</span>
+        private byte cSetupPriority;
+<span class="nc" id="L362">        private boolean bIsSetupPrioritySet = false;</span>
+        private byte cHoldPriority;
+<span class="nc" id="L364">        private boolean bIsHoldPrioritySet = false;</span>
+        private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="nc" id="L367">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L370">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepLspaObject build() throws PcepParseException {
+
+<span class="nc bnc" id="L376" title="All 2 branches missed.">            PcepObjectHeader lspaObjHeader = this.bIsHeaderSet ? this.lspaObjHeader : DEFAULT_LSPA_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L378" title="All 2 branches missed.">            if (!this.bIsExcludeAnySet) {</span>
+<span class="nc" id="L379">                throw new PcepParseException(&quot;ExcludeAny NOT Set while building PcepLspaObject.&quot;);</span>
+            }
+<span class="nc bnc" id="L381" title="All 2 branches missed.">            if (!this.bIsIncludeAnySet) {</span>
+<span class="nc" id="L382">                throw new PcepParseException(&quot;IncludeAny NOT Set while building PcepLspaObject.&quot;);</span>
+            }
+<span class="nc bnc" id="L384" title="All 2 branches missed.">            if (!this.bIsIncludeAllSet) {</span>
+<span class="nc" id="L385">                throw new PcepParseException(&quot;IncludeAll NOT Set while building PcepLspaObject.&quot;);</span>
+            }
+<span class="nc bnc" id="L387" title="All 2 branches missed.">            if (!this.bIsSetupPrioritySet) {</span>
+<span class="nc" id="L388">                throw new PcepParseException(&quot;Setup Priority NOT Set while building PcepLspaObject.&quot;);</span>
+            }
+<span class="nc bnc" id="L390" title="All 2 branches missed.">            if (!this.bIsHoldPrioritySet) {</span>
+<span class="nc" id="L391">                throw new PcepParseException(&quot;Hold Priority NOT Set while building PcepLspaObject.&quot;);</span>
+            }
+
+<span class="nc bnc" id="L394" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L395">                lspaObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L398" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L399">                lspaObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L402">            return new PcepLspaObjectVer1(lspaObjHeader, bLFlag, iExcludeAny, iIncludeAny, iIncludeAll, cSetupPriority,</span>
+                    cHoldPriority, llOptionalTlv);
+        }
+
+        @Override
+        public PcepObjectHeader getLspaObjHeader() {
+<span class="nc" id="L408">            return this.lspaObjHeader;</span>
+        }
+
+        @Override
+        public Builder setLspaObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L413">            this.lspaObjHeader = obj;</span>
+<span class="nc" id="L414">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L415">            return this;</span>
+        }
+
+        @Override
+        public boolean getLFlag() {
+<span class="nc" id="L420">            return this.bLFlag;</span>
+        }
+
+        @Override
+        public Builder setLFlag(boolean value) {
+<span class="nc" id="L425">            this.bLFlag = value;</span>
+<span class="nc" id="L426">            return this;</span>
+        }
+
+        @Override
+        public int getExcludeAny() {
+<span class="nc" id="L431">            return this.iExcludeAny;</span>
+        }
+
+        @Override
+        public Builder setExcludeAny(int value) {
+<span class="nc" id="L436">            this.iExcludeAny = value;</span>
+<span class="nc" id="L437">            this.bIsExcludeAnySet = true;</span>
+<span class="nc" id="L438">            return this;</span>
+        }
+
+        @Override
+        public int getIncludeAny() {
+<span class="nc" id="L443">            return this.iIncludeAny;</span>
+        }
+
+        @Override
+        public Builder setIncludeAny(int value) {
+<span class="nc" id="L448">            this.iIncludeAny = value;</span>
+<span class="nc" id="L449">            this.bIsIncludeAnySet = true;</span>
+<span class="nc" id="L450">            return this;</span>
+        }
+
+        @Override
+        public int getIncludeAll() {
+<span class="nc" id="L455">            return this.iIncludeAll;</span>
+        }
+
+        @Override
+        public Builder setIncludeAll(int value) {
+<span class="nc" id="L460">            this.iIncludeAll = value;</span>
+<span class="nc" id="L461">            this.bIsIncludeAllSet = true;</span>
+<span class="nc" id="L462">            return this;</span>
+        }
+
+        @Override
+        public byte getSetupPriority() {
+<span class="nc" id="L467">            return this.cSetupPriority;</span>
+        }
+
+        @Override
+        public Builder setSetupPriority(byte value) {
+<span class="nc" id="L472">            this.cSetupPriority = value;</span>
+<span class="nc" id="L473">            this.bIsSetupPrioritySet = true;</span>
+<span class="nc" id="L474">            return this;</span>
+        }
+
+        @Override
+        public byte getHoldPriority() {
+<span class="nc" id="L479">            return this.cHoldPriority;</span>
+        }
+
+        @Override
+        public Builder setHoldPriority(byte value) {
+<span class="nc" id="L484">            this.cHoldPriority = value;</span>
+<span class="nc" id="L485">            this.bIsHoldPrioritySet = true;</span>
+<span class="nc" id="L486">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L491">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L496">            this.llOptionalTlv = llOptionalTlv;</span>
+
+<span class="nc" id="L498">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L503">            this.bPFlag = value;</span>
+<span class="nc" id="L504">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L505">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L510">            this.bIFlag = value;</span>
+<span class="nc" id="L511">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L512">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L519">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L520">                .add(&quot;LFlag&quot;, bLFlag)</span>
+<span class="nc" id="L521">                .add(&quot;SetupPriority&quot;, cSetupPriority)</span>
+<span class="nc" id="L522">                .add(&quot;HoldPriority&quot;, cHoldPriority)</span>
+<span class="nc" id="L523">                .add(&quot;IncludeAll&quot;, iIncludeAll)</span>
+<span class="nc" id="L524">                .add(&quot;IncludeAny&quot;, iIncludeAny)</span>
+<span class="nc" id="L525">                .add(&quot;ExcludeAny&quot;, iExcludeAny)</span>
+<span class="nc" id="L526">                .add(&quot;OptionalTlvList&quot;, llOptionalTlv)</span>
+<span class="nc" id="L527">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

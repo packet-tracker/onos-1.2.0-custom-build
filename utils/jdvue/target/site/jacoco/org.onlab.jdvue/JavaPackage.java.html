@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>JavaPackage.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">jdvue</a> &gt; <a href="index.source.html" class="el_package">org.onlab.jdvue</a> &gt; <span class="el_source">JavaPackage.java</span></div><h1>JavaPackage.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.jdvue;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Simple abstraction of a Java package for the purpose of tracking
+ * dependencies and requirements.
+ *
+ * @author Thomas Vachuska
+ */
+public class JavaPackage extends JavaEntity {
+
+<span class="fc" id="L32">    private final Set&lt;JavaSource&gt; sources = new HashSet&lt;&gt;();</span>
+    private Set&lt;JavaPackage&gt; dependencies;
+
+    /**
+     * Creates a new Java package.
+     *
+     * @param name java package file name
+     */
+    JavaPackage(String name) {
+<span class="fc" id="L41">        super(name);</span>
+<span class="fc" id="L42">    }</span>
+
+    /**
+     * Returns the set of sources contained in this Java package.
+     *
+     * @return set of Java sources
+     */
+    public Set&lt;JavaSource&gt; getSources() {
+<span class="fc" id="L50">        return Collections.unmodifiableSet(sources);</span>
+    }
+
+    /**
+     * Adds the specified Java source to the package. Only possible if the
+     * Java package of the source is the same as this Java package.
+     *
+     * @param source Java source to be added
+     */
+    void addSource(JavaSource source) {
+<span class="pc bpc" id="L60" title="1 of 2 branches missed.">        if (source.getPackage().equals(this)) {</span>
+<span class="fc" id="L61">            sources.add(source);</span>
+        }
+<span class="fc" id="L63">    }</span>
+
+    /**
+     * Returns the set of packages directly required by this package.
+     *
+     * @return set of Java package dependencies
+     */
+    Set&lt;JavaPackage&gt; getDependencies() {
+<span class="fc" id="L71">        return dependencies;</span>
+    }
+
+    /**
+     * Sets the set of resolved Java packages on which this package dependens.
+     *
+     * @param dependencies set of resolved Java packages
+     */
+    void setDependencies(Set&lt;JavaPackage&gt; dependencies) {
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">        if (this.dependencies == null) {</span>
+<span class="fc" id="L81">            this.dependencies = Collections.unmodifiableSet(new HashSet&lt;&gt;(dependencies));</span>
+        }
+<span class="fc" id="L83">    }</span>
+
+    @Override
+    public String toString() {
+<span class="fc" id="L87">        return toStringHelper(this)</span>
+<span class="fc" id="L88">                .add(&quot;name&quot;, name())</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">                .add(&quot;sources&quot;, sources.size())</span>
+<span class="fc" id="L90">                .add(&quot;dependencies&quot;, (dependencies != null ? dependencies.size() : 0))</span>
+<span class="fc" id="L91">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

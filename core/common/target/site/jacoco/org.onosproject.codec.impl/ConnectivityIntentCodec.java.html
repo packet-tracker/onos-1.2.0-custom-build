@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConnectivityIntentCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">ConnectivityIntentCodec.java</span></div><h1>ConnectivityIntentCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import java.util.ArrayList;
+import java.util.stream.IntStream;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.intent.ConnectivityIntent;
+import org.onosproject.net.intent.Constraint;
+import org.onosproject.net.intent.Intent;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Connectivity intent codec.
+ */
+<span class="fc" id="L38">public final class ConnectivityIntentCodec extends JsonCodec&lt;ConnectivityIntent&gt; {</span>
+
+    private static final String CONSTRAINTS = &quot;constraints&quot;;
+    private static final String SELECTOR = &quot;selector&quot;;
+    private static final String TREATMENT = &quot;treatment&quot;;
+
+    @Override
+    public ObjectNode encode(ConnectivityIntent intent, CodecContext context) {
+<span class="fc" id="L46">        checkNotNull(intent, &quot;Connectivity intent cannot be null&quot;);</span>
+
+<span class="fc" id="L48">        final JsonCodec&lt;Intent&gt; intentCodec = context.codec(Intent.class);</span>
+<span class="fc" id="L49">        final ObjectNode result = intentCodec.encode(intent, context);</span>
+
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (intent.selector() != null) {</span>
+<span class="fc" id="L52">            final JsonCodec&lt;TrafficSelector&gt; selectorCodec =</span>
+<span class="fc" id="L53">                    context.codec(TrafficSelector.class);</span>
+<span class="fc" id="L54">            result.set(SELECTOR, selectorCodec.encode(intent.selector(), context));</span>
+        }
+
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">        if (intent.treatment() != null) {</span>
+<span class="fc" id="L58">            final JsonCodec&lt;TrafficTreatment&gt; treatmentCodec =</span>
+<span class="fc" id="L59">                    context.codec(TrafficTreatment.class);</span>
+<span class="fc" id="L60">            result.set(TREATMENT, treatmentCodec.encode(intent.treatment(), context));</span>
+        }
+
+<span class="fc" id="L63">        result.put(IntentCodec.PRIORITY, intent.priority());</span>
+
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">        if (intent.constraints() != null) {</span>
+<span class="fc" id="L66">            final ArrayNode jsonConstraints = result.putArray(CONSTRAINTS);</span>
+
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">            if (intent.constraints() != null) {</span>
+<span class="fc" id="L69">                final JsonCodec&lt;Constraint&gt; constraintCodec =</span>
+<span class="fc" id="L70">                        context.codec(Constraint.class);</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">                for (final Constraint constraint : intent.constraints()) {</span>
+<span class="fc" id="L72">                    final ObjectNode constraintNode =</span>
+<span class="fc" id="L73">                            constraintCodec.encode(constraint, context);</span>
+<span class="fc" id="L74">                    jsonConstraints.add(constraintNode);</span>
+<span class="fc" id="L75">                }</span>
+            }
+        }
+
+<span class="fc" id="L79">        return result;</span>
+    }
+
+    /**
+     * Extracts connectivity intent specific attributes from a JSON object
+     * and adds them to a builder.
+     *
+     * @param json root JSON object
+     * @param context code context
+     * @param builder builder to use for storing the attributes. Constraints,
+     *                selector and treatment are modified by this call.
+     */
+    public static void intentAttributes(ObjectNode json, CodecContext context,
+                                        ConnectivityIntent.Builder builder) {
+<span class="fc" id="L93">        JsonNode constraintsJson = json.get(CONSTRAINTS);</span>
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">        if (constraintsJson != null) {</span>
+<span class="fc" id="L95">            JsonCodec&lt;Constraint&gt; constraintsCodec = context.codec(Constraint.class);</span>
+<span class="fc" id="L96">            ArrayList&lt;Constraint&gt; constraints = new ArrayList&lt;&gt;(constraintsJson.size());</span>
+<span class="fc" id="L97">            IntStream.range(0, constraintsJson.size())</span>
+<span class="fc" id="L98">                    .forEach(i -&gt; constraints.add(</span>
+<span class="fc" id="L99">                            constraintsCodec.decode(get(constraintsJson, i),</span>
+                                    context)));
+<span class="fc" id="L101">            builder.constraints(constraints);</span>
+        }
+
+<span class="fc" id="L104">        ObjectNode selectorJson = get(json, SELECTOR);</span>
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">        if (selectorJson != null) {</span>
+<span class="fc" id="L106">            JsonCodec&lt;TrafficSelector&gt; selectorCodec = context.codec(TrafficSelector.class);</span>
+<span class="fc" id="L107">            TrafficSelector selector = selectorCodec.decode(selectorJson, context);</span>
+<span class="fc" id="L108">            builder.selector(selector);</span>
+        }
+
+<span class="fc" id="L111">        ObjectNode treatmentJson = get(json, TREATMENT);</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        if (treatmentJson != null) {</span>
+<span class="fc" id="L113">            JsonCodec&lt;TrafficTreatment&gt; treatmentCodec = context.codec(TrafficTreatment.class);</span>
+<span class="fc" id="L114">            TrafficTreatment treatment = treatmentCodec.decode(treatmentJson, context);</span>
+<span class="fc" id="L115">            builder.treatment(treatment);</span>
+        }
+<span class="fc" id="L117">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

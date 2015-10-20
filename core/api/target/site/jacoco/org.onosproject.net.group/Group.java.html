@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Group.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.group</a> &gt; <span class="el_source">Group.java</span></div><h1>Group.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.group;
+
+import org.onosproject.core.GroupId;
+
+/**
+ * ONOS representation of group that is stored in the system.
+ */
+public interface Group extends GroupDescription {
+    /**
+     * State of the group object in ONOS.
+     */
+<span class="pc" id="L27">    enum GroupState {</span>
+        /**
+         * Group create request is queued as group AUDIT is in progress.
+         */
+<span class="fc" id="L31">        WAITING_AUDIT_COMPLETE,</span>
+        /**
+         * Group create request is processed by ONOS and not yet
+         * received the confirmation from data plane.
+         */
+<span class="fc" id="L36">        PENDING_ADD,</span>
+        /**
+         * Group is missing in data plane and retrying GROUP ADD request.
+         */
+<span class="fc" id="L40">        PENDING_ADD_RETRY,</span>
+        /**
+         * Group is created in the data plane.
+         */
+<span class="fc" id="L44">        ADDED,</span>
+        /**
+         * Group update request is processed by ONOS and not
+         * received the confirmation from data plane post which
+         * state moves to ADDED state.
+         */
+<span class="fc" id="L50">        PENDING_UPDATE,</span>
+        /**
+         * Group delete request is processed by ONOS and not
+         * received the confirmation from data plane.
+         */
+<span class="fc" id="L55">        PENDING_DELETE</span>
+    }
+
+    /**
+     * Returns group identifier associated with a group object.
+     *
+     * @return GroupId Group Identifier
+     */
+    GroupId id();
+
+    /**
+     * Returns current state of a group object.
+     *
+     * @return GroupState Group State
+     */
+    GroupState state();
+
+    /**
+     * Returns the number of milliseconds this group has been alive.
+     *
+     * @return number of millis
+     */
+    long life();
+
+    /**
+     * Returns the number of packets processed by this group.
+     *
+     * @return number of packets
+     */
+    long packets();
+
+    /**
+     * Returns the number of bytes processed by this group.
+     *
+     * @return number of bytes
+     */
+    long bytes();
+
+    /**
+     * Returns the number of flow rules or other groups reference this group.
+     *
+     * @return number of flow rules or other groups pointing to this group
+     */
+    long referenceCount();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

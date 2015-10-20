@@ -1,0 +1,507 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepTEObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepTEObjectVer1.java</span></div><h1>PcepTEObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepTEObject;
+import org.onosproject.pcepio.types.LocalTENodeDescriptorsTlv;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.onosproject.pcepio.types.RemoteTENodeDescriptorsTlv;
+import org.onosproject.pcepio.types.RoutingUniverseTlv;
+import org.onosproject.pcepio.types.TELinkAttributesTlv;
+import org.onosproject.pcepio.types.TELinkDescriptorsTlv;
+import org.onosproject.pcepio.types.TENodeAttributesTlv;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP TE Object.
+ */
+public class PcepTEObjectVer1 implements PcepTEObject {
+    /*
+     *
+    reference: PCEP Extension for Transporting TE Data draft-dhodylee-pce-pcep-te-data-extn-02.
+    TE Object-Class is [TBD6].
+
+    Two Object-Type values are defined for the TE object:
+
+    o  TE Node: TE Object-Type is 1.
+
+    o  TE Link: TE Object-Type is 2.
+
+    The format of the TE object body is as follows:
+
+       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |  Protocol-ID  |          Flag                             |R|S|
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                          TE-ID                                |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      //                         TLVs                                //
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L67">    protected static final Logger log = LoggerFactory.getLogger(PcepTEObjectVer1.class);</span>
+
+    public static final byte TE_OBJ_TYPE_NODE_VALUE = 1;
+    public static final byte TE_OBJ_TYPE_LINK_VALUE = 2;
+
+    public static final byte TE_OBJ_CLASS = 101; //TBD6 in RFC.
+    public static final byte TE_OBJECT_VERSION = 1;
+
+    // TE_OBJ_MINIMUM_LENGTH = TEObjectHeaderLen(4)+ TEObjectLen(8)
+    public static final short TE_OBJ_MINIMUM_LENGTH = 12;
+
+    // Signaled ,all default values to be checked.
+    public static final byte DEFAULT_PROTOCOL_ID = 1; //IS-IS Level 1
+    public static final boolean DEFAULT_R_FLAG = false;
+    public static final boolean DEFAULT_S_FLAG = false;
+    public static final int DEFAULT_TE_ID = 0;
+
+    public static final int OBJECT_HEADER_LENGTH = 4;
+    public static final int RIGHT_SHIFT_ONE = 1;
+    public static final int RIGHT_FIRST_FLAG = 0x1;
+    public static final int FLAG_SET_R_FLAG = 0x2;
+    public static final int FLAG_SET_S_FLAG = 0x1;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+    public static final int MINIMUM_TLV_HEADER_LENGTH = 4;
+
+<span class="fc" id="L92">    public static final PcepObjectHeader DEFAULT_TE_OBJECT_HEADER = new PcepObjectHeader(TE_OBJ_CLASS,</span>
+            TE_OBJ_TYPE_NODE_VALUE, PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED,
+            TE_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader teObjHeader;
+    private byte yProtocolId;
+    // 2-flags
+    private boolean bRFlag;
+    private boolean bSFlag;
+    private int iTEId;
+    // Optional TLV
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+    /**
+     * Constructor to initialize variables.
+     *
+     * @param teObjHeader TE Object header
+     * @param yProtocolId Protocol-ID
+     * @param bRFlag R-flag
+     * @param bSFlag S-flag
+     * @param iTEId TE-ID
+     * @param llOptionalTlv linked list of Optional TLV
+     */
+    public PcepTEObjectVer1(PcepObjectHeader teObjHeader, byte yProtocolId, boolean bRFlag, boolean bSFlag, int iTEId,
+<span class="fc" id="L116">            LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+
+<span class="fc" id="L118">        this.teObjHeader = teObjHeader;</span>
+<span class="fc" id="L119">        this.yProtocolId = yProtocolId;</span>
+<span class="fc" id="L120">        this.bRFlag = bRFlag;</span>
+<span class="fc" id="L121">        this.bSFlag = bSFlag;</span>
+<span class="fc" id="L122">        this.iTEId = iTEId;</span>
+<span class="fc" id="L123">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L124">    }</span>
+
+    @Override
+    public PcepObjectHeader getTEObjHeader() {
+<span class="nc" id="L128">        return this.teObjHeader;</span>
+    }
+
+    @Override
+    public void setTEObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L133">        this.teObjHeader = obj;</span>
+<span class="nc" id="L134">    }</span>
+
+    @Override
+    public byte getProtocolId() {
+<span class="nc" id="L138">        return this.yProtocolId;</span>
+    }
+
+    @Override
+    public void setProtocolId(byte yProtId) {
+<span class="nc" id="L143">        this.yProtocolId = yProtId;</span>
+<span class="nc" id="L144">    }</span>
+
+    @Override
+    public boolean getRFlag() {
+<span class="nc" id="L148">        return this.bRFlag;</span>
+    }
+
+    @Override
+    public void setRFlag(boolean bRFlag) {
+<span class="nc" id="L153">        this.bRFlag = bRFlag;</span>
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public boolean getSFlag() {
+<span class="nc" id="L158">        return this.bSFlag;</span>
+    }
+
+    @Override
+    public void setSFlag(boolean bSFlag) {
+<span class="nc" id="L163">        this.bSFlag = bSFlag;</span>
+<span class="nc" id="L164">    }</span>
+
+    @Override
+    public int getTEId() {
+<span class="nc" id="L168">        return this.iTEId;</span>
+    }
+
+    @Override
+    public void setTEId(int iTEId) {
+<span class="nc" id="L173">        this.iTEId = iTEId;</span>
+<span class="nc" id="L174">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L178">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L183">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L184">    }</span>
+
+    /**
+     * Reads from the channel buffer and returns Object of PcepTEObject.
+     *
+     * @param cb of type channel buffer
+     * @return Object of PcepTEObject
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public static PcepTEObject read(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L194">        log.debug(&quot;read&quot;);</span>
+
+        PcepObjectHeader teObjHeader;
+        byte yProtocolId;
+        // 2-flags
+        boolean bRFlag;
+        boolean bSFlag;
+        int iTEId;
+        LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="fc" id="L204">        teObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only TEObject buffer.
+<span class="fc" id="L207">        ChannelBuffer tempCb = cb.readBytes(teObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+
+<span class="fc" id="L209">        yProtocolId = tempCb.readByte();</span>
+        //ignore first two bytes of Flags
+<span class="fc" id="L211">        tempCb.readShort();</span>
+
+<span class="fc" id="L213">        Integer iTemp = (int) tempCb.readByte(); //read 3rd byte Flag</span>
+<span class="pc bpc" id="L214" title="1 of 2 branches missed.">        bSFlag = (iTemp &amp; FLAG_SET_S_FLAG) == FLAG_SET_S_FLAG;</span>
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        bRFlag = (iTemp &amp; FLAG_SET_R_FLAG) == FLAG_SET_R_FLAG;</span>
+
+<span class="fc" id="L217">        iTEId = tempCb.readInt();</span>
+
+        // parse optional TLV
+<span class="fc" id="L220">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+
+<span class="fc" id="L222">        return new PcepTEObjectVer1(teObjHeader, yProtocolId, bRFlag, bSFlag, iTEId, llOptionalTlv);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+        //write Object header
+<span class="fc" id="L229">        int objStartIndex = cb.writerIndex();</span>
+<span class="fc" id="L230">        int objLenIndex = teObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L233">            throw new PcepParseException(&quot;ObjectLength Index is &quot; + objLenIndex);</span>
+        }
+
+        //write Protocol ID
+<span class="fc" id="L237">        cb.writeByte(this.yProtocolId);</span>
+
+        //write Flag
+<span class="fc" id="L240">        cb.writeShort(0);</span>
+
+<span class="fc" id="L242">        byte bTemp = 0;</span>
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">        if (bSFlag) {</span>
+<span class="fc" id="L244">            bTemp = FLAG_SET_S_FLAG;</span>
+        }
+
+<span class="pc bpc" id="L247" title="1 of 2 branches missed.">        if (bRFlag) {</span>
+<span class="fc" id="L248">            bTemp = (byte) (bTemp | FLAG_SET_R_FLAG);</span>
+        }
+<span class="fc" id="L250">        cb.writeByte(bTemp);</span>
+
+        //write TEId
+<span class="fc" id="L253">        cb.writeInt(iTEId);</span>
+
+        // Add optional TLV
+<span class="fc" id="L256">        packOptionalTlv(cb);</span>
+
+        //Update object length now
+<span class="fc" id="L259">        int length = cb.writerIndex() - objStartIndex;</span>
+
+        //will be helpful during print().
+<span class="fc" id="L262">        teObjHeader.setObjLen((short) length);</span>
+
+<span class="fc" id="L264">        cb.setShort(objLenIndex, (short) length);</span>
+
+<span class="fc" id="L266">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Returns Linked list of PCEP Value Type.
+     *
+     * @param cb of channel buffer
+     * @return Linked list of PCEP Value Type
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv;
+
+<span class="fc" id="L280">        llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L282" title="All 2 branches covered.">        while (MINIMUM_TLV_HEADER_LENGTH &lt;= cb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+<span class="fc" id="L285">            short hType = cb.readShort();</span>
+<span class="fc" id="L286">            short hLength = cb.readShort();</span>
+<span class="fc" id="L287">            long lValue = 0;</span>
+
+<span class="pc bpc" id="L289" title="1 of 7 branches missed.">            switch (hType) {</span>
+
+            case RoutingUniverseTlv.TYPE:
+<span class="fc" id="L292">                lValue = cb.readLong();</span>
+<span class="fc" id="L293">                tlv = new RoutingUniverseTlv(lValue);</span>
+<span class="fc" id="L294">                break;</span>
+            case LocalTENodeDescriptorsTlv.TYPE:
+<span class="fc" id="L296">                tlv = LocalTENodeDescriptorsTlv.read(cb, hLength);</span>
+<span class="fc" id="L297">                break;</span>
+            case RemoteTENodeDescriptorsTlv.TYPE:
+<span class="fc" id="L299">                tlv = RemoteTENodeDescriptorsTlv.read(cb, hLength);</span>
+<span class="fc" id="L300">                break;</span>
+            case TELinkDescriptorsTlv.TYPE:
+<span class="fc" id="L302">                tlv = TELinkDescriptorsTlv.read(cb, hLength);</span>
+<span class="fc" id="L303">                break;</span>
+            case TENodeAttributesTlv.TYPE:
+<span class="fc" id="L305">                tlv = TENodeAttributesTlv.read(cb, hLength);</span>
+<span class="fc" id="L306">                break;</span>
+            case TELinkAttributesTlv.TYPE:
+<span class="fc" id="L308">                tlv = TELinkAttributesTlv.read(cb, hLength);</span>
+<span class="fc" id="L309">                break;</span>
+            default:
+<span class="nc" id="L311">                throw new PcepParseException(&quot;Unsupported TLV type :&quot; + hType);</span>
+            }
+
+            // Check for the padding
+<span class="fc" id="L315">            int pad = hLength % 4;</span>
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L317">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L319">                    cb.skipBytes(pad);</span>
+                }
+            }
+
+<span class="fc" id="L323">            llOutOptionalTlv.add(tlv);</span>
+<span class="fc" id="L324">        }</span>
+
+<span class="pc bpc" id="L326" title="1 of 2 branches missed.">        if (0 &lt; cb.readableBytes()) {</span>
+
+<span class="nc" id="L328">            throw new PcepParseException(&quot;Optional Tlv parsing error. Extra bytes received.&quot;);</span>
+        }
+<span class="fc" id="L330">        return llOutOptionalTlv;</span>
+    }
+
+    /**
+     * Returns the writer index.
+     *
+     * @param cb of type channel buffer
+     * @return the writer index.
+     */
+    protected int packOptionalTlv(ChannelBuffer cb) {
+
+<span class="fc" id="L341">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+
+<span class="fc bfc" id="L343" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L344">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="pc bpc" id="L346" title="1 of 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L347">                log.debug(&quot;TLV is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L348">                continue;</span>
+            }
+<span class="fc" id="L350">            tlv.write(cb);</span>
+
+            // need to take care of padding
+<span class="fc" id="L353">            int pad = tlv.getLength() % 4;</span>
+
+<span class="pc bpc" id="L355" title="1 of 2 branches missed.">            if (0 != pad) {</span>
+<span class="nc" id="L356">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="nc" id="L358">                    cb.writeByte((byte) 0);</span>
+                }
+            }
+<span class="fc" id="L361">        }</span>
+<span class="fc" id="L362">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Builder class for PCEP te object.
+     */
+<span class="nc" id="L368">    public static class Builder implements PcepTEObject.Builder {</span>
+<span class="nc" id="L369">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L370">        private boolean bIsProtocolIdSet = false;</span>
+<span class="nc" id="L371">        private boolean bIsRFlagSet = false;</span>
+<span class="nc" id="L372">        private boolean bIsSFlagSet = false;</span>
+<span class="nc" id="L373">        private boolean bIsTEIdSet = false;</span>
+
+        private PcepObjectHeader teObjHeader;
+        private byte yProtocolId;
+        private boolean bRFlag;
+        private boolean bSFlag;
+        private int iTEId;
+<span class="nc" id="L380">        private LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L382">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L385">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepTEObject build() {
+<span class="nc bnc" id="L390" title="All 2 branches missed.">            PcepObjectHeader teObjHeader = this.bIsHeaderSet ? this.teObjHeader : DEFAULT_TE_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L392" title="All 2 branches missed.">            byte yProtocolId = this.bIsProtocolIdSet ? this.yProtocolId : DEFAULT_PROTOCOL_ID;</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">            boolean bRFlag = this.bIsRFlagSet ? this.bRFlag : DEFAULT_R_FLAG;</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">            boolean bSFlag = this.bIsSFlagSet ? this.bSFlag : DEFAULT_S_FLAG;</span>
+<span class="nc bnc" id="L395" title="All 2 branches missed.">            int iTEId = this.bIsTEIdSet ? this.iTEId : DEFAULT_TE_ID;</span>
+
+<span class="nc bnc" id="L397" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L398">                teObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L401" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L402">                teObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L405">            return new PcepTEObjectVer1(teObjHeader, yProtocolId, bRFlag, bSFlag, iTEId, llOptionalTlv);</span>
+
+        }
+
+        @Override
+        public PcepObjectHeader getTEObjHeader() {
+<span class="nc" id="L411">            return this.teObjHeader;</span>
+        }
+
+        @Override
+        public Builder setTEObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L416">            this.teObjHeader = obj;</span>
+<span class="nc" id="L417">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L418">            return this;</span>
+        }
+
+        @Override
+        public byte getProtocolId() {
+<span class="nc" id="L423">            return this.yProtocolId;</span>
+        }
+
+        @Override
+        public Builder setProtocolId(byte yProtId) {
+<span class="nc" id="L428">            this.yProtocolId = yProtId;</span>
+<span class="nc" id="L429">            this.bIsProtocolIdSet = true;</span>
+<span class="nc" id="L430">            return this;</span>
+        }
+
+        @Override
+        public boolean getRFlag() {
+<span class="nc" id="L435">            return this.bRFlag;</span>
+        }
+
+        @Override
+        public Builder setRFlag(boolean bRFlag) {
+<span class="nc" id="L440">            this.bRFlag = bRFlag;</span>
+<span class="nc" id="L441">            this.bIsRFlagSet = true;</span>
+<span class="nc" id="L442">            return this;</span>
+        }
+
+        @Override
+        public boolean getSFlag() {
+<span class="nc" id="L447">            return this.bSFlag;</span>
+        }
+
+        @Override
+        public Builder setSFlag(boolean bSFlag) {
+<span class="nc" id="L452">            this.bSFlag = bSFlag;</span>
+<span class="nc" id="L453">            this.bIsSFlagSet = true;</span>
+<span class="nc" id="L454">            return this;</span>
+        }
+
+        @Override
+        public int getTEId() {
+<span class="nc" id="L459">            return this.iTEId;</span>
+        }
+
+        @Override
+        public Builder setTEId(int iTEId) {
+<span class="nc" id="L464">            this.iTEId = iTEId;</span>
+<span class="nc" id="L465">            this.bIsTEIdSet = true;</span>
+<span class="nc" id="L466">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L471">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L476">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L477">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L482">            this.bPFlag = value;</span>
+<span class="nc" id="L483">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L484">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L489">            this.bIFlag = value;</span>
+<span class="nc" id="L490">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L491">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L497">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L498">                .add(&quot;ObjectHeader&quot;, teObjHeader)</span>
+<span class="nc bnc" id="L499" title="All 2 branches missed.">                .add(&quot;ProtocolId&quot;, yProtocolId)</span>
+<span class="nc bnc" id="L500" title="All 2 branches missed.">                .add(&quot;RFlag&quot;, (bRFlag) ? 1 : 0)</span>
+<span class="nc" id="L501">                .add(&quot;SFlag&quot;, (bSFlag) ? 1 : 0)</span>
+<span class="nc" id="L502">                .add(&quot;TeId&quot;, iTEId)</span>
+<span class="nc" id="L503">                .add(&quot;OptionalTlv&quot;, llOptionalTlv)</span>
+<span class="nc" id="L504">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

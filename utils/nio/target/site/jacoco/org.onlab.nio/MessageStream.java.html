@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MessageStream.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio</a> &gt; <span class="el_source">MessageStream.java</span></div><h1>MessageStream.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio;
+
+import org.onlab.util.Counter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
+import java.nio.channels.SelectionKey;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.System.currentTimeMillis;
+import static java.nio.ByteBuffer.allocateDirect;
+
+/**
+ * Bi-directional message stream for transferring messages to &amp;amp; from the
+ * network via two byte buffers.
+ *
+ * @param &lt;M&gt; message type
+ */
+public abstract class MessageStream&lt;M extends Message&gt; {
+
+<span class="fc" id="L43">    protected Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private final IOLoop&lt;M, ?&gt; loop;
+    private final ByteChannel channel;
+    private final int maxIdleMillis;
+
+    private final ByteBuffer inbound;
+    private ByteBuffer outbound;
+    private SelectionKey key;
+
+<span class="fc" id="L53">    private volatile boolean closed = false;</span>
+    private volatile boolean writePending;
+    private volatile boolean writeOccurred;
+
+    private Exception ioError;
+    private long lastActiveTime;
+
+<span class="fc" id="L60">    private final Counter bytesIn = new Counter();</span>
+<span class="fc" id="L61">    private final Counter messagesIn = new Counter();</span>
+<span class="fc" id="L62">    private final Counter bytesOut = new Counter();</span>
+<span class="fc" id="L63">    private final Counter messagesOut = new Counter();</span>
+
+    /**
+     * Creates a message stream associated with the specified IO loop and
+     * backed by the given byte channel.
+     *
+     * @param loop          IO loop
+     * @param byteChannel   backing byte channel
+     * @param bufferSize    size of the backing byte buffers
+     * @param maxIdleMillis maximum number of millis the stream can be idle
+     *                      before it will be closed
+     */
+    protected MessageStream(IOLoop&lt;M, ?&gt; loop, ByteChannel byteChannel,
+<span class="fc" id="L76">                            int bufferSize, int maxIdleMillis) {</span>
+<span class="fc" id="L77">        this.loop = checkNotNull(loop, &quot;Loop cannot be null&quot;);</span>
+<span class="fc" id="L78">        this.channel = checkNotNull(byteChannel, &quot;Byte channel cannot be null&quot;);</span>
+
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">        checkArgument(maxIdleMillis &gt; 0, &quot;Idle time must be positive&quot;);</span>
+<span class="fc" id="L81">        this.maxIdleMillis = maxIdleMillis;</span>
+
+<span class="fc" id="L83">        inbound = allocateDirect(bufferSize);</span>
+<span class="fc" id="L84">        outbound = allocateDirect(bufferSize);</span>
+<span class="fc" id="L85">    }</span>
+
+    /**
+     * Gets a single message from the specified byte buffer; this is
+     * to be done without manipulating the buffer via flip, reset or clear.
+     *
+     * @param buffer byte buffer
+     * @return read message or null if there are not enough bytes to read
+     * a complete message
+     */
+    protected abstract M read(ByteBuffer buffer);
+
+    /**
+     * Puts the specified message into the specified byte buffer; this is
+     * to be done without manipulating the buffer via flip, reset or clear.
+     *
+     * @param message message to be write into the buffer
+     * @param buffer  byte buffer
+     */
+    protected abstract void write(M message, ByteBuffer buffer);
+
+    /**
+     * Closes the message buffer.
+     */
+    public void close() {
+<span class="fc" id="L110">        synchronized (this) {</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">            if (closed) {</span>
+<span class="fc" id="L112">                return;</span>
+            }
+<span class="fc" id="L114">            closed = true;</span>
+<span class="pc" id="L115">        }</span>
+
+<span class="fc" id="L117">        bytesIn.freeze();</span>
+<span class="fc" id="L118">        bytesOut.freeze();</span>
+<span class="fc" id="L119">        messagesIn.freeze();</span>
+<span class="fc" id="L120">        messagesOut.freeze();</span>
+
+<span class="fc" id="L122">        loop.removeStream(this);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (key != null) {</span>
+            try {
+<span class="fc" id="L125">                key.cancel();</span>
+<span class="fc" id="L126">                key.channel().close();</span>
+<span class="nc" id="L127">            } catch (IOException e) {</span>
+<span class="nc" id="L128">                log.warn(&quot;Unable to close stream&quot;, e);</span>
+<span class="fc" id="L129">            }</span>
+        }
+<span class="fc" id="L131">    }</span>
+
+    /**
+     * Indicates whether this buffer has been closed.
+     *
+     * @return true if this stream has been closed
+     */
+    public synchronized boolean isClosed() {
+<span class="nc" id="L139">        return closed;</span>
+    }
+
+    /**
+     * Returns the stream IO selection key.
+     *
+     * @return socket channel registration selection key
+     */
+    public SelectionKey key() {
+<span class="fc" id="L148">        return key;</span>
+    }
+
+    /**
+     * Binds the selection key to be used for driving IO operations on the stream.
+     *
+     * @param key IO selection key
+     */
+    public void setKey(SelectionKey key) {
+<span class="fc" id="L157">        this.key = key;</span>
+<span class="fc" id="L158">        this.lastActiveTime = currentTimeMillis();</span>
+<span class="fc" id="L159">    }</span>
+
+    /**
+     * Returns the IO loop to which this stream is bound.
+     *
+     * @return I/O loop used to drive this stream
+     */
+    public IOLoop&lt;M, ?&gt; loop() {
+<span class="nc" id="L167">        return loop;</span>
+    }
+
+    /**
+     * Indicates whether the any prior IO encountered an error.
+     *
+     * @return true if a write failed
+     */
+    public boolean hadError() {
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        return ioError != null;</span>
+    }
+
+    /**
+     * Gets the prior IO error, if one occurred.
+     *
+     * @return IO error; null if none occurred
+     */
+    public Exception getError() {
+<span class="nc" id="L185">        return ioError;</span>
+    }
+
+    /**
+     * Reads, without blocking, a list of messages from the stream.
+     * The list will be empty if there were not messages pending.
+     *
+     * @return list of messages or null if backing channel has been closed
+     * @throws IOException if messages could not be read
+     */
+    public List&lt;M&gt; read() throws IOException {
+        try {
+<span class="fc" id="L197">            int read = channel.read(inbound);</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">            if (read != -1) {</span>
+                // Read the messages one-by-one and add them to the list.
+<span class="fc" id="L200">                List&lt;M&gt; messages = new ArrayList&lt;&gt;();</span>
+                M message;
+<span class="fc" id="L202">                inbound.flip();</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">                while ((message = read(inbound)) != null) {</span>
+<span class="fc" id="L204">                    messages.add(message);</span>
+<span class="fc" id="L205">                    messagesIn.add(1);</span>
+<span class="fc" id="L206">                    bytesIn.add(message.length());</span>
+                }
+<span class="fc" id="L208">                inbound.compact();</span>
+
+                // Mark the stream with current time to indicate liveness.
+<span class="fc" id="L211">                lastActiveTime = currentTimeMillis();</span>
+<span class="fc" id="L212">                return messages;</span>
+            }
+<span class="fc" id="L214">            return null;</span>
+
+<span class="nc" id="L216">        } catch (Exception e) {</span>
+<span class="nc" id="L217">            throw new IOException(&quot;Unable to read messages&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Writes the specified list of messages to the stream.
+     *
+     * @param messages list of messages to write
+     * @throws IOException if error occurred while writing the data
+     */
+    public void write(List&lt;M&gt; messages) throws IOException {
+<span class="fc" id="L228">        synchronized (this) {</span>
+            // First write all messages.
+<span class="fc bfc" id="L230" title="All 2 branches covered.">            for (M m : messages) {</span>
+<span class="fc" id="L231">                append(m);</span>
+<span class="fc" id="L232">            }</span>
+<span class="fc" id="L233">            flushUnlessAlreadyPlanningTo();</span>
+<span class="pc" id="L234">        }</span>
+<span class="fc" id="L235">    }</span>
+
+    /**
+     * Writes the given message to the stream.
+     *
+     * @param message message to write
+     * @throws IOException if error occurred while writing the data
+     */
+    public void write(M message) throws IOException {
+<span class="fc" id="L244">        synchronized (this) {</span>
+<span class="fc" id="L245">            append(message);</span>
+<span class="fc" id="L246">            flushUnlessAlreadyPlanningTo();</span>
+<span class="pc" id="L247">        }</span>
+<span class="fc" id="L248">    }</span>
+
+    // Appends the specified message into the internal buffer, growing the
+    // buffer if required.
+    private void append(M message) {
+        // If the buffer does not have sufficient length double it.
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        while (outbound.remaining() &lt; message.length()) {</span>
+<span class="fc" id="L255">            doubleSize();</span>
+        }
+<span class="fc" id="L257">        write(message, outbound);</span>
+<span class="fc" id="L258">        messagesOut.add(1);</span>
+<span class="fc" id="L259">        bytesOut.add(message.length());</span>
+<span class="fc" id="L260">    }</span>
+
+    // Forces a flush, unless one is planned already.
+    private void flushUnlessAlreadyPlanningTo() throws IOException {
+<span class="pc bpc" id="L264" title="1 of 4 branches missed.">        if (!writeOccurred &amp;&amp; !writePending) {</span>
+<span class="fc" id="L265">            flush();</span>
+        }
+<span class="fc" id="L267">    }</span>
+
+    /**
+     * Flushes any pending writes.
+     *
+     * @throws IOException if flush failed
+     */
+    public void flush() throws IOException {
+<span class="fc" id="L275">        synchronized (this) {</span>
+<span class="pc bpc" id="L276" title="1 of 4 branches missed.">            if (!writeOccurred &amp;&amp; !writePending) {</span>
+<span class="fc" id="L277">                outbound.flip();</span>
+                try {
+<span class="fc" id="L279">                    channel.write(outbound);</span>
+<span class="nc" id="L280">                } catch (IOException e) {</span>
+<span class="nc bnc" id="L281" title="All 4 branches missed.">                    if (!closed &amp;&amp; !Objects.equals(e.getMessage(), &quot;Broken pipe&quot;)) {</span>
+<span class="nc" id="L282">                        log.warn(&quot;Unable to write data&quot;, e);</span>
+<span class="nc" id="L283">                        ioError = e;</span>
+                    }
+<span class="fc" id="L285">                }</span>
+<span class="fc" id="L286">                lastActiveTime = currentTimeMillis();</span>
+<span class="fc" id="L287">                writeOccurred = true;</span>
+<span class="fc" id="L288">                writePending = outbound.hasRemaining();</span>
+<span class="fc" id="L289">                outbound.compact();</span>
+            }
+<span class="pc" id="L291">        }</span>
+<span class="fc" id="L292">    }</span>
+
+    /**
+     * Indicates whether the stream has bytes to be written to the channel.
+     *
+     * @return true if there are bytes to be written
+     */
+    boolean isWritePending() {
+<span class="fc" id="L300">        synchronized (this) {</span>
+<span class="fc" id="L301">            return writePending;</span>
+<span class="nc" id="L302">        }</span>
+    }
+
+
+    /**
+     * Indicates whether data has been written but not flushed yet.
+     *
+     * @return true if flush is required
+     */
+    boolean isFlushRequired() {
+<span class="fc" id="L312">        synchronized (this) {</span>
+<span class="fc bfc" id="L313" title="All 2 branches covered.">            return outbound.position() &gt; 0;</span>
+<span class="nc" id="L314">        }</span>
+    }
+
+    /**
+     * Attempts to flush data, internal stream state and channel availability
+     * permitting. Invoked by the driver I/O loop during handling of writable
+     * selection key.
+     * &lt;p&gt;
+     * Resets the internal state flags {@code writeOccurred} and
+     * {@code writePending}.
+     * &lt;/p&gt;
+     * @throws IOException if implicit flush failed
+     */
+    void flushIfPossible() throws IOException {
+<span class="fc" id="L328">        synchronized (this) {</span>
+<span class="fc" id="L329">            writePending = false;</span>
+<span class="fc" id="L330">            writeOccurred = false;</span>
+<span class="pc bpc" id="L331" title="1 of 2 branches missed.">            if (outbound.position() &gt; 0) {</span>
+<span class="fc" id="L332">                flush();</span>
+            }
+<span class="pc" id="L334">        }</span>
+<span class="fc" id="L335">        key.interestOps(SelectionKey.OP_READ);</span>
+<span class="fc" id="L336">    }</span>
+
+    /**
+     * Attempts to flush data, internal stream state and channel availability
+     * permitting and if other writes are not pending. Invoked by the driver
+     * I/O loop prior to entering select wait. Resets the internal
+     * {@code writeOccurred} state flag.
+     *
+     * @throws IOException if implicit flush failed
+     */
+    void flushIfWriteNotPending() throws IOException {
+<span class="fc" id="L347">        synchronized (this) {</span>
+<span class="fc" id="L348">            writeOccurred = false;</span>
+<span class="pc bpc" id="L349" title="2 of 4 branches missed.">            if (!writePending &amp;&amp; outbound.position() &gt; 0) {</span>
+<span class="fc" id="L350">                flush();</span>
+            }
+<span class="pc" id="L352">        }</span>
+<span class="fc bfc" id="L353" title="All 2 branches covered.">        if (isWritePending()) {</span>
+<span class="fc" id="L354">            key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);</span>
+        }
+<span class="fc" id="L356">    }</span>
+
+    /**
+     * Doubles the size of the outbound buffer.
+     */
+    private void doubleSize() {
+<span class="fc" id="L362">        ByteBuffer newBuffer = allocateDirect(outbound.capacity() * 2);</span>
+<span class="fc" id="L363">        outbound.flip();</span>
+<span class="fc" id="L364">        newBuffer.put(outbound);</span>
+<span class="fc" id="L365">        outbound = newBuffer;</span>
+<span class="fc" id="L366">    }</span>
+
+    /**
+     * Returns the maximum number of milliseconds the stream is allowed
+     * without any read/write operations.
+     *
+     * @return number if millis of permissible idle time
+     */
+    protected int maxIdleMillis() {
+<span class="nc" id="L375">        return maxIdleMillis;</span>
+    }
+
+
+    /**
+     * Returns true if the given stream has gone stale.
+     *
+     * @return true if the stream is stale
+     */
+    boolean isStale() {
+<span class="nc bnc" id="L385" title="All 4 branches missed.">        return currentTimeMillis() - lastActiveTime &gt; maxIdleMillis() &amp;&amp; key != null;</span>
+    }
+
+    /**
+     * Returns the inbound bytes counter.
+     *
+     * @return inbound bytes counter
+     */
+    public Counter bytesIn() {
+<span class="nc" id="L394">        return bytesIn;</span>
+    }
+
+    /**
+     * Returns the outbound bytes counter.
+     *
+     * @return outbound bytes counter
+     */
+    public Counter bytesOut() {
+<span class="nc" id="L403">        return bytesOut;</span>
+    }
+
+    /**
+     * Returns the inbound messages counter.
+     *
+     * @return inbound messages counter
+     */
+    public Counter messagesIn() {
+<span class="nc" id="L412">        return messagesIn;</span>
+    }
+
+    /**
+     * Returns the outbound messages counter.
+     *
+     * @return outbound messages counter
+     */
+    public Counter messagesOut() {
+<span class="nc" id="L421">        return messagesOut;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepBandwidthObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepBandwidthObjectVer1.java</span></div><h1>PcepBandwidthObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepBandwidthObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PcepBandwidthObject.
+ */
+public class PcepBandwidthObjectVer1 implements PcepBandwidthObject {
+
+    /*
+     *    RFC : 5440 , section : 7.7.
+          0                   1                   2                   3
+          0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |                         Bandwidth                             |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                         The BANDWIDTH Object format
+     */
+
+<span class="fc" id="L44">    protected static final Logger log = LoggerFactory.getLogger(PcepBandwidthObjectVer1.class);</span>
+    /*
+     *  Requested bandwidth: BANDWIDTH Object-Type is 1.
+        Bandwidth of an existing TE LSP for which a re-optimization is
+        requested. BANDWIDTH Object-Type is 2.
+     */
+    //Right now handling type 1
+    public static final byte BANDWIDTH_OBJ_TYPE = 1;
+    public static final byte BANDWIDTH_OBJ_CLASS = 5;
+    public static final byte BANDWIDTH_OBJECT_VERSION = 1;
+    public static final short BANDWIDTH_OBJ_MINIMUM_LENGTH = 8;
+
+<span class="fc" id="L56">    static final PcepObjectHeader DEFAULT_BANDWIDTH_OBJECT_HEADER = new PcepObjectHeader(BANDWIDTH_OBJ_CLASS,</span>
+            BANDWIDTH_OBJ_TYPE, PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED,
+            BANDWIDTH_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader bandwidthObjHeader;
+    private int iBandwidth;
+
+    /**
+     * Constructor to bandwidth object header and bandwidth.
+     *
+     * @param bandwidthObjHeader bandwidth object header
+     * @param iBandwidth bandwidth value
+     */
+<span class="fc" id="L69">    public PcepBandwidthObjectVer1(PcepObjectHeader bandwidthObjHeader, int iBandwidth) {</span>
+<span class="fc" id="L70">        this.bandwidthObjHeader = bandwidthObjHeader;</span>
+<span class="fc" id="L71">        this.iBandwidth = iBandwidth;</span>
+<span class="fc" id="L72">    }</span>
+
+    /**
+     * Constructor to initialize bandwidth.
+     *
+     * @param iBandwidth bandwidth value
+     */
+<span class="nc" id="L79">    public PcepBandwidthObjectVer1(int iBandwidth) {</span>
+<span class="nc" id="L80">        this.bandwidthObjHeader = DEFAULT_BANDWIDTH_OBJECT_HEADER;</span>
+<span class="nc" id="L81">        this.iBandwidth = iBandwidth;</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * Returns Object Header.
+     *
+     * @return bandwidthObjHeader
+     */
+    public PcepObjectHeader getBandwidthObjHeader() {
+<span class="nc" id="L90">        return this.bandwidthObjHeader;</span>
+    }
+
+    /**
+     * Sets Object Header.
+     *
+     * @param obj bandwidth object header
+     */
+    public void setBandwidthObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L99">        this.bandwidthObjHeader = obj;</span>
+<span class="nc" id="L100">    }</span>
+
+    @Override
+    public int getBandwidth() {
+<span class="nc" id="L104">        return this.iBandwidth;</span>
+    }
+
+    @Override
+    public void setBandwidth(int iBandwidth) {
+<span class="nc" id="L109">        this.iBandwidth = iBandwidth;</span>
+<span class="nc" id="L110">    }</span>
+
+    /**
+     * Reads from channel buffer and returns object of PcepBandwidthObject.
+     *
+     * @param cb channel buffer to parse
+     * @return object of PcepBandwidthObject
+     * @throws PcepParseException while parsing channel buffer
+     */
+    public static PcepBandwidthObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader bandwidthObjHeader;
+        int iBandwidth;
+
+<span class="fc" id="L124">        bandwidthObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L125">        iBandwidth = cb.readInt();</span>
+
+<span class="fc" id="L127">        return new PcepBandwidthObjectVer1(bandwidthObjHeader, iBandwidth);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+        //write Object header
+<span class="fc" id="L134">        int objStartIndex = cb.writerIndex();</span>
+<span class="fc" id="L135">        int objLenIndex = bandwidthObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L138">            throw new PcepParseException(&quot;Failed to write bandwidth object header. Index &quot; + objLenIndex);</span>
+        }
+
+<span class="fc" id="L141">        cb.writeInt(iBandwidth);</span>
+<span class="fc" id="L142">        short hLength = (short) (cb.writerIndex() - objStartIndex);</span>
+<span class="fc" id="L143">        cb.setShort(objLenIndex, hLength);</span>
+        //will be helpful during print().
+<span class="fc" id="L145">        bandwidthObjHeader.setObjLen(hLength);</span>
+
+<span class="fc" id="L147">        return cb.writerIndex() - objStartIndex;</span>
+    }
+
+    /**
+     * builder class for PCEP bandwidth object.
+     */
+<span class="nc" id="L153">    public static class Builder implements PcepBandwidthObject.Builder {</span>
+
+        private PcepObjectHeader bandwidthObjHeader;
+<span class="nc" id="L156">        private boolean bIsHeaderSet = false;</span>
+
+        private int iBandwidth;
+<span class="nc" id="L159">        private boolean bIsBandwidthSet = false;</span>
+
+        private boolean bPFlag;
+<span class="nc" id="L162">        private boolean bIsPFlagSet = false;</span>
+
+        private boolean bIFlag;
+<span class="nc" id="L165">        private boolean bIsIFlagSet = false;</span>
+
+        @Override
+        public PcepBandwidthObject build() throws PcepParseException {
+
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            PcepObjectHeader bandwidthObjHeader = this.bIsHeaderSet ? this.bandwidthObjHeader</span>
+                    : DEFAULT_BANDWIDTH_OBJECT_HEADER;
+
+<span class="nc bnc" id="L173" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L174">                bandwidthObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L178">                bandwidthObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            if (!this.bIsBandwidthSet) {</span>
+<span class="nc" id="L182">                throw new PcepParseException(&quot;bandwidth not Set while building Bandwidth Object.&quot;);</span>
+            }
+
+<span class="nc" id="L185">            return new PcepBandwidthObjectVer1(bandwidthObjHeader, iBandwidth);</span>
+        }
+
+        @Override
+        public int getBandwidth() {
+<span class="nc" id="L190">            return this.iBandwidth;</span>
+        }
+
+        @Override
+        public PcepObjectHeader getBandwidthObjHeader() {
+<span class="nc" id="L195">            return this.bandwidthObjHeader;</span>
+        }
+
+        @Override
+        public Builder setBandwidthObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L200">            this.bandwidthObjHeader = obj;</span>
+<span class="nc" id="L201">            return this;</span>
+        }
+
+        @Override
+        public Builder setBandwidth(int iBandwidth) {
+<span class="nc" id="L206">            this.iBandwidth = iBandwidth;</span>
+<span class="nc" id="L207">            this.bIsBandwidthSet = true;</span>
+<span class="nc" id="L208">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L213">            this.bPFlag = value;</span>
+<span class="nc" id="L214">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L215">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L220">            this.bIFlag = value;</span>
+<span class="nc" id="L221">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L222">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L229">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L230">                .add(&quot;BandwidthObjectHeader&quot;, bandwidthObjHeader)</span>
+<span class="nc" id="L231">                .add(&quot;Bandwidth&quot;, iBandwidth).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

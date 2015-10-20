@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ICMP6.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">ICMP6.java</span></div><h1>ICMP6.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import org.onlab.packet.ipv6.IExtensionHeader;
+import org.onlab.packet.ndp.NeighborAdvertisement;
+import org.onlab.packet.ndp.NeighborSolicitation;
+import org.onlab.packet.ndp.Redirect;
+import org.onlab.packet.ndp.RouterAdvertisement;
+import org.onlab.packet.ndp.RouterSolicitation;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements ICMPv6 packet format. (RFC 4443)
+ */
+<span class="fc" id="L37">public class ICMP6 extends BasePacket {</span>
+    public static final byte HEADER_LENGTH = 4; // bytes
+
+    // Type
+    /** Destination Unreachable. */
+    public static final byte DEST_UNREACH = (byte) 0x01;
+    /** Packet Too Big. */
+    public static final byte PKT_TOO_BIG = (byte) 0x02;
+    /** Time Exceeded. */
+    public static final byte TIME_EXCEED = (byte) 0x03;
+    /** Parameter Problem. */
+    public static final byte PARAM_ERR = (byte) 0x04;
+    /** Echo Request. */
+    public static final byte ECHO_REQUEST = (byte) 0x80;
+    /** Echo Reply. */
+    public static final byte ECHO_REPLY = (byte) 0x81;
+    /** Multicast Listener Query. */
+    public static final byte MCAST_QUERY = (byte) 0x82;
+    /** Multicast Listener Report. */
+    public static final byte MCAST_REPORT = (byte) 0x83;
+    /** Multicast Listener Done. */
+    public static final byte MCAST_DONE = (byte) 0x84;
+    /** Router Solicitation. */
+    public static final byte ROUTER_SOLICITATION = (byte) 0x85;
+    /** Router Advertisement. */
+    public static final byte ROUTER_ADVERTISEMENT = (byte) 0x86;
+    /** Neighbor Solicitation. */
+    public static final byte NEIGHBOR_SOLICITATION = (byte) 0x87;
+    /** Neighbor Advertisement. */
+    public static final byte NEIGHBOR_ADVERTISEMENT = (byte) 0x88;
+    /** Redirect Message. */
+    public static final byte REDIRECT = (byte) 0x89;
+
+    // Code for DEST_UNREACH
+    /** No route to destination. */
+    public static final byte NO_ROUTE = (byte) 0x00;
+    /** Communication with destination administratively prohibited. */
+    public static final byte COMM_PROHIBIT = (byte) 0x01;
+    /** Beyond scope of source address. */
+    public static final byte BEYOND_SCOPE = (byte) 0x02;
+    /** Address unreachable. */
+    public static final byte ADDR_UNREACH = (byte) 0x03;
+    /** Port unreachable. */
+    public static final byte PORT_UNREACH = (byte) 0x04;
+    /** Source address failed ingress/egress policy. */
+    public static final byte FAIL_POLICY = (byte) 0x05;
+    /** Reject route to destination. */
+    public static final byte REJECT_ROUTE = (byte) 0x06;
+    /** Error in Source Routing Header. */
+    public static final byte SRC_ROUTING_HEADER_ERR = (byte) 0x07;
+
+    // Code for TIME_EXCEED
+    /** Hop limit exceeded in transit. */
+    public static final byte HOP_LIMIT_EXCEED = (byte) 0x00;
+    /** Fragment reassembly time exceeded. */
+    public static final byte DEFRAG_TIME_EXCEED = (byte) 0x01;
+
+    // Code for PARAM_ERR
+    /** Erroneous header field encountered. */
+    public static final byte HDR_FIELD_ERR = (byte) 0x00;
+    /** Unrecognized Next Header type encountered. */
+    public static final byte NEXT_HEADER_ERR = (byte) 0x01;
+    /** Unrecognized IPv6 option encountered. */
+    public static final byte IPV6_OPT_ERR = (byte) 0x01;
+
+<span class="fc" id="L102">    public static final Map&lt;Byte, Deserializer&lt;? extends IPacket&gt;&gt; TYPE_DESERIALIZER_MAP =</span>
+            new HashMap&lt;&gt;();
+
+    static {
+<span class="fc" id="L106">        ICMP6.TYPE_DESERIALIZER_MAP.put(ICMP6.ROUTER_SOLICITATION, RouterSolicitation.deserializer());</span>
+<span class="fc" id="L107">        ICMP6.TYPE_DESERIALIZER_MAP.put(ICMP6.ROUTER_ADVERTISEMENT, RouterAdvertisement.deserializer());</span>
+<span class="fc" id="L108">        ICMP6.TYPE_DESERIALIZER_MAP.put(ICMP6.NEIGHBOR_SOLICITATION, NeighborSolicitation.deserializer());</span>
+<span class="fc" id="L109">        ICMP6.TYPE_DESERIALIZER_MAP.put(ICMP6.NEIGHBOR_ADVERTISEMENT, NeighborAdvertisement.deserializer());</span>
+<span class="fc" id="L110">        ICMP6.TYPE_DESERIALIZER_MAP.put(ICMP6.REDIRECT, Redirect.deserializer());</span>
+    }
+
+    protected byte icmpType;
+    protected byte icmpCode;
+    protected short checksum;
+
+<span class="fc" id="L117">    private static final byte[] ZERO_ADDRESS = new byte[Ip6Address.BYTE_LENGTH];</span>
+
+    /**
+     * Gets ICMP6 type.
+     *
+     * @return the ICMP6 type
+     */
+    public byte getIcmpType() {
+<span class="fc" id="L125">        return this.icmpType;</span>
+    }
+
+    /**
+     * Sets ICMP6 type.
+     *
+     * @param icmpType the ICMP type to set
+     * @return this
+     */
+    public ICMP6 setIcmpType(final byte icmpType) {
+<span class="fc" id="L135">        this.icmpType = icmpType;</span>
+<span class="fc" id="L136">        return this;</span>
+    }
+
+    /**
+     * Gets ICMP6 code.
+     *
+     * @return the ICMP6 code
+     */
+    public byte getIcmpCode() {
+<span class="fc" id="L145">        return this.icmpCode;</span>
+    }
+
+    /**
+     * Sets ICMP6 code.
+     *
+     * @param icmpCode the ICMP6 code to set
+     * @return this
+     */
+    public ICMP6 setIcmpCode(final byte icmpCode) {
+<span class="fc" id="L155">        this.icmpCode = icmpCode;</span>
+<span class="fc" id="L156">        return this;</span>
+    }
+
+    /**
+     * Gets checksum.
+     *
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="fc" id="L165">        return this.checksum;</span>
+    }
+
+    /**
+     * Sets checksum.
+     *
+     * @param checksum the checksum to set
+     * @return this
+     */
+    public ICMP6 setChecksum(final short checksum) {
+<span class="fc" id="L175">        this.checksum = checksum;</span>
+<span class="fc" id="L176">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L181">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="nc" id="L183">            this.payload.setParent(this);</span>
+<span class="nc" id="L184">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="fc" id="L187">        int payloadLength = 0;</span>
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L189">            payloadLength = payloadData.length;</span>
+        }
+
+<span class="fc" id="L192">        final byte[] data = new byte[HEADER_LENGTH + payloadLength];</span>
+<span class="fc" id="L193">        final ByteBuffer bbData = ByteBuffer.wrap(data);</span>
+
+        // Creating ByteBuffer for checksum calculation
+<span class="fc" id="L196">        final byte[] checksumData =</span>
+            new byte[IPv6.FIXED_HEADER_LENGTH + HEADER_LENGTH + payloadLength];
+<span class="fc" id="L198">        final ByteBuffer bbChecksum = ByteBuffer.wrap(checksumData);</span>
+
+        //
+        // Creating IPv6 Pseudo Header for checksum calculation according
+        // to RFC 4443 and RFC 2460
+        //
+<span class="fc" id="L204">        IPv6 ipv6Parent = null;</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        for (IPacket p = this.parent; p != null; p = p.getParent()) {</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">            if (p instanceof IPv6) {</span>
+<span class="fc" id="L207">                ipv6Parent = (IPv6) p;</span>
+<span class="fc" id="L208">                break;</span>
+            }
+        }
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">        if (ipv6Parent != null) {</span>
+<span class="fc" id="L212">            bbChecksum.put(ipv6Parent.getSourceAddress());</span>
+<span class="fc" id="L213">            bbChecksum.put(ipv6Parent.getDestinationAddress());</span>
+        } else {
+            // NOTE: IPv6 source and destination addresses unknown. Use zeroes.
+<span class="nc" id="L216">            bbChecksum.put(ZERO_ADDRESS);</span>
+<span class="nc" id="L217">            bbChecksum.put(ZERO_ADDRESS);</span>
+        }
+<span class="fc" id="L219">        bbChecksum.putInt(HEADER_LENGTH + payloadLength);</span>
+<span class="fc" id="L220">        bbChecksum.put((byte) 0);</span>
+<span class="fc" id="L221">        bbChecksum.put((byte) 0);</span>
+<span class="fc" id="L222">        bbChecksum.put((byte) 0);</span>
+<span class="fc" id="L223">        bbChecksum.put(IPv6.PROTOCOL_ICMP6);</span>
+<span class="fc" id="L224">        bbChecksum.put(this.icmpType);</span>
+<span class="fc" id="L225">        bbChecksum.put(this.icmpCode);</span>
+<span class="fc" id="L226">        bbChecksum.put((byte) 0);</span>
+<span class="fc" id="L227">        bbChecksum.put((byte) 0);</span>
+
+<span class="fc" id="L229">        bbData.put(this.icmpType);</span>
+<span class="fc" id="L230">        bbData.put(this.icmpCode);</span>
+<span class="fc" id="L231">        bbData.putShort(this.checksum);</span>
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L233">            bbData.put(payloadData);</span>
+<span class="nc" id="L234">            bbChecksum.put(payloadData);</span>
+        }
+
+<span class="pc bpc" id="L237" title="1 of 2 branches missed.">        if (this.parent != null) {</span>
+<span class="pc bpc" id="L238" title="1 of 2 branches missed.">            if (this.parent instanceof IPv6) {</span>
+<span class="fc" id="L239">                ((IPv6) this.parent).setNextHeader(IPv6.PROTOCOL_ICMP6);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            } else if (this.parent instanceof IExtensionHeader) {</span>
+<span class="nc" id="L241">                ((IExtensionHeader) this.parent).setNextHeader(IPv6.PROTOCOL_ICMP6);</span>
+            }
+        }
+
+        // compute checksum if needed
+<span class="pc bpc" id="L246" title="1 of 2 branches missed.">        if (this.checksum == 0) {</span>
+<span class="fc" id="L247">            bbData.rewind();</span>
+<span class="fc" id="L248">            bbChecksum.rewind();</span>
+<span class="fc" id="L249">            int accumulation = 0;</span>
+
+<span class="fc bfc" id="L251" title="All 2 branches covered.">            for (int i = 0; i &lt; checksumData.length / 2; ++i) {</span>
+<span class="fc" id="L252">                accumulation += 0xffff &amp; bbChecksum.getShort();</span>
+            }
+            // pad to an even number of shorts
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">            if (checksumData.length % 2 &gt; 0) {</span>
+<span class="nc" id="L256">                accumulation += (bbChecksum.get() &amp; 0xff) &lt;&lt; 8;</span>
+            }
+
+<span class="fc" id="L259">            accumulation = (accumulation &gt;&gt; 16 &amp; 0xffff)</span>
+                    + (accumulation &amp; 0xffff);
+<span class="fc" id="L261">            this.checksum = (short) (~accumulation &amp; 0xffff);</span>
+<span class="fc" id="L262">            bbData.putShort(2, this.checksum);</span>
+        }
+<span class="fc" id="L264">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L270">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L271">        this.icmpType = bb.get();</span>
+<span class="nc" id="L272">        this.icmpCode = bb.get();</span>
+<span class="nc" id="L273">        this.checksum = bb.getShort();</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L276" title="All 2 branches missed.">        if (ICMP6.TYPE_DESERIALIZER_MAP.containsKey(icmpType)) {</span>
+<span class="nc" id="L277">            deserializer = TYPE_DESERIALIZER_MAP.get(icmpType);</span>
+        } else {
+<span class="nc" id="L279">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L282">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L283">                                                     bb.limit() - bb.position());</span>
+<span class="nc" id="L284">            this.payload.setParent(this);</span>
+<span class="nc" id="L285">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L286">            return this;</span>
+<span class="nc" id="L287">        }</span>
+
+<span class="nc" id="L289">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L299">        final int prime = 5807;</span>
+<span class="nc" id="L300">        int result = super.hashCode();</span>
+<span class="nc" id="L301">        result = prime * result + this.icmpType;</span>
+<span class="nc" id="L302">        result = prime * result + this.icmpCode;</span>
+<span class="nc" id="L303">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L304">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L314" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L315">            return true;</span>
+        }
+<span class="pc bpc" id="L317" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L318">            return false;</span>
+        }
+<span class="pc bpc" id="L320" title="1 of 2 branches missed.">        if (!(obj instanceof ICMP6)) {</span>
+<span class="nc" id="L321">            return false;</span>
+        }
+<span class="fc" id="L323">        final ICMP6 other = (ICMP6) obj;</span>
+<span class="pc bpc" id="L324" title="1 of 2 branches missed.">        if (this.icmpType != other.icmpType) {</span>
+<span class="fc" id="L325">            return false;</span>
+        }
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if (this.icmpCode != other.icmpCode) {</span>
+<span class="nc" id="L328">            return false;</span>
+        }
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        if (this.checksum != other.checksum) {</span>
+<span class="nc" id="L331">            return false;</span>
+        }
+<span class="nc" id="L333">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for ICMPv6 packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;ICMP6&gt; deserializer() {
+<span class="fc" id="L342">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L343">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="fc" id="L345">            ICMP6 icmp6 = new ICMP6();</span>
+
+<span class="fc" id="L347">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L349">            icmp6.icmpType = bb.get();</span>
+<span class="fc" id="L350">            icmp6.icmpCode = bb.get();</span>
+<span class="fc" id="L351">            icmp6.checksum = bb.getShort();</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L354" title="1 of 2 branches missed.">            if (ICMP6.TYPE_DESERIALIZER_MAP.containsKey(icmp6.icmpType)) {</span>
+<span class="nc" id="L355">                deserializer = TYPE_DESERIALIZER_MAP.get(icmp6.icmpType);</span>
+            } else {
+<span class="fc" id="L357">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L359">            icmp6.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L360">                                                bb.limit() - bb.position());</span>
+<span class="fc" id="L361">            icmp6.payload.setParent(icmp6);</span>
+
+<span class="fc" id="L363">            return icmp6;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

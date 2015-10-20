@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepTunnelData.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcep-provider-tunnel</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.pcep.tunnel.impl</a> &gt; <span class="el_source">PcepTunnelData.java</span></div><h1>PcepTunnelData.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.pcep.tunnel.impl;
+
+import java.util.Objects;
+
+import org.onosproject.incubator.net.tunnel.Tunnel;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.Path;
+import org.onosproject.pcepio.types.StatefulIPv4LspIdentidiersTlv;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * To store all tunnel related information from Core and Path computation client.
+ */
+public class PcepTunnelData {
+
+    private Tunnel tunnel;
+    private Path path;
+    private int plspId;
+    private ElementId elementId;
+    private RequestType requestType;
+    private boolean rptFlag;
+
+    // data need to store from LSP object
+    private boolean lspAFlag;
+    private boolean lspDFlag;
+    private byte lspOFlag;
+    private short tunnelId;
+    private int extTunnelId;
+    private short lspId;
+    private StatefulIPv4LspIdentidiersTlv statefulIpv4IndentifierTlv;
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L51">    public PcepTunnelData() {</span>
+<span class="nc" id="L52">        this.elementId = null;</span>
+<span class="nc" id="L53">        this.tunnel = null;</span>
+<span class="nc" id="L54">        this.path = null;</span>
+<span class="nc" id="L55">        this.requestType = null;</span>
+<span class="nc" id="L56">        this.rptFlag = false;</span>
+<span class="nc" id="L57">        this.plspId = 0;</span>
+<span class="nc" id="L58">    }</span>
+
+    /**
+     * Constructor to initialize Tunnel, Path and Request type.
+     *
+     * @param tunnel mpls tunnel
+     * @param path Path in network
+     * @param requestType request type for tunnel
+     */
+<span class="fc" id="L67">    public PcepTunnelData(Tunnel tunnel, Path path, RequestType requestType) {</span>
+<span class="fc" id="L68">        this.tunnel = tunnel;</span>
+<span class="fc" id="L69">        this.path = path;</span>
+<span class="fc" id="L70">        this.requestType = requestType;</span>
+<span class="fc" id="L71">    }</span>
+
+    /**
+     * Constructor to initialize ElemendId, Tunnel, Path and Request type.
+     *
+     * @param elementId Ip element id
+     * @param tunnel mpls tunnel
+     * @param path Path in network
+     * @param requestType request type for tunnel
+     */
+<span class="nc" id="L81">    public PcepTunnelData(ElementId elementId, Tunnel tunnel, Path path, RequestType requestType) {</span>
+<span class="nc" id="L82">        this.elementId = elementId;</span>
+<span class="nc" id="L83">        this.tunnel = tunnel;</span>
+<span class="nc" id="L84">        this.path = path;</span>
+<span class="nc" id="L85">        this.requestType = requestType;</span>
+<span class="nc" id="L86">    }</span>
+
+    /**
+     * Constructor to initialize Tunnel and Request type.
+     *
+     * @param tunnel Tunnel from core
+     * @param requestType request type for tunnel
+     */
+<span class="fc" id="L94">    public PcepTunnelData(Tunnel tunnel, RequestType requestType) {</span>
+<span class="fc" id="L95">        this.tunnel = tunnel;</span>
+<span class="fc" id="L96">        this.requestType = requestType;</span>
+<span class="fc" id="L97">    }</span>
+
+    /**
+     * Constructor to initialize ElementId, Tunnel and Request type.
+     *
+     * @param elementId Ip element id
+     * @param tunnel mpls tunnel
+     * @param requestType request type for tunnel
+     */
+<span class="nc" id="L106">    public PcepTunnelData(ElementId elementId, Tunnel tunnel, RequestType requestType) {</span>
+<span class="nc" id="L107">        this.elementId = elementId;</span>
+<span class="nc" id="L108">        this.tunnel = tunnel;</span>
+<span class="nc" id="L109">        this.requestType = requestType;</span>
+<span class="nc" id="L110">    }</span>
+
+    /**
+     * Sets ip element id.
+     *
+     * @param elementId Ip element id
+     */
+    public void setElementId(ElementId elementId) {
+<span class="nc" id="L118">        this.elementId = elementId;</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Sets tunnel.
+     *
+     * @param tunnel mpls tunnel
+     */
+    public void setTunnel(Tunnel tunnel) {
+<span class="nc" id="L127">        this.tunnel = tunnel;</span>
+<span class="nc" id="L128">    }</span>
+
+    /**
+     * Sets Path.
+     *
+     * @param path Path in network
+     */
+    public void setPath(Path path) {
+<span class="nc" id="L136">        this.path = path;</span>
+<span class="nc" id="L137">    }</span>
+
+    /**
+     * Request type for tunnel.
+     *
+     * @param requestType request type for tunnel
+     */
+    public void setRequestType(RequestType requestType) {
+<span class="nc" id="L145">        this.requestType = requestType;</span>
+<span class="nc" id="L146">    }</span>
+
+    /**
+     * Sets plspid generated from pcc.
+     *
+     * @param plspId plsp identifier
+     */
+    public void setPlspId(int plspId) {
+<span class="fc" id="L154">        this.plspId = plspId;</span>
+<span class="fc" id="L155">    }</span>
+
+    /**
+     * Sets A flag from lsp object.
+     *
+     * @param value A flag value
+     */
+    public void setLspAFlag(boolean value) {
+<span class="nc" id="L163">        this.lspAFlag = value;</span>
+<span class="nc" id="L164">    }</span>
+
+    /**
+     * Sets OF flag from lsp object.
+     *
+     * @param value OF flag value
+     */
+    public void setLspOFlag(byte value) {
+<span class="nc" id="L172">        this.lspOFlag = value;</span>
+<span class="nc" id="L173">    }</span>
+
+    /**
+     * Sets tunnel id from PCC.
+     *
+     * @param value tunnel id value
+     */
+    public void setTunnelId(short value) {
+<span class="nc" id="L181">        this.tunnelId = value;</span>
+<span class="nc" id="L182">    }</span>
+
+    /**
+     * Sets extended tunnel id from PCC.
+     *
+     * @param value extended tunnel id value
+     */
+    public void setExtTunnelId(int value) {
+<span class="nc" id="L190">        this.extTunnelId = value;</span>
+<span class="nc" id="L191">    }</span>
+
+    /**
+     * Sets lsp id from pcc.
+     *
+     * @param value lsp id
+     */
+    public void setLspId(short value) {
+<span class="nc" id="L199">        this.lspId = value;</span>
+<span class="nc" id="L200">    }</span>
+
+    /**
+     * Sets statefulIpv4Identifiers tlv.
+     * @param value statefulIpv4Identifiers tlv
+     */
+    public void setStatefulIpv4IndentifierTlv(StatefulIPv4LspIdentidiersTlv value) {
+<span class="fc" id="L207">        this.statefulIpv4IndentifierTlv = value;</span>
+<span class="fc" id="L208">    }</span>
+
+    /**
+     * Sets report flag.
+     *
+     * @param rptFlag report flag
+     */
+    public void setRptFlag(boolean rptFlag) {
+<span class="nc" id="L216">        this.rptFlag = rptFlag;</span>
+<span class="nc" id="L217">    }</span>
+
+    /**
+     * Sets D flag from lsp object.
+     *
+     * @param value D flag value
+     */
+    public void setLspDFlag(boolean value) {
+<span class="nc" id="L225">        this.lspDFlag = value;</span>
+<span class="nc" id="L226">    }</span>
+
+    /**
+     * To get Ip element id.
+     *
+     * @return Ip elemend id
+     */
+    public ElementId elementId() {
+<span class="nc" id="L234">        return this.elementId;</span>
+    }
+
+    /**
+     * To get Tunnel.
+     *
+     * @return tunnel
+     */
+    public Tunnel tunnel() {
+<span class="fc" id="L243">        return this.tunnel;</span>
+    }
+
+    /**
+     * To get Path.
+     *
+     * @return path
+     */
+    public Path path() {
+<span class="nc" id="L252">        return this.path;</span>
+    }
+
+    /**
+     * To get request type.
+     *
+     * @return request type
+     */
+    public RequestType requestType() {
+<span class="nc" id="L261">        return this.requestType;</span>
+    }
+
+    /**
+     * To get pLspId.
+     *
+     * @return pLspId
+     */
+    public int plspId() {
+<span class="fc" id="L270">        return this.plspId;</span>
+    }
+
+    /**
+     * To get A flag.
+     *
+     * @return A flag
+     */
+    public boolean lspAFlag() {
+<span class="nc" id="L279">        return this.lspAFlag;</span>
+    }
+
+    /**
+     * To get OF flag.
+     *
+     * @return OF flag
+     */
+    public byte lspOFlag() {
+<span class="nc" id="L288">        return this.lspOFlag;</span>
+    }
+
+    /**
+     * To get tunnel id.
+     *
+     * @return tunnel id
+     */
+    public short tunnelId() {
+<span class="nc" id="L297">        return this.tunnelId;</span>
+    }
+
+    /**
+     * To get extended tunnel id.
+     *
+     * @return extended tunnel id
+     */
+    public int extTunnelId() {
+<span class="nc" id="L306">        return this.extTunnelId;</span>
+    }
+
+    /**
+     * To get pLspId.
+     *
+     * @return pLspId
+     */
+    public short lspId() {
+<span class="nc" id="L315">        return this.lspId;</span>
+    }
+
+    /**
+     * To get D Flag.
+     *
+     * @return d flag
+     */
+    public boolean lspDFlag() {
+<span class="nc" id="L324">        return this.lspDFlag;</span>
+    }
+
+    /**
+     * To get statefulIpv4Indentifier tlv.
+     *
+     * @return statefulIpv4Indentifier tlv
+     */
+    public StatefulIPv4LspIdentidiersTlv statefulIpv4IndentifierTlv() {
+<span class="fc" id="L333">        return this.statefulIpv4IndentifierTlv;</span>
+    }
+
+    /**
+     * To get report flag.
+     *
+     * @return report flag
+     */
+    public boolean rptFlag() {
+<span class="nc" id="L342">        return this.rptFlag;</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L348">            return true;</span>
+        }
+
+<span class="nc bnc" id="L351" title="All 2 branches missed.">        if (obj instanceof PcepTunnelData) {</span>
+<span class="nc" id="L352">            PcepTunnelData other = (PcepTunnelData) obj;</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            return Objects.equals(tunnel, other.tunnel)</span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(path, other.path)</span>
+<span class="nc bnc" id="L355" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(plspId, other.plspId)</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(elementId, other.elementId)</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(requestType, other.requestType)</span>
+<span class="nc bnc" id="L358" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(rptFlag, other.rptFlag)</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(lspAFlag, other.lspAFlag)</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(lspDFlag, other.lspDFlag)</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(lspOFlag, other.lspOFlag)</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(tunnelId, other.tunnelId)</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(extTunnelId, other.extTunnelId)</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(lspId, other.lspId)</span>
+<span class="nc bnc" id="L365" title="All 2 branches missed.">                    &amp;&amp; Objects.equals(statefulIpv4IndentifierTlv, other.statefulIpv4IndentifierTlv);</span>
+        }
+
+<span class="nc" id="L368">        return false;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L373">        return Objects.hash(tunnel, path, plspId, elementId, requestType, rptFlag, lspAFlag,</span>
+<span class="nc" id="L374">                            lspDFlag, lspOFlag, tunnelId, extTunnelId, lspId, statefulIpv4IndentifierTlv);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L379">        return MoreObjects.toStringHelper(getClass()).add(&quot;Tunnel&quot;, tunnel)</span>
+<span class="nc" id="L380">                .add(&quot;Path&quot;, path).add(&quot;PlspId&quot;, plspId).add(&quot;ElementId&quot;, elementId)</span>
+<span class="nc" id="L381">                .add(&quot;RequestType&quot;, requestType).add(&quot;RptFlag&quot;, rptFlag).add(&quot;LspAFlag&quot;, lspAFlag)</span>
+<span class="nc" id="L382">                .add(&quot;LspDFlag&quot;, lspDFlag).add(&quot;LspOFlag&quot;, lspOFlag).add(&quot;TunnelId&quot;, tunnelId)</span>
+<span class="nc" id="L383">                .add(&quot;ExtTunnelid&quot;, extTunnelId).add(&quot;LspId&quot;, lspId)</span>
+<span class="nc" id="L384">                .add(&quot;StatefulIpv4IndentifierTlv&quot;, statefulIpv4IndentifierTlv).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

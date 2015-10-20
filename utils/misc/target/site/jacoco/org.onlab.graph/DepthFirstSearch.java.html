@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DepthFirstSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">DepthFirstSearch.java</span></div><h1>DepthFirstSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
+
+/**
+ * DFS graph search algorithm implemented via iteration rather than recursion.
+ */
+<span class="fc" id="L27">public class DepthFirstSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;</span>
+        extends AbstractGraphPathSearch&lt;V, E&gt; {
+
+    /**
+     * Graph edge types as classified by the DFS algorithm.
+     */
+<span class="pc" id="L33">    public static enum EdgeType {</span>
+<span class="fc" id="L34">        TREE_EDGE, FORWARD_EDGE, BACK_EDGE, CROSS_EDGE</span>
+    }
+
+    @Override
+    public SpanningTreeResult search(Graph&lt;V, E&gt; graph, V src, V dst,
+                                     EdgeWeight&lt;V, E&gt; weight, int maxPaths) {
+<span class="fc" id="L40">        checkArguments(graph, src, dst);</span>
+
+        // Prepare the search result.
+<span class="fc" id="L43">        SpanningTreeResult result = new SpanningTreeResult(src, dst, maxPaths);</span>
+
+        // The source vertex has cost 0, of course.
+<span class="fc" id="L46">        result.updateVertex(src, null, 0.0, true);</span>
+
+        // Track finished vertexes and keep a stack of vertexes that have been
+        // started; start this stack with the source on it.
+<span class="fc" id="L50">        Set&lt;V&gt; finished = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L51">        Stack&lt;V&gt; stack = new Stack&lt;&gt;();</span>
+<span class="fc" id="L52">        stack.push(src);</span>
+
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        while (!stack.isEmpty()) {</span>
+<span class="fc" id="L55">            V vertex = stack.peek();</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">            if (vertex.equals(dst)) {</span>
+                // If we have reached our destination, bail.
+<span class="fc" id="L58">                break;</span>
+            }
+
+<span class="fc" id="L61">            double cost = result.cost(vertex);</span>
+<span class="fc" id="L62">            boolean tangent = false;</span>
+
+            // Visit all egress edges of the current vertex.
+<span class="fc bfc" id="L65" title="All 2 branches covered.">            for (E edge : graph.getEdgesFrom(vertex)) {</span>
+                // If we have seen the edge already, skip it.
+<span class="fc bfc" id="L67" title="All 2 branches covered.">                if (result.isEdgeMarked(edge)) {</span>
+<span class="fc" id="L68">                    continue;</span>
+                }
+
+                // Examine the destination of the current edge.
+<span class="fc" id="L72">                V nextVertex = edge.dst();</span>
+<span class="fc bfc" id="L73" title="All 2 branches covered.">                if (!result.hasCost(nextVertex)) {</span>
+                    // If this vertex have not finished this vertex yet,
+                    // not started it, then start it as a tree-edge.
+<span class="fc" id="L76">                    result.markEdge(edge, EdgeType.TREE_EDGE);</span>
+<span class="fc bfc" id="L77" title="All 2 branches covered.">                    double newCost = cost + (weight == null ? 1.0 : weight.weight(edge));</span>
+<span class="fc" id="L78">                    result.updateVertex(nextVertex, edge, newCost, true);</span>
+<span class="fc" id="L79">                    stack.push(nextVertex);</span>
+<span class="fc" id="L80">                    tangent = true;</span>
+<span class="fc" id="L81">                    break;</span>
+
+<span class="fc bfc" id="L83" title="All 2 branches covered.">                } else if (!finished.contains(nextVertex)) {</span>
+                    // We started the vertex, but did not yet finish it, so
+                    // it must be a back-edge.
+<span class="fc" id="L86">                    result.markEdge(edge, EdgeType.BACK_EDGE);</span>
+                } else {
+                    // The target has been finished already, so what we have
+                    // here is either a forward-edge or a cross-edge.
+<span class="fc bfc" id="L90" title="All 2 branches covered.">                    result.markEdge(edge, isForwardEdge(result, edge) ?</span>
+                            EdgeType.FORWARD_EDGE : EdgeType.CROSS_EDGE);
+                }
+<span class="fc" id="L93">            }</span>
+
+            // If we have not been sent on a tangent search and reached the
+            // end of the current scan normally, mark the node as finished
+            // and pop it off the vertex stack.
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            if (!tangent) {</span>
+<span class="fc" id="L99">                finished.add(vertex);</span>
+<span class="fc" id="L100">                stack.pop();</span>
+            }
+<span class="fc" id="L102">        }</span>
+
+        // Finally, but the paths on the search result and return.
+<span class="fc" id="L105">        result.buildPaths();</span>
+<span class="fc" id="L106">        return result;</span>
+    }
+
+    /**
+     * Determines whether the specified edge is a forward edge using the
+     * accumulated set of parent edges for each vertex.
+     *
+     * @param result search result
+     * @param edge   edge to be classified
+     * @return true if the edge is a forward edge
+     */
+    protected boolean isForwardEdge(DefaultResult result, E edge) {
+        // Follow the parent edges until we hit the edge source vertex
+<span class="fc" id="L119">        V target = edge.src();</span>
+<span class="fc" id="L120">        V vertex = edge.dst();</span>
+        Set&lt;E&gt; parentEdges;
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        while ((parentEdges = result.parents.get(vertex)) != null) {</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">            for (E parentEdge : parentEdges) {</span>
+<span class="fc" id="L124">                vertex = parentEdge.src();</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">                if (vertex.equals(target)) {</span>
+<span class="fc" id="L126">                    return true;</span>
+                }
+<span class="fc" id="L128">            }</span>
+        }
+<span class="fc" id="L130">        return false;</span>
+    }
+
+    /**
+     * Graph search result which includes edge classification for building
+     * a spanning tree.
+     */
+    public class SpanningTreeResult extends DefaultResult {
+
+<span class="fc" id="L139">        protected final Map&lt;E, EdgeType&gt; edges = new HashMap&lt;&gt;();</span>
+
+        /**
+         * Creates a new spanning tree result.
+         *
+         * @param src      search source
+         * @param dst      optional search destination
+         * @param maxPaths limit on the number of paths
+         */
+<span class="fc" id="L148">        public SpanningTreeResult(V src, V dst, int maxPaths) {</span>
+<span class="fc" id="L149">            super(src, dst, maxPaths);</span>
+<span class="fc" id="L150">        }</span>
+
+        /**
+         * Returns the map of edge type.
+         *
+         * @return edge to edge type bindings
+         */
+        public Map&lt;E, EdgeType&gt; edges() {
+<span class="fc" id="L158">            return edges;</span>
+        }
+
+        /**
+         * Indicates whether or not the edge has been marked with type.
+         *
+         * @param edge edge to test
+         * @return true if the edge has been marked already
+         */
+        boolean isEdgeMarked(E edge) {
+<span class="fc" id="L168">            return edges.containsKey(edge);</span>
+        }
+
+        /**
+         * Marks the edge with the specified type.
+         *
+         * @param edge edge to mark
+         * @param type edge type
+         */
+        void markEdge(E edge, EdgeType type) {
+<span class="fc" id="L178">            edges.put(edge, type);</span>
+<span class="fc" id="L179">        }</span>
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

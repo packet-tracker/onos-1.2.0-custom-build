@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BandwidthResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.resource.link</a> &gt; <span class="el_source">BandwidthResource.java</span></div><h1>BandwidthResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.resource.link;
+
+import org.onlab.util.Bandwidth;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Representation of bandwidth resource in bps.
+ */
+public final class BandwidthResource implements LinkResource {
+
+    private final Bandwidth bandwidth;
+
+    /**
+     * Creates a new instance with given bandwidth.
+     *
+     * @param bandwidth bandwidth value to be assigned
+     */
+<span class="fc" id="L36">    public BandwidthResource(Bandwidth bandwidth) {</span>
+<span class="fc" id="L37">        this.bandwidth = checkNotNull(bandwidth);</span>
+<span class="fc" id="L38">    }</span>
+
+    // Constructor for serialization
+<span class="nc" id="L41">    private BandwidthResource() {</span>
+<span class="nc" id="L42">        this.bandwidth = null;</span>
+<span class="nc" id="L43">    }</span>
+
+    /**
+     * Returns bandwidth as a double value.
+     *
+     * @return bandwidth as a double value
+     */
+    public double toDouble() {
+<span class="fc" id="L51">        return bandwidth.bps();</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">        if (obj instanceof BandwidthResource) {</span>
+<span class="fc" id="L57">            BandwidthResource that = (BandwidthResource) obj;</span>
+<span class="fc" id="L58">            return Objects.equals(this.bandwidth, that.bandwidth);</span>
+        }
+<span class="nc" id="L60">        return false;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L65">        return Objects.hashCode(this.bandwidth);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L70">        return String.valueOf(this.bandwidth);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

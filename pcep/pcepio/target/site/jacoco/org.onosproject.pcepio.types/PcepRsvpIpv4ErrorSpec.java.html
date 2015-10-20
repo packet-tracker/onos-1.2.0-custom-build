@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepRsvpIpv4ErrorSpec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepRsvpIpv4ErrorSpec.java</span></div><h1>PcepRsvpIpv4ErrorSpec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Rsvp Ipv4 Error Spec.
+ */
+public class PcepRsvpIpv4ErrorSpec implements PcepRsvpErrorSpec {
+
+    /*
+       RSVP error spec object header.
+        0             1              2             3
+    +-------------+-------------+-------------+-------------+
+    |       Length (bytes)      |  Class-Num  |   C-Type    |
+    +-------------+-------------+-------------+-------------+
+    |                                                       |
+    //                  (Object contents)                   //
+    |                                                       |
+    +-------------+-------------+-------------+-------------+
+
+    Ref :  ERROR_SPEC @ RFC2205
+
+    IPv4 ERROR_SPEC object: Class = 6, C-Type = 1
+    +-------------+-------------+-------------+-------------+
+    |            IPv4 Error Node Address (4 bytes)          |
+    +-------------+-------------+-------------+-------------+
+    |    Flags    |  Error Code |        Error Value        |
+    +-------------+-------------+-------------+-------------+
+
+     */
+
+    PcepRsvpSpecObjHeader objHeader;
+    public static final byte CLASS_NUM = 0x06;
+    public static final byte CLASS_TYPE = 0x01;
+    public static final byte CLASS_LENGTH = 0x0c;
+    private int ipv4Addr;
+    private byte flags;
+    private byte errCode;
+    private short errValue;
+
+    /**
+     * Constructor to initialize obj header, ipv4 addr, flags, err code and err value.
+     *
+     * @param objHeader rsvp ipv4 error spec object header
+     * @param ipv4Addr ipv4 address
+     * @param flags flags value
+     * @param errCode error code value
+     * @param errValue error value
+     */
+    public PcepRsvpIpv4ErrorSpec(PcepRsvpSpecObjHeader objHeader, int ipv4Addr, byte flags, byte errCode,
+<span class="fc" id="L69">            short errValue) {</span>
+<span class="fc" id="L70">        this.objHeader = objHeader;</span>
+<span class="fc" id="L71">        this.ipv4Addr = ipv4Addr;</span>
+<span class="fc" id="L72">        this.flags = flags;</span>
+<span class="fc" id="L73">        this.errCode = errCode;</span>
+<span class="fc" id="L74">        this.errValue = errValue;</span>
+<span class="fc" id="L75">    }</span>
+
+    /**
+     * Constructor to initialize ipv4 address, flags, err code and err value.
+     *
+     * @param ipv4Addr ipv4 address
+     * @param flags flags value
+     * @param errCode error code
+     * @param errValue error value
+     */
+<span class="nc" id="L85">    public PcepRsvpIpv4ErrorSpec(int ipv4Addr, byte flags, byte errCode, short errValue) {</span>
+<span class="nc" id="L86">        this.objHeader = new PcepRsvpSpecObjHeader(CLASS_LENGTH, CLASS_NUM, CLASS_TYPE);</span>
+<span class="nc" id="L87">        this.ipv4Addr = ipv4Addr;</span>
+<span class="nc" id="L88">        this.flags = flags;</span>
+<span class="nc" id="L89">        this.errCode = errCode;</span>
+<span class="nc" id="L90">        this.errValue = errValue;</span>
+<span class="nc" id="L91">    }</span>
+
+    @Override
+    public int write(ChannelBuffer cb) {
+<span class="fc" id="L95">        int objLenIndex = objHeader.write(cb);</span>
+<span class="fc" id="L96">        cb.writeInt(ipv4Addr);</span>
+<span class="fc" id="L97">        cb.writeByte(flags);</span>
+<span class="fc" id="L98">        cb.writeByte(errCode);</span>
+<span class="fc" id="L99">        cb.writeShort(errValue);</span>
+<span class="fc" id="L100">        short objLen = (short) (cb.writerIndex() - objLenIndex);</span>
+<span class="fc" id="L101">        cb.setShort(objLenIndex, objLen);</span>
+<span class="fc" id="L102">        return objLen;</span>
+    }
+
+    /**
+     * Reads PCPE RSVP error spec from channel buffer and returns PCEP rsvp IPv4 error spec object.
+     *
+     * @param cb channel buffer
+     * @return PCEP rsvp IPv4 error spec object
+     */
+    public static PcepRsvpErrorSpec read(ChannelBuffer cb) {
+        PcepRsvpSpecObjHeader objHeader;
+        int ipv4Addr;
+        byte flags;
+        byte errCode;
+        short errValue;
+
+<span class="fc" id="L118">        objHeader = PcepRsvpSpecObjHeader.read(cb);</span>
+<span class="fc" id="L119">        ipv4Addr = cb.readInt();</span>
+<span class="fc" id="L120">        flags = cb.readByte();</span>
+<span class="fc" id="L121">        errCode = cb.readByte();</span>
+<span class="fc" id="L122">        errValue = cb.readShort();</span>
+<span class="fc" id="L123">        return new PcepRsvpIpv4ErrorSpec(objHeader, ipv4Addr, flags, errCode, errValue);</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L128">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L133">        return StatefulRsvpErrorSpecTlv.TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="nc" id="L138">        return CLASS_LENGTH;</span>
+    }
+
+    @Override
+    public byte getClassNum() {
+<span class="nc" id="L143">        return CLASS_NUM;</span>
+    }
+
+    @Override
+    public byte getClassType() {
+<span class="nc" id="L148">        return CLASS_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L153">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L154">                .add(&quot;IPv4Address&quot;, ipv4Addr)</span>
+<span class="nc" id="L155">                .add(&quot;flags&quot;, flags)</span>
+<span class="nc" id="L156">                .add(&quot;errorCode&quot;, errCode)</span>
+<span class="nc" id="L157">                .add(&quot;errorValue&quot;, errValue)</span>
+<span class="nc" id="L158">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

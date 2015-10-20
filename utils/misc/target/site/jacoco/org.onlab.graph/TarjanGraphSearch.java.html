@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TarjanGraphSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">TarjanGraphSearch.java</span></div><h1>TarjanGraphSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Tarjan algorithm for searching a graph and producing results describing
+ * the graph SCC (strongly-connected components).
+ */
+<span class="fc" id="L30">public class TarjanGraphSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;</span>
+        implements GraphSearch&lt;V, E&gt; {
+
+    /**
+     * {@inheritDoc}
+     * &lt;p&gt;
+     * This implementation produces results augmented with information on
+     * SCCs within the graph.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * To prevent traversal of an edge, the {@link EdgeWeight#weight} should
+     * return a negative value as an edge weight.
+     * &lt;/p&gt;
+     */
+    @Override
+    public SCCResult&lt;V, E&gt; search(Graph&lt;V, E&gt; graph, EdgeWeight&lt;V, E&gt; weight) {
+<span class="fc" id="L46">        SCCResult&lt;V, E&gt; result = new SCCResult&lt;&gt;(graph);</span>
+<span class="fc bfc" id="L47" title="All 2 branches covered.">        for (V vertex : graph.getVertexes()) {</span>
+<span class="fc" id="L48">            VertexData data = result.data(vertex);</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">            if (data == null) {</span>
+<span class="fc" id="L50">                connect(graph, vertex, weight, result);</span>
+            }
+<span class="fc" id="L52">        }</span>
+<span class="fc" id="L53">        return result.build();</span>
+    }
+
+    /**
+     * Scans the specified graph, using recursion, and produces SCC results.
+     *
+     * @param graph  graph to search
+     * @param vertex current vertex to scan and connect
+     * @param weight optional edge weight
+     * @param result graph search result
+     * @return augmentation vertexData for the current vertex
+     */
+    private VertexData&lt;V&gt; connect(Graph&lt;V, E&gt; graph, V vertex,
+                                  EdgeWeight&lt;V, E&gt; weight,
+                                  SCCResult&lt;V, E&gt; result) {
+<span class="fc" id="L68">        VertexData&lt;V&gt; data = result.addData(vertex);</span>
+
+        // Scan through all egress edges of the current vertex.
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        for (E edge : graph.getEdgesFrom(vertex)) {</span>
+<span class="fc" id="L72">            V nextVertex = edge.dst();</span>
+
+            // If edge weight is negative, skip it.
+<span class="fc bfc" id="L75" title="All 4 branches covered.">            if (weight != null &amp;&amp; weight.weight(edge) &lt; 0) {</span>
+<span class="fc" id="L76">                continue;</span>
+            }
+
+            // Attempt to get the augmentation vertexData for the next vertex.
+<span class="fc" id="L80">            VertexData&lt;V&gt; nextData = result.data(nextVertex);</span>
+<span class="fc bfc" id="L81" title="All 2 branches covered.">            if (nextData == null) {</span>
+                // Next vertex has not been visited yet, so do this now.
+<span class="fc" id="L83">                nextData = connect(graph, nextVertex, weight, result);</span>
+<span class="fc" id="L84">                data.lowLink = Math.min(data.lowLink, nextData.lowLink);</span>
+
+<span class="fc bfc" id="L86" title="All 2 branches covered.">            } else if (result.visited(nextData)) {</span>
+                // Next vertex has been visited, which means it is in the
+                // same cluster as the current vertex.
+<span class="fc" id="L89">                data.lowLink = Math.min(data.lowLink, nextData.index);</span>
+            }
+<span class="fc" id="L91">        }</span>
+
+<span class="fc bfc" id="L93" title="All 2 branches covered.">        if (data.lowLink == data.index) {</span>
+<span class="fc" id="L94">            result.addCluster(data);</span>
+        }
+<span class="fc" id="L96">        return data;</span>
+    }
+
+    /**
+     * Graph search result augmented with SCC vertexData.
+     */
+    public static final class SCCResult&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;
+            implements Result {
+
+        private final Graph&lt;V, E&gt; graph;
+<span class="fc" id="L106">        private List&lt;Set&lt;V&gt;&gt; clusterVertexes = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L107">        private List&lt;Set&lt;E&gt;&gt; clusterEdges = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L109">        private int index = 0;</span>
+<span class="fc" id="L110">        private final Map&lt;V, VertexData&lt;V&gt;&gt; vertexData = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L111">        private final List&lt;VertexData&lt;V&gt;&gt; visited = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L113">        private SCCResult(Graph&lt;V, E&gt; graph) {</span>
+<span class="fc" id="L114">            this.graph = graph;</span>
+<span class="fc" id="L115">        }</span>
+
+        /**
+         * Returns the number of SCC clusters in the graph.
+         *
+         * @return number of clusters
+         */
+        public int clusterCount() {
+<span class="fc" id="L123">            return clusterEdges.size();</span>
+        }
+
+        /**
+         * Returns the list of strongly connected vertex clusters.
+         *
+         * @return list of strongly connected vertex sets
+         */
+        public List&lt;Set&lt;V&gt;&gt; clusterVertexes() {
+<span class="fc" id="L132">            return clusterVertexes;</span>
+        }
+
+        /**
+         * Returns the list of edges linking strongly connected vertex clusters.
+         *
+         * @return list of strongly connected edge sets
+         */
+        public List&lt;Set&lt;E&gt;&gt; clusterEdges() {
+<span class="fc" id="L141">            return clusterEdges;</span>
+        }
+
+        // Gets the augmentation vertexData for the specified vertex
+        private VertexData&lt;V&gt; data(V vertex) {
+<span class="fc" id="L146">            return vertexData.get(vertex);</span>
+        }
+
+        // Adds augmentation vertexData for the specified vertex
+        private VertexData&lt;V&gt; addData(V vertex) {
+<span class="fc" id="L151">            VertexData&lt;V&gt; d = new VertexData&lt;&gt;(vertex, index);</span>
+<span class="fc" id="L152">            vertexData.put(vertex, d);</span>
+<span class="fc" id="L153">            visited.add(0, d);</span>
+<span class="fc" id="L154">            index++;</span>
+<span class="fc" id="L155">            return d;</span>
+        }
+
+        // Indicates whether the given vertex has been visited
+        private boolean visited(VertexData data) {
+<span class="fc" id="L160">            return visited.contains(data);</span>
+        }
+
+        // Adds a new cluster for the specified vertex
+        private void addCluster(VertexData data) {
+<span class="fc" id="L165">            Set&lt;V&gt; vertexes = findClusterVertices(data);</span>
+<span class="fc" id="L166">            clusterVertexes.add(vertexes);</span>
+<span class="fc" id="L167">            clusterEdges.add(findClusterEdges(vertexes));</span>
+<span class="fc" id="L168">        }</span>
+
+        private Set&lt;V&gt; findClusterVertices(VertexData data) {
+            VertexData&lt;V&gt; nextVertexData;
+<span class="fc" id="L172">            Set&lt;V&gt; vertexes = new HashSet&lt;&gt;();</span>
+            do {
+<span class="fc" id="L174">                nextVertexData = visited.remove(0);</span>
+<span class="fc" id="L175">                vertexes.add(nextVertexData.vertex);</span>
+<span class="fc bfc" id="L176" title="All 2 branches covered.">            } while (data != nextVertexData);</span>
+<span class="fc" id="L177">            return Collections.unmodifiableSet(vertexes);</span>
+        }
+
+        private Set&lt;E&gt; findClusterEdges(Set&lt;V&gt; vertexes) {
+<span class="fc" id="L181">            Set&lt;E&gt; edges = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L182" title="All 2 branches covered.">            for (V vertex : vertexes) {</span>
+<span class="fc bfc" id="L183" title="All 2 branches covered.">                for (E edge : graph.getEdgesFrom(vertex)) {</span>
+<span class="fc bfc" id="L184" title="All 2 branches covered.">                    if (vertexes.contains((edge.dst()))) {</span>
+<span class="fc" id="L185">                        edges.add(edge);</span>
+                    }
+<span class="fc" id="L187">                }</span>
+<span class="fc" id="L188">            }</span>
+<span class="fc" id="L189">            return Collections.unmodifiableSet(edges);</span>
+        }
+
+        public SCCResult&lt;V, E&gt; build() {
+<span class="fc" id="L193">            clusterVertexes = Collections.unmodifiableList(clusterVertexes);</span>
+<span class="fc" id="L194">            clusterEdges = Collections.unmodifiableList(clusterEdges);</span>
+<span class="fc" id="L195">            return this;</span>
+        }
+    }
+
+    // Augments the vertex to assist in determining SCC clusters.
+    private static final class VertexData&lt;V extends Vertex&gt; {
+        final V vertex;
+        int index;
+        int lowLink;
+
+<span class="fc" id="L205">        private VertexData(V vertex, int index) {</span>
+<span class="fc" id="L206">            this.vertex = vertex;</span>
+<span class="fc" id="L207">            this.index = index;</span>
+<span class="fc" id="L208">            this.lowLink = index;</span>
+<span class="fc" id="L209">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

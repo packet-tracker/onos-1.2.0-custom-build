@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RoleValue.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.mastership.impl</a> &gt; <span class="el_source">RoleValue.java</span></div><h1>RoleValue.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.mastership.impl;
+
+import static org.onosproject.net.MastershipRole.MASTER;
+import static org.onosproject.net.MastershipRole.NONE;
+import static org.onosproject.net.MastershipRole.STANDBY;
+
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import org.onosproject.cluster.NodeId;
+import org.onosproject.cluster.RoleInfo;
+import org.onosproject.net.MastershipRole;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
+import com.google.common.collect.Lists;
+
+/**
+ * A structure that holds node mastership roles associated with a
+ * {@link org.onosproject.net.DeviceId}. This structure needs to be locked through IMap.
+ */
+final class RoleValue {
+
+<span class="pc" id="L42">    protected final Map&lt;MastershipRole, List&lt;NodeId&gt;&gt; value = new EnumMap&lt;&gt;(MastershipRole.class);</span>
+
+    /**
+     * Constructs empty RoleValue.
+     */
+<span class="fc" id="L47">    public RoleValue() {</span>
+<span class="fc" id="L48">        value.put(MastershipRole.MASTER, new LinkedList&lt;&gt;());</span>
+<span class="fc" id="L49">        value.put(MastershipRole.STANDBY, new LinkedList&lt;&gt;());</span>
+<span class="fc" id="L50">        value.put(MastershipRole.NONE, new LinkedList&lt;&gt;());</span>
+<span class="fc" id="L51">    }</span>
+
+    /**
+     * Constructs copy of specified RoleValue.
+     *
+     * @param original original to create copy from
+     */
+<span class="nc" id="L58">    public RoleValue(final RoleValue original) {</span>
+<span class="nc" id="L59">        value.put(MASTER, Lists.newLinkedList(original.value.get(MASTER)));</span>
+<span class="nc" id="L60">        value.put(STANDBY, Lists.newLinkedList(original.value.get(STANDBY)));</span>
+<span class="nc" id="L61">        value.put(NONE, Lists.newLinkedList(original.value.get(NONE)));</span>
+<span class="nc" id="L62">    }</span>
+
+    // exposing internals for serialization purpose only
+    Map&lt;MastershipRole, List&lt;NodeId&gt;&gt; value() {
+<span class="nc" id="L66">        return Collections.unmodifiableMap(value);</span>
+    }
+
+    public List&lt;NodeId&gt; nodesOfRole(MastershipRole type) {
+<span class="fc" id="L70">        return value.get(type);</span>
+    }
+
+    /**
+     * Returns the first node to match the MastershipRole, or if there
+     * are none, null.
+     *
+     * @param type the role
+     * @return a node ID or null
+     */
+    public NodeId get(MastershipRole type) {
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">        return value.get(type).isEmpty() ? null : value.get(type).get(0);</span>
+    }
+
+    public boolean contains(MastershipRole type, NodeId nodeId) {
+<span class="nc" id="L85">        return value.get(type).contains(nodeId);</span>
+    }
+
+    public MastershipRole getRole(NodeId nodeId) {
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (contains(MASTER, nodeId)) {</span>
+<span class="nc" id="L90">            return MASTER;</span>
+        }
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (contains(STANDBY, nodeId)) {</span>
+<span class="nc" id="L93">            return STANDBY;</span>
+        }
+<span class="nc" id="L95">        return NONE;</span>
+    }
+
+    /**
+     * Associates a node to a certain role.
+     *
+     * @param type the role
+     * @param nodeId the node ID of the node to associate
+     * @return true if modified
+     */
+    public boolean add(MastershipRole type, NodeId nodeId) {
+<span class="fc" id="L106">        List&lt;NodeId&gt; nodes = value.get(type);</span>
+
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        if (!nodes.contains(nodeId)) {</span>
+<span class="fc" id="L109">            return nodes.add(nodeId);</span>
+        }
+<span class="nc" id="L111">        return false;</span>
+    }
+
+    /**
+     * Removes a node from a certain role.
+     *
+     * @param type the role
+     * @param nodeId the ID of the node to remove
+     * @return true if modified
+     */
+    public boolean remove(MastershipRole type, NodeId nodeId) {
+<span class="nc" id="L122">        List&lt;NodeId&gt; nodes = value.get(type);</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (!nodes.isEmpty()) {</span>
+<span class="nc" id="L124">            return nodes.remove(nodeId);</span>
+        } else {
+<span class="nc" id="L126">            return false;</span>
+        }
+    }
+
+    /**
+     * Reassigns a node from one role to another. If the node was not of the
+     * old role, it will still be assigned the new role.
+     *
+     * @param nodeId the Node ID of node changing roles
+     * @param from the old role
+     * @param to the new role
+     * @return true if modified
+     */
+    public boolean reassign(NodeId nodeId, MastershipRole from, MastershipRole to) {
+<span class="nc" id="L140">        boolean modified = remove(from, nodeId);</span>
+<span class="nc" id="L141">        modified |= add(to, nodeId);</span>
+<span class="nc" id="L142">        return modified;</span>
+    }
+
+    /**
+     * Replaces a node in one role with another node. Even if there is no node to
+     * replace, the new node is associated to the role.
+     *
+     * @param from the old NodeId to replace
+     * @param to the new NodeId
+     * @param type the role associated with the old NodeId
+     * @return true if modified
+     */
+    public boolean replace(NodeId from, NodeId to, MastershipRole type) {
+<span class="nc" id="L155">        boolean modified = remove(type, from);</span>
+<span class="nc" id="L156">        modified |= add(type, to);</span>
+<span class="nc" id="L157">        return modified;</span>
+    }
+
+    /**
+     * Summarizes this RoleValue as a RoleInfo. Note that master and/or backups
+     * may be empty, so the values should be checked for safety.
+     *
+     * @return the RoleInfo.
+     */
+    public RoleInfo roleInfo() {
+<span class="nc" id="L167">        return new RoleInfo(</span>
+<span class="nc" id="L168">                get(MastershipRole.MASTER), nodesOfRole(MastershipRole.STANDBY));</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L173">        ToStringHelper helper = MoreObjects.toStringHelper(this.getClass());</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        for (Map.Entry&lt;MastershipRole, List&lt;NodeId&gt;&gt; el : value.entrySet()) {</span>
+<span class="nc" id="L175">            helper.add(el.getKey().toString(), el.getValue());</span>
+<span class="nc" id="L176">        }</span>
+<span class="nc" id="L177">        return helper.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

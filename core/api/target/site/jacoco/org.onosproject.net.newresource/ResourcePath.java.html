@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ResourcePath.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.newresource</a> &gt; <span class="el_source">ResourcePath.java</span></div><h1>ResourcePath.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.newresource;
+
+import com.google.common.annotations.Beta;
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableList;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * An object that is used to locate a resource in a network.
+ * A ResourcePath represents a path that is hierarchical and composed of a sequence
+ * of elementary resources that are not globally identifiable. A ResourcePath can be a globally
+ * unique resource identifier.
+ *
+ * Users of this class must keep the semantics of resources regarding the hierarchical structure.
+ * For example, resource path, Link:1/VLAN ID:100, is valid, but resource path, VLAN ID:100/Link:1
+ * is not valid because a link is not a sub-component of a VLAN ID.
+ */
+@Beta
+public final class ResourcePath {
+
+    private final List&lt;Object&gt; resources;
+
+<span class="fc" id="L44">    public static final ResourcePath ROOT = new ResourcePath(ImmutableList.of());</span>
+
+    public static ResourcePath child(ResourcePath parent, Object child) {
+<span class="nc" id="L47">        ImmutableList&lt;Object&gt; components = ImmutableList.builder()</span>
+<span class="nc" id="L48">                .addAll(parent.components())</span>
+<span class="nc" id="L49">                .add(child)</span>
+<span class="nc" id="L50">                .build();</span>
+<span class="nc" id="L51">        return new ResourcePath(components);</span>
+    }
+
+    /**
+     * Creates an resource path from the specified components.
+     *
+     * @param components components of the path. The order represents hierarchical structure of the resource.
+     */
+    public ResourcePath(Object... components) {
+<span class="fc" id="L60">        this(Arrays.asList(components));</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * Creates an resource path from the specified components.
+     *
+     * @param components components of the path. The order represents hierarchical structure of the resource.
+     */
+<span class="fc" id="L68">    public ResourcePath(List&lt;Object&gt; components) {</span>
+<span class="fc" id="L69">        checkNotNull(components);</span>
+
+<span class="fc" id="L71">        this.resources = ImmutableList.copyOf(components);</span>
+<span class="fc" id="L72">    }</span>
+
+    // for serialization
+<span class="nc" id="L75">    private ResourcePath() {</span>
+<span class="nc" id="L76">        this.resources = null;</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Returns the components of this resource path.
+     *
+     * @return the components of this resource path
+     */
+    public List&lt;Object&gt; components() {
+<span class="nc" id="L85">        return resources;</span>
+    }
+
+    /**
+     * Returns the parent resource path of this instance.
+     * E.g. if this path is Link:1/VLAN ID:100, the return value is the resource path for Link:1.
+     *
+     * @return the parent resource path of this instance.
+     * If there is no parent, empty instance will be returned.
+     */
+    public Optional&lt;ResourcePath&gt; parent() {
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        if (!isRoot()) {</span>
+<span class="fc" id="L97">            return Optional.of(new ResourcePath(resources.subList(0, resources.size() - 1)));</span>
+        }
+
+<span class="nc" id="L100">        return Optional.empty();</span>
+    }
+
+    /**
+     * Returns true if the path represents root.
+     *
+     * @return true if the path represents root, false otherwise.
+     */
+    public boolean isRoot() {
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        return resources.size() == 0;</span>
+    }
+
+    /**
+     * Returns the last component of this instance.
+     *
+     * @return the last component of this instance.
+     * The return value is equal to the last object of {@code components()}.
+     */
+    public Object lastComponent() {
+<span class="fc" id="L119">        int last = resources.size() - 1;</span>
+<span class="fc" id="L120">        return resources.get(last);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L125">        return resources.hashCode();</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L131">            return true;</span>
+        }
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        if (!(obj instanceof ResourcePath)) {</span>
+<span class="fc" id="L134">            return false;</span>
+        }
+<span class="fc" id="L136">        final ResourcePath that = (ResourcePath) obj;</span>
+<span class="fc" id="L137">        return Objects.equals(this.resources, that.resources);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L142">        return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L143">                .add(&quot;resources&quot;, resources)</span>
+<span class="fc" id="L144">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

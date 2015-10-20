@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SuppressionRulesStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-lldp-provider</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.lldp.impl</a> &gt; <span class="el_source">SuppressionRulesStore.java</span></div><h1>SuppressionRulesStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.lldp.impl;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import com.fasterxml.jackson.core.JsonEncoding;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.slf4j.Logger;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+/*
+ * JSON file example
+ *
+
+{
+  &quot;deviceId&quot; : [ &quot;of:2222000000000000&quot; ],
+  &quot;deviceType&quot; : [ &quot;ROADM&quot; ],
+  &quot;annotation&quot; : { &quot;no-lldp&quot; : null, &quot;sendLLDP&quot; : &quot;false&quot; }
+}
+ */
+
+/**
+ * Allows for reading and writing LLDP suppression definition as a JSON file.
+ */
+public class SuppressionRulesStore {
+
+    private static final String DEVICE_ID = &quot;deviceId&quot;;
+    private static final String DEVICE_TYPE = &quot;deviceType&quot;;
+    private static final String ANNOTATION = &quot;annotation&quot;;
+
+<span class="fc" id="L62">    private final Logger log = getLogger(getClass());</span>
+
+    private final File file;
+
+    /**
+     * Creates a reader/writer of the LLDP suppression definition file.
+     *
+     * @param filePath location of the definition file
+     */
+<span class="fc" id="L71">    public SuppressionRulesStore(String filePath) {</span>
+<span class="fc" id="L72">        file = new File(filePath);</span>
+<span class="fc" id="L73">    }</span>
+
+    /**
+     * Creates a reader/writer of the LLDP suppression definition file.
+     *
+     * @param file definition file
+     */
+<span class="fc" id="L80">    public SuppressionRulesStore(File file) {</span>
+<span class="fc" id="L81">        this.file = checkNotNull(file);</span>
+<span class="fc" id="L82">    }</span>
+
+    /**
+     * Returns SuppressionRules.
+     *
+     * @return SuppressionRules
+     * @throws IOException if error occurred while reading the data
+     */
+    public SuppressionRules read() throws IOException {
+<span class="fc" id="L91">        final Set&lt;DeviceId&gt; suppressedDevice = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L92">        final EnumSet&lt;Device.Type&gt; suppressedDeviceType = EnumSet.noneOf(Device.Type.class);</span>
+<span class="fc" id="L93">        final Map&lt;String, String&gt; suppressedAnnotation = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L95">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="fc" id="L96">        ObjectNode root = (ObjectNode) mapper.readTree(file);</span>
+
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        for (JsonNode deviceId : root.get(DEVICE_ID)) {</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            if (deviceId.isTextual()) {</span>
+<span class="fc" id="L100">                suppressedDevice.add(DeviceId.deviceId(deviceId.asText()));</span>
+            } else {
+<span class="nc" id="L102">                log.warn(&quot;Encountered unexpected JSONNode {} for deviceId&quot;, deviceId);</span>
+            }
+<span class="fc" id="L104">        }</span>
+
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        for (JsonNode deviceType : root.get(DEVICE_TYPE)) {</span>
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">            if (deviceType.isTextual()) {</span>
+<span class="fc" id="L108">                suppressedDeviceType.add(Device.Type.valueOf(deviceType.asText()));</span>
+            } else {
+<span class="nc" id="L110">                log.warn(&quot;Encountered unexpected JSONNode {} for deviceType&quot;, deviceType);</span>
+            }
+<span class="fc" id="L112">        }</span>
+
+<span class="fc" id="L114">        JsonNode annotation = root.get(ANNOTATION);</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">        if (annotation.isObject()) {</span>
+<span class="fc" id="L116">            ObjectNode obj = (ObjectNode) annotation;</span>
+<span class="fc" id="L117">            Iterator&lt;Entry&lt;String, JsonNode&gt;&gt; it = obj.fields();</span>
+<span class="fc bfc" id="L118" title="All 2 branches covered.">            while (it.hasNext()) {</span>
+<span class="fc" id="L119">                Entry&lt;String, JsonNode&gt; entry = it.next();</span>
+<span class="fc" id="L120">                final String key = entry.getKey();</span>
+<span class="fc" id="L121">                final JsonNode value = entry.getValue();</span>
+
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">                if (value.isValueNode()) {</span>
+<span class="fc bfc" id="L124" title="All 2 branches covered.">                    if (value.isNull()) {</span>
+<span class="fc" id="L125">                        suppressedAnnotation.put(key, SuppressionRules.ANY_VALUE);</span>
+                    } else {
+<span class="fc" id="L127">                        suppressedAnnotation.put(key, value.asText());</span>
+                    }
+                } else {
+<span class="nc" id="L130">                    log.warn(&quot;Encountered unexpected JSON field {} for annotation&quot;, entry);</span>
+                }
+<span class="fc" id="L132">            }</span>
+<span class="fc" id="L133">        } else {</span>
+<span class="nc" id="L134">            log.warn(&quot;Encountered unexpected JSONNode {} for annotation&quot;, annotation);</span>
+        }
+
+<span class="fc" id="L137">        return new SuppressionRules(suppressedDevice,</span>
+                                    suppressedDeviceType,
+                                    suppressedAnnotation);
+    }
+
+    /**
+     * Writes the given SuppressionRules.
+     *
+     * @param rules SuppressionRules
+     * @throws IOException if error occurred while writing the data
+     */
+    public void write(SuppressionRules rules) throws IOException {
+<span class="fc" id="L149">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="fc" id="L150">        ObjectNode root = mapper.createObjectNode();</span>
+<span class="fc" id="L151">        ArrayNode deviceIds = mapper.createArrayNode();</span>
+<span class="fc" id="L152">        ArrayNode deviceTypes = mapper.createArrayNode();</span>
+<span class="fc" id="L153">        ObjectNode annotations = mapper.createObjectNode();</span>
+<span class="fc" id="L154">        root.set(DEVICE_ID, deviceIds);</span>
+<span class="fc" id="L155">        root.set(DEVICE_TYPE, deviceTypes);</span>
+<span class="fc" id="L156">        root.set(ANNOTATION, annotations);</span>
+
+<span class="fc" id="L158">        rules.getSuppressedDevice()</span>
+<span class="fc" id="L159">            .forEach(deviceId -&gt; deviceIds.add(deviceId.toString()));</span>
+
+<span class="fc" id="L161">        rules.getSuppressedDeviceType()</span>
+<span class="fc" id="L162">            .forEach(type -&gt; deviceTypes.add(type.toString()));</span>
+
+<span class="fc" id="L164">        rules.getSuppressedAnnotation().forEach((key, value) -&gt; {</span>
+<span class="fc bfc" id="L165" title="All 2 branches covered.">            if (value == SuppressionRules.ANY_VALUE) {</span>
+<span class="fc" id="L166">                annotations.putNull(key);</span>
+            } else {
+<span class="fc" id="L168">                annotations.put(key, value);</span>
+            }
+<span class="fc" id="L170">        });</span>
+<span class="fc" id="L171">        mapper.writeTree(new JsonFactory().createGenerator(file, JsonEncoding.UTF8),</span>
+                         root);
+<span class="fc" id="L173">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

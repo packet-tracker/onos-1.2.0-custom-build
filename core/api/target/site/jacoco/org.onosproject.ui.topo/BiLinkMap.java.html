@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BiLinkMap.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.topo</a> &gt; <span class="el_source">BiLinkMap.java</span></div><h1>BiLinkMap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.topo;
+
+import org.onosproject.net.Link;
+import org.onosproject.net.LinkKey;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Represents a collection of {@link BiLink} concrete classes. These maps
+ * are used to collate a set of unidirectional {@link Link}s into a smaller
+ * set of bi-directional {@link BiLink} derivatives.
+ * &lt;p&gt;
+ * @param &lt;B&gt; the type of bi-link subclass
+ */
+<span class="fc" id="L35">public abstract class BiLinkMap&lt;B extends BiLink&gt; {</span>
+
+<span class="fc" id="L37">    private final Map&lt;LinkKey, B&gt; map = new HashMap&lt;&gt;();</span>
+
+    /**
+     * Creates a new instance of a bi-link. Concrete subclasses should
+     * instantiate and return the appropriate bi-link subclass.
+     *
+     * @param key the link key
+     * @param link the initial link
+     * @return a new instance
+     */
+    protected abstract B create(LinkKey key, Link link);
+
+    /**
+     * Adds the given link to our collection, returning the corresponding
+     * bi-link (creating one if needed necessary).
+     *
+     * @param link the link to add to the collection
+     * @return the corresponding bi-link wrapper
+     */
+    public B add(Link link) {
+<span class="fc" id="L57">        LinkKey key = TopoUtils.canonicalLinkKey(checkNotNull(link));</span>
+<span class="fc" id="L58">        B blink = map.get(key);</span>
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (blink == null) {</span>
+            // no bi-link yet exists for this link
+<span class="fc" id="L61">            blink = create(key, link);</span>
+<span class="fc" id="L62">            map.put(key, blink);</span>
+        } else {
+            // we have a bi-link for this link.
+<span class="fc bfc" id="L65" title="All 2 branches covered.">            if (!blink.one().equals(link)) {</span>
+<span class="fc" id="L66">                blink.setOther(link);</span>
+            }
+        }
+<span class="fc" id="L69">        return blink;</span>
+    }
+
+    /**
+     * Returns the bi-link instances in the collection.
+     *
+     * @return the bi-links in this map
+     */
+    public Collection&lt;B&gt; biLinks() {
+<span class="fc" id="L78">        return map.values();</span>
+    }
+
+    /**
+     * Returns the number of bi-links in the collection.
+     *
+     * @return number of bi-links
+     */
+    public int size() {
+<span class="fc" id="L87">        return map.size();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

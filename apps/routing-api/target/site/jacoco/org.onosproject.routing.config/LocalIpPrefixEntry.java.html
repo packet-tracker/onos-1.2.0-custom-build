@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LocalIpPrefixEntry.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.config</a> &gt; <span class="el_source">LocalIpPrefixEntry.java</span></div><h1>LocalIpPrefixEntry.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.config;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.MoreObjects;
+
+import java.util.Objects;
+
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+
+/**
+ * Configuration details for an IP prefix entry.
+ */
+public class LocalIpPrefixEntry {
+    private final IpPrefix ipPrefix;
+    private final IpPrefixType type;
+    private final IpAddress gatewayIpAddress;
+
+    /**
+     * Specifies the type of local IP prefix.
+     */
+<span class="nc" id="L37">    public enum IpPrefixType {</span>
+        /**
+         * Public IP prefixes should be exchanged by eBGP.
+         */
+<span class="nc" id="L41">        PUBLIC,</span>
+        /**
+         * Private IP prefixes should be used only locally and not exchanged
+         * by eBGP.
+         */
+<span class="nc" id="L46">        PRIVATE,</span>
+        /**
+         * For IP prefixes in blacklist.
+         */
+<span class="nc" id="L50">        BLACK_LIST</span>
+    }
+
+    /**
+     * Creates a new IP prefix entry.
+     *
+     * @param ipPrefix         an IP prefix as a String
+     * @param type             an IP prefix type as an IpPrefixType
+     * @param gatewayIpAddress IP of the gateway
+     */
+    public LocalIpPrefixEntry(@JsonProperty(&quot;ipPrefix&quot;) String ipPrefix,
+                              @JsonProperty(&quot;type&quot;) IpPrefixType type,
+                              @JsonProperty(&quot;gatewayIp&quot;) IpAddress
+<span class="nc" id="L63">                                      gatewayIpAddress) {</span>
+<span class="nc" id="L64">        this.ipPrefix = IpPrefix.valueOf(ipPrefix);</span>
+<span class="nc" id="L65">        this.type = type;</span>
+<span class="nc" id="L66">        this.gatewayIpAddress = gatewayIpAddress;</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Gets the IP prefix of the IP prefix entry.
+     *
+     * @return the IP prefix
+     */
+    public IpPrefix ipPrefix() {
+<span class="nc" id="L75">        return ipPrefix;</span>
+    }
+
+    /**
+     * Gets the IP prefix type of the IP prefix entry.
+     *
+     * @return the IP prefix type
+     */
+    public IpPrefixType ipPrefixType() {
+<span class="nc" id="L84">        return type;</span>
+    }
+
+    /**
+     * Gets the gateway IP address of the IP prefix entry.
+     *
+     * @return the gateway IP address
+     */
+    public IpAddress getGatewayIpAddress() {
+<span class="nc" id="L93">        return gatewayIpAddress;</span>
+    }
+
+    /**
+     * Tests whether the IP version of this entry is IPv4.
+     *
+     * @return true if the IP version of this entry is IPv4, otherwise false.
+     */
+    public boolean isIp4() {
+<span class="nc" id="L102">        return ipPrefix.isIp4();</span>
+    }
+
+    /**
+     * Tests whether the IP version of this entry is IPv6.
+     *
+     * @return true if the IP version of this entry is IPv6, otherwise false.
+     */
+    public boolean isIp6() {
+<span class="nc" id="L111">        return ipPrefix.isIp6();</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L116">        return Objects.hash(ipPrefix, type);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (obj == this) {</span>
+<span class="nc" id="L122">            return true;</span>
+        }
+
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (!(obj instanceof LocalIpPrefixEntry)) {</span>
+<span class="nc" id="L126">            return false;</span>
+        }
+
+<span class="nc" id="L129">        LocalIpPrefixEntry that = (LocalIpPrefixEntry) obj;</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        return Objects.equals(this.ipPrefix, that.ipPrefix)</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">                &amp;&amp; Objects.equals(this.type, that.type);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L136">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L137">                .add(&quot;ipPrefix&quot;, ipPrefix)</span>
+<span class="nc" id="L138">                .add(&quot;ipPrefixType&quot;, type)</span>
+<span class="nc" id="L139">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

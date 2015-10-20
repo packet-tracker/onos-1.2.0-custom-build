@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultApplicationDescription.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.app</a> &gt; <span class="el_source">DefaultApplicationDescription.java</span></div><h1>DefaultApplicationDescription.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.app;
+
+import org.onosproject.core.ApplicationRole;
+import org.onosproject.core.Version;
+import org.onosproject.security.Permission;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Default implementation of network control/management application descriptor.
+ */
+public class DefaultApplicationDescription implements ApplicationDescription {
+
+    private final String name;
+    private final Version version;
+    private final String description;
+    private final String origin;
+    private final ApplicationRole role;
+    private final Set&lt;Permission&gt; permissions;
+    private final Optional&lt;URI&gt; featuresRepo;
+    private final List&lt;String&gt; features;
+
+    /**
+     * Creates a new application descriptor using the supplied data.
+     *
+     * @param name         application name
+     * @param version      application version
+     * @param description  application description
+     * @param origin       origin company
+     * @param role         application role
+     * @param permissions  requested permissions
+     * @param featuresRepo optional features repo URI
+     * @param features     application features
+     */
+    public DefaultApplicationDescription(String name, Version version,
+                                         String description, String origin,
+                                         ApplicationRole role, Set&lt;Permission&gt; permissions,
+<span class="fc" id="L60">                                         URI featuresRepo, List&lt;String&gt; features) {</span>
+<span class="fc" id="L61">        this.name = checkNotNull(name, &quot;Name cannot be null&quot;);</span>
+<span class="fc" id="L62">        this.version = checkNotNull(version, &quot;Version cannot be null&quot;);</span>
+<span class="fc" id="L63">        this.description = checkNotNull(description, &quot;Description cannot be null&quot;);</span>
+<span class="fc" id="L64">        this.origin = checkNotNull(origin, &quot;Origin cannot be null&quot;);</span>
+<span class="fc" id="L65">        this.role = checkNotNull(role, &quot;Role cannot be null&quot;);</span>
+<span class="fc" id="L66">        this.permissions = checkNotNull(permissions, &quot;Permissions cannot be null&quot;);</span>
+<span class="fc" id="L67">        this.featuresRepo = Optional.ofNullable(featuresRepo);</span>
+<span class="fc" id="L68">        this.features = checkNotNull(features, &quot;Features cannot be null&quot;);</span>
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        checkArgument(!features.isEmpty(), &quot;There must be at least one feature&quot;);</span>
+<span class="fc" id="L70">    }</span>
+
+    @Override
+    public String name() {
+<span class="fc" id="L74">        return name;</span>
+    }
+
+    @Override
+    public Version version() {
+<span class="fc" id="L79">        return version;</span>
+    }
+
+    @Override
+    public String description() {
+<span class="fc" id="L84">        return description;</span>
+    }
+
+    @Override
+    public String origin() {
+<span class="fc" id="L89">        return origin;</span>
+    }
+
+    @Override
+    public ApplicationRole role() {
+<span class="fc" id="L94">        return role;</span>
+    }
+
+    @Override
+    public Set&lt;Permission&gt; permissions() {
+<span class="fc" id="L99">        return permissions;</span>
+    }
+
+    @Override
+    public Optional&lt;URI&gt; featuresRepo() {
+<span class="fc" id="L104">        return featuresRepo;</span>
+    }
+
+    @Override
+    public List&lt;String&gt; features() {
+<span class="fc" id="L109">        return features;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L114">        return toStringHelper(this)</span>
+<span class="fc" id="L115">                .add(&quot;name&quot;, name)</span>
+<span class="fc" id="L116">                .add(&quot;version&quot;, version)</span>
+<span class="fc" id="L117">                .add(&quot;description&quot;, description)</span>
+<span class="fc" id="L118">                .add(&quot;origin&quot;, origin)</span>
+<span class="fc" id="L119">                .add(&quot;role&quot;, role)</span>
+<span class="fc" id="L120">                .add(&quot;permissions&quot;, permissions)</span>
+<span class="fc" id="L121">                .add(&quot;featuresRepo&quot;, featuresRepo)</span>
+<span class="fc" id="L122">                .add(&quot;features&quot;, features)</span>
+<span class="fc" id="L123">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

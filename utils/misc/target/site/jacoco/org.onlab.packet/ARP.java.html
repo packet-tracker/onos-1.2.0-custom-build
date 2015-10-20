@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ARP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">ARP.java</span></div><h1>ARP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+import static org.onlab.packet.PacketUtils.*;
+
+/**
+ *
+ *
+ */
+<span class="pc bpc" id="L30" title="1 of 2 branches missed.">public class ARP extends BasePacket {</span>
+    public static final short HW_TYPE_ETHERNET = 0x1;
+
+    public static final short PROTO_TYPE_IP = 0x800;
+
+    public static final short OP_REQUEST = 0x1;
+    public static final short OP_REPLY = 0x2;
+    public static final short OP_RARP_REQUEST = 0x3;
+    public static final short OP_RARP_REPLY = 0x4;
+
+    public static final short INITIAL_HEADER_LENGTH = 8;
+
+    protected short hardwareType;
+    protected short protocolType;
+    protected byte hardwareAddressLength;
+    protected byte protocolAddressLength;
+    protected short opCode;
+    protected byte[] senderHardwareAddress;
+    protected byte[] senderProtocolAddress;
+    protected byte[] targetHardwareAddress;
+    protected byte[] targetProtocolAddress;
+
+    /**
+     * @return the hardwareType
+     */
+    public short getHardwareType() {
+<span class="fc" id="L56">        return this.hardwareType;</span>
+    }
+
+    /**
+     * @param hwType
+     *            the hardwareType to set
+     * @return this
+     */
+    public ARP setHardwareType(final short hwType) {
+<span class="fc" id="L65">        this.hardwareType = hwType;</span>
+<span class="fc" id="L66">        return this;</span>
+    }
+
+    /**
+     * @return the protocolType
+     */
+    public short getProtocolType() {
+<span class="fc" id="L73">        return this.protocolType;</span>
+    }
+
+    /**
+     * @param protoType
+     *            the protocolType to set
+     * @return this
+     */
+    public ARP setProtocolType(final short protoType) {
+<span class="fc" id="L82">        this.protocolType = protoType;</span>
+<span class="fc" id="L83">        return this;</span>
+    }
+
+    /**
+     * @return the hardwareAddressLength
+     */
+    public byte getHardwareAddressLength() {
+<span class="fc" id="L90">        return this.hardwareAddressLength;</span>
+    }
+
+    /**
+     * @param hwAddressLength
+     *            the hardwareAddressLength to set
+     * @return this
+     */
+    public ARP setHardwareAddressLength(final byte hwAddressLength) {
+<span class="fc" id="L99">        this.hardwareAddressLength = hwAddressLength;</span>
+<span class="fc" id="L100">        return this;</span>
+    }
+
+    /**
+     * @return the protocolAddressLength
+     */
+    public byte getProtocolAddressLength() {
+<span class="fc" id="L107">        return this.protocolAddressLength;</span>
+    }
+
+    /**
+     * @param protoAddressLength
+     *            the protocolAddressLength to set
+     * @return this
+     */
+    public ARP setProtocolAddressLength(final byte protoAddressLength) {
+<span class="fc" id="L116">        this.protocolAddressLength = protoAddressLength;</span>
+<span class="fc" id="L117">        return this;</span>
+    }
+
+    /**
+     * @return the opCode
+     */
+    public short getOpCode() {
+<span class="fc" id="L124">        return this.opCode;</span>
+    }
+
+    /**
+     * @param op
+     *            the opCode to set
+     * @return this
+     */
+    public ARP setOpCode(final short op) {
+<span class="fc" id="L133">        this.opCode = op;</span>
+<span class="fc" id="L134">        return this;</span>
+    }
+
+    /**
+     * @return the senderHardwareAddress
+     */
+    public byte[] getSenderHardwareAddress() {
+<span class="fc" id="L141">        return this.senderHardwareAddress;</span>
+    }
+
+    /**
+     * @param senderHWAddress
+     *            the senderHardwareAddress to set
+     * @return this
+     */
+    public ARP setSenderHardwareAddress(final byte[] senderHWAddress) {
+<span class="nc" id="L150">        this.senderHardwareAddress = senderHWAddress;</span>
+<span class="nc" id="L151">        return this;</span>
+    }
+
+    /**
+     * @return the senderProtocolAddress
+     */
+    public byte[] getSenderProtocolAddress() {
+<span class="fc" id="L158">        return this.senderProtocolAddress;</span>
+    }
+
+    /**
+     * @param senderProtoAddress
+     *            the senderProtocolAddress to set
+     * @return this
+     */
+    public ARP setSenderProtocolAddress(final byte[] senderProtoAddress) {
+<span class="nc" id="L167">        this.senderProtocolAddress = senderProtoAddress;</span>
+<span class="nc" id="L168">        return this;</span>
+    }
+
+    public ARP setSenderProtocolAddress(final int address) {
+<span class="nc" id="L172">        this.senderProtocolAddress = ByteBuffer.allocate(4).putInt(address)</span>
+<span class="nc" id="L173">                .array();</span>
+<span class="nc" id="L174">        return this;</span>
+    }
+
+    /**
+     * @return the targetHardwareAddress
+     */
+    public byte[] getTargetHardwareAddress() {
+<span class="fc" id="L181">        return this.targetHardwareAddress;</span>
+    }
+
+    /**
+     * @param targetHWAddress
+     *            the targetHardwareAddress to set
+     * @return this
+     */
+    public ARP setTargetHardwareAddress(final byte[] targetHWAddress) {
+<span class="nc" id="L190">        this.targetHardwareAddress = targetHWAddress;</span>
+<span class="nc" id="L191">        return this;</span>
+    }
+
+    /**
+     * @return the targetProtocolAddress
+     */
+    public byte[] getTargetProtocolAddress() {
+<span class="fc" id="L198">        return this.targetProtocolAddress;</span>
+    }
+
+    /**
+     * @return True if gratuitous ARP (SPA = TPA), false otherwise
+     */
+    public boolean isGratuitous() {
+<span class="nc bnc" id="L205" title="All 4 branches missed.">        assert this.senderProtocolAddress.length == this.targetProtocolAddress.length;</span>
+
+<span class="nc" id="L207">        int indx = 0;</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        while (indx &lt; this.senderProtocolAddress.length) {</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">            if (this.senderProtocolAddress[indx] != this.targetProtocolAddress[indx]) {</span>
+<span class="nc" id="L210">                return false;</span>
+            }
+<span class="nc" id="L212">            indx++;</span>
+        }
+
+<span class="nc" id="L215">        return true;</span>
+    }
+
+    /**
+     * @param targetProtoAddress
+     *            the targetProtocolAddress to set
+     * @return this
+     */
+    public ARP setTargetProtocolAddress(final byte[] targetProtoAddress) {
+<span class="nc" id="L224">        this.targetProtocolAddress = targetProtoAddress;</span>
+<span class="nc" id="L225">        return this;</span>
+    }
+
+    public ARP setTargetProtocolAddress(final int address) {
+<span class="nc" id="L229">        this.targetProtocolAddress = ByteBuffer.allocate(4).putInt(address)</span>
+<span class="nc" id="L230">                .array();</span>
+<span class="nc" id="L231">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L236">        final int length = 8 + 2 * (0xff &amp; this.hardwareAddressLength) + 2</span>
+                * (0xff &amp; this.protocolAddressLength);
+<span class="nc" id="L238">        final byte[] data = new byte[length];</span>
+<span class="nc" id="L239">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="nc" id="L240">        bb.putShort(this.hardwareType);</span>
+<span class="nc" id="L241">        bb.putShort(this.protocolType);</span>
+<span class="nc" id="L242">        bb.put(this.hardwareAddressLength);</span>
+<span class="nc" id="L243">        bb.put(this.protocolAddressLength);</span>
+<span class="nc" id="L244">        bb.putShort(this.opCode);</span>
+<span class="nc" id="L245">        bb.put(this.senderHardwareAddress, 0, 0xff &amp; this.hardwareAddressLength);</span>
+<span class="nc" id="L246">        bb.put(this.senderProtocolAddress, 0, 0xff &amp; this.protocolAddressLength);</span>
+<span class="nc" id="L247">        bb.put(this.targetHardwareAddress, 0, 0xff &amp; this.hardwareAddressLength);</span>
+<span class="nc" id="L248">        bb.put(this.targetProtocolAddress, 0, 0xff &amp; this.protocolAddressLength);</span>
+<span class="nc" id="L249">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L255">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L256">        this.hardwareType = bb.getShort();</span>
+<span class="nc" id="L257">        this.protocolType = bb.getShort();</span>
+<span class="nc" id="L258">        this.hardwareAddressLength = bb.get();</span>
+<span class="nc" id="L259">        this.protocolAddressLength = bb.get();</span>
+<span class="nc" id="L260">        this.opCode = bb.getShort();</span>
+<span class="nc" id="L261">        this.senderHardwareAddress = new byte[0xff &amp; this.hardwareAddressLength];</span>
+<span class="nc" id="L262">        bb.get(this.senderHardwareAddress, 0, this.senderHardwareAddress.length);</span>
+<span class="nc" id="L263">        this.senderProtocolAddress = new byte[0xff &amp; this.protocolAddressLength];</span>
+<span class="nc" id="L264">        bb.get(this.senderProtocolAddress, 0, this.senderProtocolAddress.length);</span>
+<span class="nc" id="L265">        this.targetHardwareAddress = new byte[0xff &amp; this.hardwareAddressLength];</span>
+<span class="nc" id="L266">        bb.get(this.targetHardwareAddress, 0, this.targetHardwareAddress.length);</span>
+<span class="nc" id="L267">        this.targetProtocolAddress = new byte[0xff &amp; this.protocolAddressLength];</span>
+<span class="nc" id="L268">        bb.get(this.targetProtocolAddress, 0, this.targetProtocolAddress.length);</span>
+<span class="nc" id="L269">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L279">        final int prime = 13121;</span>
+<span class="nc" id="L280">        int result = super.hashCode();</span>
+<span class="nc" id="L281">        result = prime * result + this.hardwareAddressLength;</span>
+<span class="nc" id="L282">        result = prime * result + this.hardwareType;</span>
+<span class="nc" id="L283">        result = prime * result + this.opCode;</span>
+<span class="nc" id="L284">        result = prime * result + this.protocolAddressLength;</span>
+<span class="nc" id="L285">        result = prime * result + this.protocolType;</span>
+<span class="nc" id="L286">        result = prime * result + Arrays.hashCode(this.senderHardwareAddress);</span>
+<span class="nc" id="L287">        result = prime * result + Arrays.hashCode(this.senderProtocolAddress);</span>
+<span class="nc" id="L288">        result = prime * result + Arrays.hashCode(this.targetHardwareAddress);</span>
+<span class="nc" id="L289">        result = prime * result + Arrays.hashCode(this.targetProtocolAddress);</span>
+<span class="nc" id="L290">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L300" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L301">            return true;</span>
+        }
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L304">            return false;</span>
+        }
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        if (!(obj instanceof ARP)) {</span>
+<span class="nc" id="L307">            return false;</span>
+        }
+<span class="nc" id="L309">        final ARP other = (ARP) obj;</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        if (this.hardwareAddressLength != other.hardwareAddressLength) {</span>
+<span class="nc" id="L311">            return false;</span>
+        }
+<span class="nc bnc" id="L313" title="All 2 branches missed.">        if (this.hardwareType != other.hardwareType) {</span>
+<span class="nc" id="L314">            return false;</span>
+        }
+<span class="nc bnc" id="L316" title="All 2 branches missed.">        if (this.opCode != other.opCode) {</span>
+<span class="nc" id="L317">            return false;</span>
+        }
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        if (this.protocolAddressLength != other.protocolAddressLength) {</span>
+<span class="nc" id="L320">            return false;</span>
+        }
+<span class="nc bnc" id="L322" title="All 2 branches missed.">        if (this.protocolType != other.protocolType) {</span>
+<span class="nc" id="L323">            return false;</span>
+        }
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (!Arrays.equals(this.senderHardwareAddress,</span>
+                other.senderHardwareAddress)) {
+<span class="nc" id="L327">            return false;</span>
+        }
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (!Arrays.equals(this.senderProtocolAddress,</span>
+                other.senderProtocolAddress)) {
+<span class="nc" id="L331">            return false;</span>
+        }
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        if (!Arrays.equals(this.targetHardwareAddress,</span>
+                other.targetHardwareAddress)) {
+<span class="nc" id="L335">            return false;</span>
+        }
+<span class="nc bnc" id="L337" title="All 2 branches missed.">        if (!Arrays.equals(this.targetProtocolAddress,</span>
+                other.targetProtocolAddress)) {
+<span class="nc" id="L339">            return false;</span>
+        }
+<span class="nc" id="L341">        return true;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#toString()
+     */
+    @Override
+    public String toString() {
+<span class="nc" id="L351">        return &quot;ARP [hardwareType=&quot; + this.hardwareType + &quot;, protocolType=&quot;</span>
+                + this.protocolType + &quot;, hardwareAddressLength=&quot;
+                + this.hardwareAddressLength + &quot;, protocolAddressLength=&quot;
+                + this.protocolAddressLength + &quot;, opCode=&quot; + this.opCode
+                + &quot;, senderHardwareAddress=&quot;
+<span class="nc" id="L356">                + Arrays.toString(this.senderHardwareAddress)</span>
+                + &quot;, senderProtocolAddress=&quot;
+<span class="nc" id="L358">                + Arrays.toString(this.senderProtocolAddress)</span>
+                + &quot;, targetHardwareAddress=&quot;
+<span class="nc" id="L360">                + Arrays.toString(this.targetHardwareAddress)</span>
+                + &quot;, targetProtocolAddress=&quot;
+<span class="nc" id="L362">                + Arrays.toString(this.targetProtocolAddress) + &quot;]&quot;;</span>
+    }
+
+    /**
+     * Builds an ARP reply based on a request.
+     *
+     * @param srcIp the IP address to use as the reply source
+     * @param srcMac the MAC address to use as the reply source
+     * @param request the ARP request we got
+     * @return an Ethernet frame containing the ARP reply
+     */
+    public static Ethernet buildArpReply(Ip4Address srcIp, MacAddress srcMac,
+            Ethernet request) {
+
+<span class="nc" id="L376">        Ethernet eth = new Ethernet();</span>
+<span class="nc" id="L377">        eth.setDestinationMACAddress(request.getSourceMAC());</span>
+<span class="nc" id="L378">        eth.setSourceMACAddress(srcMac);</span>
+<span class="nc" id="L379">        eth.setEtherType(Ethernet.TYPE_ARP);</span>
+<span class="nc" id="L380">        eth.setVlanID(request.getVlanID());</span>
+
+<span class="nc" id="L382">        ARP arp = new ARP();</span>
+<span class="nc" id="L383">        arp.setOpCode(ARP.OP_REPLY);</span>
+<span class="nc" id="L384">        arp.setProtocolType(ARP.PROTO_TYPE_IP);</span>
+<span class="nc" id="L385">        arp.setHardwareType(ARP.HW_TYPE_ETHERNET);</span>
+
+<span class="nc" id="L387">        arp.setProtocolAddressLength((byte) Ip4Address.BYTE_LENGTH);</span>
+<span class="nc" id="L388">        arp.setHardwareAddressLength((byte) Ethernet.DATALAYER_ADDRESS_LENGTH);</span>
+<span class="nc" id="L389">        arp.setSenderHardwareAddress(srcMac.toBytes());</span>
+<span class="nc" id="L390">        arp.setTargetHardwareAddress(request.getSourceMACAddress());</span>
+
+<span class="nc" id="L392">        arp.setTargetProtocolAddress(((ARP) request.getPayload())</span>
+<span class="nc" id="L393">                                             .getSenderProtocolAddress());</span>
+<span class="nc" id="L394">        arp.setSenderProtocolAddress(srcIp.toInt());</span>
+
+<span class="nc" id="L396">        eth.setPayload(arp);</span>
+<span class="nc" id="L397">        return eth;</span>
+    }
+
+    /**
+     * Deserializer function for ARP packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;ARP&gt; deserializer() {
+<span class="fc" id="L406">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L407">            checkInput(data, offset, length, INITIAL_HEADER_LENGTH);</span>
+
+<span class="fc" id="L409">            ARP arp = new ARP();</span>
+<span class="fc" id="L410">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L411">            arp.setHardwareType(bb.getShort());</span>
+<span class="fc" id="L412">            arp.setProtocolType(bb.getShort());</span>
+
+<span class="fc" id="L414">            byte hwAddressLength = bb.get();</span>
+<span class="fc" id="L415">            arp.setHardwareAddressLength(hwAddressLength);</span>
+
+<span class="fc" id="L417">            byte protocolAddressLength = bb.get();</span>
+<span class="fc" id="L418">            arp.setProtocolAddressLength(protocolAddressLength);</span>
+<span class="fc" id="L419">            arp.setOpCode(bb.getShort());</span>
+
+            // Check we have enough space for the addresses
+<span class="fc" id="L422">            checkHeaderLength(length, INITIAL_HEADER_LENGTH +</span>
+                    2 * hwAddressLength +
+                    2 * protocolAddressLength);
+
+<span class="fc" id="L426">            arp.senderHardwareAddress = new byte[0xff &amp; hwAddressLength];</span>
+<span class="fc" id="L427">            bb.get(arp.senderHardwareAddress, 0, arp.senderHardwareAddress.length);</span>
+<span class="fc" id="L428">            arp.senderProtocolAddress = new byte[0xff &amp; protocolAddressLength];</span>
+<span class="fc" id="L429">            bb.get(arp.senderProtocolAddress, 0, arp.senderProtocolAddress.length);</span>
+<span class="fc" id="L430">            arp.targetHardwareAddress = new byte[0xff &amp; hwAddressLength];</span>
+<span class="fc" id="L431">            bb.get(arp.targetHardwareAddress, 0, arp.targetHardwareAddress.length);</span>
+<span class="fc" id="L432">            arp.targetProtocolAddress = new byte[0xff &amp; protocolAddressLength];</span>
+<span class="fc" id="L433">            bb.get(arp.targetProtocolAddress, 0, arp.targetProtocolAddress.length);</span>
+
+<span class="fc" id="L435">            return arp;</span>
+        };
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

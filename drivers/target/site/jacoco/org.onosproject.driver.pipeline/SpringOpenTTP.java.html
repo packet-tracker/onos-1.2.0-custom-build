@@ -1,0 +1,776 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SpringOpenTTP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.pipeline</a> &gt; <span class="el_source">SpringOpenTTP.java</span></div><h1>SpringOpenTTP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.pipeline;
+
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalCause;
+import com.google.common.cache.RemovalNotification;
+
+import org.onlab.osgi.ServiceDirectory;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.VlanId;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.behaviour.NextGroup;
+import org.onosproject.net.behaviour.Pipeliner;
+import org.onosproject.net.behaviour.PipelinerContext;
+import org.onosproject.net.driver.AbstractHandlerBehaviour;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.EthCriterion;
+import org.onosproject.net.flow.criteria.EthTypeCriterion;
+import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onosproject.net.flow.criteria.MplsCriterion;
+import org.onosproject.net.flow.criteria.PortCriterion;
+import org.onosproject.net.flow.criteria.VlanIdCriterion;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flowobjective.FilteringObjective;
+import org.onosproject.net.flowobjective.FlowObjectiveStore;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.NextObjective;
+import org.onosproject.net.flowobjective.Objective;
+import org.onosproject.net.flowobjective.ObjectiveError;
+import org.onosproject.net.group.DefaultGroupBucket;
+import org.onosproject.net.group.DefaultGroupDescription;
+import org.onosproject.net.group.DefaultGroupKey;
+import org.onosproject.net.group.Group;
+import org.onosproject.net.group.GroupBucket;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupEvent;
+import org.onosproject.net.group.GroupKey;
+import org.onosproject.net.group.GroupListener;
+import org.onosproject.net.group.GroupService;
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+/**
+ * Driver for SPRING-OPEN pipeline.
+ */
+<span class="nc" id="L88">public class SpringOpenTTP extends AbstractHandlerBehaviour</span>
+        implements Pipeliner {
+
+    // Default table ID - compatible with CpqD switch
+    private static final int TABLE_VLAN = 0;
+    private static final int TABLE_TMAC = 1;
+    private static final int TABLE_IPV4_UNICAST = 2;
+    private static final int TABLE_MPLS = 3;
+    private static final int TABLE_ACL = 5;
+
+    /**
+     * Set the default values. These variables will get overwritten based on the
+     * switch vendor type
+     */
+<span class="nc" id="L102">    protected int vlanTableId = TABLE_VLAN;</span>
+<span class="nc" id="L103">    protected int tmacTableId = TABLE_TMAC;</span>
+<span class="nc" id="L104">    protected int ipv4UnicastTableId = TABLE_IPV4_UNICAST;</span>
+<span class="nc" id="L105">    protected int mplsTableId = TABLE_MPLS;</span>
+<span class="nc" id="L106">    protected int aclTableId = TABLE_ACL;</span>
+
+<span class="nc" id="L108">    protected final Logger log = getLogger(getClass());</span>
+
+    private ServiceDirectory serviceDirectory;
+    private FlowRuleService flowRuleService;
+    private CoreService coreService;
+    protected GroupService groupService;
+    protected FlowObjectiveStore flowObjectiveStore;
+    protected DeviceId deviceId;
+    private ApplicationId appId;
+
+    private Cache&lt;GroupKey, NextObjective&gt; pendingGroups;
+
+<span class="nc" id="L120">    private ScheduledExecutorService groupChecker = Executors</span>
+<span class="nc" id="L121">            .newScheduledThreadPool(2,</span>
+<span class="nc" id="L122">                                    groupedThreads(&quot;onos/pipeliner&quot;,</span>
+                                                   &quot;spring-open-%d&quot;));
+<span class="nc" id="L124">    protected KryoNamespace appKryo = new KryoNamespace.Builder()</span>
+<span class="nc" id="L125">            .register(GroupKey.class).register(DefaultGroupKey.class)</span>
+<span class="nc" id="L126">            .register(SegmentRoutingGroup.class).register(byte[].class).build();</span>
+
+    @Override
+    public void init(DeviceId deviceId, PipelinerContext context) {
+<span class="nc" id="L130">        this.serviceDirectory = context.directory();</span>
+<span class="nc" id="L131">        this.deviceId = deviceId;</span>
+
+<span class="nc" id="L133">        pendingGroups = CacheBuilder</span>
+<span class="nc" id="L134">                .newBuilder()</span>
+<span class="nc" id="L135">                .expireAfterWrite(20, TimeUnit.SECONDS)</span>
+<span class="nc" id="L136">                .removalListener((RemovalNotification&lt;GroupKey, NextObjective&gt; notification) -&gt; {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                                     if (notification.getCause() == RemovalCause.EXPIRED) {</span>
+<span class="nc" id="L138">                                         fail(notification.getValue(),</span>
+                                              ObjectiveError.GROUPINSTALLATIONFAILED);
+                                     }
+<span class="nc" id="L141">                                 }).build();</span>
+
+<span class="nc" id="L143">        groupChecker.scheduleAtFixedRate(new GroupChecker(), 0, 500,</span>
+                                         TimeUnit.MILLISECONDS);
+
+<span class="nc" id="L146">        coreService = serviceDirectory.get(CoreService.class);</span>
+<span class="nc" id="L147">        flowRuleService = serviceDirectory.get(FlowRuleService.class);</span>
+<span class="nc" id="L148">        groupService = serviceDirectory.get(GroupService.class);</span>
+<span class="nc" id="L149">        flowObjectiveStore = context.store();</span>
+
+<span class="nc" id="L151">        groupService.addListener(new InnerGroupListener());</span>
+
+<span class="nc" id="L153">        appId = coreService</span>
+<span class="nc" id="L154">                .registerApplication(&quot;org.onosproject.driver.SpringOpenTTP&quot;);</span>
+
+<span class="nc" id="L156">        setTableMissEntries();</span>
+<span class="nc" id="L157">        log.info(&quot;Spring Open TTP driver initialized&quot;);</span>
+<span class="nc" id="L158">    }</span>
+
+    @Override
+    public void filter(FilteringObjective filteringObjective) {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (filteringObjective.type() == FilteringObjective.Type.PERMIT) {</span>
+<span class="nc" id="L163">            log.debug(&quot;processing PERMIT filter objective&quot;);</span>
+<span class="nc" id="L164">            processFilter(filteringObjective,</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                          filteringObjective.op() == Objective.Operation.ADD,</span>
+<span class="nc" id="L166">                          filteringObjective.appId());</span>
+        } else {
+<span class="nc" id="L168">            log.debug(&quot;filter objective other than PERMIT not supported&quot;);</span>
+<span class="nc" id="L169">            fail(filteringObjective, ObjectiveError.UNSUPPORTED);</span>
+        }
+<span class="nc" id="L171">    }</span>
+
+    @Override
+    public void forward(ForwardingObjective fwd) {
+        Collection&lt;FlowRule&gt; rules;
+<span class="nc" id="L176">        FlowRuleOperations.Builder flowBuilder = FlowRuleOperations.builder();</span>
+
+<span class="nc" id="L178">        rules = processForward(fwd);</span>
+<span class="nc bnc" id="L179" title="All 3 branches missed.">        switch (fwd.op()) {</span>
+        case ADD:
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            rules.stream().filter(rule -&gt; rule != null)</span>
+<span class="nc" id="L182">                    .forEach(flowBuilder::add);</span>
+<span class="nc" id="L183">            break;</span>
+        case REMOVE:
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            rules.stream().filter(rule -&gt; rule != null)</span>
+<span class="nc" id="L186">                    .forEach(flowBuilder::remove);</span>
+<span class="nc" id="L187">            break;</span>
+        default:
+<span class="nc" id="L189">            fail(fwd, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L190">            log.warn(&quot;Unknown forwarding type {}&quot;, fwd.op());</span>
+        }
+
+<span class="nc" id="L193">        flowRuleService.apply(flowBuilder</span>
+<span class="nc" id="L194">                .build(new FlowRuleOperationsContext() {</span>
+                    @Override
+                    public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L197">                        pass(fwd);</span>
+<span class="nc" id="L198">                        log.debug(&quot;Provisioned tables in {} with &quot;</span>
+                                + &quot;forwarding rules for segment &quot;
+                                + &quot;router&quot;, deviceId);
+<span class="nc" id="L201">                    }</span>
+
+                    @Override
+                    public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L205">                        fail(fwd, ObjectiveError.FLOWINSTALLATIONFAILED);</span>
+<span class="nc" id="L206">                        log.warn(&quot;Failed to provision tables in {} with &quot;</span>
+                                + &quot;forwarding rules for segment router&quot;,
+                                deviceId);
+<span class="nc" id="L209">                    }</span>
+                }));
+
+<span class="nc" id="L212">    }</span>
+
+    @Override
+    public void next(NextObjective nextObjective) {
+
+<span class="nc" id="L217">        log.debug(&quot;Processing NextObjective id{} op{}&quot;, nextObjective.id(),</span>
+<span class="nc" id="L218">                  nextObjective.op());</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (nextObjective.op() == Objective.Operation.REMOVE) {</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">            if (nextObjective.next().isEmpty()) {</span>
+<span class="nc" id="L221">                removeGroup(nextObjective);</span>
+            } else {
+<span class="nc" id="L223">                removeBucketFromGroup(nextObjective);</span>
+            }
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        } else if (nextObjective.op() == Objective.Operation.ADD) {</span>
+<span class="nc" id="L226">            NextGroup nextGroup = flowObjectiveStore.getNextGroup(nextObjective.id());</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (nextGroup != null) {</span>
+<span class="nc" id="L228">                addBucketToGroup(nextObjective);</span>
+            } else {
+<span class="nc" id="L230">                addGroup(nextObjective);</span>
+            }
+<span class="nc" id="L232">        } else {</span>
+<span class="nc" id="L233">            log.warn(&quot;Unsupported operation {}&quot;, nextObjective.op());</span>
+        }
+
+<span class="nc" id="L236">    }</span>
+
+    private void removeGroup(NextObjective nextObjective) {
+<span class="nc" id="L239">        log.debug(&quot;removeGroup in {}: for next objective id {}&quot;,</span>
+<span class="nc" id="L240">                  deviceId, nextObjective.id());</span>
+<span class="nc" id="L241">        final GroupKey key = new DefaultGroupKey(</span>
+<span class="nc" id="L242">                appKryo.serialize(nextObjective.id()));</span>
+<span class="nc" id="L243">        groupService.removeGroup(deviceId, key, appId);</span>
+<span class="nc" id="L244">    }</span>
+
+    private void addGroup(NextObjective nextObjective) {
+<span class="nc" id="L247">        log.debug(&quot;addGroup with type{} for nextObjective id {}&quot;,</span>
+<span class="nc" id="L248">                  nextObjective.type(), nextObjective.id());</span>
+<span class="nc bnc" id="L249" title="All 4 branches missed.">        switch (nextObjective.type()) {</span>
+            case SIMPLE:
+<span class="nc" id="L251">                log.debug(&quot;processing SIMPLE next objective&quot;);</span>
+<span class="nc" id="L252">                Collection&lt;TrafficTreatment&gt; treatments = nextObjective.next();</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">                if (treatments.size() == 1) {</span>
+<span class="nc" id="L254">                    TrafficTreatment treatment = treatments.iterator().next();</span>
+<span class="nc" id="L255">                    GroupBucket bucket = DefaultGroupBucket</span>
+<span class="nc" id="L256">                            .createIndirectGroupBucket(treatment);</span>
+<span class="nc" id="L257">                    final GroupKey key = new DefaultGroupKey(</span>
+<span class="nc" id="L258">                            appKryo.serialize(nextObjective</span>
+<span class="nc" id="L259">                                    .id()));</span>
+<span class="nc" id="L260">                    GroupDescription groupDescription = new DefaultGroupDescription(</span>
+                            deviceId,
+                            GroupDescription.Type.INDIRECT,
+                            new GroupBuckets(
+<span class="nc" id="L264">                                    Collections.singletonList(bucket)),</span>
+                            key,
+                            null,
+<span class="nc" id="L267">                            nextObjective.appId());</span>
+<span class="nc" id="L268">                    log.debug(&quot;Creating SIMPLE group for next objective id {}&quot;,</span>
+<span class="nc" id="L269">                              nextObjective.id());</span>
+<span class="nc" id="L270">                    groupService.addGroup(groupDescription);</span>
+<span class="nc" id="L271">                    pendingGroups.put(key, nextObjective);</span>
+<span class="nc" id="L272">                }</span>
+                break;
+            case HASHED:
+<span class="nc" id="L275">                log.debug(&quot;processing HASHED next objective&quot;);</span>
+<span class="nc" id="L276">                List&lt;GroupBucket&gt; buckets = nextObjective</span>
+<span class="nc" id="L277">                        .next()</span>
+<span class="nc" id="L278">                        .stream()</span>
+<span class="nc" id="L279">                        .map((treatment) -&gt; DefaultGroupBucket</span>
+<span class="nc" id="L280">                                .createSelectGroupBucket(treatment))</span>
+<span class="nc" id="L281">                        .collect(Collectors.toList());</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">                if (!buckets.isEmpty()) {</span>
+<span class="nc" id="L283">                    final GroupKey key = new DefaultGroupKey(</span>
+<span class="nc" id="L284">                            appKryo.serialize(nextObjective</span>
+<span class="nc" id="L285">                                    .id()));</span>
+<span class="nc" id="L286">                    GroupDescription groupDescription = new DefaultGroupDescription(</span>
+                            deviceId,
+                            GroupDescription.Type.SELECT,
+                            new GroupBuckets(buckets),
+                            key,
+                            null,
+<span class="nc" id="L292">                            nextObjective.appId());</span>
+<span class="nc" id="L293">                    log.debug(&quot;Creating HASHED group for next objective id {}&quot;,</span>
+<span class="nc" id="L294">                              nextObjective.id());</span>
+<span class="nc" id="L295">                    groupService.addGroup(groupDescription);</span>
+<span class="nc" id="L296">                    pendingGroups.put(key, nextObjective);</span>
+<span class="nc" id="L297">                }</span>
+                break;
+            case BROADCAST:
+            case FAILOVER:
+<span class="nc" id="L301">                log.debug(&quot;BROADCAST and FAILOVER next objectives not supported&quot;);</span>
+<span class="nc" id="L302">                fail(nextObjective, ObjectiveError.UNSUPPORTED);</span>
+<span class="nc" id="L303">                log.warn(&quot;Unsupported next objective type {}&quot;, nextObjective.type());</span>
+<span class="nc" id="L304">                break;</span>
+            default:
+<span class="nc" id="L306">                fail(nextObjective, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L307">                log.warn(&quot;Unknown next objective type {}&quot;, nextObjective.type());</span>
+        }
+<span class="nc" id="L309">    }</span>
+
+    private void addBucketToGroup(NextObjective nextObjective) {
+<span class="nc" id="L312">        log.debug(&quot;addBucketToGroup in {}: for next objective id {}&quot;,</span>
+<span class="nc" id="L313">                  deviceId, nextObjective.id());</span>
+<span class="nc" id="L314">        Collection&lt;TrafficTreatment&gt; treatments = nextObjective.next();</span>
+<span class="nc" id="L315">        TrafficTreatment treatment = treatments.iterator().next();</span>
+<span class="nc" id="L316">        final GroupKey key = new DefaultGroupKey(</span>
+<span class="nc" id="L317">                appKryo.serialize(nextObjective</span>
+<span class="nc" id="L318">                        .id()));</span>
+<span class="nc" id="L319">        Group group = groupService.getGroup(deviceId, key);</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">        if (group == null) {</span>
+<span class="nc" id="L321">            log.warn(&quot;Group is not found in {} for {}&quot;, deviceId, key);</span>
+<span class="nc" id="L322">            return;</span>
+        }
+        GroupBucket bucket;
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if (group.type() == GroupDescription.Type.INDIRECT) {</span>
+<span class="nc" id="L326">            bucket = DefaultGroupBucket.createIndirectGroupBucket(treatment);</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        } else if (group.type() == GroupDescription.Type.SELECT) {</span>
+<span class="nc" id="L328">            bucket = DefaultGroupBucket.createSelectGroupBucket(treatment);</span>
+        } else {
+<span class="nc" id="L330">            log.warn(&quot;Unsupported Group type {}&quot;, group.type());</span>
+<span class="nc" id="L331">            return;</span>
+        }
+<span class="nc" id="L333">        GroupBuckets bucketsToAdd = new GroupBuckets(Collections.singletonList(bucket));</span>
+<span class="nc" id="L334">        log.debug(&quot;Adding buckets to group id {} of next objective id {} in device {}&quot;,</span>
+<span class="nc" id="L335">                  group.id(), nextObjective.id(), deviceId);</span>
+<span class="nc" id="L336">        groupService.addBucketsToGroup(deviceId, key, bucketsToAdd, key, appId);</span>
+<span class="nc" id="L337">    }</span>
+
+    private void removeBucketFromGroup(NextObjective nextObjective) {
+<span class="nc" id="L340">        log.debug(&quot;removeBucketFromGroup in {}: for next objective id {}&quot;,</span>
+<span class="nc" id="L341">                  deviceId, nextObjective.id());</span>
+<span class="nc" id="L342">        NextGroup nextGroup = flowObjectiveStore.getNextGroup(nextObjective.id());</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        if (nextGroup != null) {</span>
+<span class="nc" id="L344">            Collection&lt;TrafficTreatment&gt; treatments = nextObjective.next();</span>
+<span class="nc" id="L345">            TrafficTreatment treatment = treatments.iterator().next();</span>
+<span class="nc" id="L346">            final GroupKey key = new DefaultGroupKey(</span>
+<span class="nc" id="L347">                    appKryo.serialize(nextObjective</span>
+<span class="nc" id="L348">                            .id()));</span>
+<span class="nc" id="L349">            Group group = groupService.getGroup(deviceId, key);</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">            if (group == null) {</span>
+<span class="nc" id="L351">                log.warn(&quot;Group is not found in {} for {}&quot;, deviceId, key);</span>
+<span class="nc" id="L352">                return;</span>
+            }
+            GroupBucket bucket;
+<span class="nc bnc" id="L355" title="All 2 branches missed.">            if (group.type() == GroupDescription.Type.INDIRECT) {</span>
+<span class="nc" id="L356">                bucket = DefaultGroupBucket.createIndirectGroupBucket(treatment);</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">            } else if (group.type() == GroupDescription.Type.SELECT) {</span>
+<span class="nc" id="L358">                bucket = DefaultGroupBucket.createSelectGroupBucket(treatment);</span>
+            } else {
+<span class="nc" id="L360">                log.warn(&quot;Unsupported Group type {}&quot;, group.type());</span>
+<span class="nc" id="L361">                return;</span>
+            }
+<span class="nc" id="L363">            GroupBuckets removeBuckets = new GroupBuckets(Collections.singletonList(bucket));</span>
+<span class="nc" id="L364">            log.debug(&quot;Removing buckets from group id {} of next objective id {} in device {}&quot;,</span>
+<span class="nc" id="L365">                      group.id(), nextObjective.id(), deviceId);</span>
+<span class="nc" id="L366">            groupService.removeBucketsFromGroup(deviceId, key, removeBuckets, key, appId);</span>
+        }
+<span class="nc" id="L368">    }</span>
+
+    private Collection&lt;FlowRule&gt; processForward(ForwardingObjective fwd) {
+<span class="nc bnc" id="L371" title="All 3 branches missed.">        switch (fwd.flag()) {</span>
+        case SPECIFIC:
+<span class="nc" id="L373">            return processSpecific(fwd);</span>
+        case VERSATILE:
+<span class="nc" id="L375">            return processVersatile(fwd);</span>
+        default:
+<span class="nc" id="L377">            fail(fwd, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L378">            log.warn(&quot;Unknown forwarding flag {}&quot;, fwd.flag());</span>
+        }
+<span class="nc" id="L380">        return Collections.emptySet();</span>
+    }
+
+    private Collection&lt;FlowRule&gt; processVersatile(ForwardingObjective fwd) {
+<span class="nc" id="L384">        log.debug(&quot;Processing versatile forwarding objective&quot;);</span>
+<span class="nc" id="L385">        TrafficSelector selector = fwd.selector();</span>
+
+<span class="nc" id="L387">        EthTypeCriterion ethType =</span>
+<span class="nc" id="L388">                (EthTypeCriterion) selector.getCriterion(Criterion.Type.ETH_TYPE);</span>
+<span class="nc bnc" id="L389" title="All 2 branches missed.">        if (ethType == null) {</span>
+<span class="nc" id="L390">            log.error(&quot;Versatile forwarding objective must include ethType&quot;);</span>
+<span class="nc" id="L391">            fail(fwd, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L392">            return Collections.emptySet();</span>
+        }
+
+        TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment
+<span class="nc" id="L396">                .builder();</span>
+<span class="nc" id="L397">        treatmentBuilder.wipeDeferred();</span>
+
+<span class="nc bnc" id="L399" title="All 2 branches missed.">        if (fwd.nextId() != null) {</span>
+<span class="nc" id="L400">            NextGroup next = flowObjectiveStore.getNextGroup(fwd.nextId());</span>
+
+<span class="nc bnc" id="L402" title="All 2 branches missed.">            if (next != null) {</span>
+<span class="nc" id="L403">                GroupKey key = appKryo.deserialize(next.data());</span>
+
+<span class="nc" id="L405">                Group group = groupService.getGroup(deviceId, key);</span>
+
+<span class="nc bnc" id="L407" title="All 2 branches missed.">                if (group == null) {</span>
+<span class="nc" id="L408">                    log.warn(&quot;The group left!&quot;);</span>
+<span class="nc" id="L409">                    fail(fwd, ObjectiveError.GROUPMISSING);</span>
+<span class="nc" id="L410">                    return Collections.emptySet();</span>
+                }
+<span class="nc" id="L412">                treatmentBuilder.deferred().group(group.id());</span>
+<span class="nc" id="L413">                log.debug(&quot;Adding OUTGROUP action&quot;);</span>
+            }
+<span class="nc" id="L415">        } else {</span>
+<span class="nc" id="L416">            log.warn(&quot;VERSATILE forwarding objective need next objective ID.&quot;);</span>
+<span class="nc" id="L417">            return Collections.emptySet();</span>
+        }
+
+<span class="nc" id="L420">        TrafficTreatment treatment = treatmentBuilder.build();</span>
+
+<span class="nc" id="L422">        FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()</span>
+<span class="nc" id="L423">                .fromApp(fwd.appId()).withPriority(fwd.priority())</span>
+<span class="nc" id="L424">                .forDevice(deviceId).withSelector(fwd.selector())</span>
+<span class="nc" id="L425">                .withTreatment(treatment);</span>
+
+<span class="nc bnc" id="L427" title="All 2 branches missed.">        if (fwd.permanent()) {</span>
+<span class="nc" id="L428">            ruleBuilder.makePermanent();</span>
+        } else {
+<span class="nc" id="L430">            ruleBuilder.makeTemporary(fwd.timeout());</span>
+        }
+
+<span class="nc" id="L433">        ruleBuilder.forTable(aclTableId);</span>
+<span class="nc" id="L434">        return Collections.singletonList(ruleBuilder.build());</span>
+    }
+
+    protected Collection&lt;FlowRule&gt; processSpecific(ForwardingObjective fwd) {
+<span class="nc" id="L438">        log.debug(&quot;Processing specific&quot;);</span>
+<span class="nc" id="L439">        TrafficSelector selector = fwd.selector();</span>
+<span class="nc" id="L440">        EthTypeCriterion ethType = (EthTypeCriterion) selector</span>
+<span class="nc" id="L441">                .getCriterion(Criterion.Type.ETH_TYPE);</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">        if ((ethType == null) ||</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">                (ethType.ethType().toShort() != Ethernet.TYPE_IPV4) &amp;&amp;</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">                (ethType.ethType().toShort() != Ethernet.MPLS_UNICAST)) {</span>
+<span class="nc" id="L445">            log.warn(&quot;processSpecific: Unsupported &quot;</span>
+                    + &quot;forwarding objective criteraia&quot;);
+<span class="nc" id="L447">            fail(fwd, ObjectiveError.UNSUPPORTED);</span>
+<span class="nc" id="L448">            return Collections.emptySet();</span>
+        }
+
+        TrafficSelector.Builder filteredSelectorBuilder =
+<span class="nc" id="L452">                DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L453">        int forTableId = -1;</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">        if (ethType.ethType().toShort() == Ethernet.TYPE_IPV4) {</span>
+<span class="nc" id="L455">            filteredSelectorBuilder = filteredSelectorBuilder</span>
+<span class="nc" id="L456">                .matchEthType(Ethernet.TYPE_IPV4)</span>
+<span class="nc" id="L457">                .matchIPDst(((IPCriterion) selector</span>
+<span class="nc" id="L458">                        .getCriterion(Criterion.Type.IPV4_DST))</span>
+<span class="nc" id="L459">                        .ip());</span>
+<span class="nc" id="L460">            forTableId = ipv4UnicastTableId;</span>
+<span class="nc" id="L461">            log.debug(&quot;processing IPv4 specific forwarding objective&quot;);</span>
+        } else {
+<span class="nc" id="L463">            filteredSelectorBuilder = filteredSelectorBuilder</span>
+<span class="nc" id="L464">                .matchEthType(Ethernet.MPLS_UNICAST)</span>
+<span class="nc" id="L465">                .matchMplsLabel(((MplsCriterion)</span>
+<span class="nc" id="L466">                   selector.getCriterion(Criterion.Type.MPLS_LABEL)).label());</span>
+            //TODO: Add Match for BoS
+            //if (selector.getCriterion(Criterion.Type.MPLS_BOS) != null) {
+            //}
+<span class="nc" id="L470">            forTableId = mplsTableId;</span>
+<span class="nc" id="L471">            log.debug(&quot;processing MPLS specific forwarding objective&quot;);</span>
+        }
+
+        TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment
+<span class="nc" id="L475">                .builder();</span>
+<span class="nc bnc" id="L476" title="All 2 branches missed.">        if (fwd.treatment() != null) {</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">            for (Instruction i : fwd.treatment().allInstructions()) {</span>
+<span class="nc" id="L478">                treatmentBuilder.add(i);</span>
+<span class="nc" id="L479">            }</span>
+        }
+
+        //TODO: Analyze the forwarding objective here to make
+        //device specific decision such as no ECMP groups in Dell
+        //switches.
+<span class="nc bnc" id="L485" title="All 2 branches missed.">        if (fwd.nextId() != null) {</span>
+<span class="nc" id="L486">            NextGroup next = flowObjectiveStore.getNextGroup(fwd.nextId());</span>
+
+<span class="nc bnc" id="L488" title="All 2 branches missed.">            if (next != null) {</span>
+<span class="nc" id="L489">                GroupKey key = appKryo.deserialize(next.data());</span>
+
+<span class="nc" id="L491">                Group group = groupService.getGroup(deviceId, key);</span>
+
+<span class="nc bnc" id="L493" title="All 2 branches missed.">                if (group == null) {</span>
+<span class="nc" id="L494">                    log.warn(&quot;The group left!&quot;);</span>
+<span class="nc" id="L495">                    fail(fwd, ObjectiveError.GROUPMISSING);</span>
+<span class="nc" id="L496">                    return Collections.emptySet();</span>
+                }
+<span class="nc" id="L498">                treatmentBuilder.deferred().group(group.id());</span>
+<span class="nc" id="L499">                log.debug(&quot;Adding OUTGROUP action&quot;);</span>
+<span class="nc" id="L500">            } else {</span>
+<span class="nc" id="L501">                log.warn(&quot;processSpecific: No associated next objective object&quot;);</span>
+<span class="nc" id="L502">                fail(fwd, ObjectiveError.GROUPMISSING);</span>
+<span class="nc" id="L503">                return Collections.emptySet();</span>
+            }
+        }
+
+<span class="nc" id="L507">        TrafficSelector filteredSelector = filteredSelectorBuilder.build();</span>
+<span class="nc" id="L508">        TrafficTreatment treatment = treatmentBuilder.transition(aclTableId)</span>
+<span class="nc" id="L509">                .build();</span>
+
+<span class="nc" id="L511">        FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()</span>
+<span class="nc" id="L512">                .fromApp(fwd.appId()).withPriority(fwd.priority())</span>
+<span class="nc" id="L513">                .forDevice(deviceId).withSelector(filteredSelector)</span>
+<span class="nc" id="L514">                .withTreatment(treatment);</span>
+
+<span class="nc bnc" id="L516" title="All 2 branches missed.">        if (fwd.permanent()) {</span>
+<span class="nc" id="L517">            ruleBuilder.makePermanent();</span>
+        } else {
+<span class="nc" id="L519">            ruleBuilder.makeTemporary(fwd.timeout());</span>
+        }
+
+<span class="nc" id="L522">        ruleBuilder.forTable(forTableId);</span>
+<span class="nc" id="L523">        return Collections.singletonList(ruleBuilder.build());</span>
+
+    }
+
+    protected List&lt;FlowRule&gt; processEthDstFilter(Criterion c,
+                                       FilteringObjective filt,
+                                       ApplicationId applicationId) {
+<span class="nc" id="L530">        List&lt;FlowRule&gt; rules = new ArrayList&lt;FlowRule&gt;();</span>
+<span class="nc" id="L531">        EthCriterion e = (EthCriterion) c;</span>
+        TrafficSelector.Builder selectorIp = DefaultTrafficSelector
+<span class="nc" id="L533">                .builder();</span>
+        TrafficTreatment.Builder treatmentIp = DefaultTrafficTreatment
+<span class="nc" id="L535">                .builder();</span>
+<span class="nc" id="L536">        selectorIp.matchEthDst(e.mac());</span>
+<span class="nc" id="L537">        selectorIp.matchEthType(Ethernet.TYPE_IPV4);</span>
+<span class="nc" id="L538">        treatmentIp.transition(ipv4UnicastTableId);</span>
+<span class="nc" id="L539">        FlowRule ruleIp = DefaultFlowRule.builder().forDevice(deviceId)</span>
+<span class="nc" id="L540">                .withSelector(selectorIp.build())</span>
+<span class="nc" id="L541">                .withTreatment(treatmentIp.build())</span>
+<span class="nc" id="L542">                .withPriority(filt.priority()).fromApp(applicationId)</span>
+<span class="nc" id="L543">                .makePermanent().forTable(tmacTableId).build();</span>
+<span class="nc" id="L544">        log.debug(&quot;adding IP ETH rule for MAC: {}&quot;, e.mac());</span>
+<span class="nc" id="L545">        rules.add(ruleIp);</span>
+
+        TrafficSelector.Builder selectorMpls = DefaultTrafficSelector
+<span class="nc" id="L548">                .builder();</span>
+        TrafficTreatment.Builder treatmentMpls = DefaultTrafficTreatment
+<span class="nc" id="L550">                .builder();</span>
+<span class="nc" id="L551">        selectorMpls.matchEthDst(e.mac());</span>
+<span class="nc" id="L552">        selectorMpls.matchEthType(Ethernet.MPLS_UNICAST);</span>
+<span class="nc" id="L553">        treatmentMpls.transition(mplsTableId);</span>
+<span class="nc" id="L554">        FlowRule ruleMpls = DefaultFlowRule.builder()</span>
+<span class="nc" id="L555">                .forDevice(deviceId).withSelector(selectorMpls.build())</span>
+<span class="nc" id="L556">                .withTreatment(treatmentMpls.build())</span>
+<span class="nc" id="L557">                .withPriority(filt.priority()).fromApp(applicationId)</span>
+<span class="nc" id="L558">                .makePermanent().forTable(tmacTableId).build();</span>
+<span class="nc" id="L559">        log.debug(&quot;adding MPLS ETH rule for MAC: {}&quot;, e.mac());</span>
+<span class="nc" id="L560">        rules.add(ruleMpls);</span>
+
+<span class="nc" id="L562">        return rules;</span>
+    }
+
+    protected List&lt;FlowRule&gt; processVlanIdFilter(Criterion c,
+                                                 FilteringObjective filt,
+                                                 ApplicationId applicationId) {
+<span class="nc" id="L568">        List&lt;FlowRule&gt; rules = new ArrayList&lt;FlowRule&gt;();</span>
+<span class="nc" id="L569">        VlanIdCriterion v = (VlanIdCriterion) c;</span>
+<span class="nc" id="L570">        log.debug(&quot;adding rule for VLAN: {}&quot;, v.vlanId());</span>
+        TrafficSelector.Builder selector = DefaultTrafficSelector
+<span class="nc" id="L572">                .builder();</span>
+        TrafficTreatment.Builder treatment = DefaultTrafficTreatment
+<span class="nc" id="L574">                .builder();</span>
+<span class="nc" id="L575">        PortCriterion p = (PortCriterion) filt.key();</span>
+<span class="nc bnc" id="L576" title="All 2 branches missed.">        if (v.vlanId() != VlanId.NONE) {</span>
+<span class="nc" id="L577">            selector.matchVlanId(v.vlanId());</span>
+<span class="nc" id="L578">            selector.matchInPort(p.port());</span>
+<span class="nc" id="L579">            treatment.deferred().popVlan();</span>
+        }
+<span class="nc" id="L581">        treatment.transition(tmacTableId);</span>
+<span class="nc" id="L582">        FlowRule rule = DefaultFlowRule.builder().forDevice(deviceId)</span>
+<span class="nc" id="L583">                .withSelector(selector.build())</span>
+<span class="nc" id="L584">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L585">                .withPriority(filt.priority()).fromApp(applicationId)</span>
+<span class="nc" id="L586">                .makePermanent().forTable(vlanTableId).build();</span>
+<span class="nc" id="L587">        rules.add(rule);</span>
+
+<span class="nc" id="L589">        return rules;</span>
+    }
+
+    private void processFilter(FilteringObjective filt, boolean install,
+                               ApplicationId applicationId) {
+        // This driver only processes filtering criteria defined with switch
+        // ports as the key
+<span class="nc bnc" id="L596" title="All 2 branches missed.">        if (filt.key().equals(Criteria.dummy())</span>
+<span class="nc bnc" id="L597" title="All 2 branches missed.">                || filt.key().type() != Criterion.Type.IN_PORT) {</span>
+<span class="nc" id="L598">            log.warn(&quot;No key defined in filtering objective from app: {}. Not&quot;</span>
+                    + &quot;processing filtering objective&quot;, applicationId);
+<span class="nc" id="L600">            fail(filt, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L601">            return;</span>
+        }
+        // convert filtering conditions for switch-intfs into flowrules
+<span class="nc" id="L604">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+<span class="nc bnc" id="L605" title="All 2 branches missed.">        for (Criterion c : filt.conditions()) {</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">            if (c.type() == Criterion.Type.ETH_DST) {</span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">                for (FlowRule rule : processEthDstFilter(c,</span>
+                                                         filt,
+                                                         applicationId)) {
+<span class="nc bnc" id="L610" title="All 2 branches missed.">                    ops = install ? ops.add(rule) : ops.remove(rule);</span>
+<span class="nc" id="L611">                }</span>
+<span class="nc bnc" id="L612" title="All 2 branches missed.">            } else if (c.type() == Criterion.Type.VLAN_VID) {</span>
+<span class="nc bnc" id="L613" title="All 2 branches missed.">                for (FlowRule rule : processVlanIdFilter(c,</span>
+                                                         filt,
+                                                         applicationId)) {
+<span class="nc bnc" id="L616" title="All 2 branches missed.">                    ops = install ? ops.add(rule) : ops.remove(rule);</span>
+<span class="nc" id="L617">                }</span>
+<span class="nc bnc" id="L618" title="All 2 branches missed.">            } else if (c.type() == Criterion.Type.IPV4_DST) {</span>
+<span class="nc" id="L619">                IPCriterion ip = (IPCriterion) c;</span>
+<span class="nc" id="L620">                log.debug(&quot;adding rule for IP: {}&quot;, ip.ip());</span>
+                TrafficSelector.Builder selector = DefaultTrafficSelector
+<span class="nc" id="L622">                        .builder();</span>
+                TrafficTreatment.Builder treatment = DefaultTrafficTreatment
+<span class="nc" id="L624">                        .builder();</span>
+<span class="nc" id="L625">                selector.matchEthType(Ethernet.TYPE_IPV4);</span>
+<span class="nc" id="L626">                selector.matchIPDst(ip.ip());</span>
+<span class="nc" id="L627">                treatment.transition(aclTableId);</span>
+<span class="nc" id="L628">                FlowRule rule = DefaultFlowRule.builder().forDevice(deviceId)</span>
+<span class="nc" id="L629">                        .withSelector(selector.build())</span>
+<span class="nc" id="L630">                        .withTreatment(treatment.build())</span>
+<span class="nc" id="L631">                        .withPriority(filt.priority()).fromApp(applicationId)</span>
+<span class="nc" id="L632">                        .makePermanent().forTable(ipv4UnicastTableId).build();</span>
+<span class="nc bnc" id="L633" title="All 2 branches missed.">                ops = install ? ops.add(rule) : ops.remove(rule);</span>
+<span class="nc" id="L634">            } else {</span>
+<span class="nc" id="L635">                log.warn(&quot;Driver does not currently process filtering condition&quot;</span>
+<span class="nc" id="L636">                                 + &quot; of type: {}&quot;, c.type());</span>
+<span class="nc" id="L637">                fail(filt, ObjectiveError.UNSUPPORTED);</span>
+            }
+<span class="nc" id="L639">        }</span>
+        // apply filtering flow rules
+<span class="nc" id="L641">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L644">                pass(filt);</span>
+<span class="nc" id="L645">                log.debug(&quot;Provisioned tables in {} with fitering &quot;</span>
+                        + &quot;rules for segment router&quot;, deviceId);
+<span class="nc" id="L647">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L651">                fail(filt, ObjectiveError.FLOWINSTALLATIONFAILED);</span>
+<span class="nc" id="L652">                log.warn(&quot;Failed to provision tables in {} with &quot;</span>
+                        + &quot;fitering rules for segment router&quot;, deviceId);
+<span class="nc" id="L654">            }</span>
+        }));
+<span class="nc" id="L656">    }</span>
+
+    protected void setTableMissEntries() {
+        // set all table-miss-entries
+<span class="nc" id="L660">        populateTableMissEntry(vlanTableId, true, false, false, -1);</span>
+<span class="nc" id="L661">        populateTableMissEntry(tmacTableId, true, false, false, -1);</span>
+<span class="nc" id="L662">        populateTableMissEntry(ipv4UnicastTableId, false, true, true,</span>
+                               aclTableId);
+<span class="nc" id="L664">        populateTableMissEntry(mplsTableId, false, true, true, aclTableId);</span>
+<span class="nc" id="L665">        populateTableMissEntry(aclTableId, false, false, false, -1);</span>
+<span class="nc" id="L666">    }</span>
+
+    protected void populateTableMissEntry(int tableToAdd,
+                                          boolean toControllerNow,
+                                          boolean toControllerWrite,
+                                          boolean toTable, int tableToSend) {
+<span class="nc" id="L672">        TrafficSelector selector = DefaultTrafficSelector.builder().build();</span>
+<span class="nc" id="L673">        TrafficTreatment.Builder tBuilder = DefaultTrafficTreatment.builder();</span>
+
+<span class="nc bnc" id="L675" title="All 2 branches missed.">        if (toControllerNow) {</span>
+<span class="nc" id="L676">            tBuilder.setOutput(PortNumber.CONTROLLER);</span>
+        }
+
+<span class="nc bnc" id="L679" title="All 2 branches missed.">        if (toControllerWrite) {</span>
+<span class="nc" id="L680">            tBuilder.deferred().setOutput(PortNumber.CONTROLLER);</span>
+        }
+
+<span class="nc bnc" id="L683" title="All 2 branches missed.">        if (toTable) {</span>
+<span class="nc" id="L684">            tBuilder.transition(tableToSend);</span>
+        }
+
+<span class="nc" id="L687">        FlowRule flow = DefaultFlowRule.builder().forDevice(deviceId)</span>
+<span class="nc" id="L688">                .withSelector(selector).withTreatment(tBuilder.build())</span>
+<span class="nc" id="L689">                .withPriority(0).fromApp(appId).makePermanent()</span>
+<span class="nc" id="L690">                .forTable(tableToAdd).build();</span>
+
+<span class="nc" id="L692">        flowRuleService.applyFlowRules(flow);</span>
+<span class="nc" id="L693">    }</span>
+
+    private void pass(Objective obj) {
+<span class="nc bnc" id="L696" title="All 2 branches missed.">        if (obj.context().isPresent()) {</span>
+<span class="nc" id="L697">            obj.context().get().onSuccess(obj);</span>
+        }
+<span class="nc" id="L699">    }</span>
+
+    protected void fail(Objective obj, ObjectiveError error) {
+<span class="nc bnc" id="L702" title="All 2 branches missed.">        if (obj.context().isPresent()) {</span>
+<span class="nc" id="L703">            obj.context().get().onError(obj, error);</span>
+        }
+<span class="nc" id="L705">    }</span>
+
+<span class="nc" id="L707">    private class InnerGroupListener implements GroupListener {</span>
+        @Override
+        public void event(GroupEvent event) {
+<span class="nc bnc" id="L710" title="All 2 branches missed.">            if (event.type() == GroupEvent.Type.GROUP_ADDED) {</span>
+<span class="nc" id="L711">                log.debug(&quot;InnerGroupListener: Group ADDED &quot;</span>
+                        + &quot;event received in device {}&quot;, deviceId);
+<span class="nc" id="L713">                GroupKey key = event.subject().appCookie();</span>
+
+<span class="nc" id="L715">                NextObjective obj = pendingGroups.getIfPresent(key);</span>
+<span class="nc bnc" id="L716" title="All 2 branches missed.">                if (obj != null) {</span>
+<span class="nc" id="L717">                    flowObjectiveStore</span>
+<span class="nc" id="L718">                            .putNextGroup(obj.id(),</span>
+                                          new SegmentRoutingGroup(key));
+<span class="nc" id="L720">                    pass(obj);</span>
+<span class="nc" id="L721">                    pendingGroups.invalidate(key);</span>
+                }
+<span class="nc bnc" id="L723" title="All 2 branches missed.">            } else if (event.type() == GroupEvent.Type.GROUP_ADD_FAILED) {</span>
+<span class="nc" id="L724">                log.warn(&quot;InnerGroupListener: Group ADD &quot;</span>
+                        + &quot;failed event received in device {}&quot;, deviceId);
+            }
+<span class="nc" id="L727">        }</span>
+    }
+
+<span class="nc" id="L730">    private class GroupChecker implements Runnable {</span>
+
+        @Override
+        public void run() {
+<span class="nc" id="L734">            Set&lt;GroupKey&gt; keys = pendingGroups</span>
+<span class="nc" id="L735">                    .asMap()</span>
+<span class="nc" id="L736">                    .keySet()</span>
+<span class="nc" id="L737">                    .stream()</span>
+<span class="nc bnc" id="L738" title="All 2 branches missed.">                    .filter(key -&gt; groupService.getGroup(deviceId, key) != null)</span>
+<span class="nc" id="L739">                    .collect(Collectors.toSet());</span>
+
+<span class="nc" id="L741">            keys.stream()</span>
+<span class="nc" id="L742">                    .forEach(key -&gt; {</span>
+<span class="nc" id="L743">                                 NextObjective obj = pendingGroups</span>
+<span class="nc" id="L744">                                         .getIfPresent(key);</span>
+<span class="nc bnc" id="L745" title="All 2 branches missed.">                                 if (obj == null) {</span>
+<span class="nc" id="L746">                                     return;</span>
+                                 }
+<span class="nc" id="L748">                                 pass(obj);</span>
+<span class="nc" id="L749">                                 pendingGroups.invalidate(key);</span>
+<span class="nc" id="L750">                                 flowObjectiveStore.putNextGroup(obj.id(),</span>
+                                                                 new SegmentRoutingGroup(
+                                                                                         key));
+<span class="nc" id="L753">                             });</span>
+<span class="nc" id="L754">        }</span>
+    }
+
+    private class SegmentRoutingGroup implements NextGroup {
+
+        private final GroupKey key;
+
+<span class="nc" id="L761">        public SegmentRoutingGroup(GroupKey key) {</span>
+<span class="nc" id="L762">            this.key = key;</span>
+<span class="nc" id="L763">        }</span>
+
+        public GroupKey key() {
+<span class="nc" id="L766">            return key;</span>
+        }
+
+        @Override
+        public byte[] data() {
+<span class="nc" id="L771">            return appKryo.serialize(key);</span>
+        }
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

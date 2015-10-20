@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultDeviceDescription.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.device</a> &gt; <span class="el_source">DefaultDeviceDescription.java</span></div><h1>DefaultDeviceDescription.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.device;
+
+import org.onosproject.net.AbstractDescription;
+import org.onosproject.net.SparseAnnotations;
+import org.onlab.packet.ChassisId;
+
+import java.net.URI;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.net.Device.Type;
+
+/**
+ * Default implementation of immutable device description entity.
+ */
+public class DefaultDeviceDescription extends AbstractDescription
+        implements DeviceDescription {
+    private final URI uri;
+    private final Type type;
+    private final String manufacturer;
+    private final String hwVersion;
+    private final String swVersion;
+    private final String serialNumber;
+    private final ChassisId chassisId;
+
+    /**
+     * Creates a device description using the supplied information.
+     *
+     * @param uri          device URI
+     * @param type         device type
+     * @param manufacturer device manufacturer
+     * @param hwVersion    device HW version
+     * @param swVersion    device SW version
+     * @param serialNumber device serial number
+     * @param chassis      chassis id
+     * @param annotations  optional key/value annotations map
+     */
+    public DefaultDeviceDescription(URI uri, Type type, String manufacturer,
+                                    String hwVersion, String swVersion,
+                                    String serialNumber, ChassisId chassis,
+                                    SparseAnnotations... annotations) {
+<span class="fc" id="L57">        super(annotations);</span>
+<span class="fc" id="L58">        this.uri = checkNotNull(uri, &quot;Device URI cannot be null&quot;);</span>
+<span class="fc" id="L59">        this.type = checkNotNull(type, &quot;Device type cannot be null&quot;);</span>
+<span class="fc" id="L60">        this.manufacturer = manufacturer;</span>
+<span class="fc" id="L61">        this.hwVersion = hwVersion;</span>
+<span class="fc" id="L62">        this.swVersion = swVersion;</span>
+<span class="fc" id="L63">        this.serialNumber = serialNumber;</span>
+<span class="fc" id="L64">        this.chassisId = chassis;</span>
+<span class="fc" id="L65">    }</span>
+
+    /**
+     * Creates a device description using the supplied information.
+     * @param base DeviceDescription to basic information
+     * @param annotations Annotations to use.
+     */
+    public DefaultDeviceDescription(DeviceDescription base,
+                                    SparseAnnotations... annotations) {
+<span class="nc" id="L74">        this(base.deviceURI(), base.type(), base.manufacturer(),</span>
+<span class="nc" id="L75">             base.hwVersion(), base.swVersion(), base.serialNumber(),</span>
+<span class="nc" id="L76">             base.chassisId(), annotations);</span>
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Creates a device description using the supplied information.
+     * @param base DeviceDescription to basic information (except for type)
+     * @param type device type
+     * @param annotations Annotations to use.
+     */
+    public DefaultDeviceDescription(DeviceDescription base, Type type, SparseAnnotations... annotations) {
+<span class="nc" id="L86">        this(base.deviceURI(), type, base.manufacturer(),</span>
+<span class="nc" id="L87">                base.hwVersion(), base.swVersion(), base.serialNumber(),</span>
+<span class="nc" id="L88">                base.chassisId(), annotations);</span>
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    public URI deviceURI() {
+<span class="fc" id="L93">        return uri;</span>
+    }
+
+    @Override
+    public Type type() {
+<span class="fc" id="L98">        return type;</span>
+    }
+
+    @Override
+    public String manufacturer() {
+<span class="fc" id="L103">        return manufacturer;</span>
+    }
+
+    @Override
+    public String hwVersion() {
+<span class="fc" id="L108">        return hwVersion;</span>
+    }
+
+    @Override
+    public String swVersion() {
+<span class="fc" id="L113">        return swVersion;</span>
+    }
+
+    @Override
+    public String serialNumber() {
+<span class="fc" id="L118">        return serialNumber;</span>
+    }
+
+    @Override
+    public ChassisId chassisId() {
+<span class="fc" id="L123">        return chassisId;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L128">        return toStringHelper(this)</span>
+<span class="fc" id="L129">                .add(&quot;uri&quot;, uri).add(&quot;type&quot;, type).add(&quot;mfr&quot;, manufacturer)</span>
+<span class="fc" id="L130">                .add(&quot;hw&quot;, hwVersion).add(&quot;sw&quot;, swVersion)</span>
+<span class="fc" id="L131">                .add(&quot;serial&quot;, serialNumber)</span>
+<span class="fc" id="L132">                .toString();</span>
+    }
+
+    // default constructor for serialization
+<span class="nc" id="L136">    private DefaultDeviceDescription() {</span>
+<span class="nc" id="L137">        this.uri = null;</span>
+<span class="nc" id="L138">        this.type = null;</span>
+<span class="nc" id="L139">        this.manufacturer = null;</span>
+<span class="nc" id="L140">        this.hwVersion = null;</span>
+<span class="nc" id="L141">        this.swVersion = null;</span>
+<span class="nc" id="L142">        this.serialNumber = null;</span>
+<span class="nc" id="L143">        this.chassisId = null;</span>
+<span class="nc" id="L144">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

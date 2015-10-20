@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BellmanFordGraphSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">BellmanFordGraphSearch.java</span></div><h1>BellmanFordGraphSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+/**
+ * Bellman-Ford graph search algorithm for locating shortest-paths in
+ * directed graphs that may contain negative cycles.
+ */
+<span class="fc" id="L22">public class BellmanFordGraphSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;</span>
+        extends AbstractGraphPathSearch&lt;V, E&gt; {
+
+    @Override
+    public Result&lt;V, E&gt; search(Graph&lt;V, E&gt; graph, V src, V dst,
+                               EdgeWeight&lt;V, E&gt; weight, int maxPaths) {
+<span class="fc" id="L28">        checkArguments(graph, src, dst);</span>
+
+        // Prepare the graph search result.
+<span class="fc" id="L31">        DefaultResult result = new DefaultResult(src, dst, maxPaths);</span>
+
+        // The source vertex has cost 0, of course.
+<span class="fc" id="L34">        result.updateVertex(src, null, 0.0, true);</span>
+
+<span class="fc" id="L36">        int max = graph.getVertexes().size() - 1;</span>
+<span class="fc bfc" id="L37" title="All 2 branches covered.">        for (int i = 0; i &lt; max; i++) {</span>
+            // Relax, if possible, all egress edges of the current vertex.
+<span class="fc bfc" id="L39" title="All 2 branches covered.">            for (E edge : graph.getEdges()) {</span>
+<span class="fc bfc" id="L40" title="All 2 branches covered.">                if (result.hasCost(edge.src())) {</span>
+<span class="fc" id="L41">                    result.relaxEdge(edge, result.cost(edge.src()), weight);</span>
+                }
+<span class="fc" id="L43">            }</span>
+        }
+
+        // Remove any vertexes reached by traversing edges with negative weights.
+<span class="fc bfc" id="L47" title="All 2 branches covered.">        for (E edge : graph.getEdges()) {</span>
+<span class="pc bpc" id="L48" title="1 of 2 branches missed.">            if (result.hasCost(edge.src())) {</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">                if (result.relaxEdge(edge, result.cost(edge.src()), weight)) {</span>
+<span class="fc" id="L50">                    result.removeVertex(edge.dst());</span>
+                }
+            }
+<span class="fc" id="L53">        }</span>
+
+        // Finally, but the paths on the search result and return.
+<span class="fc" id="L56">        result.buildPaths();</span>
+<span class="fc" id="L57">        return result;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

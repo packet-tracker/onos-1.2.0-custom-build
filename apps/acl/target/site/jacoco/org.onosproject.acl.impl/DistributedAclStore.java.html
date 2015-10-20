@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedAclStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-acl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.acl.impl</a> &gt; <span class="el_source">DistributedAclStore.java</span></div><h1>DistributedAclStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ * Originally created by Pengfei Lu, Network and Cloud Computing Laboratory, Dalian University of Technology, China
+ * Advisers: Keqiu Li, Heng Qi and Haisheng Yu
+ * This work is supported by the State Key Program of National Natural Science of China(Grant No. 61432002)
+ * and Prospective Research Project on Future Networks in Jiangsu Future Networks Innovation Institute.
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.acl.impl;
+
+import com.google.common.collect.Collections2;
+import org.onosproject.acl.AclRule;
+import org.onosproject.acl.AclStore;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.acl.RuleId;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Implementation of the ACL store service.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L57">public class DistributedAclStore extends AbstractStore implements AclStore {</span>
+
+<span class="nc" id="L59">    private final Logger log = getLogger(getClass());</span>
+<span class="nc" id="L60">    private final int defaultFlowMaxPriority = 30000;</span>
+
+    private ConsistentMap&lt;RuleId, AclRule&gt; ruleSet;
+    private ConsistentMap&lt;DeviceId, Integer&gt; deviceToPriority;
+    private ConsistentMap&lt;RuleId, Set&lt;DeviceId&gt;&gt; ruleToDevice;
+    private ConsistentMap&lt;RuleId, Set&lt;FlowRule&gt;&gt; ruleToFlow;
+    private ConsistentMap&lt;RuleId, List&lt;RuleId&gt;&gt; denyRuleToAllowRule;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L75">        ApplicationId appId = coreService.getAppId(&quot;org.onosproject.acl&quot;);</span>
+
+<span class="nc" id="L77">        KryoNamespace.Builder serializer = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L78">                .register(KryoNamespaces.API)</span>
+<span class="nc" id="L79">                .register(AclRule.class)</span>
+<span class="nc" id="L80">                .register(AclRule.Action.class)</span>
+<span class="nc" id="L81">                .register(RuleId.class);</span>
+
+<span class="nc" id="L83">        ruleSet = storageService.&lt;RuleId, AclRule&gt;consistentMapBuilder()</span>
+<span class="nc" id="L84">                .withSerializer(Serializer.using(serializer.build()))</span>
+<span class="nc" id="L85">                .withName(&quot;acl-rule-set&quot;)</span>
+<span class="nc" id="L86">                .withApplicationId(appId)</span>
+<span class="nc" id="L87">                .withPurgeOnUninstall()</span>
+<span class="nc" id="L88">                .build();</span>
+
+<span class="nc" id="L90">        deviceToPriority = storageService.&lt;DeviceId, Integer&gt;consistentMapBuilder()</span>
+<span class="nc" id="L91">                .withSerializer(Serializer.using(serializer.build()))</span>
+<span class="nc" id="L92">                .withName(&quot;device-to-priority&quot;)</span>
+<span class="nc" id="L93">                .withApplicationId(appId)</span>
+<span class="nc" id="L94">                .withPurgeOnUninstall()</span>
+<span class="nc" id="L95">                .build();</span>
+
+<span class="nc" id="L97">        ruleToFlow = storageService.&lt;RuleId, Set&lt;FlowRule&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L98">                .withSerializer(Serializer.using(serializer.build()))</span>
+<span class="nc" id="L99">                .withName(&quot;rule-to-flow&quot;)</span>
+<span class="nc" id="L100">                .withApplicationId(appId)</span>
+<span class="nc" id="L101">                .withPurgeOnUninstall()</span>
+<span class="nc" id="L102">                .build();</span>
+
+<span class="nc" id="L104">        denyRuleToAllowRule = storageService.&lt;RuleId, List&lt;RuleId&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L105">                .withSerializer(Serializer.using(serializer.build()))</span>
+<span class="nc" id="L106">                .withName(&quot;deny-to-allow&quot;)</span>
+<span class="nc" id="L107">                .withApplicationId(appId)</span>
+<span class="nc" id="L108">                .withPurgeOnUninstall()</span>
+<span class="nc" id="L109">                .build();</span>
+
+<span class="nc" id="L111">        ruleToDevice = storageService.&lt;RuleId, Set&lt;DeviceId&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L112">                .withSerializer(Serializer.using(serializer.build()))</span>
+<span class="nc" id="L113">                .withName(&quot;rule-to-device&quot;)</span>
+<span class="nc" id="L114">                .withApplicationId(appId)</span>
+<span class="nc" id="L115">                .withPurgeOnUninstall()</span>
+<span class="nc" id="L116">                .build();</span>
+
+<span class="nc" id="L118">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L119">    }</span>
+
+    @Deactivate
+    public void deactive() {
+<span class="nc" id="L123">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L124">    }</span>
+
+    @Override
+    public List&lt;AclRule&gt; getAclRules() {
+<span class="nc" id="L128">        List&lt;AclRule&gt; aclRules = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L129">        aclRules.addAll(Collections2.transform(ruleSet.values(), Versioned::value));</span>
+<span class="nc" id="L130">        return aclRules;</span>
+    }
+
+    @Override
+    public void addAclRule(AclRule rule) {
+<span class="nc" id="L135">        ruleSet.putIfAbsent(rule.id(), rule);</span>
+<span class="nc" id="L136">    }</span>
+
+    @Override
+    public AclRule getAclRule(RuleId ruleId) {
+<span class="nc" id="L140">        Versioned&lt;AclRule&gt; rule = ruleSet.get(ruleId);</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (rule != null) {</span>
+<span class="nc" id="L142">            return rule.value();</span>
+        } else {
+<span class="nc" id="L144">            return null;</span>
+        }
+    }
+
+    @Override
+    public void removeAclRule(RuleId ruleId) {
+<span class="nc" id="L150">        ruleSet.remove(ruleId);</span>
+<span class="nc" id="L151">    }</span>
+
+    @Override
+    public void clearAcl() {
+<span class="nc" id="L155">        ruleSet.clear();</span>
+<span class="nc" id="L156">        deviceToPriority.clear();</span>
+<span class="nc" id="L157">        ruleToFlow.clear();</span>
+<span class="nc" id="L158">        denyRuleToAllowRule.clear();</span>
+<span class="nc" id="L159">        ruleToDevice.clear();</span>
+<span class="nc" id="L160">    }</span>
+
+    @Override
+    public int getPriorityByDevice(DeviceId deviceId) {
+<span class="nc" id="L164">        return deviceToPriority.compute(deviceId,</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                                        (id, priority) -&gt; (priority == null) ? defaultFlowMaxPriority : (priority - 1))</span>
+<span class="nc" id="L166">                .value();</span>
+    }
+
+    @Override
+    public Set&lt;FlowRule&gt; getFlowByRule(RuleId ruleId) {
+<span class="nc" id="L171">        Versioned&lt;Set&lt;FlowRule&gt;&gt; flowRuleSet = ruleToFlow.get(ruleId);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (flowRuleSet != null) {</span>
+<span class="nc" id="L173">            return flowRuleSet.value();</span>
+        } else {
+<span class="nc" id="L175">            return null;</span>
+        }
+    }
+
+    @Override
+    public void addRuleToFlowMapping(RuleId ruleId, FlowRule flowRule) {
+<span class="nc" id="L181">        ruleToFlow.computeIf(ruleId,</span>
+<span class="nc bnc" id="L182" title="All 4 branches missed.">                             flowRuleSet -&gt; (flowRuleSet == null || !flowRuleSet.contains(flowRule)),</span>
+                             (id, flowRuleSet) -&gt; {
+<span class="nc" id="L184">                                 Set&lt;FlowRule&gt; newSet = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">                                 if (flowRuleSet != null) {</span>
+<span class="nc" id="L186">                                     newSet.addAll(flowRuleSet);</span>
+                                 }
+<span class="nc" id="L188">                                 newSet.add(flowRule);</span>
+<span class="nc" id="L189">                                 return newSet;</span>
+                             });
+<span class="nc" id="L191">    }</span>
+
+    @Override
+    public void removeRuleToFlowMapping(RuleId ruleId) {
+<span class="nc" id="L195">        ruleToFlow.remove(ruleId);</span>
+<span class="nc" id="L196">    }</span>
+
+    @Override
+    public List&lt;RuleId&gt; getAllowingRuleByDenyingRule(RuleId denyingRuleId) {
+<span class="nc" id="L200">        Versioned&lt;List&lt;RuleId&gt;&gt; allowRuleIdSet = denyRuleToAllowRule.get(denyingRuleId);</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (allowRuleIdSet != null) {</span>
+<span class="nc" id="L202">            return allowRuleIdSet.value();</span>
+        } else {
+<span class="nc" id="L204">            return null;</span>
+        }
+    }
+
+    @Override
+    public void addDenyToAllowMapping(RuleId denyingRuleId, RuleId allowingRuleId) {
+<span class="nc" id="L210">        denyRuleToAllowRule.computeIf(denyingRuleId,</span>
+<span class="nc bnc" id="L211" title="All 4 branches missed.">                                      ruleIdList -&gt; (ruleIdList == null || !ruleIdList.contains(allowingRuleId)),</span>
+                                      (id, ruleIdList) -&gt; {
+<span class="nc" id="L213">                                          ArrayList&lt;RuleId&gt; newList = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                                          if (ruleIdList != null) {</span>
+<span class="nc" id="L215">                                              newList.addAll(ruleIdList);</span>
+                                          }
+<span class="nc" id="L217">                                          newList.add(allowingRuleId);</span>
+<span class="nc" id="L218">                                          return newList;</span>
+                                      });
+<span class="nc" id="L220">    }</span>
+
+    @Override
+    public void removeDenyToAllowMapping(RuleId denyingRuleId) {
+<span class="nc" id="L224">        denyRuleToAllowRule.remove(denyingRuleId);</span>
+<span class="nc" id="L225">    }</span>
+
+    @Override
+    public boolean checkIfRuleWorksInDevice(RuleId ruleId, DeviceId deviceId) {
+<span class="nc bnc" id="L229" title="All 4 branches missed.">        return ruleToDevice.containsKey(ruleId) &amp;&amp; ruleToDevice.get(ruleId).value().contains(deviceId);</span>
+    }
+
+    @Override
+    public void addRuleToDeviceMapping(RuleId ruleId, DeviceId deviceId) {
+<span class="nc" id="L234">        ruleToDevice.computeIf(ruleId,</span>
+<span class="nc bnc" id="L235" title="All 4 branches missed.">                               deviceIdSet -&gt; (deviceIdSet == null || !deviceIdSet.contains(deviceId)),</span>
+                               (id, deviceIdSet) -&gt; {
+<span class="nc" id="L237">                                   Set&lt;DeviceId&gt; newSet = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">                                   if (deviceIdSet != null) {</span>
+<span class="nc" id="L239">                                       newSet.addAll(deviceIdSet);</span>
+                                   }
+<span class="nc" id="L241">                                   newSet.add(deviceId);</span>
+<span class="nc" id="L242">                                   return newSet;</span>
+                               });
+<span class="nc" id="L244">    }</span>
+
+    @Override
+    public void removeRuleToDeviceMapping(RuleId ruleId) {
+<span class="nc" id="L248">        ruleToDevice.remove(ruleId);</span>
+<span class="nc" id="L249">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

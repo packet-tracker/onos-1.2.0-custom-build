@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepReportMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepReportMsgVer1.java</span></div><h1>PcepReportMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepReportMsg;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.protocol.PcepStateReport;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP report message.
+ */
+class PcepReportMsgVer1 implements PcepReportMsg {
+
+    // Pcep version: 1
+
+    /*
+     * The format of the PCRpt message is as follows:
+     *   &lt;PCRpt Message&gt;        ::= &lt;Common Header&gt;
+     *                              &lt;state-report-list&gt;
+     *Where:
+     *   &lt;state-report-list&gt;    ::= &lt;state-report&gt;[&lt;state-report-list&gt;]
+     *   &lt;state-report&gt;         ::= [&lt;SRP&gt;]
+     *                              &lt;LSP&gt;
+     *                              &lt;path&gt;
+     * Where:
+     *   &lt;path&gt;                 ::= &lt;ERO&gt;&lt;attribute-list&gt;[&lt;RRO&gt;]
+     *   Where:
+     *   &lt;attribute-list&gt; is defined in [RFC5440] and extended by PCEP extensions.
+     *    where:
+     *    &lt;attribute-list&gt;      ::=[&lt;LSPA&gt;]
+     *                             [&lt;BANDWIDTH&gt;]
+     *                             [&lt;metric-list&gt;]
+     *                             [&lt;IRO&gt;]
+     *    &lt;metric-list&gt;       ::=&lt;METRIC&gt;[&lt;metric-list&gt;]
+     */
+<span class="fc" id="L65">    protected static final Logger log = LoggerFactory.getLogger(PcepReportMsgVer1.class);</span>
+
+    public static final byte PACKET_VERSION = 1;
+    //PACKET_MINIMUM_LENGTH = CommonHeaderLen(4)+LspObjMinLen(8)+EroObjMinLen(12)
+    public static final int PACKET_MINIMUM_LENGTH = 24;
+<span class="fc" id="L70">    public static final PcepType MSG_TYPE = PcepType.REPORT;</span>
+    public static final byte REPORT_OBJ_TYPE = 1;
+    //Optional TLV
+    private LinkedList&lt;PcepStateReport&gt; llStateReportList;
+
+<span class="fc" id="L75">    public static final PcepReportMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader class for reading PCEP report message from channel buffer.
+     */
+<span class="fc" id="L80">    static class Reader implements PcepMessageReader&lt;PcepReportMsg&gt; {</span>
+
+        LinkedList&lt;PcepStateReport&gt; llStateReportList;
+
+        @Override
+        public PcepReportMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L88">                throw new PcepParseException(&quot;Received packet size &quot; + cb.readableBytes()</span>
+                        + &quot; is less than the expected size: &quot; + PACKET_MINIMUM_LENGTH);
+            }
+<span class="fc" id="L91">            llStateReportList = new LinkedList&lt;&gt;();</span>
+<span class="fc" id="L92">            byte version = cb.readByte();</span>
+<span class="fc" id="L93">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L96">                throw new PcepParseException(&quot; Invalid version: &quot; + version);</span>
+            }
+
+<span class="fc" id="L99">            byte type = cb.readByte();</span>
+
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L102">                throw new PcepParseException(&quot;Unexpected type: &quot; + type);</span>
+            }
+
+<span class="fc" id="L105">            short length = cb.readShort();</span>
+
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L108">                throw new PcepParseException(&quot;Wrong length. Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, was: &quot;</span>
+                        + length);
+            }
+            // parse state report list
+<span class="fc" id="L112">            parseStateReportList(cb);</span>
+<span class="fc" id="L113">            return new PcepReportMsgVer1(llStateReportList);</span>
+        }
+
+        // Parse State Report list
+        public void parseStateReportList(ChannelBuffer cb) throws PcepParseException {
+
+            /*
+                                &lt;state-report-list&gt;
+            Where:
+                    &lt;state-report-list&gt;     ::= &lt;state-report&gt;[&lt;state-report-list&gt;]
+                    &lt;state-report&gt;          ::=  [&lt;SRP&gt;]
+                                                  &lt;LSP&gt;
+                                                  &lt;path&gt;
+            Where:
+                    &lt;path&gt;                  ::= &lt;ERO&gt;&lt;attribute-list&gt;[&lt;RRO&gt;]
+            Where:
+                    &lt;attribute-list&gt; is defined in [RFC5440] and extended by PCEP extensions.
+
+             */
+
+<span class="fc bfc" id="L133" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+
+<span class="fc" id="L135">                PcepStateReport pcestateReq = new PcepStateReportVer1();</span>
+
+                /*
+                 * SRP is optional
+                 * Check whether SRP Object is available, if yes store it.
+                 * First read common object header and check the Object Class whether it is SRP or LSP
+                 * If it is LSP then store only LSP. So, SRP is optional. then read path and store.
+                 * If it is SRP then store SRP and then read LSP, path and store them.
+                 */
+
+                //mark the reader index to reset
+<span class="fc" id="L146">                cb.markReaderIndex();</span>
+<span class="fc" id="L147">                PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+
+<span class="fc" id="L149">                byte yObjectClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L150">                byte yObjectType = tempObjHeader.getObjType();</span>
+
+                //reset reader index
+<span class="fc" id="L153">                cb.resetReaderIndex();</span>
+                //If SRP present then store it.
+<span class="pc bpc" id="L155" title="1 of 4 branches missed.">                if ((PcepSrpObjectVer1.SRP_OBJ_CLASS == yObjectClass)</span>
+                        &amp;&amp; (PcepSrpObjectVer1.SRP_OBJ_TYPE == yObjectType)) {
+                    PcepSrpObject srpObj;
+<span class="fc" id="L158">                    srpObj = PcepSrpObjectVer1.read(cb);</span>
+<span class="fc" id="L159">                    pcestateReq.setSrpObject(srpObj);</span>
+                }
+
+                //store LSP object
+                PcepLspObject lspObj;
+<span class="fc" id="L164">                lspObj = PcepLspObjectVer1.read(cb);</span>
+<span class="fc" id="L165">                pcestateReq.setLspObject(lspObj);</span>
+
+                //store path
+<span class="fc" id="L168">                PcepStateReport.PcepMsgPath msgPath = new PcepStateReportVer1().new PcepMsgPath().read(cb);</span>
+<span class="fc" id="L169">                pcestateReq.setMsgPath(msgPath);</span>
+
+<span class="fc" id="L171">                llStateReportList.add(pcestateReq);</span>
+<span class="fc" id="L172">            }</span>
+<span class="fc" id="L173">        }</span>
+    }
+
+    /**
+     * Constructor to initialize State Report List.
+     *
+     * @param llStateReportList list of type Pcep state report
+     */
+<span class="fc" id="L181">    PcepReportMsgVer1(LinkedList&lt;PcepStateReport&gt; llStateReportList) {</span>
+<span class="fc" id="L182">        this.llStateReportList = llStateReportList;</span>
+<span class="fc" id="L183">    }</span>
+
+    /**
+     * Builder class for PCEP Report message.
+     */
+<span class="nc" id="L188">    static class Builder implements PcepReportMsg.Builder {</span>
+        // Pcep report message fields
+        LinkedList&lt;PcepStateReport&gt; llStateReportList;
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L194">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L199">            return PcepType.REPORT;</span>
+        }
+
+        @Override
+        public PcepReportMsg build() {
+<span class="nc" id="L204">            return new PcepReportMsgVer1(this.llStateReportList);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepStateReport&gt; getStateReportList() {
+<span class="nc" id="L209">            return this.llStateReportList;</span>
+        }
+
+        @Override
+        public Builder setStateReportList(LinkedList&lt;PcepStateReport&gt; ll) {
+<span class="nc" id="L214">            this.llStateReportList = ll;</span>
+<span class="nc" id="L215">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L221">        WRITER.write(cb, this);</span>
+<span class="fc" id="L222">    }</span>
+
+<span class="fc" id="L224">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing PCEP report message to channel buffer.
+     */
+<span class="fc" id="L229">    static class Writer implements PcepMessageWriter&lt;PcepReportMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepReportMsgVer1 message) throws PcepParseException {
+
+<span class="fc" id="L234">            int startIndex = cb.writerIndex();</span>
+
+            // first 3 bits set to version
+<span class="fc" id="L237">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+
+            // message type
+<span class="fc" id="L240">            cb.writeByte(MSG_TYPE.getType());</span>
+
+            // length is length of variable message, will be updated at the end
+            // Store the position of message
+            // length in buffer
+<span class="fc" id="L245">            int msgLenIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L247">            cb.writeShort((short) 0);</span>
+<span class="fc" id="L248">            ListIterator&lt;PcepStateReport&gt; listIterator = message.llStateReportList.listIterator();</span>
+
+<span class="fc bfc" id="L250" title="All 2 branches covered.">            while (listIterator.hasNext()) {</span>
+
+<span class="fc" id="L252">                PcepStateReport stateRpt = listIterator.next();</span>
+<span class="fc" id="L253">                PcepSrpObject srpObj = stateRpt.getSrpObject();</span>
+
+                //SRP object is optional
+<span class="fc bfc" id="L256" title="All 2 branches covered.">                if (srpObj != null) {</span>
+<span class="fc" id="L257">                    srpObj.write(cb);</span>
+                }
+
+                //LSP object is mandatory
+<span class="fc" id="L261">                PcepLspObject lspObj = stateRpt.getLspObject();</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">                if (lspObj == null) {</span>
+<span class="nc" id="L263">                    throw new PcepParseException(&quot;LSP Object is mandatory object for PcRpt message.&quot;);</span>
+                } else {
+<span class="fc" id="L265">                    lspObj.write(cb);</span>
+                }
+
+                //path is mandatory
+<span class="fc" id="L269">                PcepStateReport.PcepMsgPath msgPath = stateRpt.getMsgPath();</span>
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">                if (msgPath == null) {</span>
+<span class="nc" id="L271">                    throw new PcepParseException(&quot;Message path is mandatory object for PcRpt message.&quot;);</span>
+                } else {
+<span class="fc" id="L273">                    msgPath.write(cb);</span>
+                }
+<span class="fc" id="L275">            }</span>
+
+            // update message length field
+<span class="fc" id="L278">            int length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L279">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L280">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L285">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L290">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepStateReport&gt; getStateReportList() {
+<span class="nc" id="L295">        return this.llStateReportList;</span>
+    }
+
+    @Override
+    public void setStateReportList(LinkedList&lt;PcepStateReport&gt; ll) {
+<span class="nc" id="L300">        this.llStateReportList = ll;</span>
+<span class="nc" id="L301">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L305">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L306">                .add(&quot;StateReportList&quot;, llStateReportList)</span>
+<span class="nc" id="L307">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

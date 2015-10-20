@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RequestHandler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui</a> &gt; <span class="el_source">RequestHandler.java</span></div><h1>RequestHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.ui;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * Abstraction of an entity that handles a specific request from the
+ * user interface client.
+ *
+ * @see UiMessageHandler
+ */
+public abstract class RequestHandler {
+
+<span class="nc" id="L29">    protected static final ObjectMapper MAPPER = new ObjectMapper();</span>
+
+    private final String eventType;
+    private UiMessageHandler parent;
+
+
+<span class="nc" id="L35">    public RequestHandler(String eventType) {</span>
+<span class="nc" id="L36">        this.eventType = eventType;</span>
+<span class="nc" id="L37">    }</span>
+
+    // package private
+    void setParent(UiMessageHandler parent) {
+<span class="nc" id="L41">        this.parent = parent;</span>
+<span class="nc" id="L42">    }</span>
+
+    /**
+     * Returns the event type that this handler handles.
+     *
+     * @return event type
+     */
+    public String eventType() {
+<span class="nc" id="L50">        return eventType;</span>
+    }
+
+    /**
+     * Processes the incoming message payload from the client.
+     *
+     * @param sid message sequence identifier
+     * @param payload request message payload
+     */
+    // TODO: remove sid from signature
+    public abstract void process(long sid, ObjectNode payload);
+
+
+
+    // ===================================================================
+    // === Convenience methods...
+
+    /**
+     * Returns implementation of the specified service class.
+     *
+     * @param serviceClass service class
+     * @param &lt;T&gt;          type of service
+     * @return implementation class
+     * @throws org.onlab.osgi.ServiceNotFoundException if no implementation found
+     */
+    protected &lt;T&gt; T get(Class&lt;T&gt; serviceClass) {
+<span class="nc" id="L76">        return parent.directory().get(serviceClass);</span>
+    }
+
+    /**
+     * Sends a message back to the client.
+     *
+     * @param eventType message event type
+     * @param sid       message sequence identifier
+     * @param payload   message payload
+     */
+    // TODO: remove sid from signature
+    protected void sendMessage(String eventType, long sid, ObjectNode payload) {
+<span class="nc" id="L88">        parent.connection().sendMessage(eventType, sid, payload);</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     * Sends a message back to the client.
+     * Here, the message is preformatted; the assumption is it has its
+     * eventType, sid and payload attributes already filled in.
+     *
+     * @param message the message to send
+     */
+    protected void sendMessage(ObjectNode message) {
+<span class="nc" id="L99">        parent.connection().sendMessage(message);</span>
+<span class="nc" id="L100">    }</span>
+
+    /**
+     * Allows one request handler to pass the event on to another for
+     * further processing.
+     * Note that the message handlers must be defined in the same parent.
+     *
+     * @param eventType event type
+     * @param sid       sequence identifier
+     * @param payload   message payload
+     */
+    // TODO: remove sid from signature
+    protected void chain(String eventType, long sid, ObjectNode payload) {
+<span class="nc" id="L113">        parent.exec(eventType, sid, payload);</span>
+<span class="nc" id="L114">    }</span>
+
+    // ===================================================================
+
+
+    /**
+     * Returns the specified node property as a string.
+     *
+     * @param node message event
+     * @param key property name
+     * @return property as a string
+     */
+    protected String string(ObjectNode node, String key) {
+<span class="nc" id="L127">        return JsonUtils.string(node, key);</span>
+    }
+
+    /**
+     * Returns the specified node property as a string, with a default fallback.
+     *
+     * @param node         object node
+     * @param key          property name
+     * @param defValue     fallback value if property is absent
+     * @return property as a string
+     */
+    protected String string(ObjectNode node, String key, String defValue) {
+<span class="nc" id="L139">        return JsonUtils.string(node, key, defValue);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

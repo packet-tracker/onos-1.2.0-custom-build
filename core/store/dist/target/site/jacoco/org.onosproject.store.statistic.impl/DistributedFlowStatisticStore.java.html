@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedFlowStatisticStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.statistic.impl</a> &gt; <span class="el_source">DistributedFlowStatisticStore.java</span></div><h1>DistributedFlowStatisticStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.statistic.impl;
+
+import com.google.common.base.Objects;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.Tools;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.statistic.FlowStatisticStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.store.statistic.impl.StatisticStoreMessageSubjects.GET_CURRENT;
+import static org.onosproject.store.statistic.impl.StatisticStoreMessageSubjects.GET_PREVIOUS;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Maintains flow statistics using RPC calls to collect stats from remote instances
+ * on demand.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L65">public class DistributedFlowStatisticStore implements FlowStatisticStore {</span>
+<span class="nc" id="L66">    private final Logger log = getLogger(getClass());</span>
+
+    // TODO: Make configurable.
+    private static final int MESSAGE_HANDLER_THREAD_POOL_SIZE = 4;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+<span class="nc" id="L80">    private Map&lt;ConnectPoint, Set&lt;FlowEntry&gt;&gt; previous =</span>
+            new ConcurrentHashMap&lt;&gt;();
+
+<span class="nc" id="L83">    private Map&lt;ConnectPoint, Set&lt;FlowEntry&gt;&gt; current =</span>
+            new ConcurrentHashMap&lt;&gt;();
+
+<span class="nc" id="L86">    protected static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L89">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L90">                    .register(KryoNamespaces.API)</span>
+<span class="nc" id="L91">                    .nextId(KryoNamespaces.BEGIN_USER_CUSTOM_ID)</span>
+                            // register this store specific classes here
+<span class="nc" id="L93">                    .build();</span>
+<span class="nc" id="L94">        }</span>
+    };
+
+    private NodeId local;
+    private ExecutorService messageHandlingExecutor;
+
+    private static final long STATISTIC_STORE_TIMEOUT_MILLIS = 3000;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L104">        local = clusterService.getLocalNode().id();</span>
+
+<span class="nc" id="L106">        messageHandlingExecutor = Executors.newFixedThreadPool(</span>
+                MESSAGE_HANDLER_THREAD_POOL_SIZE,
+<span class="nc" id="L108">                groupedThreads(&quot;onos/store/statistic&quot;, &quot;message-handlers&quot;));</span>
+
+<span class="nc" id="L110">        clusterCommunicator.addSubscriber(</span>
+                GET_CURRENT, SERIALIZER::decode, this::getCurrentStatisticInternal, SERIALIZER::encode,
+                messageHandlingExecutor);
+
+<span class="nc" id="L114">        clusterCommunicator.addSubscriber(</span>
+                GET_CURRENT, SERIALIZER::decode, this::getPreviousStatisticInternal, SERIALIZER::encode,
+                messageHandlingExecutor);
+
+<span class="nc" id="L118">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L119">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L123">        clusterCommunicator.removeSubscriber(GET_PREVIOUS);</span>
+<span class="nc" id="L124">        clusterCommunicator.removeSubscriber(GET_CURRENT);</span>
+<span class="nc" id="L125">        messageHandlingExecutor.shutdown();</span>
+<span class="nc" id="L126">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L127">    }</span>
+
+    @Override
+    public synchronized void removeFlowStatistic(FlowRule rule) {
+<span class="nc" id="L131">        ConnectPoint cp = buildConnectPoint(rule);</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (cp == null) {</span>
+<span class="nc" id="L133">            return;</span>
+        }
+
+        // remove this rule if present from current map
+<span class="nc" id="L137">        current.computeIfPresent(cp, (c, e) -&gt; { e.remove(rule); return e;  });</span>
+
+        // remove this on if present from previous map
+<span class="nc" id="L140">        previous.computeIfPresent(cp, (c, e) -&gt; { e.remove(rule); return e; });</span>
+<span class="nc" id="L141">    }</span>
+
+    @Override
+    public synchronized void addFlowStatistic(FlowEntry rule) {
+<span class="nc" id="L145">        ConnectPoint cp = buildConnectPoint(rule);</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (cp == null) {</span>
+<span class="nc" id="L147">            return;</span>
+        }
+
+        // create one if absent and add this rule
+<span class="nc" id="L151">        current.putIfAbsent(cp, new HashSet&lt;&gt;());</span>
+<span class="nc" id="L152">        current.computeIfPresent(cp, (c, e) -&gt; { e.add(rule); return e; });</span>
+
+        // remove previous one if present
+<span class="nc" id="L155">        previous.computeIfPresent(cp, (c, e) -&gt; { e.remove(rule); return e; });</span>
+<span class="nc" id="L156">    }</span>
+
+    public synchronized void updateFlowStatistic(FlowEntry rule) {
+<span class="nc" id="L159">        ConnectPoint cp = buildConnectPoint(rule);</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (cp == null) {</span>
+<span class="nc" id="L161">            return;</span>
+        }
+
+<span class="nc" id="L164">        Set&lt;FlowEntry&gt; curr = current.get(cp);</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (curr == null) {</span>
+<span class="nc" id="L166">            addFlowStatistic(rule);</span>
+        } else {
+<span class="nc" id="L168">            Optional&lt;FlowEntry&gt; f = curr.stream().filter(c -&gt; rule.equals(c)).</span>
+<span class="nc" id="L169">                    findAny();</span>
+<span class="nc bnc" id="L170" title="All 4 branches missed.">            if (f.isPresent() &amp;&amp; rule.bytes() &lt; f.get().bytes()) {</span>
+<span class="nc" id="L171">                log.debug(&quot;DistributedFlowStatisticStore:updateFlowStatistic():&quot; +</span>
+                        &quot; Invalid Flow Update! Will be removed!!&quot; +
+<span class="nc" id="L173">                        &quot; curr flowId=&quot; + Long.toHexString(rule.id().value()) +</span>
+<span class="nc" id="L174">                        &quot;, prev flowId=&quot; + Long.toHexString(f.get().id().value()) +</span>
+<span class="nc" id="L175">                        &quot;, curr bytes=&quot; + rule.bytes() + &quot;, prev bytes=&quot; + f.get().bytes() +</span>
+<span class="nc" id="L176">                        &quot;, curr life=&quot; + rule.life() + &quot;, prev life=&quot; + f.get().life() +</span>
+<span class="nc" id="L177">                        &quot;, curr lastSeen=&quot; + rule.lastSeen() + &quot;, prev lastSeen=&quot; + f.get().lastSeen());</span>
+                // something is wrong! invalid flow entry, so delete it
+<span class="nc" id="L179">                removeFlowStatistic(rule);</span>
+<span class="nc" id="L180">                return;</span>
+            }
+<span class="nc" id="L182">            Set&lt;FlowEntry&gt; prev = previous.get(cp);</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (prev == null) {</span>
+<span class="nc" id="L184">                prev = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L185">                previous.put(cp, prev);</span>
+            }
+
+            // previous one is exist
+<span class="nc bnc" id="L189" title="All 2 branches missed.">            if (f.isPresent()) {</span>
+                // remove old one and add new one
+<span class="nc" id="L191">                prev.remove(rule);</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">                if (!prev.add(f.get())) {</span>
+<span class="nc" id="L193">                    log.debug(&quot;DistributedFlowStatisticStore:updateFlowStatistic():&quot; +</span>
+                                    &quot; flowId={}, add failed into previous.&quot;,
+<span class="nc" id="L195">                            Long.toHexString(rule.id().value()));</span>
+                }
+            }
+
+            // remove old one and add new one
+<span class="nc" id="L200">            curr.remove(rule);</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            if (!curr.add(rule)) {</span>
+<span class="nc" id="L202">                log.debug(&quot;DistributedFlowStatisticStore:updateFlowStatistic():&quot; +</span>
+                                &quot; flowId={}, add failed into current.&quot;,
+<span class="nc" id="L204">                        Long.toHexString(rule.id().value()));</span>
+            }
+        }
+<span class="nc" id="L207">    }</span>
+
+    @Override
+    public Set&lt;FlowEntry&gt; getCurrentFlowStatistic(ConnectPoint connectPoint) {
+<span class="nc" id="L211">        final DeviceId deviceId = connectPoint.deviceId();</span>
+
+<span class="nc" id="L213">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L215">            log.warn(&quot;No master for {}&quot;, deviceId);</span>
+<span class="nc" id="L216">            return Collections.emptySet();</span>
+        }
+
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+<span class="nc" id="L220">            return getCurrentStatisticInternal(connectPoint);</span>
+        } else {
+<span class="nc" id="L222">            return Tools.futureGetOrElse(clusterCommunicator.sendAndReceive(</span>
+                            connectPoint,
+                            GET_CURRENT,
+                            SERIALIZER::encode,
+                            SERIALIZER::decode,
+                            master),
+                    STATISTIC_STORE_TIMEOUT_MILLIS,
+                    TimeUnit.MILLISECONDS,
+<span class="nc" id="L230">                    Collections.emptySet());</span>
+        }
+    }
+
+    private synchronized Set&lt;FlowEntry&gt; getCurrentStatisticInternal(ConnectPoint connectPoint) {
+<span class="nc" id="L235">        return current.get(connectPoint);</span>
+    }
+
+    @Override
+    public Set&lt;FlowEntry&gt; getPreviousFlowStatistic(ConnectPoint connectPoint) {
+<span class="nc" id="L240">        final DeviceId deviceId = connectPoint.deviceId();</span>
+
+<span class="nc" id="L242">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L244">            log.warn(&quot;No master for {}&quot;, deviceId);</span>
+<span class="nc" id="L245">            return Collections.emptySet();</span>
+        }
+
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+<span class="nc" id="L249">            return getPreviousStatisticInternal(connectPoint);</span>
+        } else {
+<span class="nc" id="L251">            return Tools.futureGetOrElse(clusterCommunicator.sendAndReceive(</span>
+                            connectPoint,
+                            GET_PREVIOUS,
+                            SERIALIZER::encode,
+                            SERIALIZER::decode,
+                            master),
+                    STATISTIC_STORE_TIMEOUT_MILLIS,
+                    TimeUnit.MILLISECONDS,
+<span class="nc" id="L259">                    Collections.emptySet());</span>
+        }
+    }
+
+    private synchronized Set&lt;FlowEntry&gt; getPreviousStatisticInternal(ConnectPoint connectPoint) {
+<span class="nc" id="L264">        return previous.get(connectPoint);</span>
+    }
+
+    private ConnectPoint buildConnectPoint(FlowRule rule) {
+<span class="nc" id="L268">        PortNumber port = getOutput(rule);</span>
+
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L271">            return null;</span>
+        }
+<span class="nc" id="L273">        ConnectPoint cp = new ConnectPoint(rule.deviceId(), port);</span>
+<span class="nc" id="L274">        return cp;</span>
+    }
+
+    private PortNumber getOutput(FlowRule rule) {
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        for (Instruction i : rule.treatment().allInstructions()) {</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">            if (i.type() == Instruction.Type.OUTPUT) {</span>
+<span class="nc" id="L280">                Instructions.OutputInstruction out = (Instructions.OutputInstruction) i;</span>
+<span class="nc" id="L281">                return out.port();</span>
+            }
+<span class="nc bnc" id="L283" title="All 2 branches missed.">            if (i.type() == Instruction.Type.DROP) {</span>
+<span class="nc" id="L284">                return PortNumber.P0;</span>
+            }
+<span class="nc" id="L286">        }</span>
+<span class="nc" id="L287">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

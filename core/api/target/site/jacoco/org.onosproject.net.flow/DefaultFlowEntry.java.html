@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultFlowEntry.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow</a> &gt; <span class="el_source">DefaultFlowEntry.java</span></div><h1>DefaultFlowEntry.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import org.slf4j.Logger;
+
+public class DefaultFlowEntry extends DefaultFlowRule
+    implements StoredFlowEntry {
+
+<span class="fc" id="L26">    private static final Logger log = getLogger(DefaultFlowEntry.class);</span>
+
+    private long life;
+    private long packets;
+    private long bytes;
+    private FlowEntryState state;
+
+<span class="fc" id="L33">    private long lastSeen = -1;</span>
+
+    private final int errType;
+
+    private final int errCode;
+
+    public DefaultFlowEntry(FlowRule rule, FlowEntryState state,
+            long life, long packets, long bytes) {
+<span class="fc" id="L41">        super(rule);</span>
+<span class="fc" id="L42">        this.state = state;</span>
+<span class="fc" id="L43">        this.life = life;</span>
+<span class="fc" id="L44">        this.packets = packets;</span>
+<span class="fc" id="L45">        this.bytes = bytes;</span>
+<span class="fc" id="L46">        this.errCode = -1;</span>
+<span class="fc" id="L47">        this.errType = -1;</span>
+<span class="fc" id="L48">        this.lastSeen = System.currentTimeMillis();</span>
+<span class="fc" id="L49">    }</span>
+
+    public DefaultFlowEntry(FlowRule rule) {
+<span class="fc" id="L52">        super(rule);</span>
+<span class="fc" id="L53">        this.state = FlowEntryState.PENDING_ADD;</span>
+<span class="fc" id="L54">        this.life = 0;</span>
+<span class="fc" id="L55">        this.packets = 0;</span>
+<span class="fc" id="L56">        this.bytes = 0;</span>
+<span class="fc" id="L57">        this.errCode = -1;</span>
+<span class="fc" id="L58">        this.errType = -1;</span>
+<span class="fc" id="L59">        this.lastSeen = System.currentTimeMillis();</span>
+<span class="fc" id="L60">    }</span>
+
+    public DefaultFlowEntry(FlowRule rule, int errType, int errCode) {
+<span class="fc" id="L63">        super(rule);</span>
+<span class="fc" id="L64">        this.state = FlowEntryState.FAILED;</span>
+<span class="fc" id="L65">        this.errType = errType;</span>
+<span class="fc" id="L66">        this.errCode = errCode;</span>
+<span class="fc" id="L67">        this.lastSeen = System.currentTimeMillis();</span>
+<span class="fc" id="L68">    }</span>
+
+    @Override
+    public long life() {
+<span class="fc" id="L72">        return life;</span>
+    }
+
+    @Override
+    public long packets() {
+<span class="fc" id="L77">        return packets;</span>
+    }
+
+    @Override
+    public long bytes() {
+<span class="fc" id="L82">        return bytes;</span>
+    }
+
+    @Override
+    public FlowEntryState state() {
+<span class="fc" id="L87">        return this.state;</span>
+    }
+
+    @Override
+    public long lastSeen() {
+<span class="fc" id="L92">        return lastSeen;</span>
+    }
+
+    @Override
+    public void setLastSeen() {
+<span class="fc" id="L97">        this.lastSeen = System.currentTimeMillis();</span>
+<span class="fc" id="L98">    }</span>
+
+    @Override
+    public void setState(FlowEntryState newState) {
+<span class="fc" id="L102">        this.state = newState;</span>
+<span class="fc" id="L103">    }</span>
+
+    @Override
+    public void setLife(long life) {
+<span class="fc" id="L107">        this.life = life;</span>
+<span class="fc" id="L108">    }</span>
+
+    @Override
+    public void setPackets(long packets) {
+<span class="fc" id="L112">        this.packets = packets;</span>
+<span class="fc" id="L113">    }</span>
+
+    @Override
+    public void setBytes(long bytes) {
+<span class="fc" id="L117">        this.bytes = bytes;</span>
+<span class="fc" id="L118">    }</span>
+
+    @Override
+    public int errType() {
+<span class="fc" id="L122">        return this.errType;</span>
+    }
+
+    @Override
+    public int errCode() {
+<span class="fc" id="L127">        return this.errCode;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L132">        return toStringHelper(this)</span>
+<span class="fc" id="L133">                .add(&quot;rule&quot;, super.toString())</span>
+<span class="fc" id="L134">                .add(&quot;state&quot;, state)</span>
+<span class="fc" id="L135">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

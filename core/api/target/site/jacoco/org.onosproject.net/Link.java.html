@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Link.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">Link.java</span></div><h1>Link.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+/**
+ * Abstraction of a network infrastructure link.
+ */
+public interface Link extends Annotated, Provided, NetworkResource {
+
+    /**
+     * Coarse representation of the link type.
+     */
+<span class="pc" id="L26">    enum Type {</span>
+        /**
+         * Signifies that this is a direct single-segment link.
+         */
+<span class="fc" id="L30">        DIRECT,</span>
+
+        /**
+         * Signifies that this link is potentially comprised from multiple
+         * underlying segments or hops, and as such should be used to tag
+         * links traversing optical paths, tunnels or intervening 'dark'
+         * switches.
+         */
+<span class="fc" id="L38">        INDIRECT,</span>
+
+        /**
+         * Signifies that this link is an edge, i.e. host link.
+         */
+<span class="fc" id="L43">        EDGE,</span>
+
+        /**
+         * Signifies that this link represents a logical link backed by
+         * some form of a tunnel, e.g., GRE, MPLS, ODUk, OCH.
+         */
+<span class="fc" id="L49">        TUNNEL,</span>
+
+        /**
+         * Signifies that this link is realized by fiber (either single channel or WDM).
+         */
+<span class="fc" id="L54">        OPTICAL,</span>
+
+        /**
+         * Signifies that this link is a virtual link or a pseudo-wire.
+         */
+<span class="fc" id="L59">        VIRTUAL</span>
+    }
+
+    /**
+     * Representation of the link state, which applies primarily only to
+     * configured durable links, i.e. those that need to remain present,
+     * but instead be marked as inactive.
+     */
+<span class="pc" id="L67">    enum State {</span>
+        /**
+         * Signifies that a link is currently active.
+         */
+<span class="fc" id="L71">        ACTIVE,</span>
+
+        /**
+         * Signifies that a link is currently active.
+         */
+<span class="fc" id="L76">        INACTIVE</span>
+    }
+
+    /**
+     * Returns the link source connection point.
+     *
+     * @return link source connection point
+     */
+    ConnectPoint src();
+
+    /**
+     * Returns the link destination connection point.
+     *
+     * @return link destination connection point
+     */
+    ConnectPoint dst();
+
+    /**
+     * Returns the link type.
+     *
+     * @return link type
+     */
+    Type type();
+
+    /**
+     * Returns the link state.
+     *
+     * @return link state
+     */
+    State state();
+
+    /**
+     * Indicates if the link is to be considered durable.
+     *
+     * @return true if the link is durable
+     */
+    boolean isDurable();
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

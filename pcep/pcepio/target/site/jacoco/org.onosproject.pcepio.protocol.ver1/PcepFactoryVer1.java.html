@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepFactoryVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepFactoryVer1.java</span></div><h1>PcepFactoryVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.onosproject.pcepio.protocol.PcInitiatedLspRequest;
+import org.onosproject.pcepio.protocol.PcepAttribute;
+import org.onosproject.pcepio.protocol.PcepBandwidthObject;
+import org.onosproject.pcepio.protocol.PcepCloseMsg;
+import org.onosproject.pcepio.protocol.PcepEndPointsObject;
+import org.onosproject.pcepio.protocol.PcepEroObject;
+import org.onosproject.pcepio.protocol.PcepErrorInfo;
+import org.onosproject.pcepio.protocol.PcepError;
+import org.onosproject.pcepio.protocol.PcepErrorMsg;
+import org.onosproject.pcepio.protocol.PcepErrorObject;
+import org.onosproject.pcepio.protocol.PcepFactory;
+import org.onosproject.pcepio.protocol.PcepFecObjectIPv4Adjacency;
+import org.onosproject.pcepio.protocol.PcepInitiateMsg;
+import org.onosproject.pcepio.protocol.PcepIroObject;
+import org.onosproject.pcepio.protocol.PcepKeepaliveMsg;
+import org.onosproject.pcepio.protocol.PcepLabelObject;
+import org.onosproject.pcepio.protocol.PcepLabelRangeObject;
+import org.onosproject.pcepio.protocol.PcepLabelRangeResvMsg;
+import org.onosproject.pcepio.protocol.PcepLabelUpdate;
+import org.onosproject.pcepio.protocol.PcepLabelUpdateMsg;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepLspaObject;
+import org.onosproject.pcepio.protocol.PcepMessage;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMetricObject;
+import org.onosproject.pcepio.protocol.PcepMsgPath;
+import org.onosproject.pcepio.protocol.PcepOpenMsg;
+import org.onosproject.pcepio.protocol.PcepOpenObject;
+import org.onosproject.pcepio.protocol.PcepReportMsg;
+import org.onosproject.pcepio.protocol.PcepRroObject;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.protocol.PcepStateReport;
+import org.onosproject.pcepio.protocol.PcepUpdateMsg;
+import org.onosproject.pcepio.protocol.PcepUpdateRequest;
+import org.onosproject.pcepio.protocol.PcepVersion;
+
+/**
+ * Provides PCEP Factory and returns builder classes for all objects and messages.
+ */
+<span class="fc" id="L58">public class PcepFactoryVer1 implements PcepFactory {</span>
+
+<span class="fc" id="L60">    public static final PcepFactoryVer1 INSTANCE = new PcepFactoryVer1();</span>
+
+    @Override
+    public PcepOpenMsg.Builder buildOpenMsg() {
+<span class="nc" id="L64">        return new PcepOpenMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepOpenObject.Builder buildOpenObject() {
+<span class="nc" id="L69">        return new PcepOpenObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepKeepaliveMsg.Builder buildKeepaliveMsg() {
+<span class="nc" id="L74">        return new PcepKeepaliveMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepCloseMsg.Builder buildCloseMsg() {
+<span class="nc" id="L79">        return new PcepCloseMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepUpdateMsg.Builder buildUpdateMsg() {
+<span class="nc" id="L84">        return new PcepUpdateMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepReportMsg.Builder buildReportMsg() {
+<span class="nc" id="L89">        return new PcepReportMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepInitiateMsg.Builder buildPcepInitiateMsg() {
+<span class="nc" id="L94">        return new PcepInitiateMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLspObject.Builder buildLspObject() {
+<span class="nc" id="L99">        return new PcepLspObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepMessageReader&lt;PcepMessage&gt; getReader() {
+<span class="fc" id="L104">        return PcepMessageVer1.READER;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L109">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepSrpObject.Builder buildSrpObject() {
+<span class="nc" id="L114">        return new PcepSrpObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepEndPointsObject.Builder buildEndPointsObject() {
+<span class="nc" id="L119">        return new PcepEndPointsObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepEroObject.Builder buildEroObject() {
+<span class="nc" id="L124">        return new PcepEroObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepRroObject.Builder buildRroObject() {
+<span class="nc" id="L129">        return new PcepRroObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLspaObject.Builder buildLspaObject() {
+<span class="nc" id="L134">        return new PcepLspaObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepIroObject.Builder buildIroObject() {
+<span class="nc" id="L139">        return new PcepIroObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepMetricObject.Builder buildMetricObject() {
+<span class="nc" id="L144">        return new PcepMetricObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepBandwidthObject.Builder buildBandwidthObject() {
+<span class="nc" id="L149">        return new PcepBandwidthObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepMsgPath.Builder buildPcepMsgPath() {
+<span class="nc" id="L154">        return new PcepMsgPathVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepStateReport.Builder buildPcepStateReport() {
+<span class="nc" id="L159">        return new PcepStateReportVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepUpdateRequest.Builder buildPcepUpdateRequest() {
+<span class="nc" id="L164">        return new PcepUpdateRequestVer1.Builder();</span>
+    }
+
+    @Override
+    public PcInitiatedLspRequest.Builder buildPcInitiatedLspRequest() {
+<span class="nc" id="L169">        return new PcInitiatedLspRequestVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepAttribute.Builder buildPcepAttribute() {
+<span class="nc" id="L174">        return new PcepAttributeVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLabelUpdateMsg.Builder buildPcepLabelUpdateMsg() {
+<span class="nc" id="L179">        return new PcepLabelUpdateMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLabelUpdate.Builder buildPcepLabelUpdateObject() {
+<span class="nc" id="L184">        return new PcepLabelUpdateVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLabelObject.Builder buildLabelObject() {
+<span class="nc" id="L189">        return new PcepLabelObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepErrorMsg.Builder buildPcepErrorMsg() {
+<span class="nc" id="L194">        return new PcepErrorMsgVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepErrorObject.Builder buildPcepErrorObject() {
+<span class="nc" id="L199">        return new PcepErrorObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepFecObjectIPv4Adjacency.Builder buildFecIpv4Adjacency() {
+<span class="nc" id="L204">        return new PcepFecObjectIPv4AdjacencyVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepErrorInfo.Builder buildPcepErrorInfo() {
+<span class="nc" id="L209">        return new PcepErrorInfoVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepError.Builder buildPcepError() {
+<span class="nc" id="L214">        return new PcepErrorVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLabelRangeObject.Builder buildPcepLabelRangeObject() {
+<span class="nc" id="L219">        return new PcepLabelRangeObjectVer1.Builder();</span>
+    }
+
+    @Override
+    public PcepLabelRangeResvMsg.Builder buildPcepLabelRangeResvMsg() {
+<span class="nc" id="L224">        return new PcepLabelRangeResvMsgVer1.Builder();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

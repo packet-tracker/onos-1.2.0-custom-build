@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ApiDocProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest</a> &gt; <span class="el_source">ApiDocProvider.java</span></div><h1>ApiDocProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest;
+
+import com.google.common.annotations.Beta;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Entity capable of providing REST API documentation resources.
+ */
+@Beta
+public class ApiDocProvider {
+
+<span class="nc" id="L32">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String DOCS = &quot;/apidoc/swagger.json&quot;;
+    private static final String MODEL = &quot;/apidoc/model.json&quot;;
+
+    private final String key;
+    private final String name;
+    private final ClassLoader classLoader;
+
+    /**
+     * Creates a new REST API documentation provider.
+     *
+     * @param key         REST API key
+     * @param name        REST API name
+     * @param classLoader class loader
+     */
+<span class="nc" id="L48">    public ApiDocProvider(String key, String name, ClassLoader classLoader) {</span>
+<span class="nc" id="L49">        this.key = checkNotNull(key, &quot;Key cannot be null&quot;);</span>
+<span class="nc" id="L50">        this.name = checkNotNull(name, &quot;Name cannot be null&quot;);</span>
+<span class="nc" id="L51">        this.classLoader = checkNotNull(classLoader, &quot;Class loader cannot be null&quot;);</span>
+<span class="nc" id="L52">    }</span>
+
+    /**
+     * Returns the REST API key.
+     *
+     * @return REST API key
+     */
+    public String key() {
+<span class="nc" id="L60">        return key;</span>
+    }
+
+    /**
+     * Returns the REST API name.
+     *
+     * @return REST API name
+     */
+    public String name() {
+<span class="nc" id="L69">        return name;</span>
+    }
+
+    /**
+     * Returns input stream containing Swagger UI compatible JSON.
+     *
+     * @return input stream with Swagger JSON data
+     */
+    public InputStream docs() {
+<span class="nc" id="L78">        return get(DOCS);</span>
+    }
+
+    /**
+     * Returns input stream containing JSON model schema.
+     *
+     * @return input stream with JSON model schema
+     */
+    public InputStream model() {
+<span class="nc" id="L87">        return get(MODEL);</span>
+    }
+
+    private InputStream get(String resource) {
+<span class="nc" id="L91">        InputStream stream = classLoader.getResourceAsStream(resource);</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (stream == null) {</span>
+<span class="nc" id="L93">            log.warn(&quot;Unable to find JSON resource {}&quot;, resource);</span>
+        }
+<span class="nc" id="L95">        return stream;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

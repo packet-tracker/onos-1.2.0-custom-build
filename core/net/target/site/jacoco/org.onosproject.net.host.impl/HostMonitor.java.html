@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>HostMonitor.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.host.impl</a> &gt; <span class="el_source">HostMonitor.java</span></div><h1>HostMonitor.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.host.impl;
+
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.packet.ARP;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.ICMP6;
+import org.onlab.packet.IPv6;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+import org.onlab.packet.ndp.NeighborDiscoveryOptions;
+import org.onlab.packet.ndp.NeighborSolicitation;
+import org.onlab.util.Timer;
+import org.onosproject.incubator.net.intf.Interface;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Host;
+import org.onosproject.net.edge.EdgePortService;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.host.HostProvider;
+import org.onosproject.net.host.InterfaceIpAddress;
+import org.onosproject.net.packet.DefaultOutboundPacket;
+import org.onosproject.net.packet.OutboundPacket;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.net.provider.ProviderId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Monitors hosts on the dataplane to detect changes in host data.
+ * &lt;p&gt;
+ * The HostMonitor can monitor hosts that have already been detected for
+ * changes. At an application's request, it can also monitor and actively
+ * probe for hosts that have not yet been detected (specified by IP address).
+ * &lt;/p&gt;
+ */
+public class HostMonitor implements TimerTask {
+
+<span class="fc" id="L63">    private Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private PacketService packetService;
+    private HostManager hostManager;
+    private InterfaceService interfaceService;
+    private EdgePortService edgePortService;
+
+    private final Set&lt;IpAddress&gt; monitoredAddresses;
+
+    private final ConcurrentMap&lt;ProviderId, HostProvider&gt; hostProviders;
+
+    private static final long DEFAULT_PROBE_RATE = 30000; // milliseconds
+<span class="fc" id="L75">    private static final byte[] ZERO_MAC_ADDRESS = MacAddress.ZERO.toBytes();</span>
+<span class="fc" id="L76">    private long probeRate = DEFAULT_PROBE_RATE;</span>
+
+    private Timeout timeout;
+
+    /**
+     * Creates a new host monitor.
+     *
+     * @param packetService packet service used to send packets on the data plane
+     * @param hostManager host manager used to look up host information and
+     * probe existing hosts
+     * @param interfaceService interface service for interface information
+     * @param edgePortService  edge port service
+     */
+    public HostMonitor(PacketService packetService, HostManager hostManager,
+                       InterfaceService interfaceService,
+<span class="fc" id="L91">                       EdgePortService edgePortService) {</span>
+
+<span class="fc" id="L93">        this.packetService = packetService;</span>
+<span class="fc" id="L94">        this.hostManager = hostManager;</span>
+<span class="fc" id="L95">        this.interfaceService = interfaceService;</span>
+<span class="fc" id="L96">        this.edgePortService = edgePortService;</span>
+
+<span class="fc" id="L98">        monitoredAddresses = Collections.newSetFromMap(new ConcurrentHashMap&lt;&gt;());</span>
+<span class="fc" id="L99">        hostProviders = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="fc" id="L100">    }</span>
+
+    /**
+     * Adds an IP address to be monitored by the host monitor. The monitor will
+     * periodically probe the host to detect changes.
+     *
+     * @param ip IP address of the host to monitor
+     */
+    void addMonitoringFor(IpAddress ip) {
+<span class="fc" id="L109">        monitoredAddresses.add(ip);</span>
+<span class="fc" id="L110">    }</span>
+
+    /**
+     * Stops monitoring the given IP address.
+     *
+     * @param ip IP address to stop monitoring on
+     */
+    void stopMonitoring(IpAddress ip) {
+<span class="nc" id="L118">        monitoredAddresses.remove(ip);</span>
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Starts the host monitor. Does nothing if the monitor is already running.
+     */
+    void start() {
+<span class="fc" id="L125">        synchronized (this) {</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">            if (timeout == null) {</span>
+<span class="fc" id="L127">                timeout = Timer.getTimer().newTimeout(this, 0, TimeUnit.MILLISECONDS);</span>
+            }
+<span class="pc" id="L129">        }</span>
+<span class="fc" id="L130">    }</span>
+
+    /**
+     * Stops the host monitor.
+     */
+    void shutdown() {
+<span class="fc" id="L136">        synchronized (this) {</span>
+<span class="fc" id="L137">            timeout.cancel();</span>
+<span class="fc" id="L138">            timeout = null;</span>
+<span class="pc" id="L139">        }</span>
+<span class="fc" id="L140">    }</span>
+
+    /**
+     * Registers a host provider with the host monitor. The monitor can use the
+     * provider to probe hosts.
+     *
+     * @param provider the host provider to register
+     */
+    void registerHostProvider(HostProvider provider) {
+<span class="fc" id="L149">        hostProviders.put(provider.id(), provider);</span>
+<span class="fc" id="L150">    }</span>
+
+    @Override
+    public void run(Timeout timeout) throws Exception {
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        for (IpAddress ip : monitoredAddresses) {</span>
+<span class="fc" id="L155">            Set&lt;Host&gt; hosts = hostManager.getHostsByIp(ip);</span>
+
+<span class="fc bfc" id="L157" title="All 2 branches covered.">            if (hosts.isEmpty()) {</span>
+<span class="fc" id="L158">                sendRequest(ip);</span>
+            } else {
+<span class="fc bfc" id="L160" title="All 2 branches covered.">                for (Host host : hosts) {</span>
+<span class="fc" id="L161">                    HostProvider provider = hostProviders.get(host.providerId());</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">                    if (provider == null) {</span>
+<span class="nc" id="L163">                        hostProviders.remove(host.providerId(), null);</span>
+                    } else {
+<span class="fc" id="L165">                        provider.triggerProbe(host);</span>
+                    }
+<span class="fc" id="L167">                }</span>
+            }
+<span class="fc" id="L169">        }</span>
+
+<span class="fc" id="L171">        this.timeout = Timer.getTimer().newTimeout(this, probeRate, TimeUnit.MILLISECONDS);</span>
+<span class="fc" id="L172">    }</span>
+
+    /**
+     * Sends an ARP or NDP request for the given IP address.
+     *
+     * @param targetIp IP address to send the request for
+     */
+    private void sendRequest(IpAddress targetIp) {
+<span class="fc" id="L180">        Interface intf = interfaceService.getMatchingInterface(targetIp);</span>
+
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">        if (intf == null) {</span>
+<span class="nc" id="L183">            return;</span>
+        }
+
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">        if (!edgePortService.isEdgePoint(intf.connectPoint())) {</span>
+<span class="nc" id="L187">            log.warn(&quot;Attempt to send probe out non-edge port: {}&quot;, intf);</span>
+<span class="nc" id="L188">            return;</span>
+        }
+
+<span class="fc bfc" id="L191" title="All 2 branches covered.">        for (InterfaceIpAddress ia : intf.ipAddresses()) {</span>
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">            if (ia.subnetAddress().contains(targetIp)) {</span>
+<span class="fc" id="L193">                sendProbe(intf.connectPoint(), targetIp, ia.ipAddress(),</span>
+<span class="fc" id="L194">                        intf.mac(), intf.vlan());</span>
+            }
+<span class="fc" id="L196">        }</span>
+<span class="fc" id="L197">    }</span>
+
+    private void sendProbe(ConnectPoint connectPoint,
+                           IpAddress targetIp,
+                           IpAddress sourceIp, MacAddress sourceMac,
+                           VlanId vlan) {
+<span class="fc" id="L203">        Ethernet probePacket = null;</span>
+
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        if (targetIp.isIp4()) {</span>
+            // IPv4: Use ARP
+<span class="fc" id="L207">            probePacket = buildArpRequest(targetIp, sourceIp, sourceMac, vlan);</span>
+        } else {
+            // IPv6: Use Neighbor Discovery
+<span class="fc" id="L210">            probePacket = buildNdpRequest(targetIp, sourceIp, sourceMac, vlan);</span>
+        }
+
+<span class="fc" id="L213">        TrafficTreatment treatment = DefaultTrafficTreatment.builder()</span>
+<span class="fc" id="L214">            .setOutput(connectPoint.port())</span>
+<span class="fc" id="L215">            .build();</span>
+
+<span class="fc" id="L217">        OutboundPacket outboundPacket =</span>
+<span class="fc" id="L218">            new DefaultOutboundPacket(connectPoint.deviceId(), treatment,</span>
+<span class="fc" id="L219">                                      ByteBuffer.wrap(probePacket.serialize()));</span>
+
+<span class="fc" id="L221">        packetService.emit(outboundPacket);</span>
+<span class="fc" id="L222">    }</span>
+
+    private Ethernet buildArpRequest(IpAddress targetIp, IpAddress sourceIp,
+                                     MacAddress sourceMac, VlanId vlan) {
+
+<span class="fc" id="L227">        ARP arp = new ARP();</span>
+<span class="fc" id="L228">        arp.setHardwareType(ARP.HW_TYPE_ETHERNET)</span>
+<span class="fc" id="L229">           .setHardwareAddressLength((byte) Ethernet.DATALAYER_ADDRESS_LENGTH)</span>
+<span class="fc" id="L230">           .setProtocolType(ARP.PROTO_TYPE_IP)</span>
+<span class="fc" id="L231">           .setProtocolAddressLength((byte) IpAddress.INET_BYTE_LENGTH)</span>
+<span class="fc" id="L232">           .setOpCode(ARP.OP_REQUEST);</span>
+
+<span class="fc" id="L234">        arp.setSenderHardwareAddress(sourceMac.toBytes())</span>
+<span class="fc" id="L235">           .setSenderProtocolAddress(sourceIp.toOctets())</span>
+<span class="fc" id="L236">           .setTargetHardwareAddress(ZERO_MAC_ADDRESS)</span>
+<span class="fc" id="L237">           .setTargetProtocolAddress(targetIp.toOctets());</span>
+
+<span class="fc" id="L239">        Ethernet ethernet = new Ethernet();</span>
+<span class="fc" id="L240">        ethernet.setEtherType(Ethernet.TYPE_ARP)</span>
+<span class="fc" id="L241">                .setDestinationMACAddress(MacAddress.BROADCAST)</span>
+<span class="fc" id="L242">                .setSourceMACAddress(sourceMac)</span>
+<span class="fc" id="L243">                .setPayload(arp);</span>
+
+<span class="fc bfc" id="L245" title="All 2 branches covered.">        if (!vlan.equals(VlanId.NONE)) {</span>
+<span class="fc" id="L246">            ethernet.setVlanID(vlan.toShort());</span>
+        }
+
+<span class="fc" id="L249">        ethernet.setPad(true);</span>
+
+<span class="fc" id="L251">        return ethernet;</span>
+    }
+
+    private Ethernet buildNdpRequest(IpAddress targetIp, IpAddress sourceIp,
+                                     MacAddress sourceMac, VlanId vlan) {
+
+        // Create the Ethernet packet
+<span class="fc" id="L258">        Ethernet ethernet = new Ethernet();</span>
+<span class="fc" id="L259">        ethernet.setEtherType(Ethernet.TYPE_IPV6)</span>
+<span class="fc" id="L260">                .setDestinationMACAddress(MacAddress.BROADCAST)</span>
+<span class="fc" id="L261">                .setSourceMACAddress(sourceMac);</span>
+<span class="fc bfc" id="L262" title="All 2 branches covered.">        if (!vlan.equals(VlanId.NONE)) {</span>
+<span class="fc" id="L263">            ethernet.setVlanID(vlan.toShort());</span>
+        }
+
+        //
+        // Create the IPv6 packet
+        //
+        // TODO: The destination IP address should be the
+        // solicited-node multicast address
+<span class="fc" id="L271">        IPv6 ipv6 = new IPv6();</span>
+<span class="fc" id="L272">        ipv6.setSourceAddress(sourceIp.toOctets());</span>
+<span class="fc" id="L273">        ipv6.setDestinationAddress(targetIp.toOctets());</span>
+<span class="fc" id="L274">        ipv6.setHopLimit((byte) 255);</span>
+
+        // Create the ICMPv6 packet
+<span class="fc" id="L277">        ICMP6 icmp6 = new ICMP6();</span>
+<span class="fc" id="L278">        icmp6.setIcmpType(ICMP6.NEIGHBOR_SOLICITATION);</span>
+<span class="fc" id="L279">        icmp6.setIcmpCode((byte) 0);</span>
+
+        // Create the Neighbor Solicitation packet
+<span class="fc" id="L282">        NeighborSolicitation ns = new NeighborSolicitation();</span>
+<span class="fc" id="L283">        ns.setTargetAddress(targetIp.toOctets());</span>
+<span class="fc" id="L284">        ns.addOption(NeighborDiscoveryOptions.TYPE_SOURCE_LL_ADDRESS,</span>
+<span class="fc" id="L285">                     sourceMac.toBytes());</span>
+
+<span class="fc" id="L287">        icmp6.setPayload(ns);</span>
+<span class="fc" id="L288">        ipv6.setPayload(icmp6);</span>
+<span class="fc" id="L289">        ethernet.setPayload(ipv6);</span>
+
+<span class="fc" id="L291">        return ethernet;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

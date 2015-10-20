@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BasicDeviceConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.basics</a> &gt; <span class="el_source">BasicDeviceConfig.java</span></div><h1>BasicDeviceConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.basics;
+
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+
+/**
+ * Basic configuration for network infrastructure devices.
+ */
+<span class="nc" id="L24">public class BasicDeviceConfig extends BasicElementConfig&lt;DeviceId&gt; {</span>
+
+    public static final String TYPE = &quot;type&quot;;
+    public static final String DRIVER = &quot;driver&quot;;
+    public static final String MANAGEMENT_ADDRESS = &quot;managementAddress&quot;;
+
+    /**
+     * Returns the device type.
+     *
+     * @return device type override
+     */
+    public Device.Type type() {
+<span class="nc" id="L36">        return get(TYPE, Device.Type.SWITCH, Device.Type.class);</span>
+    }
+
+    /**
+     * Sets the device type.
+     *
+     * @param type device type override
+     * @return self
+     */
+    public BasicDeviceConfig type(Device.Type type) {
+<span class="nc" id="L46">        return (BasicDeviceConfig) setOrClear(TYPE, type);</span>
+    }
+
+    /**
+     * Returns the device driver name.
+     *
+     * @return driver name of null if not set
+     */
+    public String driver() {
+<span class="nc" id="L55">        return get(DRIVER, subject.toString());</span>
+    }
+
+    /**
+     * Sets the driver name.
+     *
+     * @param driverName new driver name; null to clear
+     * @return self
+     */
+    public BasicElementConfig driver(String driverName) {
+<span class="nc" id="L65">        return (BasicElementConfig) setOrClear(DRIVER, driverName);</span>
+    }
+
+    /**
+     * Returns the device management ip (ip:port).
+     *
+     * @return device management address (ip:port) or null if not set
+     */
+    public String managementAddress() {
+<span class="nc" id="L74">        return get(MANAGEMENT_ADDRESS, null);</span>
+    }
+
+    /**
+     * Sets the driver name.
+     *
+     * @param managementAddress new device management address (ip:port); null to clear
+     * @return self
+     */
+    public BasicElementConfig managementAddress(String managementAddress) {
+<span class="nc" id="L84">        return (BasicElementConfig) setOrClear(MANAGEMENT_ADDRESS, managementAddress);</span>
+    }
+
+    // TODO: device port meta-data to be configured via BasicPortsConfig
+    // TODO: device credentials/keys
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

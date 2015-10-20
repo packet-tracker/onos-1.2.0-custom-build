@@ -1,0 +1,275 @@
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider isReachable
+WARNING: BAD REQUEST: the requested device id: of:0000000000000001  is not associated to any NETCONF Device
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=@10.18.11.14:22:active
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: @10.18.11.14:22:active to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+SEVERE: Error while reading config infromation from the config file: The user, host and device state infomation should be in the order 'userInfo@hostInfo:deviceState'@10.18.11.14:22:active
+java.lang.ArrayIndexOutOfBoundsException: 1
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.processDeviceEntry(NetconfDeviceProvider.java:181)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.addOrRemoveDevicesConfig(NetconfDeviceProvider.java:152)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.modified(NetconfDeviceProvider.java:146)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.activate(NetconfDeviceProvider.java:112)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProviderTest.testActiveWithDeviceEntryWithArrayOutOFBoundEx(NetconfDeviceProviderTest.java:239)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:497)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:271)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:70)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:50)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runners.Suite.runChild(Suite.java:127)
+	at org.junit.runners.Suite.runChild(Suite.java:26)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:160)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:138)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.createRequestAndRun(JUnitCoreWrapper.java:108)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.executeEager(JUnitCoreWrapper.java:78)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.execute(JUnitCoreWrapper.java:54)
+	at org.apache.maven.surefire.junitcore.JUnitCoreProvider.invoke(JUnitCoreProvider.java:144)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:203)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:155)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:103)
+
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=cisco:cisco@10.18.11.14:22:active,cisco:cisco@10.18.11.18:22:inactive,cisco:cisco@10.18.11.14:22:invalid,cisco:cisco@10.18.11.14:22:null
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:22:active to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.14, port=22, state=ACTIVE
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.18:22:inactive to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.18, port=22, state=INACTIVE
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:22:invalid to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+WARNING: Device State Information can not be empty, so marking the state as INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.14, port=22, state=INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:22:null to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+WARNING: Device State Information can not be empty, so marking the state as INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.14, port=22, state=INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider$DeviceCreator run
+INFO: Trying to create Device Info on ONOS core
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=cisco:cisco@10.18.11.14:cisco:active
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:cisco:active to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+SEVERE: Bad Configuration Data: Failed to parse host port number string: cisco
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+SEVERE: Error while parsing config information for the device entry: cisco:cisco@10.18.11.14:cisco:active
+java.lang.NumberFormatException: For input string: "cisco"
+	at java.lang.NumberFormatException.forInputString(NumberFormatException.java:65)
+	at java.lang.Integer.parseInt(Integer.java:580)
+	at java.lang.Integer.parseInt(Integer.java:615)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.processDeviceEntry(NetconfDeviceProvider.java:186)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.addOrRemoveDevicesConfig(NetconfDeviceProvider.java:152)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.modified(NetconfDeviceProvider.java:146)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.activate(NetconfDeviceProvider.java:112)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProviderTest.testActiveWithDeviceEntryWithNumberFomatEx(NetconfDeviceProviderTest.java:219)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:497)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:271)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:70)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:50)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runners.Suite.runChild(Suite.java:127)
+	at org.junit.runners.Suite.runChild(Suite.java:26)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:160)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:138)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.createRequestAndRun(JUnitCoreWrapper.java:108)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.executeEager(JUnitCoreWrapper.java:78)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.execute(JUnitCoreWrapper.java:54)
+	at org.apache.maven.surefire.junitcore.JUnitCoreProvider.invoke(JUnitCoreProvider.java:144)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:203)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:155)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:103)
+
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=null:null@null:0:active
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: null:null@null:0:active to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+WARNING: Bad Configuration Data: both user and device information parts of Configuration null:null@null:0:active should be non-nullable
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=null,null
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: null to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+SEVERE: Error while parsing config information for the device entry: null
+java.lang.StringIndexOutOfBoundsException: String index out of range: -1
+	at java.lang.String.substring(String.java:1967)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.processDeviceEntry(NetconfDeviceProvider.java:175)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.addOrRemoveDevicesConfig(NetconfDeviceProvider.java:152)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.modified(NetconfDeviceProvider.java:146)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.activate(NetconfDeviceProvider.java:112)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProviderTest.testActiveWithDeviceEntryIsNull(NetconfDeviceProviderTest.java:199)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:497)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:271)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:70)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:50)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runners.Suite.runChild(Suite.java:127)
+	at org.junit.runners.Suite.runChild(Suite.java:26)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:160)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:138)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.createRequestAndRun(JUnitCoreWrapper.java:108)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.executeEager(JUnitCoreWrapper.java:78)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.execute(JUnitCoreWrapper.java:54)
+	at org.apache.maven.surefire.junitcore.JUnitCoreProvider.invoke(JUnitCoreProvider.java:144)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:203)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:155)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:103)
+
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: null to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+SEVERE: Error while parsing config information for the device entry: null
+java.lang.StringIndexOutOfBoundsException: String index out of range: -1
+	at java.lang.String.substring(String.java:1967)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.processDeviceEntry(NetconfDeviceProvider.java:175)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.addOrRemoveDevicesConfig(NetconfDeviceProvider.java:152)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.modified(NetconfDeviceProvider.java:146)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider.activate(NetconfDeviceProvider.java:112)
+	at org.onosproject.provider.netconf.device.impl.NetconfDeviceProviderTest.testActiveWithDeviceEntryIsNull(NetconfDeviceProviderTest.java:199)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:497)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:271)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:70)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:50)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runners.Suite.runChild(Suite.java:127)
+	at org.junit.runners.Suite.runChild(Suite.java:26)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:160)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:138)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.createRequestAndRun(JUnitCoreWrapper.java:108)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.executeEager(JUnitCoreWrapper.java:78)
+	at org.apache.maven.surefire.junitcore.JUnitCoreWrapper.execute(JUnitCoreWrapper.java:54)
+	at org.apache.maven.surefire.junitcore.JUnitCoreProvider.invoke(JUnitCoreProvider.java:144)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:203)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:155)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:103)
+
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=cisco:cisco@10.18.11.14:22:active,cisco:cisco@10.18.11.18:22:inactive,cisco:cisco@10.18.11.14:22:invalid,cisco:cisco@10.18.11.14:22:null
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:22:active to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.14, port=22, state=ACTIVE
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.18:22:inactive to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.18, port=22, state=INACTIVE
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:22:invalid to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+WARNING: Device State Information can not be empty, so marking the state as INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.14, port=22, state=INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+INFO: Trying to convert Device Entry String: cisco:cisco@10.18.11.14:22:null to a Netconf Device Object
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider processDeviceEntry
+WARNING: Device State Information can not be empty, so marking the state as INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider addOrRemoveDevicesConfig
+INFO: Device Detail: username: cisco, host=10.18.11.14, port=22, state=INVALID
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider$DeviceCreator run
+INFO: Trying to create Device Info on ONOS core
+Oct 20, 2015 1:08:04 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started
+Oct 20, 2015 1:08:05 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider deactivate
+INFO: Stopped
+Oct 20, 2015 1:08:05 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider modified
+INFO: Settings: devConfigs=null
+Oct 20, 2015 1:08:05 AM org.onosproject.provider.netconf.device.impl.NetconfDeviceProvider activate
+INFO: Started

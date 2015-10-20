@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IGMPQuery.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IGMPQuery.java</span></div><h1>IGMPQuery.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+
+public class IGMPQuery extends IGMPGroup {
+
+    // Bits and bytes after the group address
+<span class="fc" id="L23">    private byte resv = 0;</span>
+<span class="fc" id="L24">    private boolean sbit = false;</span>
+<span class="fc" id="L25">    private byte qrv = 2;</span>
+<span class="fc" id="L26">    private byte qqic = 0x7d;</span>
+
+    /**
+     * Create IGMP Query message.
+     *
+     * @param gaddr initiaze with a group address.
+     * @param auxInfo auxillary info.
+     */
+    public IGMPQuery(IpAddress gaddr, int auxInfo) {
+<span class="fc" id="L35">        super(gaddr, auxInfo);</span>
+<span class="fc" id="L36">    }</span>
+
+    /**
+     * Create IGMP Query message.
+     */
+    public IGMPQuery() {
+<span class="fc" id="L42">        super();</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * Is the S flag set?  Telling adjacent routers to suppress normal timer updates.
+     *
+     * @return true if the flag is set, false otherwise
+     */
+    public boolean isSbit() {
+<span class="nc" id="L51">        return sbit;</span>
+    }
+
+    /**
+     * Set the S flag.  Default is false.
+     *
+     * @param sbit true or false
+     */
+    public void setSbit(boolean sbit) {
+<span class="fc" id="L60">        this.sbit = sbit;</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * Get the Querier Robustness Variable.
+     *
+     * @return querier robustness value
+     */
+    public byte getQrv() {
+<span class="nc" id="L69">        return qrv;</span>
+    }
+
+    /**
+     * Set the Querier Robustness Variable. Default is 2.
+     *
+     * @param qrv new querier robustness value
+     */
+    public void setQrv(byte qrv) {
+<span class="nc" id="L78">        this.qrv = qrv;</span>
+<span class="nc" id="L79">    }</span>
+
+    /**
+     * Get the reserved field.  Should be zero, but ignored regardless of it's value.
+     *
+     * @return the reserved field.
+     */
+    public byte getResv() {
+<span class="nc" id="L87">        return resv;</span>
+    }
+
+    /**
+     * Set the reserved field.  Should be 0 and ignored by receivers.
+     *
+     * @param resv the reserved field.
+     */
+    public void setResv(byte resv) {
+<span class="nc" id="L96">        this.resv = resv;</span>
+<span class="nc" id="L97">    }</span>
+
+    /**
+     * Serialize this IGMPQuery.
+     *
+     * @param bb the ByteBuffer to write into, positioned at the next spot to be written to.
+     * @return the serialized message
+     */
+    @Override
+    public byte[] serialize(ByteBuffer bb) {
+
+<span class="fc" id="L108">        bb.put(gaddr.toOctets());</span>
+<span class="fc" id="L109">        byte fld = (byte) (0x7 &amp; qrv);</span>
+<span class="fc" id="L110">        bb.put(fld);</span>
+<span class="fc" id="L111">        bb.put(qqic);</span>
+<span class="fc" id="L112">        bb.putShort((short) sources.size());</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        for (IpAddress ipaddr : sources) {</span>
+<span class="fc" id="L114">            bb.put(ipaddr.toOctets());</span>
+<span class="fc" id="L115">        }</span>
+<span class="fc" id="L116">        return bb.array();</span>
+    }
+
+    /**
+     * Deserialize the IGMP Query group structure.
+     *
+     * @param bb ByteBuffer pointing at the IGMP Query group address
+     * @return the IGMP Group object
+     */
+    public IGMPGroup deserialize(ByteBuffer bb) throws DeserializationException {
+
+<span class="fc" id="L127">        gaddr = Ip4Address.valueOf(bb.getInt());</span>
+<span class="fc" id="L128">        byte fld = bb.get();</span>
+
+        // Just ignore the reserved bits
+<span class="fc" id="L131">        resv = 0;</span>
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        this.sbit = ((fld &amp; 0x8) == 0x8);</span>
+<span class="fc" id="L133">        qrv = (byte) (fld &amp; 0x7);</span>
+
+        // QQIC field
+<span class="fc" id="L136">        qqic = bb.get();</span>
+
+        // Get the number of sources.
+<span class="fc" id="L139">        short nsrcs = bb.getShort();</span>
+
+        // Do a sanity check on the amount of space we have in our buffer.
+<span class="fc" id="L142">        int lengthNeeded = (Ip4Address.BYTE_LENGTH * nsrcs);</span>
+<span class="fc" id="L143">        PacketUtils.checkHeaderLength(bb.remaining(), lengthNeeded);</span>
+
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        for (; nsrcs &gt; 0; nsrcs--) {</span>
+<span class="fc" id="L146">            Ip4Address ipaddr = Ip4Address.valueOf(bb.getInt());</span>
+<span class="fc" id="L147">            this.sources.add(ipaddr);</span>
+        }
+<span class="fc" id="L149">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals()
+     */
+    public boolean equals(Object obj) {
+<span class="pc bpc" id="L158" title="1 of 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L159">            return true;</span>
+        }
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if (!(obj instanceof IGMPQuery)) {</span>
+<span class="nc" id="L162">            return false;</span>
+        }
+<span class="fc" id="L164">        IGMPQuery other = (IGMPQuery) obj;</span>
+
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">        if (this.sbit != other.sbit) {</span>
+<span class="nc" id="L167">            return false;</span>
+        }
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">        if (this.qrv != other.qrv) {</span>
+<span class="nc" id="L170">            return false;</span>
+        }
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">        if (this.qqic != other.qqic) {</span>
+<span class="nc" id="L173">            return false;</span>
+        }
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">        if (this.sources.size() != other.sources.size()) {</span>
+<span class="nc" id="L176">            return false;</span>
+        }
+
+        // TODO: make these tolerant of order
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">        if (!this.sources.equals(other.sources)) {</span>
+<span class="nc" id="L181">            return false;</span>
+        }
+
+<span class="fc" id="L184">        return true;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L194">        final int prime = 2521;</span>
+<span class="nc" id="L195">        int result = super.hashCode();</span>
+<span class="nc" id="L196">        result = prime * result + this.gaddr.hashCode();</span>
+<span class="nc" id="L197">        result = prime * result + this.qqic;</span>
+<span class="nc" id="L198">        result = prime * result + this.qrv;</span>
+<span class="nc" id="L199">        result = prime * result + this.sources.hashCode();</span>
+<span class="nc" id="L200">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

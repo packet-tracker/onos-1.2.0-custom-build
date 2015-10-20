@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IGMPMembership.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IGMPMembership.java</span></div><h1>IGMPMembership.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import static org.onlab.packet.PacketUtils.checkBufferLength;
+
+public class IGMPMembership extends IGMPGroup {
+
+    public static final byte MODE_IS_INCLUDE = 0x1;
+    public static final byte MODE_IS_EXCLUDE = 0x2;
+    public static final byte CHANGE_TO_INCLUDE_MODE = 0x3;
+    public static final byte CHANGE_TO_EXCLUDE_MODE = 0x4;
+    public static final byte ALLOW_NEW_SOURCES = 0x5;
+    public static final byte BLOCK_OLD_SOURCES = 0x6;
+
+<span class="fc" id="L30">    private final int minGroupRecordLen = Ip4Address.BYTE_LENGTH + 4;</span>
+
+    protected byte recordType;
+<span class="fc" id="L33">    protected byte auxDataLength = 0;</span>
+    protected byte[] auxData;
+
+    /**
+     * Constructor initialized with a multicast group address.
+     *
+     * @param gaddr A multicast group address.
+     */
+    public IGMPMembership(Ip4Address gaddr) {
+<span class="fc" id="L42">        super(gaddr, 0);</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * Default constructor.
+     */
+    public IGMPMembership() {
+<span class="fc" id="L49">        super();</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     * Serialize this Membership Report.
+     *
+     * @param bb the ByteBuffer to write into, positioned at the next spot to be written to.
+     * @return serialized IGMP message.
+     */
+    @Override
+    public byte[] serialize(ByteBuffer bb) {
+
+<span class="fc" id="L61">        bb.put(recordType);</span>
+<span class="fc" id="L62">        bb.put(auxDataLength);      // reserved</span>
+<span class="fc" id="L63">        bb.putShort((short) sources.size());</span>
+<span class="fc" id="L64">        bb.put(gaddr.toOctets());</span>
+<span class="fc bfc" id="L65" title="All 2 branches covered.">        for (IpAddress ipaddr : sources) {</span>
+<span class="fc" id="L66">            bb.put(ipaddr.toOctets());</span>
+<span class="fc" id="L67">        }</span>
+
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        if (auxDataLength &gt; 0) {</span>
+<span class="nc" id="L70">            bb.put(auxData);</span>
+        }
+
+<span class="fc" id="L73">        return bb.array();</span>
+    }
+
+    /**
+     * Deserialize the IGMP Membership report packet.
+     *
+     * @param bb the ByteBuffer wrapping the serialized message.  The position of the
+     *           ByteBuffer should be pointing at the head of either message type.
+     * @return IGMP Group
+     * @throws DeserializationException if deserialization fails
+     */
+    public IGMPGroup deserialize(ByteBuffer bb) throws DeserializationException {
+
+        // Make sure there is enough buffer to read the header,
+        // including the number of sources
+<span class="fc" id="L88">        checkBufferLength(bb.remaining(), 0, minGroupRecordLen);</span>
+<span class="fc" id="L89">        recordType = bb.get();</span>
+<span class="fc" id="L90">        auxDataLength = bb.get();</span>
+<span class="fc" id="L91">        int nsrcs = bb.getShort();</span>
+
+<span class="fc" id="L93">        gaddr = Ip4Address.valueOf(bb.getInt());</span>
+
+        // Make sure we have enough buffer to hold all of these sources
+<span class="fc" id="L96">        checkBufferLength(bb.remaining(), 0, Ip4Address.BYTE_LENGTH * nsrcs);</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        for (; nsrcs &gt; 0; nsrcs--) {</span>
+<span class="fc" id="L98">            Ip4Address src = Ip4Address.valueOf(bb.getInt());</span>
+<span class="fc" id="L99">            this.sources.add(src);</span>
+        }
+
+<span class="pc bpc" id="L102" title="1 of 2 branches missed.">        if (auxDataLength &gt; 0) {</span>
+<span class="nc" id="L103">            auxData = new byte[auxDataLength];</span>
+<span class="nc" id="L104">            bb.get(auxData, 0, auxDataLength);</span>
+        }
+<span class="fc" id="L106">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals()
+     */
+    public boolean equals(Object obj) {
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L116">            return true;</span>
+        }
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">        if (!(obj instanceof IGMPMembership)) {</span>
+<span class="nc" id="L119">            return false;</span>
+        }
+<span class="fc" id="L121">        IGMPMembership other = (IGMPMembership) obj;</span>
+
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        if (!this.gaddr.equals(other.gaddr)) {</span>
+<span class="nc" id="L124">            return false;</span>
+        }
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">        if (this.recordType != other.recordType) {</span>
+<span class="nc" id="L127">            return false;</span>
+        }
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">        if (this.auxDataLength != other.auxDataLength) {</span>
+<span class="nc" id="L130">            return false;</span>
+        }
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if (this.sources.size() != other.sources.size()) {</span>
+<span class="nc" id="L133">            return false;</span>
+        }
+        // TODO: make these tolerant of order
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">        if (!this.sources.equals(other.sources)) {</span>
+<span class="nc" id="L137">            return false;</span>
+        }
+
+<span class="fc" id="L140">        return true;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L150">        final int prime = 2521;</span>
+<span class="nc" id="L151">        int result = super.hashCode();</span>
+<span class="nc" id="L152">        result = prime * result + this.gaddr.hashCode();</span>
+<span class="nc" id="L153">        result = prime * result + this.recordType;</span>
+<span class="nc" id="L154">        result = prime * result + this.auxDataLength;</span>
+<span class="nc" id="L155">        result = prime * result + this.sources.hashCode();</span>
+<span class="nc" id="L156">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

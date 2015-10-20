@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepFecObjectIPv6AdjacencyVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepFecObjectIPv6AdjacencyVer1.java</span></div><h1>PcepFecObjectIPv6AdjacencyVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepFecObjectIPv6Adjacency;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Fec Object IPv6 Adjacency object.
+ */
+public class PcepFecObjectIPv6AdjacencyVer1 implements PcepFecObjectIPv6Adjacency {
+
+    /*
+     * ref : draft-zhao-pce-pcep-extension-for-pce-controller-01 , section : 7.5
+     *
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                                                               |
+           //              Local IPv6 address (16 bytes)                   //
+           |                                                               |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                                                               |
+           //              Remote IPv6 address (16 bytes)                  //
+           |                                                               |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                      FEC Object-Type is 4 IPv6 Adjacency
+     */
+<span class="nc" id="L51">    protected static final Logger log = LoggerFactory.getLogger(PcepFecObjectIPv6AdjacencyVer1.class);</span>
+
+    public static final byte FEC_OBJ_TYPE = 4;
+    public static final byte FEC_OBJ_CLASS = 63; //to be defined
+    public static final byte FEC_OBJECT_VERSION = 1;
+    public static final short FEC_OBJ_MINIMUM_LENGTH = 36;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+    public static final int IPV6_ADDRESS_LENGTH = 16;
+
+<span class="nc" id="L60">    static final PcepObjectHeader DEFAULT_FEC_OBJECT_HEADER = new PcepObjectHeader(FEC_OBJ_CLASS, FEC_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, FEC_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader fecObjHeader;
+<span class="nc" id="L64">    private byte[] localIPv6Address = new byte[IPV6_ADDRESS_LENGTH];</span>
+<span class="nc" id="L65">    private byte[] remoteIPv6Address = new byte[IPV6_ADDRESS_LENGTH];</span>
+
+    /**
+     * Constructor to initialize parameters for PCEP fec object.
+     *
+     * @param fecObjHeader fec object header
+     * @param localIPv6Address local IPv6 address
+     * @param remoteIPv6Address remote IPv6 address
+     */
+    public PcepFecObjectIPv6AdjacencyVer1(PcepObjectHeader fecObjHeader, byte[] localIPv6Address,
+<span class="nc" id="L75">            byte[] remoteIPv6Address) {</span>
+<span class="nc" id="L76">        this.fecObjHeader = fecObjHeader;</span>
+<span class="nc" id="L77">        this.localIPv6Address = localIPv6Address;</span>
+<span class="nc" id="L78">        this.remoteIPv6Address = remoteIPv6Address;</span>
+<span class="nc" id="L79">    }</span>
+
+    /**
+     * Sets Object Header.
+     *
+     * @param obj object header
+     */
+    public void setFecIpv4ObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L87">        this.fecObjHeader = obj;</span>
+<span class="nc" id="L88">    }</span>
+
+    @Override
+    public byte[] getLocalIPv6Address() {
+<span class="nc" id="L92">        return this.localIPv6Address;</span>
+    }
+
+    @Override
+    public void seLocalIPv6Address(byte[] value) {
+<span class="nc" id="L97">        this.localIPv6Address = value;</span>
+<span class="nc" id="L98">    }</span>
+
+    @Override
+    public byte[] getRemoteIPv6Address() {
+<span class="nc" id="L102">        return this.remoteIPv6Address;</span>
+    }
+
+    @Override
+    public void seRemoteIPv6Address(byte[] value) {
+<span class="nc" id="L107">        this.remoteIPv6Address = value;</span>
+<span class="nc" id="L108">    }</span>
+
+    /**
+     * Reads channel buffer and Returns object of PcepFecObjectIPv6Adjacency.
+     *
+     * @param cb of channel buffer
+     * @return object of PcepFecObjectIPv6Adjacency
+     * @throws PcepParseException when fails tp read from channel buffer
+     */
+    public static PcepFecObjectIPv6Adjacency read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader fecObjHeader;
+<span class="nc" id="L120">        byte[] localIPv6Address = new byte[IPV6_ADDRESS_LENGTH];</span>
+<span class="nc" id="L121">        byte[] remoteIPv6Address = new byte[IPV6_ADDRESS_LENGTH];</span>
+<span class="nc" id="L122">        fecObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="nc" id="L123">        cb.readBytes(localIPv6Address, 0, IPV6_ADDRESS_LENGTH);</span>
+<span class="nc" id="L124">        cb.readBytes(remoteIPv6Address, 0, IPV6_ADDRESS_LENGTH);</span>
+<span class="nc" id="L125">        return new PcepFecObjectIPv6AdjacencyVer1(fecObjHeader, localIPv6Address, remoteIPv6Address);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L131">        int objStartIndex = cb.writerIndex();</span>
+
+        //write common header
+<span class="nc" id="L134">        int objLenIndex = fecObjHeader.write(cb);</span>
+<span class="nc" id="L135">        cb.writeBytes(localIPv6Address);</span>
+<span class="nc" id="L136">        cb.writeBytes(remoteIPv6Address);</span>
+        //now write FEC IPv6 Adjacency Object Length
+<span class="nc" id="L138">        cb.setShort(objLenIndex, (short) (cb.writerIndex() - objStartIndex));</span>
+<span class="nc" id="L139">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Builder class for PCEP fec object IPv6 Adjacency.
+     */
+<span class="nc" id="L145">    public static class Builder implements PcepFecObjectIPv6Adjacency.Builder {</span>
+<span class="nc" id="L146">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L147">        private boolean bIsLocalIPv6Addressset = false;</span>
+<span class="nc" id="L148">        private boolean bIsRemoteIPv6Addressset = false;</span>
+
+        private PcepObjectHeader fecObjHeader;
+<span class="nc" id="L151">        byte[] localIPv6Address = new byte[IPV6_ADDRESS_LENGTH];</span>
+<span class="nc" id="L152">        byte[] remoteIPv6Address = new byte[IPV6_ADDRESS_LENGTH];</span>
+
+<span class="nc" id="L154">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L157">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepFecObjectIPv6Adjacency build() throws PcepParseException {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            PcepObjectHeader fecObjHeader = this.bIsHeaderSet ? this.fecObjHeader : DEFAULT_FEC_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if (!this.bIsLocalIPv6Addressset) {</span>
+<span class="nc" id="L165">                throw new PcepParseException(</span>
+                        &quot;Local IPv6 Address not set while building PcepFecObjectIPv6Adjacency object.&quot;);
+            }
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            if (!this.bIsRemoteIPv6Addressset) {</span>
+<span class="nc" id="L169">                throw new PcepParseException(</span>
+                        &quot;Remote IPv6 Address not set while building PcepFecObjectIPv6Adjacency object.&quot;);
+            }
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L173">                fecObjHeader.setPFlag(bPFlag);</span>
+            }
+<span class="nc bnc" id="L175" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L176">                fecObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L178">            return new PcepFecObjectIPv6AdjacencyVer1(fecObjHeader, this.localIPv6Address, this.remoteIPv6Address);</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L183">            this.bPFlag = value;</span>
+<span class="nc" id="L184">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L185">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L190">            this.bIFlag = value;</span>
+<span class="nc" id="L191">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L192">            return this;</span>
+        }
+
+        @Override
+        public PcepObjectHeader getFecIpv6AdjacencyObjHeader() {
+<span class="nc" id="L197">            return this.fecObjHeader;</span>
+        }
+
+        @Override
+        public Builder setFecIpv6AdjacencyObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L202">            this.fecObjHeader = obj;</span>
+<span class="nc" id="L203">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L204">            return this;</span>
+        }
+
+        @Override
+        public byte[] getLocalIPv6Address() {
+<span class="nc" id="L209">            return this.localIPv6Address;</span>
+        }
+
+        @Override
+        public Builder setLocalIPv6Address(byte[] value) {
+<span class="nc" id="L214">            this.localIPv6Address = value;</span>
+<span class="nc" id="L215">            this.bIsLocalIPv6Addressset = true;</span>
+<span class="nc" id="L216">            return this;</span>
+        }
+
+        @Override
+        public byte[] getRemoteIPv6Address() {
+<span class="nc" id="L221">            return this.remoteIPv6Address;</span>
+        }
+
+        @Override
+        public Builder setRemoteIPv6Address(byte[] value) {
+<span class="nc" id="L226">            this.remoteIPv6Address = value;</span>
+<span class="nc" id="L227">            this.bIsRemoteIPv6Addressset = true;</span>
+<span class="nc" id="L228">            return this;</span>
+        }
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L234">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public int getType() {
+<span class="nc" id="L239">        return FEC_OBJ_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L244">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L245">                .add(&quot;localIPv6Address&quot;, localIPv6Address)</span>
+<span class="nc" id="L246">                .add(&quot;remoteIPv6Address: &quot;, remoteIPv6Address)</span>
+<span class="nc" id="L247">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

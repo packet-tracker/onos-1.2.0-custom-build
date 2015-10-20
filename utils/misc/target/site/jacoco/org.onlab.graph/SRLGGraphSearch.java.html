@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SRLGGraphSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">SRLGGraphSearch.java</span></div><h1>SRLGGraphSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+package org.onlab.graph;
+
+
+import java.util.Map;
+import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.Random;
+
+
+/**
+ * SRLG Graph Search finds a pair of paths with disjoint risk groups; i.e
+ * if one path goes through an edge in risk group 1, the other path will go
+ * through no edges in risk group 1.
+ */
+public class SRLGGraphSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;
+        extends AbstractGraphPathSearch&lt;V, E&gt; {
+
+    static final int ITERATIONS = 100;
+    static final int POPSIZE = 50;
+
+<span class="fc" id="L40">    boolean useSuurballe = false;</span>
+
+    static final double INF = 100000000.0;
+
+    int numGroups;
+    Map&lt;E, Integer&gt; riskGrouping;
+
+    Graph&lt;V, E&gt; orig;
+    V src, dst;
+    EdgeWeight&lt;V, E&gt; weight;
+
+    /**
+     * Creates an SRLG graph search object with the given number
+     * of groups and given risk mapping.
+     *
+     * @param   groups      the number of disjoint risk groups
+     * @param   grouping    map linking edges to integral group assignments
+     */
+<span class="fc" id="L58">    public SRLGGraphSearch(int groups, Map&lt;E, Integer&gt; grouping) {</span>
+<span class="fc" id="L59">        numGroups = groups;</span>
+<span class="fc" id="L60">        riskGrouping = grouping;</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * Creates an SRLG graph search object from a map, inferring
+     * the number of groups and creating an integral mapping.
+     *
+     * @param   grouping    map linking edges to object group assignments,
+     *                      with same-group status linked to equality
+     */
+<span class="fc" id="L70">    public SRLGGraphSearch(Map&lt;E, Object&gt; grouping) {</span>
+<span class="pc bpc" id="L71" title="1 of 2 branches missed.">        if (grouping == null) {</span>
+<span class="fc" id="L72">            useSuurballe = true;</span>
+<span class="fc" id="L73">            return;</span>
+        }
+<span class="nc" id="L75">        numGroups = 0;</span>
+<span class="nc" id="L76">        HashMap&lt;Object, Integer&gt; tmpMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L77">        riskGrouping = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        for (E key: grouping.keySet()) {</span>
+<span class="nc" id="L79">            Object value = grouping.get(key);</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">            if (!tmpMap.containsKey(value)) {</span>
+<span class="nc" id="L81">                tmpMap.put(value, numGroups);</span>
+<span class="nc" id="L82">                numGroups++;</span>
+            }
+<span class="nc" id="L84">            riskGrouping.put(key, tmpMap.get(value));</span>
+<span class="nc" id="L85">        }</span>
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public Result&lt;V, E&gt; search(Graph&lt;V, E&gt; graph, V src, V dst,
+                               EdgeWeight&lt;V, E&gt; weight, int maxPaths) {
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        if (maxPaths == ALL_PATHS) {</span>
+<span class="fc" id="L92">            maxPaths = POPSIZE;</span>
+        }
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">        if (useSuurballe) {</span>
+<span class="nc" id="L95">            return new SuurballeGraphSearch&lt;V, E&gt;().search(graph, src, dst, weight, ALL_PATHS);</span>
+        }
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">        if (weight == null) {</span>
+<span class="fc" id="L98">            weight = edge -&gt; 1;</span>
+        }
+<span class="fc" id="L100">        checkArguments(graph, src, dst);</span>
+<span class="fc" id="L101">        orig = graph;</span>
+<span class="fc" id="L102">        this.src = src;</span>
+<span class="fc" id="L103">        this.dst = dst;</span>
+<span class="fc" id="L104">        this.weight = weight;</span>
+<span class="fc" id="L105">        List&lt;Subset&gt; best = new GAPopulation&lt;Subset&gt;()</span>
+<span class="fc" id="L106">                .runGA(ITERATIONS, POPSIZE, maxPaths, new Subset(new boolean[numGroups]));</span>
+<span class="fc" id="L107">        Set&lt;DisjointPathPair&gt; dpps = new HashSet&lt;DisjointPathPair&gt;();</span>
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        for (Subset s: best) {</span>
+<span class="fc" id="L109">            dpps.addAll(s.buildPaths());</span>
+<span class="fc" id="L110">        }</span>
+<span class="fc" id="L111">        Result&lt;V, E&gt; firstDijkstra = new DijkstraGraphSearch&lt;V, E&gt;()</span>
+<span class="fc" id="L112">                .search(orig, src, dst, weight, 1);</span>
+<span class="fc" id="L113">        return new Result&lt;V, E&gt;() {</span>
+<span class="fc" id="L114">            final DefaultResult search = (DefaultResult) firstDijkstra;</span>
+
+            public V src() {
+<span class="nc" id="L117">                return src;</span>
+            }
+            public V dst() {
+<span class="nc" id="L120">                return dst;</span>
+
+            }
+            public Set&lt;Path&lt;V, E&gt;&gt; paths() {
+<span class="fc" id="L124">                Set&lt;Path&lt;V, E&gt;&gt; pathsD = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">                for (DisjointPathPair&lt;V, E&gt; path: dpps) {</span>
+<span class="fc" id="L126">                    pathsD.add(path);</span>
+<span class="fc" id="L127">                }</span>
+<span class="fc" id="L128">                return pathsD;</span>
+            }
+            public Map&lt;V, Double&gt; costs() {
+<span class="nc" id="L131">                return search.costs();</span>
+
+            }
+            public Map&lt;V, Set&lt;E&gt;&gt; parents() {
+<span class="nc" id="L135">                return search.parents();</span>
+
+            }
+        };
+    }
+
+    //finds the shortest path in the graph given a subset of edge types to use
+    private Result&lt;V, E&gt; findShortestPathFromSubset(boolean[] subset) {
+<span class="fc" id="L143">        Graph&lt;V, E&gt; graph = orig;</span>
+<span class="fc" id="L144">        EdgeWeight&lt;V, E&gt; modified = new EdgeWeight&lt;V, E&gt;() {</span>
+<span class="fc" id="L145">            final boolean[] subsetF = subset;</span>
+
+            @Override
+            public double weight(E edge) {
+<span class="fc bfc" id="L149" title="All 2 branches covered.">                if (subsetF[riskGrouping.get(edge)]) {</span>
+<span class="fc" id="L150">                    return weight.weight(edge);</span>
+                }
+<span class="fc" id="L152">                return INF;</span>
+            }
+        };
+
+<span class="fc" id="L156">        Result&lt;V, E&gt; res = new DijkstraGraphSearch&lt;V, E&gt;().search(graph, src, dst, modified, 1);</span>
+<span class="fc" id="L157">        return res;</span>
+    }
+    /**
+     * A subset is a type of GA organism that represents a subset of allowed shortest
+     * paths (and its complement). Its fitness is determined by the sum of the weights
+     * of the first two shortest paths.
+     */
+    class Subset implements GAOrganism {
+
+        boolean[] subset;
+        boolean[] not;
+<span class="fc" id="L168">        Random r = new Random();</span>
+
+        /**
+         * Creates a Subset from the given subset array.
+         *
+         * @param sub   subset array
+         */
+<span class="fc" id="L175">        public Subset(boolean[] sub) {</span>
+<span class="fc" id="L176">            subset = sub.clone();</span>
+<span class="fc" id="L177">            not = new boolean[subset.length];</span>
+<span class="fc bfc" id="L178" title="All 2 branches covered.">            for (int i = 0; i &lt; subset.length; i++) {</span>
+<span class="fc bfc" id="L179" title="All 2 branches covered.">                not[i] = !subset[i];</span>
+            }
+<span class="fc" id="L181">        }</span>
+
+        @Override
+        public double fitness() {
+<span class="fc" id="L185">            Set&lt;Path&lt;V, E&gt;&gt; paths1 = findShortestPathFromSubset(subset).paths();</span>
+<span class="fc" id="L186">            Set&lt;Path&lt;V, E&gt;&gt; paths2 = findShortestPathFromSubset(not).paths();</span>
+<span class="pc bpc" id="L187" title="1 of 4 branches missed.">            if (paths1.size() == 0 || paths2.size() == 0) {</span>
+<span class="fc" id="L188">                return INF;</span>
+            }
+<span class="fc" id="L190">            return paths1.iterator().next().cost() + paths2.iterator().next().cost();</span>
+        }
+
+        @Override
+        public void mutate() {
+<span class="fc" id="L195">            int turns = r.nextInt((int) Math.sqrt(subset.length));</span>
+<span class="fc bfc" id="L196" title="All 2 branches covered.">            while (turns &gt; 0) {</span>
+<span class="fc" id="L197">                int choose = r.nextInt(subset.length);</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">                subset[choose] = !subset[choose];</span>
+<span class="fc bfc" id="L199" title="All 2 branches covered.">                not[choose] = !not[choose];</span>
+<span class="fc" id="L200">                turns--;</span>
+<span class="fc" id="L201">            }</span>
+<span class="fc" id="L202">        }</span>
+
+        @Override
+        public GAOrganism crossWith(GAOrganism org) {
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">            if (!(org.getClass().equals(getClass()))) {</span>
+<span class="nc" id="L207">                return this;</span>
+            }
+<span class="fc" id="L209">            Subset other = (Subset) (org);</span>
+<span class="fc" id="L210">            boolean[] sub = new boolean[subset.length];</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">            for (int i = 0; i &lt; subset.length; i++) {</span>
+<span class="fc" id="L212">                sub[i] = subset[i];</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">                if (r.nextBoolean()) {</span>
+<span class="fc" id="L214">                    sub[i] = other.subset[i];</span>
+                }
+            }
+<span class="fc" id="L217">            return new Subset(sub);</span>
+        }
+
+        @Override
+        public GAOrganism random() {
+<span class="fc" id="L222">            boolean[] sub = new boolean[subset.length];</span>
+<span class="fc bfc" id="L223" title="All 2 branches covered.">            for (int i = 0; i &lt; sub.length; i++) {</span>
+<span class="fc" id="L224">                sub[i] = r.nextBoolean();</span>
+            }
+<span class="fc" id="L226">            return new Subset(sub);</span>
+        }
+
+        /**
+         * Builds the set of disjoint path pairs for a given subset
+         * using Dijkstra's algorithm on both the subset and complement
+         * and returning all pairs with one from each set.
+         *
+         * @return all shortest disjoint paths given this subset
+         */
+        public Set&lt;DisjointPathPair&gt; buildPaths() {
+<span class="fc" id="L237">            Set&lt;DisjointPathPair&gt; dpps = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L238" title="All 2 branches covered.">            for (Path&lt;V, E&gt; path1: findShortestPathFromSubset(subset).paths()) {</span>
+<span class="fc bfc" id="L239" title="All 2 branches covered.">                if (path1.cost() &gt;= INF) {</span>
+<span class="fc" id="L240">                    continue;</span>
+                }
+<span class="fc bfc" id="L242" title="All 2 branches covered.">                for (Path&lt;V, E&gt; path2: findShortestPathFromSubset(not).paths()) {</span>
+<span class="fc bfc" id="L243" title="All 2 branches covered.">                    if (path2.cost() &gt;= INF) {</span>
+<span class="fc" id="L244">                        continue;</span>
+                    }
+<span class="fc" id="L246">                    DisjointPathPair&lt;V, E&gt; dpp = new DisjointPathPair&lt;&gt;(path1, path2);</span>
+<span class="fc" id="L247">                    dpps.add(dpp);</span>
+<span class="fc" id="L248">                }</span>
+<span class="fc" id="L249">            }</span>
+<span class="fc" id="L250">            return dpps;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,39 @@
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+INFO: Dispatch loop initiated
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher activate
+INFO: Started
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher deactivate
+INFO: Stopped
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop process
+WARNING: No sink registered for event class org.onosproject.event.impl.CoreEventDispatcherTest$Thing
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+INFO: Dispatch loop terminated
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher activate
+INFO: Started
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+INFO: Dispatch loop initiated
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher deactivate
+INFO: Stopped
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+INFO: Dispatch loop terminated
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher activate
+INFO: Started
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+INFO: Dispatch loop initiated
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher deactivate
+INFO: Stopped
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+WARNING: Error encountered while dispatching event:
+java.lang.IllegalStateException: BOOM!
+	at org.onosproject.event.impl.CoreEventDispatcherTest$GooSink.process(CoreEventDispatcherTest.java:128)
+	at org.onosproject.event.impl.CoreEventDispatcherTest$GooSink.process(CoreEventDispatcherTest.java:124)
+	at org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop.process(CoreEventDispatcher.java:141)
+	at org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop.run(CoreEventDispatcher.java:124)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1142)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:617)
+	at java.lang.Thread.run(Thread.java:745)
+
+Oct 20, 2015 1:06:09 AM org.onosproject.event.impl.CoreEventDispatcher$DispatchLoop run
+INFO: Dispatch loop terminated

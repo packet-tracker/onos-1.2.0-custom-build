@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UiMessageHandler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui</a> &gt; <span class="el_source">UiMessageHandler.java</span></div><h1>UiMessageHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.ui;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.onlab.osgi.ServiceDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Abstraction of an entity capable of processing JSON messages from the user
+ * interface client.
+ * &lt;p&gt;
+ * The message structure is:
+ * &lt;/p&gt;
+ * &lt;pre&gt;
+ * {
+ *     &quot;type&quot;: &quot;&lt;em&gt;event-type&lt;/em&gt;&quot;,
+ *     &quot;payload&quot;: {
+ *         &lt;em&gt;arbitrary JSON object structure&lt;/em&gt;
+ *     }
+ * }
+ * &lt;/pre&gt;
+ * On {@link #init initialization} the handler will create and cache
+ * {@link RequestHandler} instances, each of which are bound to a particular
+ * &lt;em&gt;event-type&lt;/em&gt;. On {@link #process arrival} of a new message,
+ * the &lt;em&gt;event-type&lt;/em&gt; is determined, and the message dispatched to the
+ * corresponding &lt;em&gt;RequestHandler&lt;/em&gt;'s
+ * {@link RequestHandler#process process} method.
+ */
+<span class="nc" id="L55">public abstract class UiMessageHandler {</span>
+
+<span class="nc" id="L57">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+<span class="nc" id="L58">    private final Map&lt;String, RequestHandler&gt; handlerMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L59">    private final ObjectMapper mapper = new ObjectMapper();</span>
+
+    private UiConnection connection;
+    private ServiceDirectory directory;
+
+
+    /**
+     * Subclasses must create and return the collection of request handlers
+     * for the message types they handle.
+     * &lt;p&gt;
+     * Note that request handlers should be stateless. When we are
+     * {@link #destroy destroyed}, we will simply drop our references to them
+     * and allow them to be garbage collected.
+     *
+     * @return the message handler instances
+     */
+    protected abstract Collection&lt;RequestHandler&gt; createRequestHandlers();
+
+    /**
+     * Returns the set of message types which this handler is capable of
+     * processing.
+     *
+     * @return set of message types
+     */
+    public Set&lt;String&gt; messageTypes() {
+<span class="nc" id="L84">        return Collections.unmodifiableSet(handlerMap.keySet());</span>
+    }
+
+    /**
+     * Processes a JSON message from the user interface client.
+     *
+     * @param message JSON message
+     */
+    public void process(ObjectNode message) {
+<span class="nc" id="L93">        String type = JsonUtils.eventType(message);</span>
+<span class="nc" id="L94">        ObjectNode payload = JsonUtils.payload(message);</span>
+        // TODO: remove sid
+<span class="nc" id="L96">        exec(type, 0, payload);</span>
+<span class="nc" id="L97">    }</span>
+
+    /**
+     * Finds the appropriate handler and executes the process method.
+     *
+     * @param eventType event type
+     * @param sid       sequence identifier
+     * @param payload   message payload
+     */
+    // TODO: remove sid from signature
+    void exec(String eventType, long sid, ObjectNode payload) {
+<span class="nc" id="L108">        RequestHandler requestHandler = handlerMap.get(eventType);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        if (requestHandler != null) {</span>
+<span class="nc" id="L110">            requestHandler.process(sid, payload);</span>
+        } else {
+<span class="nc" id="L112">            log.warn(&quot;no request handler for event type {}&quot;, eventType);</span>
+        }
+<span class="nc" id="L114">    }</span>
+
+    /**
+     * Initializes the handler with the user interface connection and
+     * service directory context.
+     *
+     * @param connection user interface connection
+     * @param directory  service directory
+     */
+    public void init(UiConnection connection, ServiceDirectory directory) {
+<span class="nc" id="L124">        this.connection = connection;</span>
+<span class="nc" id="L125">        this.directory = directory;</span>
+
+<span class="nc" id="L127">        Collection&lt;RequestHandler&gt; handlers = createRequestHandlers();</span>
+<span class="nc" id="L128">        checkNotNull(handlers, &quot;Handlers cannot be null&quot;);</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        checkArgument(!handlers.isEmpty(), &quot;Handlers cannot be empty&quot;);</span>
+
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        for (RequestHandler h : handlers) {</span>
+<span class="nc" id="L132">            h.setParent(this);</span>
+<span class="nc" id="L133">            handlerMap.put(h.eventType(), h);</span>
+<span class="nc" id="L134">        }</span>
+<span class="nc" id="L135">    }</span>
+
+    /**
+     * Destroys the message handler context.
+     */
+    public void destroy() {
+<span class="nc" id="L141">        this.connection = null;</span>
+<span class="nc" id="L142">        this.directory = null;</span>
+<span class="nc" id="L143">        handlerMap.clear();</span>
+<span class="nc" id="L144">    }</span>
+
+    /**
+     * Returns the user interface connection with which this handler was primed.
+     *
+     * @return user interface connection
+     */
+    public UiConnection connection() {
+<span class="nc" id="L152">        return connection;</span>
+    }
+
+    /**
+     * Returns the user interface connection with which this handler was primed.
+     *
+     * @return user interface connection
+     */
+    public ServiceDirectory directory() {
+<span class="nc" id="L161">        return directory;</span>
+    }
+
+    /**
+     * Returns implementation of the specified service class.
+     *
+     * @param serviceClass service class
+     * @param &lt;T&gt;          type of service
+     * @return implementation class
+     * @throws org.onlab.osgi.ServiceNotFoundException if no implementation found
+     */
+    protected &lt;T&gt; T get(Class&lt;T&gt; serviceClass) {
+<span class="nc" id="L173">        return directory.get(serviceClass);</span>
+    }
+
+    /**
+     * Returns a freshly minted object node.
+     *
+     * @return new object node
+     */
+    protected ObjectNode objectNode() {
+<span class="nc" id="L182">        return mapper.createObjectNode();</span>
+    }
+
+    /**
+     * Returns a freshly minted array node.
+     *
+     * @return new array node
+     */
+    protected ArrayNode arrayNode() {
+<span class="nc" id="L191">        return mapper.createArrayNode();</span>
+    }
+
+    /**
+     * Sends the specified data to the client.
+     * It is expected that the data is in the prescribed JSON format for
+     * events to the client.
+     *
+     * @param data data to be sent
+     */
+    protected synchronized void sendMessage(ObjectNode data) {
+<span class="nc" id="L202">        UiConnection connection = connection();</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (connection != null) {</span>
+<span class="nc" id="L204">            connection.sendMessage(data);</span>
+        }
+<span class="nc" id="L206">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

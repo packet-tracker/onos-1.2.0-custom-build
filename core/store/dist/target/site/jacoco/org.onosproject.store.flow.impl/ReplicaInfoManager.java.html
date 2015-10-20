@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ReplicaInfoManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.flow.impl</a> &gt; <span class="el_source">ReplicaInfoManager.java</span></div><h1>ReplicaInfoManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.flow.impl;
+
+import com.google.common.collect.ImmutableList;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.cluster.RoleInfo;
+import org.onosproject.event.EventDeliveryService;
+import org.onosproject.event.ListenerRegistry;
+import org.onosproject.mastership.MastershipEvent;
+import org.onosproject.mastership.MastershipListener;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.store.flow.ReplicaInfo;
+import org.onosproject.store.flow.ReplicaInfoEvent;
+import org.onosproject.store.flow.ReplicaInfoEventListener;
+import org.onosproject.store.flow.ReplicaInfoService;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.List;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.store.flow.ReplicaInfoEvent.Type.BACKUPS_CHANGED;
+import static org.onosproject.store.flow.ReplicaInfoEvent.Type.MASTER_CHANGED;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages replica placement information.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L51">public class ReplicaInfoManager implements ReplicaInfoService {</span>
+
+<span class="fc" id="L53">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L55">    private final MastershipListener mastershipListener = new InternalMastershipListener();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected EventDeliveryService eventDispatcher;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+<span class="fc" id="L63">    protected final ListenerRegistry&lt;ReplicaInfoEvent, ReplicaInfoEventListener&gt;</span>
+        listenerRegistry = new ListenerRegistry&lt;&gt;();
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L68">        eventDispatcher.addSink(ReplicaInfoEvent.class, listenerRegistry);</span>
+<span class="fc" id="L69">        mastershipService.addListener(mastershipListener);</span>
+<span class="fc" id="L70">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L71">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L75">        eventDispatcher.removeSink(ReplicaInfoEvent.class);</span>
+<span class="fc" id="L76">        mastershipService.removeListener(mastershipListener);</span>
+<span class="fc" id="L77">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L78">    }</span>
+
+    @Override
+    public ReplicaInfo getReplicaInfoFor(DeviceId deviceId) {
+<span class="fc" id="L82">        return buildFromRoleInfo(mastershipService.getNodesFor(deviceId));</span>
+    }
+
+    @Override
+    public void addListener(ReplicaInfoEventListener listener) {
+<span class="fc" id="L87">        listenerRegistry.addListener(checkNotNull(listener));</span>
+<span class="fc" id="L88">    }</span>
+
+    @Override
+    public void removeListener(ReplicaInfoEventListener listener) {
+<span class="nc" id="L92">        listenerRegistry.removeListener(checkNotNull(listener));</span>
+<span class="nc" id="L93">    }</span>
+
+    private static ReplicaInfo buildFromRoleInfo(RoleInfo roles) {
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        List&lt;NodeId&gt; backups = roles.backups() == null ?</span>
+<span class="pc" id="L97">                Collections.emptyList() : ImmutableList.copyOf(roles.backups());</span>
+<span class="fc" id="L98">        return new ReplicaInfo(roles.master(), backups);</span>
+    }
+
+<span class="fc" id="L101">    final class InternalMastershipListener implements MastershipListener {</span>
+
+        @Override
+        public void event(MastershipEvent event) {
+<span class="fc" id="L105">            final ReplicaInfo replicaInfo = buildFromRoleInfo(event.roleInfo());</span>
+<span class="pc bpc" id="L106" title="2 of 3 branches missed.">            switch (event.type()) {</span>
+            case MASTER_CHANGED:
+<span class="fc" id="L108">                eventDispatcher.post(new ReplicaInfoEvent(MASTER_CHANGED,</span>
+<span class="fc" id="L109">                                                          event.subject(),</span>
+                                                          replicaInfo));
+<span class="fc" id="L111">                break;</span>
+            case BACKUPS_CHANGED:
+<span class="nc" id="L113">                eventDispatcher.post(new ReplicaInfoEvent(BACKUPS_CHANGED,</span>
+<span class="nc" id="L114">                                                          event.subject(),</span>
+                                                          replicaInfo));
+<span class="nc" id="L116">                break;</span>
+            default:
+                break;
+            }
+<span class="fc" id="L120">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

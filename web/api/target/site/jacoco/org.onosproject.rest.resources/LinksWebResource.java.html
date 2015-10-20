@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LinksWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">LinksWebResource.java</span></div><h1>LinksWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.link.LinkService;
+import org.onosproject.rest.AbstractWebResource;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Response;
+
+import static org.onosproject.net.DeviceId.deviceId;
+import static org.onosproject.net.PortNumber.portNumber;
+
+/**
+ * Manage inventory of infrastructure links.
+ */
+@Path(&quot;links&quot;)
+<span class="fc" id="L36">public class LinksWebResource extends AbstractWebResource {</span>
+
+<span class="fc" id="L38">    enum Direction {</span>
+<span class="fc" id="L39">        ALL,</span>
+<span class="fc" id="L40">        INGRESS,</span>
+<span class="fc" id="L41">        EGRESS</span>
+    }
+
+    /**
+     * Get infrastructure links.
+     * Returns array of all links, or links for the specified device or port.
+     *
+     * @param deviceId  (optional) device identifier
+     * @param port      (optional) port number
+     * @param direction (optional) direction qualifier
+     * @return 200 OK
+     */
+    @GET
+    public Response getLinks(@QueryParam(&quot;device&quot;) String deviceId,
+                             @QueryParam(&quot;port&quot;) String port,
+                             @QueryParam(&quot;direction&quot;) String direction) {
+<span class="fc" id="L57">        LinkService service = get(LinkService.class);</span>
+        Iterable&lt;Link&gt; links;
+
+<span class="fc bfc" id="L60" title="All 4 branches covered.">        if (deviceId != null &amp;&amp; port != null) {</span>
+<span class="fc" id="L61">            links = getConnectPointLinks(new ConnectPoint(deviceId(deviceId),</span>
+<span class="fc" id="L62">                                                          portNumber(port)),</span>
+                                         direction, service);
+<span class="fc bfc" id="L64" title="All 2 branches covered.">        } else if (deviceId != null) {</span>
+<span class="fc" id="L65">            links = getDeviceLinks(deviceId(deviceId), direction, service);</span>
+        } else {
+<span class="fc" id="L67">            links = service.getLinks();</span>
+        }
+<span class="fc" id="L69">        return ok(encodeArray(Link.class, &quot;links&quot;, links)).build();</span>
+    }
+
+    private Iterable&lt;Link&gt; getConnectPointLinks(ConnectPoint point,
+                                                String direction,
+                                                LinkService service) {
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        Direction dir = direction != null ?</span>
+<span class="fc" id="L76">                Direction.valueOf(direction.toUpperCase()) : Direction.ALL;</span>
+<span class="pc bpc" id="L77" title="1 of 3 branches missed.">        switch (dir) {</span>
+            case INGRESS:
+<span class="fc" id="L79">                return service.getIngressLinks(point);</span>
+            case EGRESS:
+<span class="nc" id="L81">                return service.getEgressLinks(point);</span>
+            default:
+<span class="fc" id="L83">                return service.getLinks(point);</span>
+        }
+    }
+
+    private Iterable&lt;Link&gt; getDeviceLinks(DeviceId deviceId,
+                                          String direction,
+                                          LinkService service) {
+<span class="fc bfc" id="L90" title="All 2 branches covered.">        Direction dir = direction != null ?</span>
+<span class="fc" id="L91">                Direction.valueOf(direction.toUpperCase()) : Direction.ALL;</span>
+<span class="pc bpc" id="L92" title="1 of 3 branches missed.">        switch (dir) {</span>
+            case INGRESS:
+<span class="fc" id="L94">                return service.getDeviceIngressLinks(deviceId);</span>
+            case EGRESS:
+<span class="nc" id="L96">                return service.getDeviceEgressLinks(deviceId);</span>
+            default:
+<span class="fc" id="L98">                return service.getDeviceLinks(deviceId);</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RemoteTENodeDescriptorsTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">RemoteTENodeDescriptorsTlv.java</span></div><h1>RemoteTENodeDescriptorsTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.ListIterator;
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Remote TE Node Descriptors TLV.
+ */
+public class RemoteTENodeDescriptorsTlv implements PcepValueType {
+
+    /* Reference :PCEP Extension for Transporting TE Data
+        draft-dhodylee-pce-pcep-te-data-extn-02
+     *
+          0                   1                   2                   3
+          0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         |           Type=[TBD9]         |             Length            |
+         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         |                                                               |
+         //              Node Descriptor Sub-TLVs (variable)            //
+         |                                                               |
+         +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L50">    protected static final Logger log = LoggerFactory.getLogger(RemoteTENodeDescriptorsTlv.class);</span>
+
+    public static final short TYPE = 1003; //TODD:change this TBD9
+    public short hLength;
+
+    public static final int TLV_HEADER_LENGTH = 4;
+    // Node Descriptor Sub-TLVs (variable)
+    private LinkedList&lt;PcepValueType&gt; llRemoteTENodeDescriptorSubTLVs;
+
+    /**
+     * Constructor to initialize llRemoteTENodeDescriptorSubTLVs.
+     *
+     * @param llRemoteTENodeDescriptorSubTLVs LinkedList of PcepValueType
+     */
+<span class="fc" id="L64">    public RemoteTENodeDescriptorsTlv(LinkedList&lt;PcepValueType&gt; llRemoteTENodeDescriptorSubTLVs) {</span>
+<span class="fc" id="L65">        this.llRemoteTENodeDescriptorSubTLVs = llRemoteTENodeDescriptorSubTLVs;</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * Returns object of Remote TE Node Descriptors TLV.
+     *
+     * @param llRemoteTENodeDescriptorSubTLVs LinkedList of PcepValueType
+     * @return object of RemoteTENodeDescriptorsTLV
+     */
+    public static RemoteTENodeDescriptorsTlv of(final LinkedList&lt;PcepValueType&gt; llRemoteTENodeDescriptorSubTLVs) {
+<span class="fc" id="L75">        return new RemoteTENodeDescriptorsTlv(llRemoteTENodeDescriptorSubTLVs);</span>
+    }
+
+    /**
+     * Returns Remote TE Node Descriptor Sub TLVs.
+     *
+     * @return llRemoteTENodeDescriptorSubTLVs
+     */
+    public LinkedList&lt;PcepValueType&gt; getllRemoteTENodeDescriptorSubTLVs() {
+<span class="nc" id="L84">        return llRemoteTENodeDescriptorSubTLVs;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L89">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L94">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L99">        return hLength;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L104">        return Objects.hash(llRemoteTENodeDescriptorSubTLVs.hashCode());</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L110">            return true;</span>
+        }
+        /*
+         * Here we have a list of Tlv so to compare each sub tlv between the object
+         * we have to take a list iterator so one by one we can get each sub tlv object
+         * and can compare them.
+         * it may be possible that the size of 2 lists is not equal so we have to first check
+         * the size, if both are same then we should check for the subtlv objects otherwise
+         * we should return false.
+         */
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (obj instanceof RemoteTENodeDescriptorsTlv) {</span>
+<span class="fc" id="L121">            int countObjSubTlv = 0;</span>
+<span class="fc" id="L122">            int countOtherSubTlv = 0;</span>
+<span class="fc" id="L123">            boolean isCommonSubTlv = true;</span>
+<span class="fc" id="L124">            RemoteTENodeDescriptorsTlv other = (RemoteTENodeDescriptorsTlv) obj;</span>
+<span class="fc" id="L125">            Iterator&lt;PcepValueType&gt; objListIterator = ((RemoteTENodeDescriptorsTlv) obj).llRemoteTENodeDescriptorSubTLVs</span>
+<span class="fc" id="L126">                    .iterator();</span>
+<span class="fc" id="L127">            countObjSubTlv = ((RemoteTENodeDescriptorsTlv) obj).llRemoteTENodeDescriptorSubTLVs.size();</span>
+<span class="fc" id="L128">            countOtherSubTlv = other.llRemoteTENodeDescriptorSubTLVs.size();</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">            if (countObjSubTlv != countOtherSubTlv) {</span>
+<span class="nc" id="L130">                return false;</span>
+            } else {
+<span class="fc bfc" id="L132" title="All 4 branches covered.">                while (objListIterator.hasNext() &amp;&amp; isCommonSubTlv) {</span>
+<span class="fc" id="L133">                    PcepValueType subTlv = objListIterator.next();</span>
+<span class="fc" id="L134">                    isCommonSubTlv = Objects.equals(llRemoteTENodeDescriptorSubTLVs.contains(subTlv),</span>
+<span class="fc" id="L135">                            other.llRemoteTENodeDescriptorSubTLVs.contains(subTlv));</span>
+<span class="fc" id="L136">                }</span>
+<span class="fc" id="L137">                return isCommonSubTlv;</span>
+            }
+        }
+<span class="fc" id="L140">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+
+<span class="fc" id="L146">        int tlvStartIndex = c.writerIndex();</span>
+<span class="fc" id="L147">        c.writeShort(TYPE);</span>
+<span class="fc" id="L148">        int tlvLenIndex = c.writerIndex();</span>
+<span class="fc" id="L149">        hLength = 0;</span>
+<span class="fc" id="L150">        c.writeShort(hLength);</span>
+
+<span class="fc" id="L152">        ListIterator&lt;PcepValueType&gt; listIterator = llRemoteTENodeDescriptorSubTLVs.listIterator();</span>
+
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L155">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L158">                log.debug(&quot;TLV is null from subTlv list&quot;);</span>
+<span class="nc" id="L159">                continue;</span>
+            }
+<span class="fc" id="L161">            tlv.write(c);</span>
+
+            // need to take care of padding
+<span class="fc" id="L164">            int pad = tlv.getLength() % 4;</span>
+
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">            if (0 != pad) {</span>
+<span class="nc" id="L167">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="nc" id="L169">                    c.writeByte((byte) 0);</span>
+                }
+            }
+<span class="fc" id="L172">        }</span>
+
+<span class="fc" id="L174">        hLength = (short) (c.writerIndex() - tlvStartIndex);</span>
+<span class="fc" id="L175">        c.setShort(tlvLenIndex, (hLength - TLV_HEADER_LENGTH));</span>
+
+<span class="fc" id="L177">        return c.writerIndex() - tlvStartIndex;</span>
+    }
+
+    /**
+     * Reads channel buffer and returns object of Remote TE Node Descriptors TLV.
+     *
+     * @param c input channel buffer
+     * @param length length of buffer
+     * @return object of RemoteTENodeDescriptorsTLV
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public static PcepValueType read(ChannelBuffer c , short length) throws PcepParseException {
+
+        // Node Descriptor Sub-TLVs (variable)
+<span class="fc" id="L191">        LinkedList&lt;PcepValueType&gt; llRemoteTENodeDescriptorSubTLVs = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L193">        ChannelBuffer tempCb = c.readBytes(length);</span>
+
+<span class="fc bfc" id="L195" title="All 2 branches covered.">        while (TLV_HEADER_LENGTH &lt;= tempCb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+<span class="fc" id="L198">            short hType = tempCb.readShort();</span>
+<span class="fc" id="L199">            int iValue = 0;</span>
+<span class="fc" id="L200">            short hLength = tempCb.readShort();</span>
+<span class="pc bpc" id="L201" title="1 of 5 branches missed.">            switch (hType) {</span>
+
+            case AutonomousSystemTlv.TYPE:
+<span class="fc" id="L204">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L205">                tlv = new AutonomousSystemTlv(iValue);</span>
+<span class="fc" id="L206">                break;</span>
+            case BGPLSidentifierTlv.TYPE:
+<span class="fc" id="L208">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L209">                tlv = new BGPLSidentifierTlv(iValue);</span>
+<span class="fc" id="L210">                break;</span>
+            case OSPFareaIDsubTlv.TYPE:
+<span class="fc" id="L212">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L213">                tlv = new OSPFareaIDsubTlv(iValue);</span>
+<span class="fc" id="L214">                break;</span>
+            case RouterIDSubTlv.TYPE:
+<span class="fc" id="L216">                tlv = RouterIDSubTlv.read(tempCb, hLength);</span>
+<span class="fc" id="L217">                break;</span>
+
+            default:
+<span class="nc" id="L220">                throw new PcepParseException(&quot;Unsupported Sub TLV type :&quot; + hType);</span>
+            }
+
+            // Check for the padding
+<span class="fc" id="L224">            int pad = hLength % 4;</span>
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L226">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">                if (pad &lt;= tempCb.readableBytes()) {</span>
+<span class="nc" id="L228">                    tempCb.skipBytes(pad);</span>
+                }
+            }
+
+<span class="fc" id="L232">            llRemoteTENodeDescriptorSubTLVs.add(tlv);</span>
+<span class="fc" id="L233">        }</span>
+
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">        if (0 &lt; tempCb.readableBytes()) {</span>
+
+<span class="nc" id="L237">            throw new PcepParseException(&quot;Sub Tlv parsing error. Extra bytes received.&quot;);</span>
+        }
+<span class="fc" id="L239">        return new RemoteTENodeDescriptorsTlv(llRemoteTENodeDescriptorSubTLVs);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L244">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L245">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L246">                .add(&quot;Length&quot;, hLength)</span>
+<span class="fc" id="L247">                .add(&quot;RemoteTeNodeDescriptorSubTLVs&quot;, llRemoteTENodeDescriptorSubTLVs)</span>
+<span class="fc" id="L248">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

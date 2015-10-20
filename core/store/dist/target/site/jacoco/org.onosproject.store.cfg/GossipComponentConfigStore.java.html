@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GossipComponentConfigStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.cfg</a> &gt; <span class="el_source">GossipComponentConfigStore.java</span></div><h1>GossipComponentConfigStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.cfg;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cfg.ComponentConfigEvent;
+import org.onosproject.cfg.ComponentConfigStore;
+import org.onosproject.cfg.ComponentConfigStoreDelegate;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.LogicalClockService;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import static org.onosproject.cfg.ComponentConfigEvent.Type.PROPERTY_SET;
+import static org.onosproject.cfg.ComponentConfigEvent.Type.PROPERTY_UNSET;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.REMOVE;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of component configurations in a distributed data store
+ * that uses optimistic replication and gossip based anti-entropy techniques.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L49">public class GossipComponentConfigStore</span>
+        extends AbstractStore&lt;ComponentConfigEvent, ComponentConfigStoreDelegate&gt;
+        implements ComponentConfigStore {
+
+    private static final String SEP = &quot;#&quot;;
+
+<span class="nc" id="L55">    private final Logger log = getLogger(getClass());</span>
+
+    private EventuallyConsistentMap&lt;String, String&gt; properties;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LogicalClockService clockService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L67">        KryoNamespace.Builder serializer = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L68">                .register(KryoNamespaces.API);</span>
+
+<span class="nc" id="L70">        properties = storageService.&lt;String, String&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L71">                .withName(&quot;cfg&quot;)</span>
+<span class="nc" id="L72">                .withSerializer(serializer)</span>
+<span class="nc" id="L73">                .withTimestampProvider((k, v) -&gt; clockService.getTimestamp())</span>
+<span class="nc" id="L74">                .build();</span>
+
+<span class="nc" id="L76">        properties.addListener(new InternalPropertiesListener());</span>
+<span class="nc" id="L77">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L78">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L82">        properties.destroy();</span>
+<span class="nc" id="L83">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L84">    }</span>
+
+    @Override
+    public void setProperty(String componentName, String name, String value) {
+<span class="nc" id="L88">        properties.put(key(componentName, name), value);</span>
+
+<span class="nc" id="L90">    }</span>
+
+    @Override
+    public void unsetProperty(String componentName, String name) {
+<span class="nc" id="L94">        properties.remove(key(componentName, name));</span>
+<span class="nc" id="L95">    }</span>
+
+    /**
+     * Listener to component configuration properties distributed map changes.
+     */
+<span class="nc" id="L100">    private final class InternalPropertiesListener</span>
+            implements EventuallyConsistentMapListener&lt;String, String&gt; {
+
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;String, String&gt; event) {
+<span class="nc" id="L105">            String[] keys = event.key().split(SEP);</span>
+<span class="nc" id="L106">            String value = event.value();</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc" id="L108">                delegate.notify(new ComponentConfigEvent(PROPERTY_SET, keys[0], keys[1], value));</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            } else if (event.type() == REMOVE) {</span>
+<span class="nc" id="L110">                delegate.notify(new ComponentConfigEvent(PROPERTY_UNSET, keys[0], keys[1], null));</span>
+            }
+<span class="nc" id="L112">        }</span>
+    }
+
+    // Generates a key from component name and property name.
+    private String key(String componentName, String name) {
+<span class="nc" id="L117">        return componentName + SEP + name;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

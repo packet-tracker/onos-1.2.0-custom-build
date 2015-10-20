@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PacketManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.packet.impl</a> &gt; <span class="el_source">PacketManager.java</span></div><h1>PacketManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.packet.impl;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.Device;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flowobjective.DefaultForwardingObjective;
+import org.onosproject.net.flowobjective.FlowObjectiveService;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.Objective;
+import org.onosproject.net.flowobjective.ObjectiveContext;
+import org.onosproject.net.flowobjective.ObjectiveError;
+import org.onosproject.net.packet.DefaultPacketRequest;
+import org.onosproject.net.packet.OutboundPacket;
+import org.onosproject.net.packet.PacketContext;
+import org.onosproject.net.packet.PacketEvent;
+import org.onosproject.net.packet.PacketPriority;
+import org.onosproject.net.packet.PacketProcessor;
+import org.onosproject.net.packet.PacketProcessorEntry;
+import org.onosproject.net.packet.PacketProvider;
+import org.onosproject.net.packet.PacketProviderRegistry;
+import org.onosproject.net.packet.PacketProviderService;
+import org.onosproject.net.packet.PacketRequest;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.net.packet.PacketStore;
+import org.onosproject.net.packet.PacketStoreDelegate;
+import org.onosproject.net.provider.AbstractProviderRegistry;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.slf4j.Logger;
+
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.*;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Provides a basic implementation of the packet SB &amp;amp; NB APIs.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L74">public class PacketManager</span>
+        extends AbstractProviderRegistry&lt;PacketProvider, PacketProviderService&gt;
+        implements PacketService, PacketProviderRegistry {
+
+<span class="nc" id="L78">    private final Logger log = getLogger(getClass());</span>
+
+    private static final String TABLE_TYPE_MSG =
+            &quot;Table Type cannot be null. For requesting packets without &quot; +
+                    &quot;table hints, use other methods in the packetService API&quot;;
+
+<span class="nc" id="L84">    private final PacketStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private FlowRuleService flowService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private PacketStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private FlowObjectiveService objectiveService;
+
+    private ExecutorService eventHandlingExecutor;
+
+<span class="nc" id="L103">    private final DeviceListener deviceListener = new InternalDeviceListener();</span>
+
+<span class="nc" id="L105">    private final List&lt;ProcessorEntry&gt; processors = Lists.newCopyOnWriteArrayList();</span>
+
+    private ApplicationId appId;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L111">        eventHandlingExecutor = Executors.newSingleThreadExecutor(</span>
+<span class="nc" id="L112">                groupedThreads(&quot;onos/net/packet&quot;, &quot;event-handler&quot;));</span>
+<span class="nc" id="L113">        appId = coreService.getAppId(CoreService.CORE_APP_NAME);</span>
+<span class="nc" id="L114">        store.setDelegate(delegate);</span>
+<span class="nc" id="L115">        deviceService.addListener(deviceListener);</span>
+<span class="nc" id="L116">        store.existingRequests().forEach(this::pushToAllDevices);</span>
+<span class="nc" id="L117">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L118">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L122">        store.unsetDelegate(delegate);</span>
+<span class="nc" id="L123">        deviceService.removeListener(deviceListener);</span>
+<span class="nc" id="L124">        eventHandlingExecutor.shutdown();</span>
+<span class="nc" id="L125">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public void addProcessor(PacketProcessor processor, int priority) {
+<span class="nc" id="L130">        checkPermission(PACKET_EVENT);</span>
+<span class="nc" id="L131">        checkNotNull(processor, &quot;Processor cannot be null&quot;);</span>
+<span class="nc" id="L132">        ProcessorEntry entry = new ProcessorEntry(processor, priority);</span>
+
+        // Insert the new processor according to its priority.
+<span class="nc" id="L135">        int i = 0;</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        for (; i &lt; processors.size(); i++) {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">            if (priority &lt; processors.get(i).priority()) {</span>
+<span class="nc" id="L138">                break;</span>
+            }
+        }
+<span class="nc" id="L141">        processors.add(i, entry);</span>
+<span class="nc" id="L142">    }</span>
+
+    @Override
+    public void removeProcessor(PacketProcessor processor) {
+<span class="nc" id="L146">        checkPermission(PACKET_EVENT);</span>
+<span class="nc" id="L147">        checkNotNull(processor, &quot;Processor cannot be null&quot;);</span>
+
+        // Remove the processor entry.
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        for (int i = 0; i &lt; processors.size(); i++) {</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            if (processors.get(i).processor() == processor) {</span>
+<span class="nc" id="L152">                processors.remove(i);</span>
+<span class="nc" id="L153">                break;</span>
+            }
+        }
+<span class="nc" id="L156">    }</span>
+
+    @Override
+    public List&lt;PacketProcessorEntry&gt; getProcessors() {
+<span class="nc" id="L160">        return ImmutableList.copyOf(processors);</span>
+    }
+
+    @Override
+    public void requestPackets(TrafficSelector selector, PacketPriority priority,
+                               ApplicationId appId) {
+<span class="nc" id="L166">        checkPermission(PACKET_READ);</span>
+<span class="nc" id="L167">        checkNotNull(selector, &quot;Selector cannot be null&quot;);</span>
+<span class="nc" id="L168">        checkNotNull(appId, &quot;Application ID cannot be null&quot;);</span>
+
+<span class="nc" id="L170">        PacketRequest request = new DefaultPacketRequest(selector, priority, appId);</span>
+<span class="nc" id="L171">        store.requestPackets(request);</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    public void cancelPackets(TrafficSelector selector, PacketPriority priority,
+                              ApplicationId appId) {
+<span class="nc" id="L177">        checkPermission(PACKET_READ);</span>
+<span class="nc" id="L178">        checkNotNull(selector, &quot;Selector cannot be null&quot;);</span>
+<span class="nc" id="L179">        checkNotNull(appId, &quot;Application ID cannot be null&quot;);</span>
+
+<span class="nc" id="L181">        PacketRequest request = new DefaultPacketRequest(selector, priority, appId);</span>
+<span class="nc" id="L182">        store.cancelPackets(request);</span>
+<span class="nc" id="L183">    }</span>
+
+    @Override
+    public List&lt;PacketRequest&gt; getRequests() {
+<span class="nc" id="L187">        return store.existingRequests();</span>
+    }
+
+    /**
+     * Pushes all rules to the specified device.
+     *
+     * @param device device on which to install packet request flows
+     */
+    private void pushRulesToDevice(Device device) {
+<span class="nc" id="L196">        log.debug(&quot;Pushing packet requests to device {}&quot;, device.id());</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        for (PacketRequest request : store.existingRequests()) {</span>
+<span class="nc" id="L198">            pushRule(device, request);</span>
+<span class="nc" id="L199">        }</span>
+<span class="nc" id="L200">    }</span>
+
+    /**
+     * Pushes a packet request flow rule to all devices.
+     *
+     * @param request the packet request
+     */
+    private void pushToAllDevices(PacketRequest request) {
+<span class="nc" id="L208">        log.debug(&quot;Pushing packet request {} to all devices&quot;, request);</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">        for (Device device : deviceService.getDevices()) {</span>
+<span class="nc" id="L210">            pushRule(device, request);</span>
+<span class="nc" id="L211">        }</span>
+<span class="nc" id="L212">    }</span>
+
+    /**
+     * Removes packet request flow rule from all devices.
+     *
+     * @param request the packet request
+     */
+    private void removeFromAllDevices(PacketRequest request) {
+<span class="nc" id="L220">        deviceService.getAvailableDevices().forEach(d -&gt; removeRule(d, request));</span>
+<span class="nc" id="L221">    }</span>
+
+    /**
+     * Pushes packet intercept flow rules to the device.
+     *
+     * @param device  the device to push the rules to
+     * @param request the packet request
+     */
+    private void pushRule(Device device, PacketRequest request) {
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (!device.type().equals(Device.Type.SWITCH)) {</span>
+<span class="nc" id="L231">            return;</span>
+        }
+
+<span class="nc" id="L234">        ForwardingObjective forwarding = createBuilder(request)</span>
+<span class="nc" id="L235">                .add(new ObjectiveContext() {</span>
+                    @Override
+                    public void onError(Objective objective, ObjectiveError error) {
+<span class="nc" id="L238">                        log.warn(&quot;Failed to install packet request {} to {}: {}&quot;,</span>
+<span class="nc" id="L239">                                 request, device.id(), error);</span>
+<span class="nc" id="L240">                    }</span>
+                });
+
+<span class="nc" id="L243">        objectiveService.forward(device.id(), forwarding);</span>
+<span class="nc" id="L244">    }</span>
+
+    /**
+     * Removes packet intercept flow rules from the device.
+     *
+     * @param device  the device to remove the rules deom
+     * @param request the packet request
+     */
+    private void removeRule(Device device, PacketRequest request) {
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (!device.type().equals(Device.Type.SWITCH)) {</span>
+<span class="nc" id="L254">            return;</span>
+        }
+<span class="nc" id="L256">        ForwardingObjective forwarding = createBuilder(request)</span>
+<span class="nc" id="L257">                .remove(new ObjectiveContext() {</span>
+                    @Override
+                    public void onError(Objective objective, ObjectiveError error) {
+<span class="nc" id="L260">                        log.warn(&quot;Failed to withdraw packet request {} from {}: {}&quot;,</span>
+<span class="nc" id="L261">                                 request, device.id(), error);</span>
+<span class="nc" id="L262">                    }</span>
+                });
+<span class="nc" id="L264">        objectiveService.forward(device.id(), forwarding);</span>
+<span class="nc" id="L265">    }</span>
+
+    private DefaultForwardingObjective.Builder createBuilder(PacketRequest request) {
+<span class="nc" id="L268">        return DefaultForwardingObjective.builder()</span>
+<span class="nc" id="L269">                .withPriority(request.priority().priorityValue())</span>
+<span class="nc" id="L270">                .withSelector(request.selector())</span>
+<span class="nc" id="L271">                .fromApp(appId)</span>
+<span class="nc" id="L272">                .withFlag(ForwardingObjective.Flag.VERSATILE)</span>
+<span class="nc" id="L273">                .withTreatment(DefaultTrafficTreatment.builder().punt().build())</span>
+<span class="nc" id="L274">                .makePermanent();</span>
+    }
+
+    @Override
+    public void emit(OutboundPacket packet) {
+<span class="nc" id="L279">        checkPermission(PACKET_WRITE);</span>
+<span class="nc" id="L280">        checkNotNull(packet, &quot;Packet cannot be null&quot;);</span>
+<span class="nc" id="L281">        store.emit(packet);</span>
+<span class="nc" id="L282">    }</span>
+
+    private void localEmit(OutboundPacket packet) {
+<span class="nc" id="L285">        Device device = deviceService.getDevice(packet.sendThrough());</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">        if (device == null) {</span>
+<span class="nc" id="L287">            return;</span>
+        }
+<span class="nc" id="L289">        PacketProvider packetProvider = getProvider(device.providerId());</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">        if (packetProvider != null) {</span>
+<span class="nc" id="L291">            packetProvider.emit(packet);</span>
+        }
+<span class="nc" id="L293">    }</span>
+
+    @Override
+    protected PacketProviderService createProviderService(PacketProvider provider) {
+<span class="nc" id="L297">        return new InternalPacketProviderService(provider);</span>
+    }
+
+    /**
+     * Personalized packet provider service issued to the supplied provider.
+     */
+    private class InternalPacketProviderService
+            extends AbstractProviderService&lt;PacketProvider&gt;
+            implements PacketProviderService {
+
+<span class="nc" id="L307">        protected InternalPacketProviderService(PacketProvider provider) {</span>
+<span class="nc" id="L308">            super(provider);</span>
+<span class="nc" id="L309">        }</span>
+
+        @Override
+        public void processPacket(PacketContext context) {
+            // TODO filter packets sent to processors based on registrations
+<span class="nc bnc" id="L314" title="All 2 branches missed.">            for (ProcessorEntry entry : processors) {</span>
+<span class="nc" id="L315">                long start = System.nanoTime();</span>
+<span class="nc" id="L316">                entry.processor().process(context);</span>
+<span class="nc" id="L317">                entry.addNanos(System.nanoTime() - start);</span>
+<span class="nc" id="L318">            }</span>
+<span class="nc" id="L319">        }</span>
+
+    }
+
+    /**
+     * Internal callback from the packet store.
+     */
+<span class="nc" id="L326">    private class InternalStoreDelegate implements PacketStoreDelegate {</span>
+        @Override
+        public void notify(PacketEvent event) {
+<span class="nc" id="L329">            localEmit(event.subject());</span>
+<span class="nc" id="L330">        }</span>
+
+        @Override
+        public void requestPackets(PacketRequest request) {
+<span class="nc" id="L334">            pushToAllDevices(request);</span>
+<span class="nc" id="L335">        }</span>
+
+        @Override
+        public void cancelPackets(PacketRequest request) {
+<span class="nc" id="L339">            removeFromAllDevices(request);</span>
+<span class="nc" id="L340">        }</span>
+    }
+
+    /**
+     * Internal listener for device service events.
+     */
+<span class="nc" id="L346">    private class InternalDeviceListener implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+<span class="nc" id="L349">            eventHandlingExecutor.execute(() -&gt; {</span>
+                try {
+<span class="nc" id="L351">                    Device device = event.subject();</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">                    switch (event.type()) {</span>
+                        case DEVICE_ADDED:
+                        case DEVICE_AVAILABILITY_CHANGED:
+<span class="nc bnc" id="L355" title="All 2 branches missed.">                            if (deviceService.isAvailable(event.subject().id())) {</span>
+<span class="nc" id="L356">                                pushRulesToDevice(device);</span>
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+<span class="nc" id="L362">                } catch (Exception e) {</span>
+<span class="nc" id="L363">                    log.warn(&quot;Failed to process {}&quot;, event, e);</span>
+<span class="nc" id="L364">                }</span>
+<span class="nc" id="L365">            });</span>
+<span class="nc" id="L366">        }</span>
+    }
+
+    /**
+     * Entity for tracking stats for a packet processor.
+     */
+    private class ProcessorEntry implements PacketProcessorEntry {
+        private final PacketProcessor processor;
+        private final int priority;
+<span class="nc" id="L375">        private long invocations = 0;</span>
+<span class="nc" id="L376">        private long nanos = 0;</span>
+
+<span class="nc" id="L378">        public ProcessorEntry(PacketProcessor processor, int priority) {</span>
+<span class="nc" id="L379">            this.processor = processor;</span>
+<span class="nc" id="L380">            this.priority = priority;</span>
+<span class="nc" id="L381">        }</span>
+
+        @Override
+        public PacketProcessor processor() {
+<span class="nc" id="L385">            return processor;</span>
+        }
+
+        @Override
+        public int priority() {
+<span class="nc" id="L390">            return priority;</span>
+        }
+
+        @Override
+        public long invocations() {
+<span class="nc" id="L395">            return invocations;</span>
+        }
+
+        @Override
+        public long totalNanos() {
+<span class="nc" id="L400">            return nanos;</span>
+        }
+
+        @Override
+        public long averageNanos() {
+<span class="nc bnc" id="L405" title="All 2 branches missed.">            return invocations &gt; 0 ? nanos / invocations : 0;</span>
+        }
+
+        void addNanos(long nanos) {
+<span class="nc" id="L409">            this.nanos += nanos;</span>
+<span class="nc" id="L410">            this.invocations++;</span>
+<span class="nc" id="L411">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

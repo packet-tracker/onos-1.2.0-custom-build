@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IOLoopMessaging.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio.service</a> &gt; <span class="el_source">IOLoopMessaging.java</span></div><h1>IOLoopMessaging.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio.service;
+
+import static org.onlab.util.Tools.groupedThreads;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+import org.apache.commons.pool.KeyedPoolableObjectFactory;
+import org.apache.commons.pool.impl.GenericKeyedObjectPool;
+import org.onlab.nio.AcceptorLoop;
+import org.onlab.nio.SelectorLoop;
+import org.onosproject.store.cluster.messaging.Endpoint;
+import org.onosproject.store.cluster.messaging.MessagingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
+import com.google.common.collect.Lists;
+
+/**
+ * MessagingService implementation based on IOLoop.
+ */
+<span class="nc" id="L57">public class IOLoopMessaging implements MessagingService {</span>
+
+<span class="nc" id="L59">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String REPLY_MESSAGE_TYPE = &quot;ONOS_REQUEST_REPLY&quot;;
+
+    static final long TIMEOUT = 1000;
+
+    static final boolean SO_NO_DELAY = false;
+    static final int SO_SEND_BUFFER_SIZE = 128 * 1024;
+    static final int SO_RCV_BUFFER_SIZE = 128 * 1024;
+
+    private static final int NUM_WORKERS = 8;
+
+    private AcceptorLoop acceptorLoop;
+<span class="nc" id="L72">    private final ExecutorService acceptorThreadPool =</span>
+<span class="nc" id="L73">            Executors.newSingleThreadExecutor(groupedThreads(&quot;onos/nio/messaging&quot;, &quot;acceptor&quot;));</span>
+<span class="nc" id="L74">    private final ExecutorService ioThreadPool =</span>
+<span class="nc" id="L75">            Executors.newFixedThreadPool(NUM_WORKERS, groupedThreads(&quot;onos/nio/messaging&quot;, &quot;io-loop-worker-%d&quot;));</span>
+
+<span class="nc" id="L77">    private final List&lt;DefaultIOLoop&gt; ioLoops = Lists.newArrayList();</span>
+
+<span class="nc" id="L79">    private int lastWorker = -1;</span>
+
+<span class="nc" id="L81">    private final AtomicBoolean started = new AtomicBoolean(false);</span>
+    private Endpoint localEp;
+
+<span class="nc" id="L84">    private GenericKeyedObjectPool&lt;Endpoint, DefaultMessageStream&gt; streams =</span>
+            new GenericKeyedObjectPool&lt;&gt;(new DefaultMessageStreamFactory());
+
+<span class="nc" id="L87">    private final ConcurrentMap&lt;String, Consumer&lt;DefaultMessage&gt;&gt; handlers = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="nc" id="L88">    private final AtomicLong messageIdGenerator = new AtomicLong(0);</span>
+<span class="nc" id="L89">    private final Cache&lt;Long, CompletableFuture&lt;byte[]&gt;&gt; responseFutures = CacheBuilder.newBuilder()</span>
+<span class="nc" id="L90">            .removalListener(new RemovalListener&lt;Long, CompletableFuture&lt;byte[]&gt;&gt;() {</span>
+                @Override
+                public void onRemoval(RemovalNotification&lt;Long, CompletableFuture&lt;byte[]&gt;&gt; entry) {
+<span class="nc bnc" id="L93" title="All 2 branches missed.">                    if (entry.wasEvicted()) {</span>
+<span class="nc" id="L94">                        entry.getValue().completeExceptionally(new TimeoutException(&quot;Timedout waiting for reply&quot;));</span>
+                    }
+<span class="nc" id="L96">                }</span>
+            })
+<span class="nc" id="L98">            .build();</span>
+
+    /**
+     * Activates IO Loops.
+     *
+     * @param localEp local end-point
+     * @throws IOException is activation fails
+     */
+    public void start(Endpoint localEp) throws IOException {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (started.get()) {</span>
+<span class="nc" id="L108">            log.warn(&quot;IOMessaging is already running at {}&quot;, localEp);</span>
+<span class="nc" id="L109">            return;</span>
+        }
+<span class="nc" id="L111">        this.localEp = localEp;</span>
+<span class="nc" id="L112">        streams.setLifo(false);</span>
+<span class="nc" id="L113">        this.acceptorLoop = new DefaultAcceptorLoop(new InetSocketAddress(localEp.host().toString(), localEp.port()));</span>
+
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        for (int i = 0; i &lt; NUM_WORKERS; i++) {</span>
+<span class="nc" id="L116">            ioLoops.add(new DefaultIOLoop(this::dispatchLocally));</span>
+        }
+
+<span class="nc" id="L119">        ioLoops.forEach(ioThreadPool::execute);</span>
+<span class="nc" id="L120">        acceptorThreadPool.execute(acceptorLoop);</span>
+<span class="nc" id="L121">        ioLoops.forEach(loop -&gt; loop.awaitStart(TIMEOUT));</span>
+<span class="nc" id="L122">        acceptorLoop.awaitStart(TIMEOUT);</span>
+<span class="nc" id="L123">        started.set(true);</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Shuts down IO loops.
+     */
+    public void stop() {
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        if (started.get()) {</span>
+<span class="nc" id="L131">            ioLoops.forEach(SelectorLoop::shutdown);</span>
+<span class="nc" id="L132">            acceptorLoop.shutdown();</span>
+<span class="nc" id="L133">            ioThreadPool.shutdown();</span>
+<span class="nc" id="L134">            acceptorThreadPool.shutdown();</span>
+<span class="nc" id="L135">            started.set(false);</span>
+        }
+<span class="nc" id="L137">    }</span>
+
+
+    @Override
+    public CompletableFuture&lt;Void&gt; sendAsync(Endpoint ep, String type, byte[] payload) {
+<span class="nc" id="L142">        DefaultMessage message = new DefaultMessage(</span>
+<span class="nc" id="L143">                messageIdGenerator.incrementAndGet(),</span>
+                localEp,
+                type,
+                payload);
+<span class="nc" id="L147">        return sendAsync(ep, message);</span>
+    }
+
+    protected CompletableFuture&lt;Void&gt; sendAsync(Endpoint ep, DefaultMessage message) {
+<span class="nc" id="L151">        CompletableFuture&lt;Void&gt; future = new CompletableFuture&lt;&gt;();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        if (ep.equals(localEp)) {</span>
+<span class="nc" id="L153">            dispatchLocally(message);</span>
+<span class="nc" id="L154">            future.complete(null);</span>
+<span class="nc" id="L155">            return future;</span>
+        }
+
+<span class="nc" id="L158">        DefaultMessageStream stream = null;</span>
+        try {
+<span class="nc" id="L160">            stream = streams.borrowObject(ep);</span>
+<span class="nc" id="L161">            stream.write(message);</span>
+<span class="nc" id="L162">            future.complete(null);</span>
+<span class="nc" id="L163">        } catch (Exception e) {</span>
+<span class="nc" id="L164">            future.completeExceptionally(e);</span>
+        } finally {
+<span class="nc" id="L166">            try {</span>
+<span class="nc" id="L167">                streams.returnObject(ep, stream);</span>
+<span class="nc" id="L168">            } catch (Exception e) {</span>
+<span class="nc" id="L169">                log.warn(&quot;Failed to return stream to pool&quot;);</span>
+<span class="nc" id="L170">            }</span>
+<span class="nc" id="L171">        }</span>
+<span class="nc" id="L172">        return future;</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;byte[]&gt; sendAndReceive(
+            Endpoint ep,
+            String type,
+            byte[] payload) {
+<span class="nc" id="L180">        CompletableFuture&lt;byte[]&gt; response = new CompletableFuture&lt;&gt;();</span>
+<span class="nc" id="L181">        Long messageId = messageIdGenerator.incrementAndGet();</span>
+<span class="nc" id="L182">        responseFutures.put(messageId, response);</span>
+<span class="nc" id="L183">        DefaultMessage message = new DefaultMessage(messageId, localEp, type, payload);</span>
+        try {
+<span class="nc" id="L185">            sendAsync(ep, message);</span>
+<span class="nc" id="L186">        } catch (Exception e) {</span>
+<span class="nc" id="L187">            responseFutures.invalidate(messageId);</span>
+<span class="nc" id="L188">            response.completeExceptionally(e);</span>
+<span class="nc" id="L189">        }</span>
+<span class="nc" id="L190">        return response;</span>
+    }
+
+    @Override
+    public void registerHandler(String type, Consumer&lt;byte[]&gt; handler, Executor executor) {
+<span class="nc" id="L195">        handlers.put(type, message -&gt; executor.execute(() -&gt; handler.accept(message.payload())));</span>
+<span class="nc" id="L196">    }</span>
+
+    @Override
+    public void registerHandler(String type, Function&lt;byte[], byte[]&gt; handler, Executor executor) {
+<span class="nc" id="L200">        handlers.put(type, message -&gt; executor.execute(() -&gt; {</span>
+<span class="nc" id="L201">            byte[] responsePayload = handler.apply(message.payload());</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (responsePayload != null) {</span>
+<span class="nc" id="L203">                DefaultMessage response = new DefaultMessage(message.id(),</span>
+                        localEp,
+                        REPLY_MESSAGE_TYPE,
+                        responsePayload);
+<span class="nc" id="L207">                sendAsync(message.sender(), response).whenComplete((result, error) -&gt; {</span>
+<span class="nc" id="L208">                    log.debug(&quot;Failed to respond&quot;, error);</span>
+<span class="nc" id="L209">                });</span>
+            }
+<span class="nc" id="L211">        }));</span>
+<span class="nc" id="L212">    }</span>
+
+    @Override
+    public void registerHandler(String type, Function&lt;byte[], CompletableFuture&lt;byte[]&gt;&gt; handler) {
+<span class="nc" id="L216">        handlers.put(type, message -&gt; {</span>
+<span class="nc" id="L217">            handler.apply(message.payload()).whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">                if (error == null) {</span>
+<span class="nc" id="L219">                    DefaultMessage response = new DefaultMessage(message.id(),</span>
+                        localEp,
+                        REPLY_MESSAGE_TYPE,
+                        result);
+<span class="nc" id="L223">                    sendAsync(message.sender(), response).whenComplete((r, e) -&gt; {</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">                        if (e != null) {</span>
+<span class="nc" id="L225">                            log.debug(&quot;Failed to respond&quot;, e);</span>
+                        }
+<span class="nc" id="L227">                    });</span>
+                }
+<span class="nc" id="L229">            });</span>
+<span class="nc" id="L230">        });</span>
+<span class="nc" id="L231">    }</span>
+
+    @Override
+    public void unregisterHandler(String type) {
+<span class="nc" id="L235">        handlers.remove(type);</span>
+<span class="nc" id="L236">    }</span>
+
+    protected void dispatchLocally(DefaultMessage message) {
+<span class="nc" id="L239">        String type = message.type();</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (REPLY_MESSAGE_TYPE.equals(type)) {</span>
+            try {
+<span class="nc" id="L242">                CompletableFuture&lt;byte[]&gt; futureResponse =</span>
+<span class="nc" id="L243">                        responseFutures.getIfPresent(message.id());</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">                if (futureResponse != null) {</span>
+<span class="nc" id="L245">                    futureResponse.complete(message.payload());</span>
+                } else {
+<span class="nc" id="L247">                    log.warn(&quot;Received a reply for message id:[{}]. &quot;</span>
+                            + &quot; from {}. But was unable to locate the&quot;
+<span class="nc" id="L249">                            + &quot; request handle&quot;, message.id(), message.sender());</span>
+                }
+            } finally {
+<span class="nc" id="L252">                responseFutures.invalidate(message.id());</span>
+<span class="nc" id="L253">            }</span>
+<span class="nc" id="L254">            return;</span>
+        }
+<span class="nc" id="L256">        Consumer&lt;DefaultMessage&gt; handler = handlers.get(type);</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">        if (handler != null) {</span>
+<span class="nc" id="L258">            handler.accept(message);</span>
+        } else {
+<span class="nc" id="L260">            log.debug(&quot;No handler registered for {}&quot;, type);</span>
+        }
+<span class="nc" id="L262">    }</span>
+
+    // Get the next worker to which a client should be assigned
+    private synchronized DefaultIOLoop nextWorker() {
+<span class="nc" id="L266">        lastWorker = (lastWorker + 1) % NUM_WORKERS;</span>
+<span class="nc" id="L267">        return ioLoops.get(lastWorker);</span>
+    }
+
+    /**
+     * Initiates open connection request and registers the pending socket
+     * channel with the given IO loop.
+     *
+     * @param loop loop with which the channel should be registered
+     * @throws java.io.IOException if the socket could not be open or connected
+     */
+    private DefaultMessageStream createConnection(Endpoint ep, DefaultIOLoop loop) throws IOException {
+<span class="nc" id="L278">        SocketAddress sa = new InetSocketAddress(ep.host().toString(), ep.port());</span>
+<span class="nc" id="L279">        SocketChannel ch = SocketChannel.open();</span>
+<span class="nc" id="L280">        ch.configureBlocking(false);</span>
+<span class="nc" id="L281">        DefaultMessageStream stream = loop.connectStream(ch);</span>
+<span class="nc" id="L282">        ch.connect(sa);</span>
+<span class="nc" id="L283">        return stream;</span>
+    }
+
+    // Loop for accepting client connections
+    private class DefaultAcceptorLoop extends AcceptorLoop {
+
+<span class="nc" id="L289">        public DefaultAcceptorLoop(SocketAddress address) throws IOException {</span>
+<span class="nc" id="L290">            super(DefaultIOLoop.SELECT_TIMEOUT_MILLIS, address);</span>
+<span class="nc" id="L291">        }</span>
+
+        @Override
+        protected void acceptConnection(ServerSocketChannel channel) throws IOException {
+<span class="nc" id="L295">            SocketChannel sc = channel.accept();</span>
+<span class="nc" id="L296">            sc.configureBlocking(false);</span>
+
+<span class="nc" id="L298">            Socket so = sc.socket();</span>
+<span class="nc" id="L299">            so.setTcpNoDelay(SO_NO_DELAY);</span>
+<span class="nc" id="L300">            so.setReceiveBufferSize(SO_RCV_BUFFER_SIZE);</span>
+<span class="nc" id="L301">            so.setSendBufferSize(SO_SEND_BUFFER_SIZE);</span>
+
+<span class="nc" id="L303">            nextWorker().acceptStream(sc);</span>
+<span class="nc" id="L304">        }</span>
+    }
+
+<span class="nc" id="L307">    private class DefaultMessageStreamFactory implements KeyedPoolableObjectFactory&lt;Endpoint, DefaultMessageStream&gt; {</span>
+
+        @Override
+        public void activateObject(Endpoint endpoint, DefaultMessageStream stream) throws Exception {
+<span class="nc" id="L311">        }</span>
+
+        @Override
+        public void destroyObject(Endpoint ep, DefaultMessageStream stream) throws Exception {
+<span class="nc" id="L315">            stream.close();</span>
+<span class="nc" id="L316">        }</span>
+
+        @Override
+        public DefaultMessageStream makeObject(Endpoint ep) throws Exception {
+<span class="nc" id="L320">            DefaultMessageStream stream = createConnection(ep, nextWorker()).connectedFuture().get();</span>
+<span class="nc" id="L321">            log.info(&quot;Established a new connection to {}&quot;, ep);</span>
+<span class="nc" id="L322">            return stream;</span>
+        }
+
+        @Override
+        public void passivateObject(Endpoint ep, DefaultMessageStream stream) throws Exception {
+<span class="nc" id="L327">        }</span>
+
+        @Override
+        public boolean validateObject(Endpoint ep, DefaultMessageStream stream) {
+<span class="nc" id="L331">            return stream.isClosed();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

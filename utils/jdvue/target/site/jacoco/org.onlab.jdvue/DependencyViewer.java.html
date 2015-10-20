@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DependencyViewer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">jdvue</a> &gt; <a href="index.source.html" class="el_package">org.onlab.jdvue</a> &gt; <span class="el_source">DependencyViewer.java</span></div><h1>DependencyViewer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.jdvue;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import java.io.BufferedReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.Set;
+
+/**
+ * Generator of a self-contained HTML file which serves as a GUI for
+ * visualizing Java package dependencies carried in the supplied catalog.
+ *
+ * The HTML file is an adaptation of D3.js Hierarchical Edge Bundling as
+ * shown at http://bl.ocks.org/mbostock/7607999.
+ *
+ * @author Thomas Vachuska
+ */
+public class DependencyViewer {
+
+    private static final String JPD_EXT = &quot;.db&quot;;
+    private static final String HTML_EXT = &quot;.html&quot;;
+
+    private static final String INDEX = &quot;index.html&quot;;
+    private static final String D3JS = &quot;d3.v3.min.js&quot;;
+
+    private static final String TITLE_PLACEHOLDER = &quot;TITLE_PLACEHOLDER&quot;;
+    private static final String D3JS_PLACEHOLDER = &quot;D3JS_PLACEHOLDER&quot;;
+    private static final String DATA_PLACEHOLDER = &quot;DATA_PLACEHOLDER&quot;;
+
+    private final Catalog catalog;
+
+    /**
+     * Creates a Java package dependency viewer.
+     *
+     * @param catalog dependency catalog
+     */
+<span class="fc" id="L59">    public DependencyViewer(Catalog catalog) {</span>
+<span class="fc" id="L60">        this.catalog = catalog;</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * Main program entry point.
+     *
+     * @param args command line arguments
+     */
+    public static void main(String[] args) {
+<span class="fc" id="L69">        Catalog cat = new Catalog();</span>
+<span class="fc" id="L70">        DependencyViewer viewer = new DependencyViewer(cat);</span>
+        try {
+<span class="fc" id="L72">            String path = args[0];</span>
+<span class="fc" id="L73">            cat.load(path + JPD_EXT);</span>
+<span class="fc" id="L74">            cat.analyze();</span>
+
+<span class="fc" id="L76">            System.err.println(cat);</span>
+<span class="fc" id="L77">            viewer.dumpLongestCycle(cat);</span>
+<span class="fc" id="L78">            viewer.writeHTMLFile(path);</span>
+<span class="nc" id="L79">        } catch (IOException e) {</span>
+<span class="nc" id="L80">            System.err.println(&quot;Unable to process catalog: &quot; + e.getMessage());</span>
+<span class="fc" id="L81">        }</span>
+<span class="fc" id="L82">    }</span>
+
+    /**
+     * Prints out the longest cycle; just for kicks.
+     * @param cat catalog
+     */
+    private void dumpLongestCycle(Catalog cat) {
+<span class="fc" id="L89">        DependencyCycle longest = null;</span>
+<span class="fc bfc" id="L90" title="All 2 branches covered.">        for (DependencyCycle cycle : cat.getCycles()) {</span>
+<span class="fc bfc" id="L91" title="All 4 branches covered.">            if (longest == null || longest.getCycleSegments().size() &lt; cycle.getCycleSegments().size()) {</span>
+<span class="fc" id="L92">                longest = cycle;</span>
+            }
+<span class="fc" id="L94">        }</span>
+
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        if (longest != null) {</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">            for (Dependency dependency : longest.getCycleSegments()) {</span>
+<span class="fc" id="L98">                System.out.println(dependency);</span>
+<span class="fc" id="L99">            }</span>
+        }
+<span class="fc" id="L101">    }</span>
+
+    /**
+     * Writes the HTML catalog file for the given viewer.
+     *
+     * @param path base file path
+     * @throws IOException if issues encountered writing the HTML file
+     */
+    public void writeHTMLFile(String path) throws IOException {
+<span class="fc" id="L110">        String index = slurp(getClass().getResourceAsStream(INDEX));</span>
+<span class="fc" id="L111">        String d3js = slurp(getClass().getResourceAsStream(D3JS));</span>
+
+<span class="fc" id="L113">        FileWriter fw = new FileWriter(path + HTML_EXT);</span>
+<span class="fc" id="L114">        ObjectWriter writer = new ObjectMapper().writer(); // .writerWithDefaultPrettyPrinter();</span>
+<span class="fc" id="L115">        fw.write(index.replace(TITLE_PLACEHOLDER, path)</span>
+<span class="fc" id="L116">                         .replace(D3JS_PLACEHOLDER, d3js)</span>
+<span class="fc" id="L117">                         .replace(DATA_PLACEHOLDER, writer.writeValueAsString(toJson())));</span>
+<span class="fc" id="L118">        fw.close();</span>
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * Slurps the specified input stream into a string.
+     *
+     * @param stream input stream to be read
+     * @return string containing the contents of the input stream
+     * @throws IOException if issues encountered reading from the stream
+     */
+     static String slurp(InputStream stream) throws IOException {
+<span class="fc" id="L129">        StringBuilder sb = new StringBuilder();</span>
+<span class="fc" id="L130">        BufferedReader br = new BufferedReader(new InputStreamReader(stream));</span>
+        String line;
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        while ((line = br.readLine()) != null) {</span>
+<span class="fc" id="L133">            sb.append(line).append(System.lineSeparator());</span>
+        }
+<span class="fc" id="L135">        br.close();</span>
+<span class="fc" id="L136">        return sb.toString();</span>
+    }
+
+    // Produces a JSON structure designed to drive the hierarchical visual
+    // representation of Java package dependencies and any dependency cycles
+     private JsonNode toJson() {
+<span class="fc" id="L142">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="fc" id="L143">        ObjectNode root = mapper.createObjectNode();</span>
+<span class="fc" id="L144">        root.put(&quot;packages&quot;, jsonPackages(mapper));</span>
+<span class="fc" id="L145">        root.put(&quot;cycleSegments&quot;, jsonCycleSegments(mapper, catalog.getCycleSegments()));</span>
+<span class="fc" id="L146">        root.put(&quot;summary&quot;, jsonSummary(mapper));</span>
+<span class="fc" id="L147">        return root;</span>
+    }
+
+    // Produces a JSON summary of dependencies
+    private JsonNode jsonSummary(ObjectMapper mapper) {
+<span class="fc" id="L152">        ObjectNode summary = mapper.createObjectNode();</span>
+<span class="fc" id="L153">        summary.put(&quot;packages&quot;, catalog.getPackages().size());</span>
+<span class="fc" id="L154">        summary.put(&quot;sources&quot;, catalog.getSources().size());</span>
+<span class="fc" id="L155">        summary.put(&quot;cycles&quot;, catalog.getCycles().size());</span>
+<span class="fc" id="L156">        summary.put(&quot;cycleSegments&quot;, catalog.getCycleSegments().size());</span>
+<span class="fc" id="L157">        return summary;</span>
+    }
+
+    // Produces a JSON structure with package dependency data
+    private JsonNode jsonPackages(ObjectMapper mapper) {
+<span class="fc" id="L162">        ArrayNode packages = mapper.createArrayNode();</span>
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        for (JavaPackage javaPackage : catalog.getPackages()) {</span>
+<span class="fc" id="L164">            packages.add(json(mapper, javaPackage));</span>
+<span class="fc" id="L165">        }</span>
+<span class="fc" id="L166">        return packages;</span>
+    }
+
+    // Produces a JSON structure with all cyclic segments
+    private JsonNode jsonCycleSegments(ObjectMapper mapper,
+                                       Set&lt;Dependency&gt; segments) {
+<span class="fc" id="L172">        ObjectNode cyclicSegments = mapper.createObjectNode();</span>
+<span class="fc bfc" id="L173" title="All 2 branches covered.">        for (Dependency dependency : segments) {</span>
+<span class="fc" id="L174">            String s = dependency.getSource().name();</span>
+<span class="fc" id="L175">            String t = dependency.getTarget().name();</span>
+<span class="fc" id="L176">            cyclicSegments.put(t + &quot;-&quot; + s,</span>
+<span class="fc" id="L177">                               mapper.createObjectNode().put(&quot;s&quot;, s).put(&quot;t&quot;, t));</span>
+<span class="fc" id="L178">        }</span>
+<span class="fc" id="L179">        return cyclicSegments;</span>
+    }
+
+    // Produces a JSON object structure describing the specified Java package.
+    private JsonNode json(ObjectMapper mapper, JavaPackage javaPackage) {
+<span class="fc" id="L184">        ObjectNode node = mapper.createObjectNode();</span>
+
+<span class="fc" id="L186">        ArrayNode imports = mapper.createArrayNode();</span>
+<span class="fc bfc" id="L187" title="All 2 branches covered.">        for (JavaPackage dependency : javaPackage.getDependencies()) {</span>
+<span class="fc" id="L188">            imports.add(dependency.name());</span>
+<span class="fc" id="L189">        }</span>
+
+<span class="fc" id="L191">        Set&lt;DependencyCycle&gt; packageCycles = catalog.getPackageCycles(javaPackage);</span>
+<span class="fc" id="L192">        Set&lt;Dependency&gt; packageCycleSegments = catalog.getPackageCycleSegments(javaPackage);</span>
+
+<span class="fc" id="L194">        node.put(&quot;name&quot;, javaPackage.name());</span>
+<span class="fc" id="L195">        node.put(&quot;size&quot;, javaPackage.getSources().size());</span>
+<span class="fc" id="L196">        node.put(&quot;imports&quot;, imports);</span>
+<span class="fc" id="L197">        node.put(&quot;cycleSegments&quot;, jsonCycleSegments(mapper, packageCycleSegments));</span>
+<span class="fc" id="L198">        node.put(&quot;cycleCount&quot;, packageCycles.size());</span>
+<span class="fc" id="L199">        node.put(&quot;cycleSegmentCount&quot;, packageCycleSegments.size());</span>
+<span class="fc" id="L200">        return node;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

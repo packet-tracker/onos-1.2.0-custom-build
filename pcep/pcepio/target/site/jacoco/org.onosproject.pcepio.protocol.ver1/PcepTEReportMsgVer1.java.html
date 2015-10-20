@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepTEReportMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepTEReportMsgVer1.java</span></div><h1>PcepTEReportMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepTEObject;
+import org.onosproject.pcepio.protocol.PcepTEReportMsg;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides  PCEP TE Report Message.
+ */
+class PcepTEReportMsgVer1 implements PcepTEReportMsg {
+
+    /*
+     * Ref : draft-dhodylee-pce-pcep-te-data-extn-02, section 8.1
+
+        &lt;TERpt Message&gt;  ::=  &lt;Common Header&gt;
+                              &lt;te-report-list&gt;
+    Where:
+        &lt;te-report-list&gt; ::=  &lt;TE&gt;[&lt;te-report-list&gt;]
+     */
+
+<span class="fc" id="L49">    private static final Logger log = LoggerFactory.getLogger(PcepTEReportMsgVer1.class);</span>
+    //PACKET_MINIMUM_LENGTH = CommonHeaderLen(4)+TEObjMinLen(12)
+    public static final int PACKET_MINIMUM_LENGTH = 16;
+<span class="fc" id="L52">    public static final PcepType MSG_TYPE = PcepType.TE_REPORT;</span>
+    // &lt;te-report-list&gt;
+    private LinkedList&lt;PcepTEObject&gt; teReportList;
+
+<span class="fc" id="L56">    public static final PcepTEReportMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader class for reading PCPE te report message form channel buffer.
+     */
+<span class="fc" id="L61">    static class Reader implements PcepMessageReader&lt;PcepTEReportMsg&gt; {</span>
+
+        LinkedList&lt;PcepTEObject&gt; teReportList;
+
+        @Override
+        public PcepTEReportMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L69">                return null;</span>
+            }
+
+<span class="fc" id="L72">            teReportList = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L74">            byte version = cb.readByte();</span>
+<span class="fc" id="L75">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">            if (version != PcepMessageVer1.PACKET_VERSION) {</span>
+<span class="nc" id="L77">                throw new PcepParseException(&quot;Wrong version. Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+            }
+
+<span class="fc" id="L80">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L82">                throw new PcepParseException(&quot;Wrong type. Expected=PcepType.TE_REPORT(14), got=&quot; + type);</span>
+            }
+
+<span class="fc" id="L85">            short length = cb.readShort();</span>
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L87">                throw new PcepParseException(</span>
+                        &quot;Wrong length. Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, is: &quot; + length);
+            }
+
+            // Parse state report list
+<span class="fc" id="L92">            parseTEReportList(cb);</span>
+
+<span class="fc" id="L94">            return new PcepTEReportMsgVer1(teReportList);</span>
+        }
+
+        /**
+         * Parse te-report-list.
+         *
+         * @param cb input Channel Buffer
+         * @throws PcepParseException when fails to parse TE Report list.
+         */
+        public void parseTEReportList(ChannelBuffer cb) throws PcepParseException {
+            // &lt;te-report-list&gt; ::= &lt;TE&gt;[&lt;te-report-list&gt;]
+
+<span class="fc bfc" id="L106" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+                //store TE objectS
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">                if (!teReportList.add(PcepTEObjectVer1.read(cb))) {</span>
+<span class="nc" id="L109">                    throw new PcepParseException(&quot;Failed to add TE object to TE report list&quot;);</span>
+                }
+            }
+<span class="fc" id="L112">        }</span>
+    }
+
+    /**
+     * Constructor to initialize TE Report List.
+     *
+     * @param teReportList list of PCEP TE Object
+     */
+<span class="fc" id="L120">    PcepTEReportMsgVer1(LinkedList&lt;PcepTEObject&gt; teReportList) {</span>
+<span class="fc" id="L121">        this.teReportList = teReportList;</span>
+<span class="fc" id="L122">    }</span>
+
+    /**
+     * Builder class for PCEP te report message.
+     */
+<span class="nc" id="L127">    static class Builder implements PcepTEReportMsg.Builder {</span>
+        // PCEP TE Report message fields
+        LinkedList&lt;PcepTEObject&gt; teReportList;
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L133">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L138">            return PcepType.TE_REPORT;</span>
+        }
+
+        @Override
+        public PcepTEReportMsg build() {
+<span class="nc" id="L143">            return new PcepTEReportMsgVer1(this.teReportList);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepTEObject&gt; getTEReportList() {
+<span class="nc" id="L148">            return this.teReportList;</span>
+        }
+
+        @Override
+        public Builder setTEReportList(LinkedList&lt;PcepTEObject&gt; ll) {
+<span class="nc" id="L153">            this.teReportList = ll;</span>
+<span class="nc" id="L154">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer bb) throws PcepParseException {
+<span class="fc" id="L160">        WRITER.write(bb, this);</span>
+<span class="fc" id="L161">    }</span>
+
+<span class="fc" id="L163">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing PCEP te report message to channel buffer.
+     */
+<span class="fc" id="L168">    static class Writer implements PcepMessageWriter&lt;PcepTEReportMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer bb, PcepTEReportMsgVer1 message) throws PcepParseException {
+
+<span class="fc" id="L173">            int startIndex = bb.writerIndex();</span>
+
+            // first 3 bits set to version
+<span class="fc" id="L176">            bb.writeByte((byte) (PcepMessageVer1.PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+
+            // message type
+<span class="fc" id="L179">            bb.writeByte(MSG_TYPE.getType());</span>
+
+            // Length of the message will be updated at the end
+            // First write with 0s
+<span class="fc" id="L183">            int msgLenIndex = bb.writerIndex();</span>
+<span class="fc" id="L184">            bb.writeShort((short) 0);</span>
+
+<span class="fc" id="L186">            ListIterator&lt;PcepTEObject&gt; listIterator = message.teReportList.listIterator();</span>
+
+<span class="fc bfc" id="L188" title="All 2 branches covered.">            while (listIterator.hasNext()) {</span>
+<span class="fc" id="L189">                PcepTEObject teObj = listIterator.next();</span>
+<span class="fc" id="L190">                teObj.write(bb);</span>
+<span class="fc" id="L191">            }</span>
+
+            // update message length field
+<span class="fc" id="L194">            int length = bb.writerIndex() - startIndex;</span>
+<span class="fc" id="L195">            bb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L196">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L201">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L206">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepTEObject&gt; getTEReportList() {
+<span class="nc" id="L211">        return this.teReportList;</span>
+    }
+
+    @Override
+    public void setTEReportList(LinkedList&lt;PcepTEObject&gt; ll) {
+<span class="nc" id="L216">        this.teReportList = ll;</span>
+<span class="nc" id="L217">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L221">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L222">                .add(&quot;TeReportList&quot;, teReportList)</span>
+<span class="nc" id="L223">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

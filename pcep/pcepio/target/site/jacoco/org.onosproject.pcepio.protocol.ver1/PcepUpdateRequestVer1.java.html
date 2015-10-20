@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepUpdateRequestVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepUpdateRequestVer1.java</span></div><h1>PcepUpdateRequestVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepMsgPath;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.protocol.PcepUpdateRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Update Request List.
+ */
+public class PcepUpdateRequestVer1 implements PcepUpdateRequest {
+
+    /*                     &lt;update-request-list&gt;
+     * Where:
+     *   &lt;update-request-list&gt;     ::= &lt;update-request&gt;[&lt;update-request-list&gt;]
+     *   &lt;update-request&gt;          ::= &lt;SRP&gt;
+     *                                 &lt;LSP&gt;
+     *                                 &lt;path&gt;
+     * Where:
+     *   &lt;path&gt;                     ::= &lt;ERO&gt;&lt;attribute-list&gt;
+     * Where:
+     * &lt;attribute-list&gt; is defined in [RFC5440] and extended by PCEP extensions.
+     */
+
+<span class="fc" id="L46">    protected static final Logger log = LoggerFactory.getLogger(PcepUpdateRequestVer1.class);</span>
+
+    //PCEP SRP Object
+    private PcepSrpObject srpObject;
+    //PCEP LSP Object
+    private PcepLspObject lspObject;
+    //PCEP Message path
+    private PcepMsgPath msgPath;
+
+    /**
+     * Default constructor.
+     */
+<span class="fc" id="L58">    public PcepUpdateRequestVer1() {</span>
+<span class="fc" id="L59">        srpObject = null;</span>
+<span class="fc" id="L60">        lspObject = null;</span>
+<span class="fc" id="L61">        msgPath = null;</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * Constructor to initialize all member variables.
+     *
+     * @param srpObject srp object
+     * @param lspObject lsp object
+     * @param msgPath message path object
+     */
+<span class="nc" id="L71">    public PcepUpdateRequestVer1(PcepSrpObject srpObject, PcepLspObject lspObject, PcepMsgPath msgPath) {</span>
+<span class="nc" id="L72">        this.srpObject = srpObject;</span>
+<span class="nc" id="L73">        this.lspObject = lspObject;</span>
+<span class="nc" id="L74">        this.msgPath = msgPath;</span>
+<span class="nc" id="L75">    }</span>
+
+    @Override
+    public PcepSrpObject getSrpObject() {
+<span class="fc" id="L79">        return srpObject;</span>
+    }
+
+    @Override
+    public PcepLspObject getLspObject() {
+<span class="fc" id="L84">        return lspObject;</span>
+    }
+
+    @Override
+    public PcepMsgPath getMsgPath() {
+<span class="fc" id="L89">        return msgPath;</span>
+    }
+
+    @Override
+    public void setSrpObject(PcepSrpObject srpObject) {
+<span class="fc" id="L94">        this.srpObject = srpObject;</span>
+
+<span class="fc" id="L96">    }</span>
+
+    @Override
+    public void setLspObject(PcepLspObject lspObject) {
+<span class="fc" id="L100">        this.lspObject = lspObject;</span>
+<span class="fc" id="L101">    }</span>
+
+    @Override
+    public void setMsgPath(PcepMsgPath msgPath) {
+<span class="fc" id="L105">        this.msgPath = msgPath;</span>
+<span class="fc" id="L106">    }</span>
+
+    /**
+     * Builder class for PCEP update request.
+     */
+<span class="nc" id="L111">    public static class Builder implements PcepUpdateRequest.Builder {</span>
+
+<span class="nc" id="L113">        private boolean bIsSRPObjectSet = false;</span>
+<span class="nc" id="L114">        private boolean bIsLSPObjectSet = false;</span>
+<span class="nc" id="L115">        private boolean bIsPcepMsgPathSet = false;</span>
+
+        //PCEP SRP Object
+        private PcepSrpObject srpObject;
+        //PCEP LSP Object
+        private PcepLspObject lspObject;
+        //PCEP Attribute list
+        private PcepMsgPath msgPath;
+
+        @Override
+        public PcepUpdateRequest build() throws PcepParseException {
+
+            //PCEP SRP Object
+<span class="nc" id="L128">            PcepSrpObject srpObject = null;</span>
+            //PCEP LSP Object
+<span class="nc" id="L130">            PcepLspObject lspObject = null;</span>
+            //PCEP Attribute list
+<span class="nc" id="L132">            PcepMsgPath msgPath = null;</span>
+
+<span class="nc bnc" id="L134" title="All 2 branches missed.">            if (!this.bIsSRPObjectSet) {</span>
+<span class="nc" id="L135">                throw new PcepParseException(&quot; SRP Object NOT Set while building PcepUpdateRequest.&quot;);</span>
+            } else {
+<span class="nc" id="L137">                srpObject = this.srpObject;</span>
+            }
+<span class="nc bnc" id="L139" title="All 2 branches missed.">            if (!this.bIsLSPObjectSet) {</span>
+<span class="nc" id="L140">                throw new PcepParseException(&quot; LSP Object NOT Set while building PcepUpdateRequest.&quot;);</span>
+            } else {
+<span class="nc" id="L142">                lspObject = this.lspObject;</span>
+            }
+<span class="nc bnc" id="L144" title="All 2 branches missed.">            if (!this.bIsPcepMsgPathSet) {</span>
+<span class="nc" id="L145">                throw new PcepParseException(&quot; Msg Path NOT Set while building PcepUpdateRequest.&quot;);</span>
+            } else {
+<span class="nc" id="L147">                msgPath = this.msgPath;</span>
+            }
+
+<span class="nc" id="L150">            return new PcepUpdateRequestVer1(srpObject, lspObject, msgPath);</span>
+        }
+
+        @Override
+        public PcepSrpObject getSrpObject() {
+<span class="nc" id="L155">            return this.srpObject;</span>
+        }
+
+        @Override
+        public PcepLspObject getLspObject() {
+<span class="nc" id="L160">            return this.lspObject;</span>
+        }
+
+        @Override
+        public PcepMsgPath getMsgPath() {
+<span class="nc" id="L165">            return this.msgPath;</span>
+        }
+
+        @Override
+        public Builder setSrpObject(PcepSrpObject srpobj) {
+<span class="nc" id="L170">            this.srpObject = srpobj;</span>
+<span class="nc" id="L171">            this.bIsSRPObjectSet = true;</span>
+<span class="nc" id="L172">            return this;</span>
+
+        }
+
+        @Override
+        public Builder setLspObject(PcepLspObject lspObject) {
+<span class="nc" id="L178">            this.lspObject = lspObject;</span>
+<span class="nc" id="L179">            this.bIsLSPObjectSet = true;</span>
+<span class="nc" id="L180">            return this;</span>
+        }
+
+        @Override
+        public Builder setMsgPath(PcepMsgPath msgPath) {
+<span class="nc" id="L185">            this.msgPath = msgPath;</span>
+<span class="nc" id="L186">            this.bIsPcepMsgPathSet = true;</span>
+<span class="nc" id="L187">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L193">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L194">                .add(&quot;SrpObject&quot;, srpObject)</span>
+<span class="nc" id="L195">                .add(&quot;LspObject&quot;, lspObject)</span>
+<span class="nc" id="L196">                .add(&quot;MsgPath&quot;, msgPath)</span>
+<span class="nc" id="L197">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

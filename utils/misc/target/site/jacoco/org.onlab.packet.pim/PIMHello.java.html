@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PIMHello.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.pim</a> &gt; <span class="el_source">PIMHello.java</span></div><h1>PIMHello.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.pim;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+import org.onlab.packet.IpAddress;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+<span class="fc" id="L28">public class PIMHello extends BasePacket {</span>
+
+    private IpAddress nbrIpAddress;
+<span class="fc" id="L31">    private boolean priorityPresent = false;</span>
+
+<span class="fc" id="L33">    private Map&lt;Short, PIMHelloOption&gt; options = new HashMap&lt;&gt;();</span>
+
+    /**
+     * Create a PIM Hello packet with the most common hello options and default
+     * values.  The values of any options can be easily changed by modifying the value of
+     * the option with the desired change.
+     */
+    public void createDefaultOptions() {
+<span class="fc" id="L41">        options.put(PIMHelloOption.OPT_HOLDTIME, new PIMHelloOption(PIMHelloOption.OPT_HOLDTIME));</span>
+<span class="fc" id="L42">        options.put(PIMHelloOption.OPT_PRIORITY, new PIMHelloOption(PIMHelloOption.OPT_PRIORITY));</span>
+<span class="fc" id="L43">        options.put(PIMHelloOption.OPT_GENID, new PIMHelloOption(PIMHelloOption.OPT_GENID));</span>
+<span class="fc" id="L44">    }</span>
+
+    /**
+     * Add a PIM Hello option to this hello message.  Note
+     *
+     * @param opt the PIM Hello option we are adding
+     */
+    public void addOption(PIMHelloOption opt) {
+<span class="fc" id="L52">        this.options.put(opt.getOptType(), opt);</span>
+<span class="fc" id="L53">    }</span>
+
+    public Map&lt;Short, PIMHelloOption&gt; getOptions() {
+<span class="nc" id="L56">        return this.options;</span>
+    }
+
+    /**
+     * Sets all payloads parent packet if applicable, then serializes this
+     * packet and all payloads.
+     *
+     * @return a byte[] containing this packet and payloads
+     */
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L67">        int totalLen = 0;</span>
+
+
+         // Since we are likely to only have 3-4 options, go head and walk the
+         // hashmap twice, once to calculate the space needed to allocate a
+         // buffer, the second time serialize the options into the buffer.  This
+         // saves us from allocating an over sized buffer the re-allocating and
+         // copying.
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        for (Short optType : options.keySet()) {</span>
+<span class="fc" id="L76">            PIMHelloOption opt = options.get(optType);</span>
+<span class="fc" id="L77">            totalLen += PIMHelloOption.MINIMUM_OPTION_LEN_BYTES + opt.getOptLength();</span>
+<span class="fc" id="L78">        }</span>
+
+<span class="fc" id="L80">        byte[] data = new byte[totalLen];</span>
+<span class="fc" id="L81">        ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+        // Now serialize the data.
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        for (Short optType : options.keySet()) {</span>
+<span class="fc" id="L85">            PIMHelloOption opt = options.get(optType);</span>
+<span class="fc" id="L86">            bb.put(opt.serialize());</span>
+<span class="fc" id="L87">        }</span>
+<span class="fc" id="L88">        return data;</span>
+    }
+
+    /**
+     * XXX: This is deprecated, DO NOT USE, use the deserializer() function instead.
+     */
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+        // TODO: throw an expection?
+<span class="nc" id="L97">        return null;</span>
+    }
+
+    /**
+     * Deserialize this hello message.
+     *
+     * @return a deserialized hello message
+     */
+    public static Deserializer&lt;PIMHello&gt; deserializer() {
+<span class="fc" id="L106">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L107">            checkInput(data, offset, length, PIMHelloOption.MINIMUM_OPTION_LEN_BYTES);</span>
+<span class="fc" id="L108">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L110">            PIMHello hello = new PIMHello();</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">            while (bb.hasRemaining()) {</span>
+<span class="fc" id="L112">                PIMHelloOption opt = PIMHelloOption.deserialize(bb);</span>
+<span class="fc" id="L113">                hello.addOption(opt);</span>
+<span class="fc" id="L114">            }</span>
+<span class="fc" id="L115">            return hello;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

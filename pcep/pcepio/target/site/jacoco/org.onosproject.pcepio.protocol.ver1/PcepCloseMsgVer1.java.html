@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepCloseMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepCloseMsgVer1.java</span></div><h1>PcepCloseMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepCloseMsg;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Close Message.
+ */
+class PcepCloseMsgVer1 implements PcepCloseMsg {
+
+    /*
+     * RFC : 5440 , section : 6.8
+     * &lt;Close Message&gt;           ::= &lt;Common Header&gt; &lt;CLOSE&gt;
+     *
+         0                   1                   2                   3
+         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        | Ver |  Flags  |  Message-Type |       Message-Length          |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |          Reserved             |      Flags    |    Reason     |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |                                                               |
+        //                         Optional TLVs                       //
+        |                                                               |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L60">    protected static final Logger log = LoggerFactory.getLogger(PcepCloseMsgVer1.class);</span>
+
+    // Pcep version: 1
+    public static final byte PACKET_VERSION = 1;
+    public static final int PACKET_MINIMUM_LENGTH = 12;
+<span class="fc" id="L65">    public static final PcepType MSG_TYPE = PcepType.CLOSE;</span>
+    public static final byte CLOSE_OBJ_TYPE = 1;
+    public static final byte CLOSE_OBJ_CLASS = 15;
+    public static final byte CLOSE_OBJECT_VERSION = 1;
+    public static final byte DEFAULT_REASON = 1; // Default reason to close
+    public static final short CLOSE_OBJ_MINIMUM_LENGTH = 8;
+    public static final int SHIFT_FLAG = 5;
+<span class="fc" id="L72">    static final PcepObjectHeader DEFAULT_CLOSE_HEADER = new PcepObjectHeader(CLOSE_OBJ_CLASS, CLOSE_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, CLOSE_OBJ_MINIMUM_LENGTH);
+
+    private final PcepObjectHeader closeObjHeader;
+    private byte yReason;
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="fc" id="L79">    public static final PcepCloseMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader class for reading close message for channel buffer.
+     */
+<span class="fc" id="L84">    static class Reader implements PcepMessageReader&lt;PcepCloseMsg&gt; {</span>
+        PcepObjectHeader closeObjHeader;
+        byte yReason;
+        // Optional TLV
+        private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+        @Override
+        public PcepCloseMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L94">                throw new PcepParseException(&quot;Packet size is less than the minimum length.&quot;);</span>
+            }
+            // fixed value property version == 1
+<span class="fc" id="L97">            byte version = cb.readByte();</span>
+<span class="fc" id="L98">            version = (byte) (version &gt;&gt; SHIFT_FLAG);</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L100">                throw new PcepParseException(&quot;Wrong version. Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+            }
+            // fixed value property type == 7
+<span class="fc" id="L103">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L105">                throw new PcepParseException(&quot;Wrong type. Expected=PcepType.CLOSE(7), got=&quot; + type);</span>
+            }
+<span class="fc" id="L107">            short length = cb.readShort();</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L109">                throw new PcepParseException(&quot;Wrong length. Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, was: &quot;</span>
+                        + length);
+            }
+<span class="fc" id="L112">            closeObjHeader = PcepObjectHeader.read(cb);</span>
+            // Reserved
+<span class="fc" id="L114">            cb.readShort();</span>
+            // Flags
+<span class="fc" id="L116">            cb.readByte();</span>
+            // Reason
+<span class="fc" id="L118">            yReason = cb.readByte();</span>
+            // parse optional TLV
+<span class="fc" id="L120">            llOptionalTlv = parseOptionalTlv(cb);</span>
+<span class="fc" id="L121">            return new PcepCloseMsgVer1(closeObjHeader, yReason, llOptionalTlv);</span>
+        }
+    }
+
+    /**
+     * Parse the list of Optional Tlvs.
+     *
+     * @param cb channel buffer
+     * @return list of Optional Tlvs
+     * @throws PcepParseException when fails to parse optional tlvs
+     */
+    public static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L134">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+        /*
+         rfc 5440:
+         Optional TLVs may be included within the CLOSE object body. The
+         specification of such TLVs is outside the scope of this document.
+         */
+<span class="fc" id="L140">        return llOptionalTlv;</span>
+    }
+
+    /**
+     * constructor to initialize PCEP close Message with all the parameters.
+     *
+     * @param closeObjHeader object header for close message
+     * @param yReason reason for closing the channel
+     * @param llOptionalTlv list of optional tlvs
+     */
+<span class="fc" id="L150">    PcepCloseMsgVer1(PcepObjectHeader closeObjHeader, byte yReason, LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+
+<span class="fc" id="L152">        this.closeObjHeader = closeObjHeader;</span>
+<span class="fc" id="L153">        this.yReason = yReason;</span>
+<span class="fc" id="L154">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L155">    }</span>
+
+    /**
+     * Builder class for PCEP close message.
+     */
+<span class="nc" id="L160">    static class Builder implements PcepCloseMsg.Builder {</span>
+
+        // PCEP Close message fields
+<span class="nc" id="L163">        private boolean bIsHeaderSet = false;</span>
+        private PcepObjectHeader closeObjHeader;
+<span class="nc" id="L165">        private boolean bIsReasonSet = false;</span>
+        private byte yReason;
+<span class="nc" id="L167">        private LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L169">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L172">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L177">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L182">            return PcepType.CLOSE;</span>
+        }
+
+        @Override
+        public PcepCloseMsg build() {
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            PcepObjectHeader closeObjHeader = this.bIsHeaderSet ? this.closeObjHeader : DEFAULT_CLOSE_HEADER;</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">            byte yReason = this.bIsReasonSet ? this.yReason : DEFAULT_REASON;</span>
+
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L192">                closeObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L196">                closeObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L198">            return new PcepCloseMsgVer1(closeObjHeader, yReason, this.llOptionalTlv);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getCloseObjHeader() {
+<span class="nc" id="L203">            return this.closeObjHeader;</span>
+        }
+
+        @Override
+        public Builder setCloseObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L208">            this.closeObjHeader = obj;</span>
+<span class="nc" id="L209">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L210">            return this;</span>
+        }
+
+        @Override
+        public byte getReason() {
+<span class="nc" id="L215">            return this.yReason;</span>
+        }
+
+        @Override
+        public Builder setReason(byte value) {
+<span class="nc" id="L220">            this.yReason = value;</span>
+<span class="nc" id="L221">            this.bIsReasonSet = true;</span>
+<span class="nc" id="L222">            return this;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L227">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L228">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L233">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L238">            this.bPFlag = value;</span>
+<span class="nc" id="L239">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L240">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L245">            this.bIFlag = value;</span>
+<span class="nc" id="L246">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L247">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L253">        WRITER.write(cb, this);</span>
+<span class="fc" id="L254">    }</span>
+
+<span class="fc" id="L256">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing close message to channel buffer.
+     */
+<span class="fc" id="L261">    static class Writer implements PcepMessageWriter&lt;PcepCloseMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepCloseMsgVer1 message) throws PcepParseException {
+<span class="fc" id="L265">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="fc" id="L267">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; SHIFT_FLAG));</span>
+            // message type
+<span class="fc" id="L269">            cb.writeByte(MSG_TYPE.getType());</span>
+            // length is length of variable message, will be updated at the end
+            // Store the position of message
+            // length in buffer
+<span class="fc" id="L273">            int msgLenIndex = cb.writerIndex();</span>
+<span class="fc" id="L274">            cb.writeShort((short) 0);</span>
+<span class="fc" id="L275">            int objStartIndex = cb.writerIndex();</span>
+<span class="fc" id="L276">            int objLenIndex = message.closeObjHeader.write(cb);</span>
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">            if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L278">                throw new PcepParseException(&quot;Failed to write Close object header.&quot;);</span>
+            }
+            // first 3 bits set to version
+<span class="fc" id="L281">            cb.writeShort(0); // Reserved</span>
+<span class="fc" id="L282">            cb.writeByte(0); // Flags</span>
+<span class="fc" id="L283">            cb.writeByte(message.yReason);</span>
+            // Pack optional TLV
+<span class="fc" id="L285">            packOptionalTlv(cb, message);</span>
+<span class="fc" id="L286">            int length = cb.writerIndex() - objStartIndex;</span>
+<span class="fc" id="L287">            cb.setShort(objLenIndex, (short) length);</span>
+            // will be helpful during print().
+<span class="fc" id="L289">            message.closeObjHeader.setObjLen((short) length);</span>
+            // As per RFC the length of object should be
+            // multiples of 4
+<span class="fc" id="L292">            int pad = length % 4;</span>
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">            if (pad != 0) {</span>
+<span class="nc" id="L294">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">                for (int i = 0; i &lt; pad; i++) {</span>
+<span class="nc" id="L296">                    cb.writeByte((byte) 0);</span>
+                }
+<span class="nc" id="L298">                length = length + pad;</span>
+            }
+            // update message length field
+<span class="fc" id="L301">            length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L302">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L303">        }</span>
+
+        public void packOptionalTlv(ChannelBuffer cb, PcepCloseMsgVer1 message) {
+
+<span class="fc" id="L307">            LinkedList&lt;PcepValueType&gt; llOptionalTlv = message.llOptionalTlv;</span>
+<span class="fc" id="L308">            ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">            while (listIterator.hasNext()) {</span>
+<span class="nc" id="L310">                listIterator.next().write(cb);</span>
+            }
+<span class="fc" id="L312">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L317">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L322">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public byte getReason() {
+<span class="nc" id="L327">        return this.yReason;</span>
+    }
+
+    @Override
+    public void setReason(byte value) {
+<span class="nc" id="L332">        this.yReason = value;</span>
+<span class="nc" id="L333">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L337">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L342">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L343">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L347">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L348">                .add(&quot;closeObjectHeader&quot;, closeObjHeader).add(&quot;Reason&quot;, yReason)</span>
+<span class="nc" id="L349">                .add(&quot;OptionalTlvlist&quot;, llOptionalTlv).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

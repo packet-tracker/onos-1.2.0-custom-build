@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Catalog.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">jdvue</a> &gt; <a href="index.source.html" class="el_package">org.onlab.jdvue</a> &gt; <span class="el_source">Catalog.java</span></div><h1>Catalog.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.jdvue;
+
+
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Produces a package &amp;amp; source catalogue.
+ *
+ * @author Thomas Vachuska
+ */
+<span class="fc" id="L40">public class Catalog {</span>
+
+    private static final String PACKAGE = &quot;package&quot;;
+    private static final String IMPORT = &quot;import&quot;;
+    private static final String STATIC = &quot;static&quot;;
+    private static final String SRC_ROOT = &quot;src/main/java/&quot;;
+    private static final String WILDCARD = &quot;\\.*$&quot;;
+
+<span class="fc" id="L48">    private final Map&lt;String, JavaSource&gt; sources = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L49">    private final Map&lt;String, JavaPackage&gt; packages = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L50">    private final Set&lt;DependencyCycle&gt; cycles = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L51">    private final Set&lt;Dependency&gt; cycleSegments = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L52">    private final Map&lt;JavaPackage, Set&lt;DependencyCycle&gt;&gt; packageCycles = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L53">    private final Map&lt;JavaPackage, Set&lt;Dependency&gt;&gt; packageCycleSegments = new HashMap&lt;&gt;();</span>
+
+    /**
+     * Loads the catalog from the specified catalog file.
+     *
+     * @param catalogPath catalog file path
+     * @throws IOException if unable to read the catalog file
+     */
+    public void load(String catalogPath) throws IOException {
+<span class="fc" id="L62">        InputStream is = new FileInputStream(catalogPath);</span>
+<span class="fc" id="L63">        BufferedReader br = new BufferedReader(new InputStreamReader(is));</span>
+
+        String line;
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        while ((line = br.readLine()) != null) {</span>
+            // Split the line into the two fields: path and pragmas
+<span class="fc" id="L68">            String fields[] = line.trim().split(&quot;:&quot;);</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">            if (fields.length &lt;= 1) {</span>
+<span class="fc" id="L70">                continue;</span>
+            }
+<span class="fc" id="L72">            String path = fields[0];</span>
+
+            // Now split the pragmas on whitespace and trim punctuation
+<span class="fc" id="L75">            String pragma[] = fields[1].trim().replaceAll(&quot;[;\n\r]&quot;, &quot;&quot;).split(&quot;[\t ]&quot;);</span>
+
+            // Locate (or create) Java source entity based on the path
+<span class="fc" id="L78">            JavaSource source = getOrCreateSource(path);</span>
+
+            // Now process the package or import statements
+<span class="fc bfc" id="L81" title="All 2 branches covered.">            if (pragma[0].equals(PACKAGE)) {</span>
+<span class="fc" id="L82">                processPackageDeclaration(source, pragma[1]);</span>
+
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">            } else if (pragma[0].equals(IMPORT)) {</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">                if (pragma[1].equals(STATIC)) {</span>
+<span class="nc" id="L86">                    processImportStatement(source, pragma[2]);</span>
+                } else {
+<span class="fc" id="L88">                    processImportStatement(source, pragma[1]);</span>
+                }
+            }
+<span class="fc" id="L91">        }</span>
+<span class="fc" id="L92">    }</span>
+
+    /**
+     * Analyzes the catalog by resolving imports and identifying circular
+     * package dependencies.
+     */
+    public void analyze() {
+<span class="fc" id="L99">        resolveImports();</span>
+<span class="fc" id="L100">        findCircularDependencies();</span>
+<span class="fc" id="L101">    }</span>
+
+    /**
+     * Identifies circular package dependencies through what amounts to be a
+     * depth-first search rooted with each package.
+     */
+    private void findCircularDependencies() {
+<span class="fc" id="L108">        cycles.clear();</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        for (JavaPackage javaPackage : getPackages()) {</span>
+<span class="fc" id="L110">            findCircularDependencies(javaPackage);</span>
+<span class="fc" id="L111">        }</span>
+
+<span class="fc" id="L113">        cycleSegments.clear();</span>
+<span class="fc" id="L114">        packageCycles.clear();</span>
+<span class="fc" id="L115">        packageCycleSegments.clear();</span>
+
+<span class="fc bfc" id="L117" title="All 2 branches covered.">        for (DependencyCycle cycle : getCycles()) {</span>
+<span class="fc" id="L118">            recordCycleForPackages(cycle);</span>
+<span class="fc" id="L119">            cycleSegments.addAll(cycle.getCycleSegments());</span>
+<span class="fc" id="L120">        }</span>
+<span class="fc" id="L121">    }</span>
+
+    /**
+     * Records the specified cycle into a set for each involved package.
+     *
+     * @param cycle cycle to record for involved packages
+     */
+    private void recordCycleForPackages(DependencyCycle cycle) {
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        for (JavaPackage javaPackage : cycle.getCycle()) {</span>
+<span class="fc" id="L130">            Set&lt;DependencyCycle&gt; cset = packageCycles.get(javaPackage);</span>
+<span class="fc bfc" id="L131" title="All 2 branches covered.">            if (cset == null) {</span>
+<span class="fc" id="L132">                cset = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L133">                packageCycles.put(javaPackage, cset);</span>
+            }
+<span class="fc" id="L135">            cset.add(cycle);</span>
+
+<span class="fc" id="L137">            Set&lt;Dependency&gt; sset = packageCycleSegments.get(javaPackage);</span>
+<span class="fc bfc" id="L138" title="All 2 branches covered.">            if (sset == null) {</span>
+<span class="fc" id="L139">                sset = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L140">                packageCycleSegments.put(javaPackage, sset);</span>
+            }
+<span class="fc" id="L142">            sset.addAll(cycle.getCycleSegments());</span>
+<span class="fc" id="L143">        }</span>
+<span class="fc" id="L144">    }</span>
+
+    /**
+     * Identifies circular dependencies in which this package participates
+     * using depth-first search.
+     *
+     * @param javaPackage Java package to inspect for dependency cycles
+     */
+    private void findCircularDependencies(JavaPackage javaPackage) {
+        // Setup a depth trace anchored at the given java package.
+<span class="fc" id="L154">        List&lt;JavaPackage&gt; trace = newTrace(new ArrayList&lt;JavaPackage&gt;(), javaPackage);</span>
+
+<span class="fc" id="L156">        Set&lt;JavaPackage&gt; searched = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L157">        searchDependencies(javaPackage, trace, searched);</span>
+<span class="fc" id="L158">    }</span>
+
+    /**
+     * Generates a new trace using the previous one and a new element
+     *
+     * @param trace       old search trace
+     * @param javaPackage package to add to the trace
+     * @return new search trace
+     */
+    private List&lt;JavaPackage&gt; newTrace(List&lt;JavaPackage&gt; trace,
+                                       JavaPackage javaPackage) {
+<span class="fc" id="L169">        List&lt;JavaPackage&gt; newTrace = new ArrayList&lt;&gt;(trace);</span>
+<span class="fc" id="L170">        newTrace.add(javaPackage);</span>
+<span class="fc" id="L171">        return newTrace;</span>
+    }
+
+
+    /**
+     * Recursive depth-first search through dependency tree
+     *
+     * @param javaPackage java package being searched currently
+     * @param trace       search trace
+     * @param searched    set of java packages already searched
+     */
+    private void searchDependencies(JavaPackage javaPackage,
+                                    List&lt;JavaPackage&gt; trace,
+                                    Set&lt;JavaPackage&gt; searched) {
+<span class="fc bfc" id="L185" title="All 2 branches covered.">        if (!searched.contains(javaPackage)) {</span>
+<span class="fc" id="L186">            searched.add(javaPackage);</span>
+<span class="fc bfc" id="L187" title="All 2 branches covered.">            for (JavaPackage dependency : javaPackage.getDependencies()) {</span>
+<span class="fc bfc" id="L188" title="All 2 branches covered.">                if (trace.contains(dependency)) {</span>
+<span class="fc" id="L189">                    cycles.add(new DependencyCycle(trace, dependency));</span>
+                } else {
+<span class="fc" id="L191">                    searchDependencies(dependency, newTrace(trace, dependency), searched);</span>
+                }
+<span class="fc" id="L193">            }</span>
+        }
+<span class="fc" id="L195">    }</span>
+
+    /**
+     * Resolves import names of Java sources into imports of entities known
+     * to this catalog. All other import names will be ignored.
+     */
+    private void resolveImports() {
+<span class="fc bfc" id="L202" title="All 2 branches covered.">        for (JavaPackage javaPackage : getPackages()) {</span>
+<span class="fc" id="L203">            Set&lt;JavaPackage&gt; dependencies = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L204" title="All 2 branches covered.">            for (JavaSource source : javaPackage.getSources()) {</span>
+<span class="fc" id="L205">                Set&lt;JavaEntity&gt; imports = resolveImports(source);</span>
+<span class="fc" id="L206">                source.setImports(imports);</span>
+<span class="fc" id="L207">                dependencies.addAll(importedPackages(imports));</span>
+<span class="fc" id="L208">            }</span>
+<span class="fc" id="L209">            javaPackage.setDependencies(dependencies);</span>
+<span class="fc" id="L210">        }</span>
+<span class="fc" id="L211">    }</span>
+
+    /**
+     * Produces a set of imported Java packages from the specified set of
+     * Java source entities.
+     *
+     * @param imports list of imported Java source entities
+     * @return list of imported Java packages
+     */
+    private Set&lt;JavaPackage&gt; importedPackages(Set&lt;JavaEntity&gt; imports) {
+<span class="fc" id="L221">        Set&lt;JavaPackage&gt; packages = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        for (JavaEntity entity : imports) {</span>
+<span class="pc bpc" id="L223" title="1 of 2 branches missed.">            packages.add(entity instanceof JavaPackage ? (JavaPackage) entity :</span>
+<span class="fc" id="L224">                                 ((JavaSource) entity).getPackage());</span>
+<span class="fc" id="L225">        }</span>
+<span class="fc" id="L226">        return packages;</span>
+    }
+
+    /**
+     * Resolves import names of the specified Java source into imports of
+     * entities known to this catalog. All other import names will be ignored.
+     *
+     * @param source Java source
+     * @return list of resolved imports
+     */
+    private Set&lt;JavaEntity&gt; resolveImports(JavaSource source) {
+<span class="fc" id="L237">        Set&lt;JavaEntity&gt; imports = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L238" title="All 2 branches covered.">        for (String importName : source.getImportNames()) {</span>
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">            JavaEntity entity = importName.matches(WILDCARD) ?</span>
+<span class="pc" id="L240">                    getPackage(importName.replaceAll(WILDCARD, &quot;&quot;)) :</span>
+<span class="fc" id="L241">                    getSource(importName);</span>
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">            if (entity != null) {</span>
+<span class="fc" id="L243">                imports.add(entity);</span>
+            }
+<span class="fc" id="L245">        }</span>
+<span class="fc" id="L246">        return imports;</span>
+    }
+
+    /**
+     * Returns either an existing or a newly created Java package.
+     *
+     * @param packageName Java package name
+     * @return Java package
+     */
+    private JavaPackage getOrCreatePackage(String packageName) {
+<span class="fc" id="L256">        JavaPackage javaPackage = packages.get(packageName);</span>
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        if (javaPackage == null) {</span>
+<span class="fc" id="L258">            javaPackage = new JavaPackage(packageName);</span>
+<span class="fc" id="L259">            packages.put(packageName, javaPackage);</span>
+        }
+<span class="fc" id="L261">        return javaPackage;</span>
+    }
+
+    /**
+     * Returns either an existing or a newly created Java source.
+     *
+     * @param path Java source path
+     * @return Java source
+     */
+    private JavaSource getOrCreateSource(String path) {
+<span class="fc" id="L271">        String name = nameFromPath(path);</span>
+<span class="fc" id="L272">        JavaSource source = sources.get(name);</span>
+<span class="fc bfc" id="L273" title="All 2 branches covered.">        if (source == null) {</span>
+<span class="fc" id="L274">            source = new JavaSource(name, path);</span>
+<span class="fc" id="L275">            sources.put(name, source);</span>
+        }
+<span class="fc" id="L277">        return source;</span>
+    }
+
+    /**
+     * Extracts a fully qualified source class name from the given path.
+     * &lt;p/&gt;
+     * For now, this implementation assumes standard Maven source structure
+     * and thus will look for start of package name under 'src/main/java/'.
+     * If it will not find such a prefix, it will simply return the path as
+     * the name.
+     *
+     * @param path source path
+     * @return source name
+     */
+    private String nameFromPath(String path) {
+<span class="fc" id="L292">        int i = path.indexOf(SRC_ROOT);</span>
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">        String name = i &lt; 0 ? path : path.substring(i + SRC_ROOT.length());</span>
+<span class="fc" id="L294">        return name.replaceAll(&quot;\\.java$&quot;, &quot;&quot;).replace(&quot;/&quot;, &quot;.&quot;);</span>
+    }
+
+    /**
+     * Processes the package declaration pragma for the given source.
+     *
+     * @param source      Java source
+     * @param packageName Java package name
+     */
+    private void processPackageDeclaration(JavaSource source, String packageName) {
+<span class="fc" id="L304">        JavaPackage javaPackage = getOrCreatePackage(packageName);</span>
+<span class="fc" id="L305">        source.setPackage(javaPackage);</span>
+<span class="fc" id="L306">        javaPackage.addSource(source);</span>
+<span class="fc" id="L307">    }</span>
+
+    /**
+     * Processes the import pragma for the given source.
+     *
+     * @param source Java source
+     * @param name   name of the Java entity being imported (class or package)
+     */
+    private void processImportStatement(JavaSource source, String name) {
+<span class="fc" id="L316">        source.addImportName(name);</span>
+<span class="fc" id="L317">    }</span>
+
+    /**
+     * Returns the collection of java sources.
+     *
+     * @return collection of java sources
+     */
+    public Collection&lt;JavaSource&gt; getSources() {
+<span class="fc" id="L325">        return Collections.unmodifiableCollection(sources.values());</span>
+    }
+
+    /**
+     * Returns the Java source with the specified name.
+     *
+     * @param name Java source name
+     * @return Java source
+     */
+    public JavaSource getSource(String name) {
+<span class="fc" id="L335">        return sources.get(name);</span>
+    }
+
+    /**
+     * Returns the collection of all Java packages.
+     *
+     * @return collection of java packages
+     */
+    public Collection&lt;JavaPackage&gt; getPackages() {
+<span class="fc" id="L344">        return Collections.unmodifiableCollection(packages.values());</span>
+    }
+
+    /**
+     * Returns the set of all Java package dependency cycles.
+     *
+     * @return set of dependency cycles
+     */
+    public Set&lt;DependencyCycle&gt; getCycles() {
+<span class="fc" id="L353">        return Collections.unmodifiableSet(cycles);</span>
+    }
+
+    /**
+     * Returns the set of all Java package dependency cycle segments.
+     *
+     * @return set of dependency cycle segments
+     */
+    public Set&lt;Dependency&gt; getCycleSegments() {
+<span class="fc" id="L362">        return Collections.unmodifiableSet(cycleSegments);</span>
+    }
+
+    /**
+     * Returns the set of dependency cycles which involve the specified package.
+     *
+     * @param javaPackage java package
+     * @return set of dependency cycles
+     */
+    public Set&lt;DependencyCycle&gt; getPackageCycles(JavaPackage javaPackage) {
+<span class="fc" id="L372">        Set&lt;DependencyCycle&gt; set = packageCycles.get(javaPackage);</span>
+<span class="fc bfc" id="L373" title="All 2 branches covered.">        return Collections.unmodifiableSet(set == null ? new HashSet&lt;DependencyCycle&gt;() : set);</span>
+    }
+
+    /**
+     * Returns the set of dependency cycle segments which involve the specified package.
+     *
+     * @param javaPackage java package
+     * @return set of dependency cycle segments
+     */
+    public Set&lt;Dependency&gt; getPackageCycleSegments(JavaPackage javaPackage) {
+<span class="fc" id="L383">        Set&lt;Dependency&gt; set = packageCycleSegments.get(javaPackage);</span>
+<span class="fc bfc" id="L384" title="All 2 branches covered.">        return Collections.unmodifiableSet(set == null ? new HashSet&lt;Dependency&gt;() : set);</span>
+    }
+
+    /**
+     * Returns the Java package with the specified name.
+     *
+     * @param name Java package name
+     * @return Java package
+     */
+    public JavaPackage getPackage(String name) {
+<span class="fc" id="L394">        return packages.get(name);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L399">        return toStringHelper(this)</span>
+<span class="fc" id="L400">                .add(&quot;packages&quot;, packages.size())</span>
+<span class="fc" id="L401">                .add(&quot;sources&quot;, sources.size())</span>
+<span class="fc" id="L402">                .add(&quot;cycles&quot;, cycles.size())</span>
+<span class="fc" id="L403">                .add(&quot;cycleSegments&quot;, cycleSegments.size()).toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

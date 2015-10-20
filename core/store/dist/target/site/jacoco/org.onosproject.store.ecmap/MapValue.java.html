@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MapValue.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.ecmap</a> &gt; <span class="el_source">MapValue.java</span></div><h1>MapValue.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.ecmap;
+
+import org.onosproject.store.Timestamp;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
+
+/**
+ * Representation of a value in EventuallyConsistentMap.
+ *
+ * @param &lt;V&gt; value type
+ */
+public class MapValue&lt;V&gt; implements Comparable&lt;MapValue&lt;V&gt;&gt; {
+    private final Timestamp timestamp;
+    private final V value;
+
+    /**
+     * Creates a tombstone value with the specified timestamp.
+     * @param timestamp timestamp for tombstone
+     * @return tombstone MapValue
+     *
+     * @param &lt;U&gt; value type
+     */
+    public static &lt;U&gt; MapValue&lt;U&gt; tombstone(Timestamp timestamp) {
+<span class="fc" id="L40">        return new MapValue&lt;&gt;(null, timestamp);</span>
+    }
+
+<span class="fc" id="L43">    public MapValue(V value, Timestamp timestamp) {</span>
+<span class="fc" id="L44">        this.value = value;</span>
+<span class="fc" id="L45">        this.timestamp = timestamp;</span>
+<span class="fc" id="L46">    }</span>
+
+    public boolean isTombstone() {
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        return value == null;</span>
+    }
+
+    public boolean isAlive() {
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        return value != null;</span>
+    }
+
+    public Timestamp timestamp() {
+<span class="fc" id="L57">        return timestamp;</span>
+    }
+
+    public V get() {
+<span class="fc" id="L61">        return value;</span>
+    }
+
+    @Override
+    public int compareTo(MapValue&lt;V&gt; o) {
+<span class="fc" id="L66">        return this.timestamp.compareTo(o.timestamp);</span>
+    }
+
+    public boolean isNewerThan(MapValue&lt;V&gt; other) {
+<span class="fc" id="L70">        return timestamp.isNewerThan(other.timestamp);</span>
+    }
+
+    public boolean isNewerThan(Timestamp timestamp) {
+<span class="fc" id="L74">        return this.timestamp.isNewerThan(timestamp);</span>
+    }
+
+    public Digest digest() {
+<span class="fc" id="L78">        return new Digest(timestamp, isTombstone());</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L83">        return Objects.hashCode(timestamp, value);</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    @Override
+    public boolean equals(Object other) {
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (other instanceof MapValue) {</span>
+<span class="nc" id="L90">            MapValue&lt;V&gt; that = (MapValue&lt;V&gt;) other;</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">            return Objects.equal(this.timestamp, that.timestamp) &amp;&amp;</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">                    Objects.equal(this.value, that.value);</span>
+        }
+<span class="nc" id="L94">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L99">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L100">                .add(&quot;timestamp&quot;, timestamp)</span>
+<span class="nc" id="L101">                .add(&quot;value&quot;, value)</span>
+<span class="nc" id="L102">                .toString();</span>
+    }
+
+    @SuppressWarnings(&quot;unused&quot;)
+<span class="nc" id="L106">    private MapValue() {</span>
+<span class="nc" id="L107">        this.timestamp = null;</span>
+<span class="nc" id="L108">        this.value = null;</span>
+<span class="nc" id="L109">    }</span>
+
+    /**
+     * Digest or summary of a MapValue for use during Anti-Entropy exchanges.
+     */
+    public static class Digest {
+        private final Timestamp timestamp;
+        private final boolean isTombstone;
+
+<span class="fc" id="L118">        public Digest(Timestamp timestamp, boolean isTombstone) {</span>
+<span class="fc" id="L119">            this.timestamp = timestamp;</span>
+<span class="fc" id="L120">            this.isTombstone = isTombstone;</span>
+<span class="fc" id="L121">        }</span>
+
+        public Timestamp timestamp() {
+<span class="nc" id="L124">            return timestamp;</span>
+        }
+
+        public boolean isTombstone() {
+<span class="nc" id="L128">            return isTombstone;</span>
+        }
+
+        public boolean isNewerThan(Digest other) {
+<span class="nc" id="L132">            return timestamp.isNewerThan(other.timestamp);</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L137">            return Objects.hashCode(timestamp, isTombstone);</span>
+        }
+
+        @Override
+        public boolean equals(Object other) {
+<span class="pc bpc" id="L142" title="1 of 2 branches missed.">            if (other instanceof Digest) {</span>
+<span class="fc" id="L143">                Digest that = (Digest) other;</span>
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">                return Objects.equal(this.timestamp, that.timestamp) &amp;&amp;</span>
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">                        Objects.equal(this.isTombstone, that.isTombstone);</span>
+            }
+<span class="nc" id="L147">            return false;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L152">            return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L153">                    .add(&quot;timestamp&quot;, timestamp)</span>
+<span class="nc" id="L154">                    .add(&quot;isTombstone&quot;, isTombstone)</span>
+<span class="nc" id="L155">                    .toString();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

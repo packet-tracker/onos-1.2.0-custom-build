@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepRsvpUserErrorSpec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepRsvpUserErrorSpec.java</span></div><h1>PcepRsvpUserErrorSpec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepVersion;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Rsvp User Error Spec.
+ */
+public class PcepRsvpUserErrorSpec implements PcepRsvpErrorSpec {
+
+    /*
+        RSVP error spec object header.
+        0             1              2             3
+    +-------------+-------------+-------------+-------------+
+    |       Length (bytes)      |  Class-Num  |   C-Type    |
+    +-------------+-------------+-------------+-------------+
+    |                                                       |
+    //                  (Object contents)                   //
+    |                                                       |
+    +-------------+-------------+-------------+-------------+
+
+    Ref : USER_ERROR_SPEC @ RFC5284.
+    USER_ERROR_SPEC object: Class = 194, C-Type = 1
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +---------------+---------------+---------------+---------------+
+    |                       Enterprise Number                       |
+    +---------------+---------------+---------------+---------------+
+    |    Sub Org    |  Err Desc Len |        User Error Value       |
+    +---------------+---------------+---------------+---------------+
+    |                                                               |
+    ~                       Error Description                       ~
+    |                                                               |
+    +---------------+---------------+---------------+---------------+
+    |                                                               |
+    ~                     User-Defined Subobjects                   ~
+    |                                                               |
+    +---------------+---------------+---------------+---------------+
+     */
+
+    public static final byte CLASS_NUM = (byte) 0xc2;
+    public static final byte CLASS_TYPE = 0x01;
+
+    private PcepRsvpSpecObjHeader objHeader;
+    private int enterpriseNum;
+    private byte subOrg;
+    private byte errDescLen;
+    private short userErrorValue;
+    private byte[] errDesc;
+    private LinkedList&lt;PcepValueType&gt; llRsvpUserSpecSubObj;
+
+    /**
+     * Default constructor.
+     *
+     * @param objHeader pcep rsvp spec object header
+     * @param enterpriseNum enterprise number
+     * @param subOrg organization identifier value
+     * @param errDescLen error description length
+     * @param userErrorValue user error value
+     * @param errDesc error description
+     * @param llRsvpUserSpecSubObj list of subobjects
+     */
+    public PcepRsvpUserErrorSpec(PcepRsvpSpecObjHeader objHeader, int enterpriseNum, byte subOrg, byte errDescLen,
+<span class="nc" id="L86">            short userErrorValue, byte[] errDesc, LinkedList&lt;PcepValueType&gt; llRsvpUserSpecSubObj) {</span>
+<span class="nc" id="L87">        this.objHeader = objHeader;</span>
+<span class="nc" id="L88">        this.enterpriseNum = enterpriseNum;</span>
+<span class="nc" id="L89">        this.subOrg = subOrg;</span>
+<span class="nc" id="L90">        this.errDescLen = errDescLen;</span>
+<span class="nc" id="L91">        this.userErrorValue = userErrorValue;</span>
+<span class="nc" id="L92">        this.errDesc = errDesc;</span>
+<span class="nc" id="L93">        this.llRsvpUserSpecSubObj = llRsvpUserSpecSubObj;</span>
+<span class="nc" id="L94">    }</span>
+
+    @Override
+    public int write(ChannelBuffer cb) {
+<span class="nc" id="L98">        int objLenIndex = objHeader.write(cb);</span>
+<span class="nc" id="L99">        cb.writeInt(enterpriseNum);</span>
+<span class="nc" id="L100">        cb.writeByte(subOrg);</span>
+<span class="nc" id="L101">        cb.writeByte(errDescLen);</span>
+<span class="nc" id="L102">        cb.writeShort(userErrorValue);</span>
+<span class="nc" id="L103">        cb.writeBytes(errDesc);</span>
+
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (llRsvpUserSpecSubObj != null) {</span>
+
+<span class="nc" id="L107">            ListIterator&lt;PcepValueType&gt; listIterator = llRsvpUserSpecSubObj.listIterator();</span>
+
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            while (listIterator.hasNext()) {</span>
+<span class="nc" id="L110">                PcepValueType tlv = listIterator.next();</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">                if (tlv == null) {</span>
+<span class="nc" id="L112">                    continue;</span>
+                }
+<span class="nc" id="L114">                tlv.write(cb);</span>
+                // need to take care of padding
+<span class="nc" id="L116">                int pad = tlv.getLength() % 4;</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">                if (0 != pad) {</span>
+<span class="nc" id="L118">                    pad = 4 - pad;</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                    for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="nc" id="L120">                        cb.writeByte((byte) 0);</span>
+                    }
+                }
+<span class="nc" id="L123">            }</span>
+        }
+<span class="nc" id="L125">        short objLen = (short) (cb.writerIndex() - objLenIndex);</span>
+<span class="nc" id="L126">        cb.setShort(objLenIndex, objLen);</span>
+<span class="nc" id="L127">        return objLen;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of PcepRsvpErrorSpec.
+     *
+     * @param cb of type channel buffer
+     * @return object of PcepRsvpErrorSpec
+     * @throws PcepParseException when expected object is not received
+     */
+    public static PcepRsvpErrorSpec read(ChannelBuffer cb) throws PcepParseException {
+        PcepRsvpSpecObjHeader objHeader;
+        int enterpriseNum;
+        byte subOrg;
+        byte errDescLen;
+        short userErrorValue;
+        byte[] errDesc;
+<span class="nc" id="L144">        LinkedList&lt;PcepValueType&gt; llRsvpUserSpecSubObj = null;</span>
+
+<span class="nc" id="L146">        objHeader = PcepRsvpSpecObjHeader.read(cb);</span>
+
+<span class="nc bnc" id="L148" title="All 4 branches missed.">        if (objHeader.getObjClassNum() != CLASS_NUM || objHeader.getObjClassType() != CLASS_TYPE) {</span>
+<span class="nc" id="L149">            throw new PcepParseException(&quot;Expected PcepRsvpUserErrorSpec object.&quot;);</span>
+        }
+<span class="nc" id="L151">        enterpriseNum = cb.readInt();</span>
+<span class="nc" id="L152">        subOrg = cb.readByte();</span>
+<span class="nc" id="L153">        errDescLen = cb.readByte();</span>
+<span class="nc" id="L154">        userErrorValue = cb.readShort();</span>
+<span class="nc" id="L155">        errDesc = new byte[errDescLen];</span>
+<span class="nc" id="L156">        cb.readBytes(errDesc, 0, errDescLen);</span>
+
+<span class="nc" id="L158">        llRsvpUserSpecSubObj = parseErrSpecSubObj(cb);</span>
+
+<span class="nc" id="L160">        return new PcepRsvpUserErrorSpec(objHeader, enterpriseNum, subOrg, errDescLen, userErrorValue, errDesc,</span>
+                llRsvpUserSpecSubObj);
+    }
+
+    private static LinkedList&lt;PcepValueType&gt; parseErrSpecSubObj(ChannelBuffer cb) throws PcepParseException {
+<span class="nc" id="L165">        LinkedList&lt;PcepValueType&gt; llRsvpUserSpecSubObj = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        while (0 &lt; cb.readableBytes()) {</span>
+<span class="nc" id="L167">            PcepValueType tlv = null;</span>
+<span class="nc" id="L168">            short hType = cb.readShort();</span>
+<span class="nc" id="L169">            int iValue = 0;</span>
+            //short hLength = cb.readShort();
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            switch (hType) {</span>
+            case AutonomousSystemTlv.TYPE:
+<span class="nc" id="L173">                iValue = cb.readInt();</span>
+<span class="nc" id="L174">                tlv = new AutonomousSystemTlv(iValue);</span>
+<span class="nc" id="L175">                break;</span>
+            default:
+<span class="nc" id="L177">                throw new PcepParseException(&quot;Unsupported Sub TLV type :&quot; + hType);</span>
+            }
+<span class="nc" id="L179">            llRsvpUserSpecSubObj.add(tlv);</span>
+<span class="nc" id="L180">        }</span>
+<span class="nc" id="L181">        return llRsvpUserSpecSubObj;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L186">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L191">        return StatefulRsvpErrorSpecTlv.TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="nc" id="L196">        return objHeader.getObjLen();</span>
+    }
+
+    @Override
+    public byte getClassNum() {
+<span class="nc" id="L201">        return CLASS_NUM;</span>
+    }
+
+    @Override
+    public byte getClassType() {
+<span class="nc" id="L206">        return CLASS_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L211">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L212">                .add(&quot;enterpriseNumber&quot;, enterpriseNum)</span>
+<span class="nc" id="L213">                .add(&quot;subOrganization&quot;, subOrg)</span>
+<span class="nc" id="L214">                .add(&quot;errDescLength&quot;, errDescLen)</span>
+<span class="nc" id="L215">                .add(&quot;userErrorValue&quot;, userErrorValue)</span>
+<span class="nc" id="L216">                .add(&quot;errDesc&quot;, errDesc)</span>
+<span class="nc" id="L217">                .add(&quot;RsvpUserSpecSubObject&quot;, llRsvpUserSpecSubObj)</span>
+<span class="nc" id="L218">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

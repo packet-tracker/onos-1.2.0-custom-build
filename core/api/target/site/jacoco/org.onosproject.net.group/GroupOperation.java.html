@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupOperation.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.group</a> &gt; <span class="el_source">GroupOperation.java</span></div><h1>GroupOperation.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.group;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.Objects;
+
+import org.onosproject.core.GroupId;
+
+/**
+ * Group operation definition to be used between core and provider
+ * layers of group subsystem.
+ *
+ */
+public final class GroupOperation {
+    private final Type opType;
+    private final GroupId groupId;
+    private final GroupDescription.Type groupType;
+    private final GroupBuckets buckets;
+
+<span class="pc" id="L35">    public enum Type {</span>
+        /**
+         * Create a group in a device with the specified parameters.
+         */
+<span class="fc" id="L39">        ADD,</span>
+        /**
+         * Modify a group in a device with the specified parameters.
+         */
+<span class="fc" id="L43">        MODIFY,</span>
+        /**
+         * Delete a specified group.
+         */
+<span class="fc" id="L47">        DELETE</span>
+    }
+
+    /**
+     * Group operation constructor with the parameters.
+     *
+     * @param opType group operation type
+     * @param groupId group Identifier
+     * @param groupType type of the group
+     * @param buckets immutable list of group buckets to be part of group
+     */
+    private GroupOperation(Type opType,
+                           GroupId groupId,
+                           GroupDescription.Type groupType,
+<span class="fc" id="L61">                           GroupBuckets buckets) {</span>
+<span class="fc" id="L62">        this.opType = checkNotNull(opType);</span>
+<span class="fc" id="L63">        this.groupId = checkNotNull(groupId);</span>
+<span class="fc" id="L64">        this.groupType = checkNotNull(groupType);</span>
+<span class="fc" id="L65">        this.buckets = buckets;</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * Creates ADD group operation object.
+     *
+     * @param groupId group Identifier
+     * @param groupType type of the group
+     * @param buckets immutable list of group buckets to be part of group
+     * @return add group operation object
+     */
+    public static GroupOperation createAddGroupOperation(GroupId groupId,
+                                     GroupDescription.Type groupType,
+                                     GroupBuckets buckets) {
+<span class="fc" id="L79">        checkNotNull(buckets);</span>
+<span class="fc" id="L80">        return new GroupOperation(Type.ADD, groupId, groupType, buckets);</span>
+    }
+
+    /**
+     * Creates MODIFY group operation object.
+     *
+     * @param groupId group Identifier
+     * @param groupType type of the group
+     * @param buckets immutable list of group buckets to be part of group
+     * @return modify group operation object
+     */
+    public static GroupOperation createModifyGroupOperation(GroupId groupId,
+                               GroupDescription.Type groupType,
+                               GroupBuckets buckets) {
+<span class="fc" id="L94">        checkNotNull(buckets);</span>
+<span class="fc" id="L95">        return new GroupOperation(Type.MODIFY, groupId, groupType, buckets);</span>
+
+    }
+
+    /**
+     * Creates DELETE group operation object.
+     *
+     * @param groupId group Identifier
+     * @param groupType type of the group
+     * @return delete group operation object
+     */
+    public static GroupOperation createDeleteGroupOperation(GroupId groupId,
+                                  GroupDescription.Type groupType) {
+<span class="fc" id="L108">        return new GroupOperation(Type.DELETE, groupId, groupType, null);</span>
+
+    }
+
+    /**
+     * Returns group operation type.
+     *
+     * @return GroupOpType group operation type
+     */
+    public Type opType() {
+<span class="fc" id="L118">        return this.opType;</span>
+    }
+
+    /**
+     * Returns group identifier attribute of the operation.
+     *
+     * @return GroupId group identifier
+     */
+    public GroupId groupId() {
+<span class="fc" id="L127">        return this.groupId;</span>
+    }
+
+    /**
+     * Returns group type attribute of the operation.
+     *
+     * @return GroupType group type
+     */
+    public GroupDescription.Type groupType() {
+<span class="fc" id="L136">        return this.groupType;</span>
+    }
+
+    /**
+     * Returns group buckets associated with the operation.
+     *
+     * @return GroupBuckets group buckets
+     */
+    public GroupBuckets buckets() {
+<span class="fc" id="L145">        return this.buckets;</span>
+    }
+
+    @Override
+    /*
+     * The deviceId, type and buckets are used for hash.
+     *
+     * (non-Javadoc)
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    public int hashCode() {
+<span class="fc bfc" id="L156" title="All 2 branches covered.">        return (buckets != null) ? Objects.hash(groupId, opType, buckets) :</span>
+<span class="fc" id="L157">            Objects.hash(groupId, opType);</span>
+    }
+
+    @Override
+    /*
+     * The deviceId, type and buckets should be same.
+     *
+     * (non-Javadoc)
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L168" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L169">            return true;</span>
+        }
+<span class="fc bfc" id="L171" title="All 2 branches covered.">       if (obj instanceof GroupOperation) {</span>
+<span class="fc" id="L172">           GroupOperation that = (GroupOperation) obj;</span>
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">           return Objects.equals(groupId, that.groupId) &amp;&amp;</span>
+<span class="fc bfc" id="L174" title="All 2 branches covered.">                   Objects.equals(groupType, that.groupType) &amp;&amp;</span>
+<span class="fc bfc" id="L175" title="All 2 branches covered.">                   Objects.equals(opType, that.opType) &amp;&amp;</span>
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">                   Objects.equals(buckets, that.buckets);</span>
+
+        }
+<span class="fc" id="L179">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

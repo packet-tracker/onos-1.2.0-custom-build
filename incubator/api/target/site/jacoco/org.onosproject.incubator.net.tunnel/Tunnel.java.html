@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Tunnel.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.tunnel</a> &gt; <span class="el_source">Tunnel.java</span></div><h1>Tunnel.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.tunnel;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.DefaultGroupId;
+import org.onosproject.net.Annotated;
+import org.onosproject.net.NetworkResource;
+import org.onosproject.net.Path;
+import org.onosproject.net.Provided;
+
+/**
+ * Abstraction of a generalized Tunnel entity (bandwidth pipe) for either L3/L2
+ * networks or L1/L0 networks, representation of e.g., VLAN, GRE tunnel, MPLS
+ * LSP, L1 ODUk connection, WDM OCH, etc.. Each Tunnel is associated with at
+ * least two tunnel end point objects that model the logical ports essentially.
+ * Note that it supports nested case.
+ */
+@Beta
+public interface Tunnel extends Annotated, Provided, NetworkResource {
+
+    /**
+     * Tunnel technology type.
+     */
+<span class="pc" id="L38">    enum Type {</span>
+        /**
+         * Signifies that this is a MPLS tunnel.
+         */
+<span class="fc" id="L42">        MPLS,</span>
+        /**
+         * Signifies that this is a L2 tunnel.
+         */
+<span class="fc" id="L46">        VLAN,</span>
+        /**
+         * Signifies that this is a DC L2 extension tunnel.
+         */
+<span class="fc" id="L50">        VXLAN,</span>
+        /**
+         * Signifies that this is a L3 tunnel.
+         */
+<span class="fc" id="L54">        GRE,</span>
+        /**
+         * Signifies that this is a L1 OTN tunnel.
+         */
+<span class="fc" id="L58">        ODUK,</span>
+        /**
+         * Signifies that this is a L0 OCH tunnel.
+         */
+<span class="fc" id="L62">        OCH</span>
+    }
+
+    /**
+     * Representation of the tunnel state.
+     */
+<span class="pc" id="L68">    public enum State {</span>
+        /**
+         * Signifies that a tunnel is currently in a initialized state.
+         */
+<span class="fc" id="L72">        INIT,</span>
+        /**
+         * Signifies that a tunnel is currently established but no traffic.
+         */
+<span class="fc" id="L76">        ESTABLISHED,</span>
+        /**
+         * Signifies that a tunnel is currently active. This state means that
+         * this tunnel is available. It can be borrowed by consumer.
+         */
+<span class="fc" id="L81">        ACTIVE,</span>
+        /**
+         * Signifies that a tunnel is currently out of service.
+         */
+<span class="fc" id="L85">        FAILED,</span>
+        /**
+         * Signifies that a tunnel is currently inactive. This state means that
+         * this tunnel can not be borrowed by consumer.
+         */
+<span class="fc" id="L90">        INACTIVE</span>
+    }
+
+    /**
+     * Returns the tunnel state.
+     *
+     * @return tunnel state
+     */
+    State state();
+
+    /**
+     * the origin of a tunnel.
+     *
+     * @return the origin of a tunnel
+     */
+    TunnelEndPoint src();
+
+    /**
+     * the terminal of a tunnel.
+     *
+     * @return the terminal of a tunnel
+     */
+    TunnelEndPoint dst();
+
+    /**
+     * Returns the tunnel type.
+     *
+     * @return tunnel type
+     */
+    Type type();
+
+    /**
+     * Returns group flow table id which a tunnel match up.
+     *
+     * @return OpenFlowGroupId
+     */
+    DefaultGroupId groupId();
+
+    /**
+     * Returns tunnel identify generated by ONOS as primary key.
+     *
+     * @return TunnelId
+     */
+    TunnelId tunnelId();
+
+    /**
+     * Return the name of a tunnel.
+     *
+     * @return Tunnel Name
+     */
+    TunnelName tunnelName();
+
+    /**
+     * Network resource backing the tunnel, e.g. lambda, VLAN id, MPLS tag.
+     *
+     * @return backing resource
+     */
+    NetworkResource resource();
+
+    /**
+     * Returns the path of the tunnel.
+     *
+     * @return the path of the tunnel
+     */
+    Path path();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

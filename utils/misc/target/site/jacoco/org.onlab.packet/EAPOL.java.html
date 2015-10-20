@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EAPOL.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">EAPOL.java</span></div><h1>EAPOL.java</h1><pre class="source lang-java linenums">/*
+ *
+ *  * Copyright 2015 AT&amp;T Foundry
+ *  *
+ *  * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ *  * you may not use this file except in compliance with the License.
+ *  * You may obtain a copy of the License at
+ *  *
+ *  *     http://www.apache.org/licenses/LICENSE-2.0
+ *  *
+ *  * Unless required by applicable law or agreed to in writing, software
+ *  * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  * See the License for the specific language governing permissions and
+ *  * limitations under the License.
+ *
+ */
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+
+import static org.onlab.packet.PacketUtils.checkHeaderLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * EAPOL (Extensible Authentication Protocol over LAN) header.
+ */
+<span class="nc" id="L29">public class EAPOL extends BasePacket {</span>
+
+<span class="nc" id="L31">    private byte version = 0x01;</span>
+    private byte eapolType;
+    private short packetLength;
+
+    private static final int HEADER_LENGTH = 4;
+
+    // EAPOL Packet Type
+    public static final byte EAPOL_PACKET = 0x0;
+    public static final byte EAPOL_START  = 0x1;
+    public static final byte EAPOL_LOGOFF = 0x2;
+    public static final byte EAPOL_KEY    = 0x3;
+    public static final byte EAPOL_ASF    = 0x4;
+
+<span class="fc" id="L44">    public static final MacAddress PAE_GROUP_ADDR = MacAddress.valueOf(new byte[] {</span>
+            (byte) 0x01, (byte) 0x80, (byte) 0xc2, (byte) 0x00, (byte) 0x00, (byte) 0x03
+    });
+
+    /**
+     * Gets the version.
+     *
+     * @return version
+     */
+    public byte getVersion() {
+<span class="nc" id="L54">        return this.version;</span>
+    }
+
+    /**
+     * Sets the version.
+     *
+     * @param version EAPOL version
+     * @return this
+     */
+    public EAPOL setVersion(final byte version) {
+<span class="nc" id="L64">        this.version = version;</span>
+<span class="nc" id="L65">        return this;</span>
+    }
+
+    /**
+     * Gets the type.
+     *
+     * @return EAPOL type
+     */
+    public byte getEapolType() {
+<span class="nc" id="L74">        return this.eapolType;</span>
+    }
+
+    /**
+     * Sets the EAPOL type.
+     *
+     * @param eapolType EAPOL type
+     * @return this
+     */
+    public EAPOL setEapolType(final byte eapolType) {
+<span class="nc" id="L84">        this.eapolType = eapolType;</span>
+<span class="nc" id="L85">        return this;</span>
+    }
+
+    /**
+     * Gets the packet length.
+     *
+     * @return packet length
+     */
+    public short getPacketLength() {
+<span class="nc" id="L94">        return this.packetLength;</span>
+    }
+
+    /**
+     * Sets the packet length.
+     *
+     * @param packetLen packet length
+     * @return this
+     */
+    public EAPOL setPacketLength(final short packetLen) {
+<span class="nc" id="L104">        this.packetLength = packetLen;</span>
+<span class="nc" id="L105">        return this;</span>
+    }
+
+    /**
+     * Serializes the packet, based on the code/type using the payload
+     * to compute its length.
+     *
+     * @return this
+     */
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L116">        byte[] payloadData = null;</span>
+
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (this.payload != null) {</span>
+<span class="nc" id="L119">            this.payload.setParent(this);</span>
+<span class="nc" id="L120">            payloadData = this.payload.serialize();</span>
+        }
+
+        // prepare the buffer to hold the version (1), packet type (1),
+        // packet length (2) and the eap payload.
+        // if there is no payload, packet length is 0
+<span class="nc" id="L126">        byte[] data = new byte[4 + this.packetLength];</span>
+<span class="nc" id="L127">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="nc" id="L128">        bb.put(this.version);</span>
+<span class="nc" id="L129">        bb.put(this.eapolType);</span>
+<span class="nc" id="L130">        bb.putShort(this.packetLength);</span>
+
+        // put the EAP payload
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L134">            bb.put(payloadData);</span>
+        }
+
+<span class="nc" id="L137">        return data;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L142">        final int prime = 3889;</span>
+<span class="nc" id="L143">        int result = super.hashCode();</span>
+<span class="nc" id="L144">        result = prime * result + this.version;</span>
+<span class="nc" id="L145">        result = prime * result + this.eapolType;</span>
+<span class="nc" id="L146">        result = prime * result + this.packetLength;</span>
+<span class="nc" id="L147">        return result;</span>
+    }
+
+    /**
+     * Deserializer for EAPOL packets.
+     *
+     * @return deserializer
+     */
+    public static Deserializer&lt;EAPOL&gt; deserializer() {
+<span class="fc" id="L156">        return (data, offset, length) -&gt; {</span>
+<span class="nc" id="L157">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="nc" id="L159">            EAPOL eapol = new EAPOL();</span>
+<span class="nc" id="L160">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L161">            eapol.setVersion(bb.get());</span>
+<span class="nc" id="L162">            eapol.setEapolType(bb.get());</span>
+<span class="nc" id="L163">            eapol.setPacketLength(bb.getShort());</span>
+
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            if (eapol.packetLength &gt; 0) {</span>
+<span class="nc" id="L166">                checkHeaderLength(length, HEADER_LENGTH + eapol.packetLength);</span>
+                // deserialize the EAP Payload
+<span class="nc" id="L168">                eapol.payload = EAP.deserializer().deserialize(data,</span>
+<span class="nc" id="L169">                        bb.position(), bb.limit() - bb.position());</span>
+
+<span class="nc" id="L171">                eapol.payload.setParent(eapol);</span>
+            }
+
+<span class="nc" id="L174">            return eapol;</span>
+        };
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L181">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+        // deserialize the EAPOL header
+<span class="nc" id="L184">        this.version = bb.get();</span>
+<span class="nc" id="L185">        this.eapolType = bb.get();</span>
+<span class="nc" id="L186">        this.packetLength = bb.getShort();</span>
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (this.packetLength &gt; 0) {</span>
+            // deserialize the EAP Payload
+<span class="nc" id="L190">            this.payload = new EAP();</span>
+
+<span class="nc" id="L192">            this.payload = this.payload.deserialize(data, bb.position(), length - 4);</span>
+<span class="nc" id="L193">            this.payload.setParent(this);</span>
+        }
+
+<span class="nc" id="L196">        return this;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

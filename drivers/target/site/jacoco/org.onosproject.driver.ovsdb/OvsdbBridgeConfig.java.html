@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OvsdbBridgeConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.ovsdb</a> &gt; <span class="el_source">OvsdbBridgeConfig.java</span></div><h1>OvsdbBridgeConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.ovsdb;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.onlab.packet.IpAddress;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.behaviour.BridgeConfig;
+import org.onosproject.net.behaviour.BridgeDescription;
+import org.onosproject.net.behaviour.BridgeName;
+import org.onosproject.net.behaviour.DefaultBridgeDescription;
+import org.onosproject.net.device.DefaultPortDescription;
+import org.onosproject.net.device.PortDescription;
+import org.onosproject.net.driver.AbstractHandlerBehaviour;
+import org.onosproject.net.driver.DriverHandler;
+import org.onosproject.ovsdb.controller.OvsdbBridge;
+import org.onosproject.ovsdb.controller.OvsdbClientService;
+import org.onosproject.ovsdb.controller.OvsdbController;
+import org.onosproject.ovsdb.controller.OvsdbNodeId;
+import org.onosproject.ovsdb.controller.OvsdbPort;
+
+/**
+ * The implementation of BridageConfig.
+ */
+<span class="nc" id="L44">public class OvsdbBridgeConfig extends AbstractHandlerBehaviour</span>
+        implements BridgeConfig {
+
+    @Override
+    public void addBridge(BridgeName bridgeName) {
+<span class="nc" id="L49">        DriverHandler handler = handler();</span>
+<span class="nc" id="L50">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L51">        clientService.createBridge(bridgeName.name());</span>
+<span class="nc" id="L52">    }</span>
+
+    @Override
+    public void deleteBridge(BridgeName bridgeName) {
+<span class="nc" id="L56">        DriverHandler handler = handler();</span>
+<span class="nc" id="L57">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L58">        clientService.dropBridge(bridgeName.name());</span>
+<span class="nc" id="L59">    }</span>
+
+    @Override
+    public Collection&lt;BridgeDescription&gt; getBridges() {
+<span class="nc" id="L63">        DriverHandler handler = handler();</span>
+<span class="nc" id="L64">        DeviceId deviceId = handler.data().deviceId();</span>
+<span class="nc" id="L65">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L66">        Set&lt;OvsdbBridge&gt; bridges = clientService.getBridges();</span>
+
+<span class="nc" id="L68">        return bridges.stream()</span>
+<span class="nc" id="L69">                .map(x -&gt; new DefaultBridgeDescription(</span>
+<span class="nc" id="L70">                                BridgeName.bridgeName(x.bridgeName().value()),</span>
+                                deviceId,
+<span class="nc" id="L72">                                DeviceId.deviceId(&quot;of:&quot; + x.datapathId().value())</span>
+                        )
+                )
+<span class="nc" id="L75">                .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public void addPort(PortDescription port) {
+<span class="nc" id="L80">        DriverHandler handler = handler();</span>
+<span class="nc" id="L81">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L82">        Set&lt;OvsdbBridge&gt; ovsdbSet = clientService.getBridges();</span>
+<span class="nc bnc" id="L83" title="All 4 branches missed.">        if (ovsdbSet != null &amp;&amp; ovsdbSet.size() &gt; 0) {</span>
+<span class="nc" id="L84">            OvsdbBridge bridge = ovsdbSet.iterator().next();</span>
+<span class="nc" id="L85">            clientService.createPort(bridge.bridgeName().toString(), port</span>
+<span class="nc" id="L86">                    .portNumber().toString());</span>
+        }
+<span class="nc" id="L88">    }</span>
+
+    @Override
+    public void deletePort(PortDescription port) {
+<span class="nc" id="L92">        DriverHandler handler = handler();</span>
+<span class="nc" id="L93">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L94">        Set&lt;OvsdbBridge&gt; ovsdbSet = clientService.getBridges();</span>
+<span class="nc bnc" id="L95" title="All 4 branches missed.">        if (ovsdbSet != null &amp;&amp; ovsdbSet.size() &gt; 0) {</span>
+<span class="nc" id="L96">            OvsdbBridge bridge = ovsdbSet.iterator().next();</span>
+<span class="nc" id="L97">            clientService.dropPort(bridge.bridgeName().toString(), port</span>
+<span class="nc" id="L98">                    .portNumber().toString());</span>
+        }
+<span class="nc" id="L100">    }</span>
+
+    @Override
+    public Collection&lt;PortDescription&gt; getPorts() {
+<span class="nc" id="L104">        DriverHandler handler = handler();</span>
+<span class="nc" id="L105">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L106">        Set&lt;OvsdbPort&gt; ports = clientService.getPorts();</span>
+
+<span class="nc" id="L108">        return ports.stream()</span>
+<span class="nc" id="L109">                .map(x -&gt; new DefaultPortDescription(</span>
+<span class="nc" id="L110">                                PortNumber.portNumber(x.portNumber().value()),</span>
+                                true
+                        )
+                )
+<span class="nc" id="L114">                .collect(Collectors.toSet());</span>
+    }
+
+    // OvsdbNodeId(IP:port) is used in the adaptor while DeviceId(ovsdb:IP:port)
+    // is used in the core. So DeviceId need be changed to OvsdbNodeId.
+    private OvsdbNodeId changeDeviceIdToNodeId(DeviceId deviceId) {
+<span class="nc" id="L120">        int lastColon = deviceId.toString().lastIndexOf(&quot;:&quot;);</span>
+<span class="nc" id="L121">        int fistColon = deviceId.toString().indexOf(&quot;:&quot;);</span>
+<span class="nc" id="L122">        String ip = deviceId.toString().substring(fistColon + 1, lastColon);</span>
+<span class="nc" id="L123">        String port = deviceId.toString().substring(lastColon + 1);</span>
+<span class="nc" id="L124">        IpAddress ipAddress = IpAddress.valueOf(ip);</span>
+<span class="nc" id="L125">        long portL = Long.parseLong(port);</span>
+<span class="nc" id="L126">        return new OvsdbNodeId(ipAddress, portL);</span>
+    }
+
+    // Used for getting OvsdbClientService.
+    private OvsdbClientService getOvsdbClientService(DriverHandler handler) {
+<span class="nc" id="L131">        OvsdbController ovsController = handler.get(OvsdbController.class);</span>
+<span class="nc" id="L132">        DeviceId deviceId = handler.data().deviceId();</span>
+<span class="nc" id="L133">        OvsdbNodeId nodeId = changeDeviceIdToNodeId(deviceId);</span>
+<span class="nc" id="L134">        return ovsController.getOvsdbClient(nodeId);</span>
+    }
+
+    @Override
+    public Set&lt;PortNumber&gt; getPortNumbers() {
+<span class="nc" id="L139">        DriverHandler handler = handler();</span>
+<span class="nc" id="L140">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L141">        Set&lt;OvsdbPort&gt; ports = clientService.getPorts();</span>
+
+<span class="nc" id="L143">        return ports.stream()</span>
+<span class="nc" id="L144">                .map(x -&gt; PortNumber.portNumber(</span>
+<span class="nc" id="L145">                                x.portNumber().value(),</span>
+<span class="nc" id="L146">                                x.portName().value()</span>
+                        )
+                )
+<span class="nc" id="L149">                .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public List&lt;PortNumber&gt; getLocalPorts(Iterable&lt;String&gt; ifaceIds) {
+<span class="nc" id="L154">        List&lt;PortNumber&gt; ports = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L155">        DriverHandler handler = handler();</span>
+<span class="nc" id="L156">        OvsdbClientService clientService = getOvsdbClientService(handler);</span>
+<span class="nc" id="L157">        Set&lt;OvsdbPort&gt; ovsdbSet = clientService.getLocalPorts(ifaceIds);</span>
+<span class="nc" id="L158">        ovsdbSet.forEach(o -&gt; {</span>
+<span class="nc" id="L159">            PortNumber port = PortNumber.portNumber(o.portNumber().value(),</span>
+<span class="nc" id="L160">                                                    o.portName().value());</span>
+<span class="nc" id="L161">            ports.add(port);</span>
+<span class="nc" id="L162">        });</span>
+<span class="nc" id="L163">        return ports;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

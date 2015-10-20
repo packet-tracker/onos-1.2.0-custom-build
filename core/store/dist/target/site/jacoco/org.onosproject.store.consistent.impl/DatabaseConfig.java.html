@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DatabaseConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DatabaseConfig.java</span></div><h1>DatabaseConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.consistent.impl;
+
+import com.typesafe.config.ConfigValueFactory;
+import net.kuujo.copycat.cluster.ClusterConfig;
+import net.kuujo.copycat.cluster.internal.coordinator.CoordinatedResourceConfig;
+import net.kuujo.copycat.protocol.Consistency;
+import net.kuujo.copycat.resource.ResourceConfig;
+import net.kuujo.copycat.state.StateLogConfig;
+import net.kuujo.copycat.util.internal.Assert;
+
+import java.util.Map;
+
+/**
+ * Database configuration.
+ *
+ */
+public class DatabaseConfig extends ResourceConfig&lt;DatabaseConfig&gt; {
+  private static final String DATABASE_CONSISTENCY = &quot;consistency&quot;;
+
+  private static final String DEFAULT_CONFIGURATION = &quot;database-defaults&quot;;
+  private static final String CONFIGURATION = &quot;database&quot;;
+
+  private String name;
+
+  public DatabaseConfig() {
+<span class="nc" id="L42">    super(CONFIGURATION, DEFAULT_CONFIGURATION);</span>
+<span class="nc" id="L43">  }</span>
+
+  public DatabaseConfig(Map&lt;String, Object&gt; config) {
+<span class="nc" id="L46">    super(config, CONFIGURATION, DEFAULT_CONFIGURATION);</span>
+<span class="nc" id="L47">  }</span>
+
+  public DatabaseConfig(String resource) {
+<span class="nc" id="L50">    super(resource, CONFIGURATION, DEFAULT_CONFIGURATION);</span>
+<span class="nc" id="L51">  }</span>
+
+  protected DatabaseConfig(DatabaseConfig config) {
+<span class="nc" id="L54">    super(config);</span>
+<span class="nc" id="L55">  }</span>
+
+  @Override
+  public DatabaseConfig copy() {
+<span class="nc" id="L59">    return new DatabaseConfig(this);</span>
+  }
+
+  /**
+   * Sets the database read consistency.
+   *
+   * @param consistency The database read consistency.
+   * @throws java.lang.NullPointerException If the consistency is {@code null}
+   */
+  public void setConsistency(String consistency) {
+<span class="nc" id="L69">    this.config = config.withValue(DATABASE_CONSISTENCY,</span>
+<span class="nc" id="L70">            ConfigValueFactory.fromAnyRef(</span>
+<span class="nc" id="L71">                    Consistency.parse(Assert.isNotNull(consistency, &quot;consistency&quot;)).toString()));</span>
+<span class="nc" id="L72">  }</span>
+
+  /**
+   * Sets the database read consistency.
+   *
+   * @param consistency The database read consistency.
+   * @throws java.lang.NullPointerException If the consistency is {@code null}
+   */
+  public void setConsistency(Consistency consistency) {
+<span class="nc" id="L81">    this.config = config.withValue(DATABASE_CONSISTENCY,</span>
+<span class="nc" id="L82">            ConfigValueFactory.fromAnyRef(</span>
+<span class="nc" id="L83">                    Assert.isNotNull(consistency, &quot;consistency&quot;).toString()));</span>
+<span class="nc" id="L84">  }</span>
+
+  /**
+   * Returns the database read consistency.
+   *
+   * @return The database read consistency.
+   */
+  public Consistency getConsistency() {
+<span class="nc" id="L92">    return Consistency.parse(config.getString(DATABASE_CONSISTENCY));</span>
+  }
+
+  /**
+   * Sets the database read consistency, returning the configuration for method chaining.
+   *
+   * @param consistency The database read consistency.
+   * @return The database configuration.
+   * @throws java.lang.NullPointerException If the consistency is {@code null}
+   */
+  public DatabaseConfig withConsistency(String consistency) {
+<span class="nc" id="L103">    setConsistency(consistency);</span>
+<span class="nc" id="L104">    return this;</span>
+  }
+
+  /**
+   * Sets the database read consistency, returning the configuration for method chaining.
+   *
+   * @param consistency The database read consistency.
+   * @return The database configuration.
+   * @throws java.lang.NullPointerException If the consistency is {@code null}
+   */
+  public DatabaseConfig withConsistency(Consistency consistency) {
+<span class="nc" id="L115">    setConsistency(consistency);</span>
+<span class="nc" id="L116">    return this;</span>
+  }
+
+  /**
+   * Returns the database name.
+   *
+   * @return The database name
+   */
+  public String getName() {
+<span class="nc" id="L125">      return name;</span>
+  }
+
+  /**
+   * Sets the database name, returning the configuration for method chaining.
+   *
+   * @param name The database name
+   * @return The database configuration
+   * @throws java.lang.NullPointerException If the name is {@code null}
+   */
+  public DatabaseConfig withName(String name) {
+<span class="nc" id="L136">      setName(Assert.isNotNull(name, &quot;name&quot;));</span>
+<span class="nc" id="L137">      return this;</span>
+  }
+
+  /**
+   * Sets the database name.
+   *
+   * @param name The database name
+   * @throws java.lang.NullPointerException If the name is {@code null}
+   */
+  public void setName(String name) {
+<span class="nc" id="L147">      this.name = Assert.isNotNull(name, &quot;name&quot;);</span>
+<span class="nc" id="L148">  }</span>
+
+  @Override
+  public CoordinatedResourceConfig resolve(ClusterConfig cluster) {
+<span class="nc" id="L152">    return new StateLogConfig(toMap())</span>
+<span class="nc" id="L153">      .resolve(cluster)</span>
+<span class="nc" id="L154">      .withResourceType(DefaultDatabase.class);</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

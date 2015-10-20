@@ -1,0 +1,576 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLspObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLspObjectVer1.java</span></div><h1>PcepLspObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.types.PcepErrorDetailInfo;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.onosproject.pcepio.types.StatefulIPv4LspIdentidiersTlv;
+import org.onosproject.pcepio.types.StatefulLspDbVerTlv;
+import org.onosproject.pcepio.types.StatefulLspErrorCodeTlv;
+import org.onosproject.pcepio.types.StatefulRsvpErrorSpecTlv;
+import org.onosproject.pcepio.types.SymbolicPathNameTlv;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP lsp object.
+ */
+public class PcepLspObjectVer1 implements PcepLspObject {
+
+    /*
+     message format.
+     Reference : draft-ietf-pce-stateful-pce-11, section 7.3.
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                PLSP-ID                |    Flag |    O|A|R|S|D|
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     //                        TLVs                                 //
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                     The LSP Object format
+     */
+<span class="fc" id="L59">    protected static final Logger log = LoggerFactory.getLogger(PcepLspObjectVer1.class);</span>
+
+    public static final byte LSP_OBJ_TYPE = 1;
+    public static final byte LSP_OBJ_CLASS = 32;
+    public static final byte LSP_OBJECT_VERSION = 1;
+
+    // LSP_OBJ_MINIMUM_LENGTH = CommonHeaderLen(4)+ LspObjectHeaderLen(4)+TlvAssumedMinLength(8)
+    public static final short LSP_OBJ_MINIMUM_LENGTH = 16;
+
+    public static final int DEFAULT_PLSPID = 0;
+    public static final byte DEFAULT_OFLAG = 1;
+    public static final boolean DEFAULT_AFLAG = false;
+    public static final boolean DEFAULT_RFLAG = false;
+    public static final boolean DEFAULT_SFLAG = false;
+    public static final boolean DEFAULT_DFLAG = false;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+    public static final int PLSPID_SHIFT_VALUE = 12;
+    public static final int OFLAG_SHIFT_VALUE = 4;
+    public static final int AFLAG_SHIFT_VALUE = 3;
+    public static final int RFLAG_SHIFT_VALUE = 2;
+    public static final int SFLAG_SHIFT_VALUE = 1;
+    public static final int PLSPID_TEMP_SHIFT_VALUE = 0xFFFFF000;
+    public static final int OFLAG_TEMP_SHIFT_VALUE = 0x70;
+    public static final int AFLAG_TEMP_SHIFT_VALUE = 0x08;
+    public static final int RFLAG_TEMP_SHIFT_VALUE = 0x04;
+    public static final int SFLAG_TEMP_SHIFT_VALUE = 0x02;
+    public static final int DFLAG_TEMP_SHIFT_VALUE = 0x01;
+    public static final int BIT_SET = 1;
+    public static final int BIT_RESET = 0;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+
+<span class="fc" id="L90">    static final PcepObjectHeader DEFAULT_LSP_OBJECT_HEADER = new PcepObjectHeader(LSP_OBJ_CLASS, LSP_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, LSP_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader lspObjHeader;
+    private int iPlspId;
+    // 3-bits
+    private byte yOFlag;
+    private boolean bAFlag;
+    private boolean bRFlag;
+    private boolean bSFlag;
+    private boolean bDFlag;
+
+    // Optional TLV
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+    /**
+     * Constructor to initialize all the member variables.
+     *
+     * @param lspObjHeader lsp object header
+     * @param iPlspId plsp id
+     * @param yOFlag O flag
+     * @param bAFlag A flag
+     * @param bRFlag R flag
+     * @param bSFlag S flag
+     * @param bDFlag D flag
+     * @param llOptionalTlv list of optional tlv
+     */
+    public PcepLspObjectVer1(PcepObjectHeader lspObjHeader, int iPlspId, byte yOFlag, boolean bAFlag, boolean bRFlag,
+<span class="fc" id="L118">            boolean bSFlag, boolean bDFlag, LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+
+<span class="fc" id="L120">        this.lspObjHeader = lspObjHeader;</span>
+<span class="fc" id="L121">        this.iPlspId = iPlspId;</span>
+<span class="fc" id="L122">        this.yOFlag = yOFlag;</span>
+<span class="fc" id="L123">        this.bAFlag = bAFlag;</span>
+<span class="fc" id="L124">        this.bRFlag = bRFlag;</span>
+<span class="fc" id="L125">        this.bSFlag = bSFlag;</span>
+<span class="fc" id="L126">        this.bDFlag = bDFlag;</span>
+<span class="fc" id="L127">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L128">    }</span>
+
+    /**
+     * Sets lsp Object Header.
+     *
+     * @param obj lsp object header
+     */
+    public void setLspObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L136">        this.lspObjHeader = obj;</span>
+<span class="nc" id="L137">    }</span>
+
+    @Override
+    public void setPlspId(int iPlspId) {
+<span class="nc" id="L141">        this.iPlspId = iPlspId;</span>
+<span class="nc" id="L142">    }</span>
+
+    @Override
+    public void setOFlag(byte yOFlag) {
+<span class="nc" id="L146">        this.yOFlag = yOFlag;</span>
+<span class="nc" id="L147">    }</span>
+
+    @Override
+    public void setAFlag(boolean bAFlag) {
+<span class="nc" id="L151">        this.bAFlag = bAFlag;</span>
+<span class="nc" id="L152">    }</span>
+
+    @Override
+    public void setRFlag(boolean bRFlag) {
+<span class="nc" id="L156">        this.bRFlag = bRFlag;</span>
+<span class="nc" id="L157">    }</span>
+
+    @Override
+    public void setSFlag(boolean bSFlag) {
+<span class="nc" id="L161">        this.bSFlag = bSFlag;</span>
+<span class="nc" id="L162">    }</span>
+
+    @Override
+    public void setDFlag(boolean bDFlag) {
+<span class="nc" id="L166">        this.bDFlag = bDFlag;</span>
+<span class="nc" id="L167">    }</span>
+
+    /**
+     * Returns lsp object header.
+     *
+     * @return lspObjHeader
+     */
+    public PcepObjectHeader getLspObjHeader() {
+<span class="nc" id="L175">        return this.lspObjHeader;</span>
+    }
+
+    @Override
+    public int getPlspId() {
+<span class="nc" id="L180">        return this.iPlspId;</span>
+    }
+
+    @Override
+    public byte getOFlag() {
+<span class="nc" id="L185">        return this.yOFlag;</span>
+    }
+
+    @Override
+    public boolean getAFlag() {
+<span class="nc" id="L190">        return this.bAFlag;</span>
+    }
+
+    @Override
+    public boolean getRFlag() {
+<span class="nc" id="L195">        return this.bRFlag;</span>
+    }
+
+    @Override
+    public boolean getSFlag() {
+<span class="nc" id="L200">        return this.bSFlag;</span>
+    }
+
+    @Override
+    public boolean getDFlag() {
+<span class="nc" id="L205">        return this.bDFlag;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L210">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L215">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L216">    }</span>
+
+    /**
+     * Parse channel buffer and returns object of PcepLspObject.
+     *
+     * @param cb of type channel buffer
+     * @return object of  PcepLspObject
+     * @throws PcepParseException when lsp object is not present in channel buffer
+     */
+    public static PcepLspObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader lspObjHeader;
+        int iPlspId;
+        // 3-bits
+        byte yOFlag;
+        boolean bAFlag;
+        boolean bRFlag;
+        boolean bSFlag;
+        boolean bDFlag;
+
+        // Optional TLV
+<span class="fc" id="L237">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L239">        lspObjHeader = PcepObjectHeader.read(cb);</span>
+
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">        if (lspObjHeader.getObjClass() != PcepLspObjectVer1.LSP_OBJ_CLASS) {</span>
+<span class="nc" id="L242">            throw new PcepParseException(PcepErrorDetailInfo.ERROR_TYPE_6, PcepErrorDetailInfo.ERROR_VALUE_8);</span>
+        }
+        //take only LspObject buffer.
+<span class="fc" id="L245">        ChannelBuffer tempCb = cb.readBytes(lspObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+
+<span class="fc" id="L247">        Integer iTemp = tempCb.readInt();</span>
+<span class="fc" id="L248">        iPlspId = (iTemp &amp; PLSPID_TEMP_SHIFT_VALUE) &gt;&gt; PLSPID_SHIFT_VALUE;</span>
+<span class="fc" id="L249">        Integer iX = (iTemp &amp; OFLAG_TEMP_SHIFT_VALUE) &gt;&gt; OFLAG_SHIFT_VALUE;</span>
+<span class="fc" id="L250">        yOFlag = iX.byteValue();</span>
+<span class="fc" id="L251">        iX = (iTemp &amp; AFLAG_TEMP_SHIFT_VALUE) &gt;&gt; AFLAG_SHIFT_VALUE;</span>
+<span class="fc bfc" id="L252" title="All 2 branches covered.">        bAFlag = iX &gt; 0;</span>
+<span class="fc" id="L253">        iX = (iTemp &amp; RFLAG_TEMP_SHIFT_VALUE) &gt;&gt; RFLAG_SHIFT_VALUE;</span>
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        bRFlag = iX &gt; 0;</span>
+<span class="fc" id="L255">        iX = (iTemp &amp; SFLAG_TEMP_SHIFT_VALUE) &gt;&gt; SFLAG_SHIFT_VALUE;</span>
+<span class="fc bfc" id="L256" title="All 2 branches covered.">        bSFlag = iX &gt; 0;</span>
+<span class="fc" id="L257">        iX = iTemp &amp; DFLAG_TEMP_SHIFT_VALUE;</span>
+<span class="fc bfc" id="L258" title="All 2 branches covered.">        bDFlag = iX &gt; 0;</span>
+
+        // parse optional TLV
+<span class="fc" id="L261">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+
+<span class="fc" id="L263">        return new PcepLspObjectVer1(lspObjHeader, iPlspId, yOFlag, bAFlag, bRFlag, bSFlag, bDFlag, llOptionalTlv);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+        //write Object header
+<span class="fc" id="L270">        int objStartIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L272">        int objLenIndex = lspObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L275">            throw new PcepParseException(&quot;Failed to write lsp object header. Index &quot; + objLenIndex);</span>
+        }
+
+<span class="fc" id="L278">        int iTemp = iPlspId &lt;&lt; PLSPID_SHIFT_VALUE;</span>
+<span class="fc" id="L279">        iTemp = iTemp | (yOFlag &lt;&lt; OFLAG_SHIFT_VALUE);</span>
+        byte bFlag;
+<span class="fc bfc" id="L281" title="All 2 branches covered.">        iTemp = bAFlag ? (iTemp | AFLAG_TEMP_SHIFT_VALUE) : iTemp;</span>
+
+<span class="fc bfc" id="L283" title="All 2 branches covered.">        bFlag = (bRFlag) ? (byte) BIT_SET : BIT_RESET;</span>
+<span class="fc" id="L284">        iTemp = iTemp | (bFlag &lt;&lt; RFLAG_SHIFT_VALUE);</span>
+<span class="fc bfc" id="L285" title="All 2 branches covered.">        bFlag = (bSFlag) ? (byte) BIT_SET : BIT_RESET;</span>
+<span class="fc" id="L286">        iTemp = iTemp | (bFlag &lt;&lt; SFLAG_SHIFT_VALUE);</span>
+<span class="fc bfc" id="L287" title="All 2 branches covered.">        bFlag = (bDFlag) ? (byte) BIT_SET : BIT_RESET;</span>
+<span class="fc" id="L288">        iTemp = iTemp | bFlag;</span>
+<span class="fc" id="L289">        cb.writeInt(iTemp);</span>
+
+        // Add optional TLV
+<span class="fc" id="L292">        packOptionalTlv(cb);</span>
+
+        //Update object length now
+<span class="fc" id="L295">        int length = cb.writerIndex() - objStartIndex;</span>
+        //will be helpful during print().
+<span class="fc" id="L297">        lspObjHeader.setObjLen((short) length);</span>
+        // As per RFC the length of object should be
+        // multiples of 4
+
+<span class="fc" id="L301">        cb.setShort(objLenIndex, (short) length);</span>
+
+<span class="fc" id="L303">        return length;</span>
+    }
+
+    /**
+     * Returns Linked list of optional tlvs.
+     *
+     * @param cb of channel buffer.
+     * @return list of optional tlvs
+     * @throws PcepParseException when unsupported tlv is received
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv;
+
+<span class="fc" id="L317">        llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L319" title="All 2 branches covered.">        while (MINIMUM_COMMON_HEADER_LENGTH &lt;= cb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+<span class="fc" id="L322">            short hType = cb.readShort();</span>
+<span class="fc" id="L323">            short hLength = cb.readShort();</span>
+<span class="fc" id="L324">            int iValue = 0;</span>
+
+<span class="pc bpc" id="L326" title="1 of 6 branches missed.">            switch (hType) {</span>
+
+            case StatefulIPv4LspIdentidiersTlv.TYPE:
+<span class="fc" id="L329">                tlv = StatefulIPv4LspIdentidiersTlv.read(cb);</span>
+<span class="fc" id="L330">                break;</span>
+            case StatefulLspErrorCodeTlv.TYPE:
+<span class="fc" id="L332">                iValue = cb.readInt();</span>
+<span class="fc" id="L333">                tlv = new StatefulLspErrorCodeTlv(iValue);</span>
+<span class="fc" id="L334">                break;</span>
+            case StatefulRsvpErrorSpecTlv.TYPE:
+<span class="fc" id="L336">                tlv = StatefulRsvpErrorSpecTlv.read(cb);</span>
+<span class="fc" id="L337">                break;</span>
+            case SymbolicPathNameTlv.TYPE:
+<span class="fc" id="L339">                tlv = SymbolicPathNameTlv.read(cb, hLength);</span>
+<span class="fc" id="L340">                break;</span>
+            case StatefulLspDbVerTlv.TYPE:
+<span class="fc" id="L342">                tlv = StatefulLspDbVerTlv.read(cb);</span>
+<span class="fc" id="L343">                break;</span>
+            default:
+<span class="nc" id="L345">                throw new PcepParseException(&quot;Received unsupported TLV type :&quot; + hType);</span>
+            }
+            // Check for the padding
+<span class="fc" id="L348">            int pad = hLength % 4;</span>
+<span class="fc bfc" id="L349" title="All 2 branches covered.">            if (0 &lt; pad) {</span>
+<span class="fc" id="L350">                pad = 4 - pad;</span>
+<span class="pc bpc" id="L351" title="1 of 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="fc" id="L352">                    cb.skipBytes(pad);</span>
+                }
+            }
+
+<span class="fc" id="L356">            llOutOptionalTlv.add(tlv);</span>
+<span class="fc" id="L357">        }</span>
+
+<span class="pc bpc" id="L359" title="1 of 2 branches missed.">        if (0 &lt; cb.readableBytes()) {</span>
+
+<span class="nc" id="L361">            throw new PcepParseException(&quot;Optional Tlv parsing error. Extra bytes received.&quot;);</span>
+        }
+<span class="fc" id="L363">        return llOutOptionalTlv;</span>
+    }
+
+    /**
+     * returns writer index.
+     *
+     * @param cb of type channel buffer
+     * @return length of bytes written to channel buffer
+     */
+    protected int packOptionalTlv(ChannelBuffer cb) {
+
+<span class="fc" id="L374">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+<span class="fc" id="L375">        int startIndex = cb.writerIndex();</span>
+
+<span class="fc bfc" id="L377" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L378">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L381">                log.debug(&quot;tlv is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L382">                continue;</span>
+            }
+
+<span class="fc" id="L385">            tlv.write(cb);</span>
+
+            // need to take care of padding
+<span class="fc" id="L388">            int pad = tlv.getLength() % 4;</span>
+
+<span class="fc bfc" id="L390" title="All 2 branches covered.">            if (0 != pad) {</span>
+<span class="fc" id="L391">                pad = 4 - pad;</span>
+<span class="fc bfc" id="L392" title="All 2 branches covered.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="fc" id="L393">                    cb.writeByte((byte) 0);</span>
+                }
+            }
+<span class="fc" id="L396">        }</span>
+
+<span class="fc" id="L398">        return cb.writerIndex() - startIndex;</span>
+    }
+
+    /**
+     * Builder class for PCEP lsp Object.
+     */
+<span class="nc" id="L404">    public static class Builder implements PcepLspObject.Builder {</span>
+
+<span class="nc" id="L406">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L407">        private boolean bIsPlspIdSet = false;</span>
+<span class="nc" id="L408">        private boolean bIsOFlagSet = false;</span>
+<span class="nc" id="L409">        private boolean bIsRFlagSet = false;</span>
+<span class="nc" id="L410">        private boolean bIsAFlagSet = false;</span>
+<span class="nc" id="L411">        private boolean bIsDFlagSet = false;</span>
+<span class="nc" id="L412">        private boolean bIsSFlagSet = false;</span>
+
+        private PcepObjectHeader lspObjHeader;
+        private byte yOFlag;
+        private boolean bAFlag;
+        private boolean bDFlag;
+        private boolean bSFlag;
+        private boolean bRFlag;
+<span class="nc" id="L420">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = null;</span>
+
+        private int plspId;
+
+<span class="nc" id="L424">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L427">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepLspObject build() {
+<span class="nc bnc" id="L432" title="All 2 branches missed.">            PcepObjectHeader lspObjHeader = this.bIsHeaderSet ? this.lspObjHeader : DEFAULT_LSP_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L434" title="All 2 branches missed.">            int plspId = this.bIsPlspIdSet ? this.plspId : DEFAULT_PLSPID;</span>
+<span class="nc bnc" id="L435" title="All 2 branches missed.">            byte yOFlag = this.bIsOFlagSet ? this.yOFlag : DEFAULT_OFLAG;</span>
+<span class="nc bnc" id="L436" title="All 2 branches missed.">            boolean bAFlag = this.bIsAFlagSet ? this.bAFlag : DEFAULT_AFLAG;</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">            boolean bRFlag = this.bIsRFlagSet ? this.bRFlag : DEFAULT_RFLAG;</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">            boolean bSFlag = this.bIsSFlagSet ? this.bSFlag : DEFAULT_SFLAG;</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">            boolean bDFlag = this.bIsDFlagSet ? this.bDFlag : DEFAULT_DFLAG;</span>
+
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L442">                lspObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L445" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L446">                lspObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L449">            return new PcepLspObjectVer1(lspObjHeader, plspId, yOFlag, bAFlag, bRFlag, bSFlag, bDFlag, llOptionalTlv);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getLspObjHeader() {
+<span class="nc" id="L454">            return this.lspObjHeader;</span>
+        }
+
+        @Override
+        public Builder setLspObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L459">            this.lspObjHeader = obj;</span>
+<span class="nc" id="L460">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L461">            return this;</span>
+        }
+
+        @Override
+        public int getPlspId() {
+<span class="nc" id="L466">            return this.plspId;</span>
+        }
+
+        @Override
+        public Builder setPlspId(int value) {
+<span class="nc" id="L471">            this.plspId = value;</span>
+<span class="nc" id="L472">            this.bIsPlspIdSet = true;</span>
+<span class="nc" id="L473">            return this;</span>
+        }
+
+        @Override
+        public byte getOFlag() {
+<span class="nc" id="L478">            return this.yOFlag;</span>
+        }
+
+        @Override
+        public Builder setOFlag(byte value) {
+<span class="nc" id="L483">            this.yOFlag = value;</span>
+<span class="nc" id="L484">            this.bIsOFlagSet = true;</span>
+<span class="nc" id="L485">            return this;</span>
+        }
+
+        @Override
+        public boolean getAFlag() {
+<span class="nc" id="L490">            return this.bAFlag;</span>
+        }
+
+        @Override
+        public Builder setAFlag(boolean value) {
+<span class="nc" id="L495">            this.bAFlag = value;</span>
+<span class="nc" id="L496">            this.bIsAFlagSet = true;</span>
+<span class="nc" id="L497">            return this;</span>
+        }
+
+        @Override
+        public boolean getRFlag() {
+<span class="nc" id="L502">            return this.bRFlag;</span>
+        }
+
+        @Override
+        public Builder setRFlag(boolean value) {
+<span class="nc" id="L507">            this.bRFlag = value;</span>
+<span class="nc" id="L508">            this.bIsRFlagSet = true;</span>
+<span class="nc" id="L509">            return this;</span>
+        }
+
+        @Override
+        public boolean getSFlag() {
+<span class="nc" id="L514">            return this.bSFlag;</span>
+        }
+
+        @Override
+        public Builder setSFlag(boolean value) {
+<span class="nc" id="L519">            this.bSFlag = value;</span>
+<span class="nc" id="L520">            this.bIsSFlagSet = true;</span>
+<span class="nc" id="L521">            return this;</span>
+        }
+
+        @Override
+        public boolean getDFlag() {
+<span class="nc" id="L526">            return this.bDFlag;</span>
+        }
+
+        @Override
+        public Builder setDFlag(boolean value) {
+<span class="nc" id="L531">            this.bDFlag = value;</span>
+<span class="nc" id="L532">            this.bIsDFlagSet = true;</span>
+<span class="nc" id="L533">            return this;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L538">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L539">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L544">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L549">            this.bPFlag = value;</span>
+<span class="nc" id="L550">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L551">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L556">            this.bIFlag = value;</span>
+<span class="nc" id="L557">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L558">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L565">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L566">                .add(&quot;PlspIDValue&quot;, iPlspId)</span>
+<span class="nc" id="L567">                .add(&quot;OFlag&quot;, yOFlag)</span>
+<span class="nc" id="L568">                .add(&quot;AFlag&quot;, bAFlag)</span>
+<span class="nc" id="L569">                .add(&quot;RFlag&quot;, bRFlag)</span>
+<span class="nc" id="L570">                .add(&quot;SFlag&quot;, bSFlag)</span>
+<span class="nc" id="L571">                .add(&quot;DFlag&quot;, bDFlag)</span>
+<span class="nc" id="L572">                .add(&quot;OptionalTlvList&quot;, llOptionalTlv)</span>
+<span class="nc" id="L573">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SubjectFactories.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.basics</a> &gt; <span class="el_source">SubjectFactories.java</span></div><h1>SubjectFactories.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.basics;
+
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.HostId;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.config.SubjectFactory;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * Set of subject factories for potential configuration subjects.
+ */
+public final class SubjectFactories {
+
+    // Construction forbidden
+<span class="nc" id="L34">    private SubjectFactories() {</span>
+<span class="nc" id="L35">    }</span>
+
+    // Required for resolving application identifiers
+    private static CoreService coreService;
+
+<span class="nc" id="L40">    public static final SubjectFactory&lt;ApplicationId&gt; APP_SUBJECT_FACTORY =</span>
+<span class="nc" id="L41">            new SubjectFactory&lt;ApplicationId&gt;(ApplicationId.class, &quot;apps&quot;) {</span>
+                @Override
+                public ApplicationId createSubject(String key) {
+<span class="nc" id="L44">                    return coreService.registerApplication(key);</span>
+                }
+                @Override
+                public String subjectKey(ApplicationId subject) {
+<span class="nc" id="L48">                    return subject.name();</span>
+                }
+            };
+
+<span class="nc" id="L52">    public static final SubjectFactory&lt;DeviceId&gt; DEVICE_SUBJECT_FACTORY =</span>
+<span class="nc" id="L53">            new SubjectFactory&lt;DeviceId&gt;(DeviceId.class, &quot;devices&quot;) {</span>
+                @Override
+                public DeviceId createSubject(String key) {
+<span class="nc" id="L56">                    return DeviceId.deviceId(key);</span>
+                }
+            };
+
+<span class="nc" id="L60">    public static final SubjectFactory&lt;ConnectPoint&gt; CONNECT_POINT_SUBJECT_FACTORY =</span>
+<span class="nc" id="L61">            new SubjectFactory&lt;ConnectPoint&gt;(ConnectPoint.class, &quot;ports&quot;) {</span>
+                @Override
+                public ConnectPoint createSubject(String key) {
+<span class="nc" id="L64">                    return ConnectPoint.deviceConnectPoint(key);</span>
+                }
+                @Override
+                public String subjectKey(ConnectPoint subject) {
+<span class="nc" id="L68">                    return key(subject);</span>
+                }
+            };
+
+<span class="nc" id="L72">    public static final SubjectFactory&lt;HostId&gt; HOST_SUBJECT_FACTORY =</span>
+<span class="nc" id="L73">            new SubjectFactory&lt;HostId&gt;(HostId.class, &quot;hosts&quot;) {</span>
+                @Override
+                public HostId createSubject(String key) {
+<span class="nc" id="L76">                    return HostId.hostId(key);</span>
+                }
+            };
+
+<span class="nc" id="L80">    public static final SubjectFactory&lt;LinkKey&gt; LINK_SUBJECT_FACTORY =</span>
+<span class="nc" id="L81">            new SubjectFactory&lt;LinkKey&gt;(LinkKey.class, &quot;links&quot;) {</span>
+                @Override
+                public LinkKey createSubject(String key) {
+<span class="nc" id="L84">                    String[] cps = key.split(&quot;-&quot;);</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">                    checkArgument(cps.length == 2, &quot;Incorrect link key format: %s&quot;, key);</span>
+<span class="nc" id="L86">                    return LinkKey.linkKey(ConnectPoint.deviceConnectPoint(cps[0]),</span>
+<span class="nc" id="L87">                                           ConnectPoint.deviceConnectPoint(cps[1]));</span>
+                }
+                @Override
+                public String subjectKey(LinkKey subject) {
+<span class="nc" id="L91">                    return key(subject.src()) + &quot;-&quot; + key(subject.dst());</span>
+                }
+            };
+
+    /**
+     * Provides reference to the core service, which is required for
+     * application subject factory.
+     *
+     * @param service core service reference
+     */
+    public static void setCoreService(CoreService service) {
+<span class="nc" id="L102">        coreService = service;</span>
+<span class="nc" id="L103">    }</span>
+
+    private static String key(ConnectPoint subject) {
+<span class="nc" id="L106">        return subject.deviceId() + &quot;/&quot; + subject.port();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

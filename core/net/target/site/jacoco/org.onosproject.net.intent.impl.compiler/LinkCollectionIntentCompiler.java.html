@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LinkCollectionIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">LinkCollectionIntentCompiler.java</span></div><h1>LinkCollectionIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.intent.FlowRuleIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentCompiler;
+import org.onosproject.net.intent.IntentExtensionService;
+import org.onosproject.net.intent.LinkCollectionIntent;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Component(immediate = true)
+<span class="fc" id="L51">public class LinkCollectionIntentCompiler implements IntentCompiler&lt;LinkCollectionIntent&gt; {</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentExtensionService intentManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    private ApplicationId appId;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L63">        appId = coreService.registerApplication(&quot;org.onosproject.net.intent&quot;);</span>
+<span class="fc" id="L64">        intentManager.registerCompiler(LinkCollectionIntent.class, this);</span>
+<span class="fc" id="L65">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L69">        intentManager.unregisterCompiler(LinkCollectionIntent.class);</span>
+<span class="fc" id="L70">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(LinkCollectionIntent intent, List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+<span class="fc" id="L75">        SetMultimap&lt;DeviceId, PortNumber&gt; inputPorts = HashMultimap.create();</span>
+<span class="fc" id="L76">        SetMultimap&lt;DeviceId, PortNumber&gt; outputPorts = HashMultimap.create();</span>
+
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        for (Link link : intent.links()) {</span>
+<span class="fc" id="L79">            inputPorts.put(link.dst().deviceId(), link.dst().port());</span>
+<span class="fc" id="L80">            outputPorts.put(link.src().deviceId(), link.src().port());</span>
+<span class="fc" id="L81">        }</span>
+
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        for (ConnectPoint ingressPoint : intent.ingressPoints()) {</span>
+<span class="fc" id="L84">            inputPorts.put(ingressPoint.deviceId(), ingressPoint.port());</span>
+<span class="fc" id="L85">        }</span>
+
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        for (ConnectPoint egressPoint : intent.egressPoints()) {</span>
+<span class="fc" id="L88">            outputPorts.put(egressPoint.deviceId(), egressPoint.port());</span>
+<span class="fc" id="L89">        }</span>
+
+<span class="fc" id="L91">        List&lt;FlowRule&gt; rules = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        for (DeviceId deviceId: outputPorts.keys()) {</span>
+<span class="fc" id="L93">            rules.addAll(createRules(intent, deviceId, inputPorts.get(deviceId), outputPorts.get(deviceId)));</span>
+<span class="fc" id="L94">        }</span>
+<span class="fc" id="L95">        return Collections.singletonList(new FlowRuleIntent(appId, rules, intent.resources()));</span>
+    }
+
+    private List&lt;FlowRule&gt; createRules(LinkCollectionIntent intent, DeviceId deviceId,
+                                       Set&lt;PortNumber&gt; inPorts, Set&lt;PortNumber&gt; outPorts) {
+<span class="fc" id="L100">        Set&lt;PortNumber&gt; ingressPorts = intent.ingressPoints().stream()</span>
+<span class="fc" id="L101">                .filter(point -&gt; point.deviceId().equals(deviceId))</span>
+<span class="fc" id="L102">                .map(ConnectPoint::port)</span>
+<span class="fc" id="L103">                .collect(Collectors.toSet());</span>
+
+<span class="fc" id="L105">        TrafficTreatment.Builder defaultTreatmentBuilder = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L106">        outPorts.stream()</span>
+<span class="fc" id="L107">                .forEach(defaultTreatmentBuilder::setOutput);</span>
+<span class="fc" id="L108">        TrafficTreatment defaultTreatment = defaultTreatmentBuilder.build();</span>
+
+<span class="fc" id="L110">        TrafficTreatment.Builder ingressTreatmentBuilder = DefaultTrafficTreatment.builder(intent.treatment());</span>
+<span class="fc" id="L111">        outPorts.stream()</span>
+<span class="fc" id="L112">                .forEach(ingressTreatmentBuilder::setOutput);</span>
+<span class="fc" id="L113">        TrafficTreatment ingressTreatment = ingressTreatmentBuilder.build();</span>
+
+<span class="fc" id="L115">        List&lt;FlowRule&gt; rules = new ArrayList&lt;&gt;(inPorts.size());</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        for (PortNumber inPort: inPorts) {</span>
+<span class="fc" id="L117">            TrafficSelector selector = DefaultTrafficSelector.builder(intent.selector()).matchInPort(inPort).build();</span>
+            TrafficTreatment treatment;
+<span class="fc bfc" id="L119" title="All 2 branches covered.">            if (ingressPorts.contains(inPort)) {</span>
+<span class="fc" id="L120">                treatment = ingressTreatment;</span>
+            } else {
+<span class="fc" id="L122">                treatment = defaultTreatment;</span>
+            }
+
+<span class="fc" id="L125">            FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="fc" id="L126">                                .forDevice(deviceId)</span>
+<span class="fc" id="L127">                                .withSelector(selector)</span>
+<span class="fc" id="L128">                                .withTreatment(treatment)</span>
+<span class="fc" id="L129">                                .withPriority(intent.priority())</span>
+<span class="fc" id="L130">                                .fromApp(appId)</span>
+<span class="fc" id="L131">                                .makePermanent()</span>
+<span class="fc" id="L132">                                .build();</span>
+<span class="fc" id="L133">            rules.add(rule);</span>
+<span class="fc" id="L134">        }</span>
+
+<span class="fc" id="L136">        return rules;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

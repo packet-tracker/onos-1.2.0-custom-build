@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Data.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">Data.java</span></div><h1>Data.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.util.Arrays;
+
+import static org.onlab.packet.PacketUtils.*;
+
+/**
+ *
+ */
+public class Data extends BasePacket {
+    protected byte[] data;
+
+    /**
+     *
+     */
+<span class="fc" id="L34">    public Data() {</span>
+<span class="fc" id="L35">        data = new byte[0];</span>
+<span class="fc" id="L36">    }</span>
+
+    /**
+     * @param data the data
+     */
+<span class="nc" id="L41">    public Data(final byte[] data) {</span>
+<span class="nc" id="L42">        this.data = data;</span>
+<span class="nc" id="L43">    }</span>
+
+    /**
+     * @return the data
+     */
+    public byte[] getData() {
+<span class="nc" id="L49">        return this.data;</span>
+    }
+
+    /**
+     * @param data
+     *            the data to set
+     * @return self
+     */
+    public Data setData(final byte[] data) {
+<span class="fc" id="L58">        this.data = data;</span>
+<span class="fc" id="L59">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L64">        return this.data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L70">        this.data = Arrays.copyOfRange(data, offset, data.length);</span>
+<span class="nc" id="L71">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L81">        final int prime = 1571;</span>
+<span class="nc" id="L82">        int result = super.hashCode();</span>
+<span class="nc" id="L83">        result = prime * result + Arrays.hashCode(this.data);</span>
+<span class="nc" id="L84">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L95">            return true;</span>
+        }
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L98">            return false;</span>
+        }
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        if (!(obj instanceof Data)) {</span>
+<span class="nc" id="L101">            return false;</span>
+        }
+<span class="nc" id="L103">        final Data other = (Data) obj;</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (!Arrays.equals(this.data, other.data)) {</span>
+<span class="nc" id="L105">            return false;</span>
+        }
+<span class="nc" id="L107">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for generic payload data.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;Data&gt; deserializer() {
+<span class="fc" id="L116">        return (data, offset, length) -&gt; {</span>
+            // Allow zero-length data for now
+<span class="fc bfc" id="L118" title="All 2 branches covered.">            if (length == 0) {</span>
+<span class="fc" id="L119">                return new Data();</span>
+            }
+
+<span class="fc" id="L122">            checkInput(data, offset, length, 1);</span>
+
+<span class="fc" id="L124">            Data dataObject = new Data();</span>
+
+<span class="fc" id="L126">            dataObject.data = Arrays.copyOfRange(data, offset, data.length);</span>
+
+<span class="fc" id="L128">            return dataObject;</span>
+        };
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

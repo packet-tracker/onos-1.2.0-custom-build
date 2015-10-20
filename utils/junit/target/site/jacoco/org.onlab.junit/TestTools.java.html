@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TestTools.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-junit</a> &gt; <a href="index.source.html" class="el_package">org.onlab.junit</a> &gt; <span class="el_source">TestTools.java</span></div><h1>TestTools.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.junit;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.io.Files;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+import java.util.Random;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static org.junit.Assert.fail;
+
+/**
+ * Utilities to aid in producing JUnit tests.
+ */
+public final class TestTools {
+
+<span class="fc" id="L34">    private static final Random RANDOM = new Random();</span>
+
+    // Prohibit construction
+<span class="nc" id="L37">    private TestTools() {</span>
+<span class="nc" id="L38">    }</span>
+
+    public static void print(String msg) {
+<span class="nc" id="L41">        System.out.print(msg);</span>
+<span class="nc" id="L42">    }</span>
+
+    /**
+     * Suspends the current thread for a specified number of millis.
+     *
+     * @param ms number of millis
+     */
+    public static void delay(int ms) {
+        try {
+<span class="fc" id="L51">            Thread.sleep(ms);</span>
+<span class="nc" id="L52">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L53">            fail(&quot;test interrupted&quot;);</span>
+<span class="fc" id="L54">        }</span>
+<span class="fc" id="L55">    }</span>
+
+    /**
+     * Returns the current time in millis since epoch.
+     *
+     * @return current time
+     */
+    public static long now() {
+<span class="fc" id="L63">        return System.currentTimeMillis();</span>
+    }
+
+    /**
+     * Runs the specified runnable until it completes successfully or until the
+     * specified time expires. If the latter occurs, the first encountered
+     * assertion on the last attempt will be re-thrown. Errors other than
+     * assertion errors will be propagated immediately.
+     * &lt;p&gt;
+     * Assertions attempts will not be closer than 10 millis apart and no
+     * further than 50 millis.
+     * &lt;/p&gt;
+     *
+     * @param delay      number of millis to delay before the first attempt
+     * @param duration   number of milliseconds beyond the current time
+     * @param assertions test assertions runnable
+     */
+    public static void assertAfter(int delay, int duration, Runnable assertions) {
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">        checkArgument(delay &lt; duration, &quot;delay &gt;= duration&quot;);</span>
+<span class="fc" id="L82">        long start = now();</span>
+<span class="fc" id="L83">        int step = Math.max(Math.min((duration - delay) / 100, 50), 10);</span>
+
+        // Is there an initial delay?
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        if (delay &gt; 0) {</span>
+<span class="fc" id="L87">            delay(delay);</span>
+        }
+
+        // Keep going until the assertions succeed or until time runs-out.
+        while (true) {
+            try {
+<span class="fc" id="L93">                assertions.run();</span>
+<span class="fc" id="L94">                break;</span>
+<span class="fc" id="L95">            } catch (AssertionError e) {</span>
+                // If there was an error and time ran out, re-throw it.
+<span class="fc bfc" id="L97" title="All 2 branches covered.">                if (now() - start &gt; duration) {</span>
+<span class="fc" id="L98">                    throw e;</span>
+                }
+            }
+<span class="fc" id="L101">            delay(step);</span>
+        }
+<span class="fc" id="L103">    }</span>
+
+    /**
+     * Runs the specified runnable until it completes successfully or until the
+     * specified time expires. If the latter occurs, the first encountered
+     * assertion on the last attempt will be re-thrown. Errors other than
+     * assertion errors will be propagated immediately.
+     * &lt;p&gt;
+     * Assertions attempts will not be closer than 10 millis apart and no
+     * further than 50 millis.
+     * &lt;/p&gt;
+     *
+     * @param duration   number of milliseconds beyond the current time
+     * @param assertions test assertions runnable
+     */
+    public static void assertAfter(int duration, Runnable assertions) {
+<span class="nc" id="L119">        assertAfter(0, duration, assertions);</span>
+<span class="nc" id="L120">    }</span>
+
+
+    /**
+     * Creates a directory tree of test files. To signify creating a directory
+     * file path should end with '/'.
+     *
+     * @param paths list of file paths
+     * @return list of created files
+     * @throws java.io.IOException if there is an issue
+     */
+    public static List&lt;File&gt; createTestFiles(List&lt;String&gt; paths) throws IOException {
+<span class="nc" id="L132">        return createTestFiles(paths, 32, 1024);</span>
+    }
+
+    /**
+     * Creates a directory tree of test files. To signify creating a directory
+     * file path should end with '/'.
+     *
+     * @param paths   list of file paths
+     * @param minSize minimum file size in bytes
+     * @param maxSize maximum file size in bytes
+     * @return list of created files
+     * @throws java.io.IOException if there is an issue
+     */
+    public static List&lt;File&gt; createTestFiles(List&lt;String&gt; paths,
+                                             int minSize, int maxSize) throws IOException {
+<span class="nc" id="L147">        ImmutableList.Builder&lt;File&gt; files = ImmutableList.builder();</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        for (String p : paths) {</span>
+<span class="nc" id="L149">            File f = new File(p);</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">            if (p.endsWith(&quot;/&quot;)) {</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">                if (f.mkdirs()) {</span>
+<span class="nc" id="L152">                    files.add(f);</span>
+                }
+            } else {
+<span class="nc" id="L155">                Files.createParentDirs(f);</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                if (f.createNewFile()) {</span>
+<span class="nc" id="L157">                    writeRandomFile(f, minSize, maxSize);</span>
+<span class="nc" id="L158">                    files.add(f);</span>
+                }
+            }
+<span class="nc" id="L161">        }</span>
+<span class="nc" id="L162">        return files.build();</span>
+    }
+
+    /**
+     * Writes random binary content into the specified file. The number of
+     * bytes will be random between the given minimum and maximum.
+     *
+     * @param file    file to write data to
+     * @param minSize minimum number of bytes to write
+     * @param maxSize maximum number of bytes to write
+     * @throws IOException if there is an issue
+     */
+    public static void writeRandomFile(File file, int minSize, int maxSize) throws IOException {
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        int size = minSize + (minSize == maxSize ? 0 : RANDOM.nextInt(maxSize - minSize));</span>
+<span class="nc" id="L176">        byte[] data = new byte[size];</span>
+<span class="nc" id="L177">        tweakBytes(RANDOM, data, size / 4);</span>
+<span class="nc" id="L178">        Files.write(data, file);</span>
+<span class="nc" id="L179">    }</span>
+
+
+    /**
+     * Tweaks the given number of bytes in a byte array.
+     *
+     * @param random random number generator
+     * @param data   byte array to be tweaked
+     * @param count  number of bytes to tweak
+     */
+    public static void tweakBytes(Random random, byte[] data, int count) {
+<span class="nc" id="L190">        tweakBytes(random, data, count, 0, data.length);</span>
+<span class="nc" id="L191">    }</span>
+
+    /**
+     * Tweaks the given number of bytes in the specified range of a byte array.
+     *
+     * @param random random number generator
+     * @param data   byte array to be tweaked
+     * @param count  number of bytes to tweak
+     * @param start  index at beginning of range (inclusive)
+     * @param end    index at end of range (exclusive)
+     */
+    public static void tweakBytes(Random random, byte[] data, int count,
+                                  int start, int end) {
+<span class="nc" id="L204">        int len = end - start;</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        for (int i = 0; i &lt; count; i++) {</span>
+<span class="nc" id="L206">            data[start + random.nextInt(len)] = (byte) random.nextInt();</span>
+        }
+<span class="nc" id="L208">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

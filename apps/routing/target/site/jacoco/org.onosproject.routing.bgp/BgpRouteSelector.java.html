@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpRouteSelector.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpRouteSelector.java</span></div><h1>BgpRouteSelector.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.onlab.packet.IpPrefix;
+import org.onosproject.routing.RouteUpdate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.LinkedList;
+
+/**
+ * Class to receive and process the BGP routes from each BGP Session/Peer.
+ */
+class BgpRouteSelector {
+<span class="fc" id="L30">    private static final Logger log =</span>
+<span class="fc" id="L31">        LoggerFactory.getLogger(BgpRouteSelector.class);</span>
+
+    private BgpSessionManager bgpSessionManager;
+
+    /**
+     * Constructor.
+     *
+     * @param bgpSessionManager the BGP Session Manager to use
+     */
+<span class="fc" id="L40">    BgpRouteSelector(BgpSessionManager bgpSessionManager) {</span>
+<span class="fc" id="L41">        this.bgpSessionManager = bgpSessionManager;</span>
+<span class="fc" id="L42">    }</span>
+
+    /**
+     * Processes route entry updates: added/updated and deleted route
+     * entries.
+     *
+     * @param bgpSession the BGP session the route entry updates were
+     * received on
+     * @param addedBgpRouteEntries the added/updated route entries to process
+     * @param deletedBgpRouteEntries the deleted route entries to process
+     */
+    synchronized void routeUpdates(BgpSession bgpSession,
+                        Collection&lt;BgpRouteEntry&gt; addedBgpRouteEntries,
+                        Collection&lt;BgpRouteEntry&gt; deletedBgpRouteEntries) {
+<span class="fc" id="L56">        Collection&lt;RouteUpdate&gt; routeUpdates = new LinkedList&lt;&gt;();</span>
+        RouteUpdate routeUpdate;
+
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (bgpSessionManager.isShutdown()) {</span>
+<span class="fc" id="L60">            return;         // Ignore any leftover updates if shutdown</span>
+        }
+        // Process the deleted route entries
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        for (BgpRouteEntry bgpRouteEntry : deletedBgpRouteEntries) {</span>
+<span class="fc" id="L64">            routeUpdate = processDeletedRoute(bgpSession, bgpRouteEntry);</span>
+<span class="fc bfc" id="L65" title="All 2 branches covered.">            if (routeUpdate != null) {</span>
+<span class="fc" id="L66">                routeUpdates.add(routeUpdate);</span>
+            }
+<span class="fc" id="L68">        }</span>
+
+        // Process the added/updated route entries
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        for (BgpRouteEntry bgpRouteEntry : addedBgpRouteEntries) {</span>
+<span class="fc" id="L72">            routeUpdate = processAddedRoute(bgpSession, bgpRouteEntry);</span>
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">            if (routeUpdate != null) {</span>
+<span class="fc" id="L74">                routeUpdates.add(routeUpdate);</span>
+            }
+<span class="fc" id="L76">        }</span>
+<span class="fc" id="L77">        bgpSessionManager.getRouteListener().update(routeUpdates);</span>
+<span class="fc" id="L78">    }</span>
+
+    /**
+     * Processes an added/updated route entry.
+     *
+     * @param bgpSession the BGP session the route entry update was received on
+     * @param bgpRouteEntry the added/updated route entry
+     * @return the result route update that should be forwarded to the
+     * Route Listener, or null if no route update should be forwarded
+     */
+    private RouteUpdate processAddedRoute(BgpSession bgpSession,
+                                          BgpRouteEntry bgpRouteEntry) {
+        RouteUpdate routeUpdate;
+<span class="fc" id="L91">        BgpRouteEntry bestBgpRouteEntry =</span>
+<span class="fc" id="L92">            bgpSessionManager.findBgpRoute(bgpRouteEntry.prefix());</span>
+
+        //
+        // Install the new route entry if it is better than the
+        // current best route.
+        //
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        if ((bestBgpRouteEntry == null) ||</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            bgpRouteEntry.isBetterThan(bestBgpRouteEntry)) {</span>
+<span class="fc" id="L100">            bgpSessionManager.addBgpRoute(bgpRouteEntry);</span>
+<span class="fc" id="L101">            routeUpdate =</span>
+                new RouteUpdate(RouteUpdate.Type.UPDATE, bgpRouteEntry);
+<span class="fc" id="L103">            return routeUpdate;</span>
+        }
+
+        //
+        // If the route entry arrived on the same BGP Session as
+        // the current best route, then elect the next best route
+        // and install it.
+        //
+<span class="nc" id="L111">        if (bestBgpRouteEntry.getBgpSession() !=</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            bgpRouteEntry.getBgpSession()) {</span>
+<span class="nc" id="L113">            return null;            // Nothing to do</span>
+        }
+
+        // Find the next best route
+<span class="nc" id="L117">        bestBgpRouteEntry = findBestBgpRoute(bgpRouteEntry.prefix());</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        if (bestBgpRouteEntry == null) {</span>
+            //
+            // TODO: Shouldn't happen. Install the new route as a
+            // pre-caution.
+            //
+<span class="nc" id="L123">            log.debug(&quot;BGP next best route for prefix {} is missing. &quot; +</span>
+                      &quot;Adding the route that is currently processed.&quot;,
+<span class="nc" id="L125">                      bgpRouteEntry.prefix());</span>
+<span class="nc" id="L126">            bestBgpRouteEntry = bgpRouteEntry;</span>
+        }
+
+        // Install the next best route
+<span class="nc" id="L130">        bgpSessionManager.addBgpRoute(bestBgpRouteEntry);</span>
+<span class="nc" id="L131">        routeUpdate = new RouteUpdate(RouteUpdate.Type.UPDATE,</span>
+                                      bestBgpRouteEntry);
+<span class="nc" id="L133">        return routeUpdate;</span>
+    }
+
+    /**
+     * Processes a deleted route entry.
+     *
+     * @param bgpSession the BGP session the route entry update was received on
+     * @param bgpRouteEntry the deleted route entry
+     * @return the result route update that should be forwarded to the
+     * Route Listener, or null if no route update should be forwarded
+     */
+    private RouteUpdate processDeletedRoute(BgpSession bgpSession,
+                                            BgpRouteEntry bgpRouteEntry) {
+        RouteUpdate routeUpdate;
+<span class="fc" id="L147">        BgpRouteEntry bestBgpRouteEntry =</span>
+<span class="fc" id="L148">            bgpSessionManager.findBgpRoute(bgpRouteEntry.prefix());</span>
+
+        //
+        // Remove the route entry only if it was the best one.
+        // Install the the next best route if it exists.
+        //
+        // NOTE: We intentionally use &quot;==&quot; instead of method equals(),
+        // because we need to check whether this is same object.
+        //
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (bgpRouteEntry != bestBgpRouteEntry) {</span>
+<span class="fc" id="L158">            return null;            // Nothing to do</span>
+        }
+
+        //
+        // Find the next best route
+        //
+<span class="fc" id="L164">        bestBgpRouteEntry = findBestBgpRoute(bgpRouteEntry.prefix());</span>
+<span class="fc bfc" id="L165" title="All 2 branches covered.">        if (bestBgpRouteEntry != null) {</span>
+            // Install the next best route
+<span class="fc" id="L167">            bgpSessionManager.addBgpRoute(bestBgpRouteEntry);</span>
+<span class="fc" id="L168">            routeUpdate = new RouteUpdate(RouteUpdate.Type.UPDATE,</span>
+                                          bestBgpRouteEntry);
+<span class="fc" id="L170">            return routeUpdate;</span>
+        }
+
+        //
+        // No route found. Remove the route entry
+        //
+<span class="fc" id="L176">        bgpSessionManager.removeBgpRoute(bgpRouteEntry.prefix());</span>
+<span class="fc" id="L177">        routeUpdate = new RouteUpdate(RouteUpdate.Type.DELETE, bgpRouteEntry);</span>
+<span class="fc" id="L178">        return routeUpdate;</span>
+    }
+
+    /**
+     * Finds the best route entry among all BGP Sessions.
+     *
+     * @param prefix the prefix of the route
+     * @return the best route if found, otherwise null
+     */
+    private BgpRouteEntry findBestBgpRoute(IpPrefix prefix) {
+<span class="fc" id="L188">        BgpRouteEntry bestRoute = null;</span>
+
+        // Iterate across all BGP Sessions and select the best route
+<span class="fc bfc" id="L191" title="All 2 branches covered.">        for (BgpSession bgpSession : bgpSessionManager.getBgpSessions()) {</span>
+<span class="fc" id="L192">            BgpRouteEntry route = bgpSession.findBgpRoute(prefix);</span>
+<span class="fc bfc" id="L193" title="All 2 branches covered.">            if (route == null) {</span>
+<span class="fc" id="L194">                continue;</span>
+            }
+<span class="pc bpc" id="L196" title="1 of 4 branches missed.">            if ((bestRoute == null) || route.isBetterThan(bestRoute)) {</span>
+<span class="fc" id="L197">                bestRoute = route;</span>
+            }
+<span class="fc" id="L199">        }</span>
+<span class="fc" id="L200">        return bestRoute;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

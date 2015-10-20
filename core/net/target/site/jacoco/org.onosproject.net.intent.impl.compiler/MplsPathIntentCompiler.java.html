@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MplsPathIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">MplsPathIntentCompiler.java</span></div><h1>MplsPathIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import com.google.common.collect.Sets;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.packet.EthType;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.VlanId;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.EthTypeCriterion;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.L2ModificationInstruction;
+import org.onosproject.net.intent.FlowRuleIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentCompiler;
+import org.onosproject.net.intent.IntentExtensionService;
+import org.onosproject.net.intent.MplsPathIntent;
+import org.onosproject.net.link.LinkStore;
+import org.onosproject.net.resource.link.DefaultLinkResourceRequest;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.onosproject.net.resource.link.LinkResourceRequest;
+import org.onosproject.net.resource.link.LinkResourceService;
+import org.onosproject.net.resource.link.MplsLabel;
+import org.onosproject.net.resource.link.MplsLabelResourceAllocation;
+import org.onosproject.net.resource.ResourceAllocation;
+import org.onosproject.net.resource.ResourceType;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+
+@Component(immediate = true)
+<span class="fc" id="L70">public class MplsPathIntentCompiler implements IntentCompiler&lt;MplsPathIntent&gt; {</span>
+
+<span class="fc" id="L72">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentExtensionService intentExtensionService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkResourceService resourceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkStore linkStore;
+
+    protected ApplicationId appId;
+
+    @Override
+    public List&lt;Intent&gt; compile(MplsPathIntent intent, List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+<span class="fc" id="L91">        LinkResourceAllocations allocations = assignMplsLabel(intent);</span>
+<span class="fc" id="L92">        List&lt;FlowRule&gt; rules = generateRules(intent, allocations);</span>
+
+<span class="fc" id="L94">        return Collections.singletonList(new FlowRuleIntent(appId, rules, intent.resources()));</span>
+    }
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L99">        appId = coreService.registerApplication(&quot;org.onosproject.net.intent&quot;);</span>
+<span class="fc" id="L100">        intentExtensionService.registerCompiler(MplsPathIntent.class, this);</span>
+<span class="fc" id="L101">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L105">        intentExtensionService.unregisterCompiler(MplsPathIntent.class);</span>
+<span class="fc" id="L106">    }</span>
+
+    private LinkResourceAllocations assignMplsLabel(MplsPathIntent intent) {
+        // TODO: do it better... Suggestions?
+<span class="fc" id="L110">        Set&lt;Link&gt; linkRequest = Sets.newHashSetWithExpectedSize(intent.path()</span>
+<span class="fc" id="L111">                .links().size() - 2);</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        for (int i = 1; i &lt;= intent.path().links().size() - 2; i++) {</span>
+<span class="nc" id="L113">            Link link = intent.path().links().get(i);</span>
+<span class="nc" id="L114">            linkRequest.add(link);</span>
+            // add the inverse link. I want that the label is reserved both for
+            // the direct and inverse link
+<span class="nc" id="L117">            linkRequest.add(linkStore.getLink(link.dst(), link.src()));</span>
+        }
+
+<span class="fc" id="L120">        LinkResourceRequest.Builder request = DefaultLinkResourceRequest</span>
+<span class="fc" id="L121">                .builder(intent.id(), linkRequest).addMplsRequest();</span>
+<span class="fc" id="L122">        LinkResourceAllocations reqMpls = resourceService</span>
+<span class="fc" id="L123">                .requestResources(request.build());</span>
+<span class="fc" id="L124">        return reqMpls;</span>
+    }
+
+    private MplsLabel getMplsLabel(LinkResourceAllocations allocations, Link link) {
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        for (ResourceAllocation allocation : allocations</span>
+<span class="fc" id="L129">                .getResourceAllocation(link)) {</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">            if (allocation.type() == ResourceType.MPLS_LABEL) {</span>
+<span class="fc" id="L131">                return ((MplsLabelResourceAllocation) allocation).mplsLabel();</span>
+
+            }
+<span class="fc" id="L134">        }</span>
+<span class="nc" id="L135">        log.warn(&quot;MPLS label was not assigned successfully&quot;);</span>
+<span class="nc" id="L136">        return null;</span>
+    }
+
+    private List&lt;FlowRule&gt; generateRules(MplsPathIntent intent,
+                                         LinkResourceAllocations allocations) {
+
+<span class="fc" id="L142">        Iterator&lt;Link&gt; links = intent.path().links().iterator();</span>
+<span class="fc" id="L143">        Link srcLink = links.next();</span>
+<span class="fc" id="L144">        ConnectPoint prev = srcLink.dst();</span>
+
+<span class="fc" id="L146">        Link link = links.next();</span>
+        // List of flow rules to be installed
+<span class="fc" id="L148">        List&lt;FlowRule&gt; rules = new LinkedList&lt;&gt;();</span>
+
+        // Ingress traffic
+        // Get the new MPLS label
+<span class="fc" id="L152">        MplsLabel mpls = getMplsLabel(allocations, link);</span>
+<span class="fc" id="L153">        checkNotNull(mpls);</span>
+<span class="fc" id="L154">        MplsLabel prevLabel = mpls;</span>
+<span class="fc" id="L155">        rules.add(ingressFlow(prev.port(), link, intent, mpls));</span>
+
+<span class="fc" id="L157">        prev = link.dst();</span>
+
+<span class="pc bpc" id="L159" title="1 of 2 branches missed.">        while (links.hasNext()) {</span>
+
+<span class="nc" id="L161">            link = links.next();</span>
+
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            if (links.hasNext()) {</span>
+                // Transit traffic
+                // Get the new MPLS label
+<span class="nc" id="L166">                mpls = getMplsLabel(allocations, link);</span>
+<span class="nc" id="L167">                checkNotNull(mpls);</span>
+<span class="nc" id="L168">                rules.add(transitFlow(prev.port(), link, intent,</span>
+                        prevLabel, mpls));
+<span class="nc" id="L170">                prevLabel = mpls;</span>
+
+            } else {
+                // Egress traffic
+<span class="nc" id="L174">                rules.add(egressFlow(prev.port(), link, intent,</span>
+                        prevLabel));
+            }
+
+<span class="nc" id="L178">            prev = link.dst();</span>
+        }
+<span class="fc" id="L180">        return rules;</span>
+    }
+
+    private FlowRule ingressFlow(PortNumber inPort, Link link,
+                                 MplsPathIntent intent, MplsLabel label) {
+
+<span class="fc" id="L186">        TrafficSelector.Builder ingressSelector = DefaultTrafficSelector</span>
+<span class="fc" id="L187">                .builder(intent.selector());</span>
+<span class="fc" id="L188">        TrafficTreatment.Builder treat = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L189">        ingressSelector.matchInPort(inPort);</span>
+
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">        if (intent.ingressLabel().isPresent()) {</span>
+<span class="fc" id="L192">            ingressSelector.matchEthType(Ethernet.MPLS_UNICAST)</span>
+<span class="fc" id="L193">                    .matchMplsLabel(intent.ingressLabel().get());</span>
+
+            // Swap the MPLS label
+<span class="fc" id="L196">            treat.setMpls(label.label());</span>
+        } else {
+            // Push and set the MPLS label
+<span class="nc" id="L199">            treat.pushMpls().setMpls(label.label());</span>
+        }
+        // Add the output action
+<span class="fc" id="L202">        treat.setOutput(link.src().port());</span>
+
+<span class="fc" id="L204">        return createFlowRule(intent, link.src().deviceId(), ingressSelector.build(), treat.build());</span>
+    }
+
+    private FlowRule transitFlow(PortNumber inPort, Link link,
+                                          MplsPathIntent intent,
+                                          MplsLabel prevLabel,
+                                          MplsLabel outLabel) {
+
+        // Ignore the ingress Traffic Selector and use only the MPLS label
+        // assigned in the previous link
+<span class="nc" id="L214">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L215">        selector.matchInPort(inPort).matchEthType(Ethernet.MPLS_UNICAST)</span>
+<span class="nc" id="L216">                .matchMplsLabel(prevLabel.label());</span>
+<span class="nc" id="L217">        TrafficTreatment.Builder treat = DefaultTrafficTreatment.builder();</span>
+
+        // Set the new label only if the label on the packet is
+        // different
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if (!prevLabel.equals(outLabel)) {</span>
+<span class="nc" id="L222">            treat.setMpls(outLabel.label());</span>
+        }
+
+<span class="nc" id="L225">        treat.setOutput(link.src().port());</span>
+<span class="nc" id="L226">        return createFlowRule(intent, link.src().deviceId(), selector.build(), treat.build());</span>
+    }
+
+    private FlowRule egressFlow(PortNumber inPort, Link link,
+                                         MplsPathIntent intent,
+                                         MplsLabel prevLabel) {
+        // egress point: either set the egress MPLS label or pop the
+        // MPLS label based on the intent annotations
+
+<span class="nc" id="L235">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L236">        selector.matchInPort(inPort).matchEthType(Ethernet.MPLS_UNICAST)</span>
+<span class="nc" id="L237">                .matchMplsLabel(prevLabel.label());</span>
+
+        // apply the intent's treatments
+<span class="nc" id="L240">        TrafficTreatment.Builder treat = DefaultTrafficTreatment.builder(intent</span>
+<span class="nc" id="L241">                .treatment());</span>
+
+        // check if the treatement is popVlan or setVlan (rewrite),
+        // than selector needs to match any VlanId
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        for (Instruction instruct : intent.treatment().allInstructions()) {</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">            if (instruct instanceof L2ModificationInstruction) {</span>
+<span class="nc" id="L247">                L2ModificationInstruction l2Mod = (L2ModificationInstruction) instruct;</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">                if (l2Mod.subtype() == L2ModificationInstruction.L2SubType.VLAN_PUSH) {</span>
+<span class="nc" id="L249">                    break;</span>
+                }
+<span class="nc bnc" id="L251" title="All 2 branches missed.">                if (l2Mod.subtype() == L2ModificationInstruction.L2SubType.VLAN_POP ||</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">                        l2Mod.subtype() == L2ModificationInstruction.L2SubType.VLAN_ID) {</span>
+<span class="nc" id="L253">                    selector.matchVlanId(VlanId.ANY);</span>
+                }
+            }
+<span class="nc" id="L256">        }</span>
+
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        if (intent.egressLabel().isPresent()) {</span>
+<span class="nc" id="L259">            treat.setMpls(intent.egressLabel().get());</span>
+        } else {
+<span class="nc" id="L261">                treat.popMpls(outputEthType(intent.selector()));</span>
+        }
+<span class="nc" id="L263">        treat.setOutput(link.src().port());</span>
+<span class="nc" id="L264">        return createFlowRule(intent, link.src().deviceId(),</span>
+<span class="nc" id="L265">                selector.build(), treat.build());</span>
+    }
+
+    protected FlowRule createFlowRule(MplsPathIntent intent, DeviceId deviceId,
+                                      TrafficSelector selector, TrafficTreatment treat) {
+<span class="fc" id="L270">        return DefaultFlowRule.builder()</span>
+<span class="fc" id="L271">                .forDevice(deviceId)</span>
+<span class="fc" id="L272">                .withSelector(selector)</span>
+<span class="fc" id="L273">                .withTreatment(treat)</span>
+<span class="fc" id="L274">                .withPriority(intent.priority())</span>
+<span class="fc" id="L275">                .fromApp(appId)</span>
+<span class="fc" id="L276">                .makePermanent()</span>
+<span class="fc" id="L277">                .build();</span>
+    }
+
+    // if the ingress ethertype is defined, the egress traffic
+    // will be use that value, otherwise the IPv4 ethertype is used.
+    private EthType outputEthType(TrafficSelector selector) {
+<span class="nc" id="L283">        Criterion c = selector.getCriterion(Criterion.Type.ETH_TYPE);</span>
+<span class="nc bnc" id="L284" title="All 4 branches missed.">        if (c != null &amp;&amp; c instanceof EthTypeCriterion) {</span>
+<span class="nc" id="L285">            EthTypeCriterion ethertype = (EthTypeCriterion) c;</span>
+<span class="nc" id="L286">            return ethertype.ethType();</span>
+        } else {
+<span class="nc" id="L288">            return EthType.EtherType.IPV4.ethType();</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

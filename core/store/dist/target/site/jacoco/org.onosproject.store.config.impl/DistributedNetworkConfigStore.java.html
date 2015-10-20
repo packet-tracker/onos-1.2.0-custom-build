@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedNetworkConfigStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.config.impl</a> &gt; <span class="el_source">DistributedNetworkConfigStore.java</span></div><h1>DistributedNetworkConfigStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.config.impl;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ShortNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.Tools;
+import org.onosproject.net.config.Config;
+import org.onosproject.net.config.ConfigApplyDelegate;
+import org.onosproject.net.config.ConfigFactory;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigStore;
+import org.onosproject.net.config.NetworkConfigStoreDelegate;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.ConsistentMapException;
+import org.onosproject.store.service.MapEvent;
+import org.onosproject.store.service.MapEventListener;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+import static org.onosproject.net.config.NetworkConfigEvent.Type.*;
+
+/**
+ * Implementation of a distributed network configuration store.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L70">public class DistributedNetworkConfigStore</span>
+        extends AbstractStore&lt;NetworkConfigEvent, NetworkConfigStoreDelegate&gt;
+        implements NetworkConfigStore {
+
+    private static final int MAX_BACKOFF = 10;
+
+<span class="fc" id="L76">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    private ConsistentMap&lt;ConfigKey, JsonNode&gt; configs;
+
+<span class="fc" id="L83">    private final Map&lt;String, ConfigFactory&gt; factoriesByConfig = Maps.newConcurrentMap();</span>
+<span class="fc" id="L84">    private final ObjectMapper mapper = new ObjectMapper();</span>
+<span class="fc" id="L85">    private final ConfigApplyDelegate applyDelegate = new InternalApplyDelegate();</span>
+<span class="fc" id="L86">    private final MapEventListener&lt;ConfigKey, JsonNode&gt; listener = new InternalMapListener();</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L90">        KryoNamespace.Builder kryoBuilder = new KryoNamespace.Builder()</span>
+<span class="fc" id="L91">                .register(KryoNamespaces.API)</span>
+<span class="fc" id="L92">                .register(ConfigKey.class, ObjectNode.class, ArrayNode.class,</span>
+                          JsonNodeFactory.class, LinkedHashMap.class,
+                          TextNode.class, BooleanNode.class,
+                          LongNode.class, DoubleNode.class, ShortNode.class, IntNode.class);
+
+<span class="fc" id="L97">        configs = storageService.&lt;ConfigKey, JsonNode&gt;consistentMapBuilder()</span>
+<span class="fc" id="L98">                .withSerializer(Serializer.using(kryoBuilder.build()))</span>
+<span class="fc" id="L99">                .withName(&quot;onos-network-configs&quot;)</span>
+<span class="fc" id="L100">                .withRelaxedReadConsistency()</span>
+<span class="fc" id="L101">                .build();</span>
+<span class="fc" id="L102">        configs.addListener(listener);</span>
+<span class="fc" id="L103">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L104">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L108">        configs.removeListener(listener);</span>
+<span class="fc" id="L109">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L110">    }</span>
+
+    @Override
+    public void addConfigFactory(ConfigFactory configFactory) {
+<span class="fc" id="L114">        factoriesByConfig.put(configFactory.configClass().getName(), configFactory);</span>
+<span class="fc" id="L115">        notifyDelegate(new NetworkConfigEvent(CONFIG_REGISTERED, configFactory.configKey(),</span>
+<span class="fc" id="L116">                                              configFactory.configClass()));</span>
+<span class="fc" id="L117">    }</span>
+
+    @Override
+    public void removeConfigFactory(ConfigFactory configFactory) {
+<span class="fc" id="L121">        factoriesByConfig.remove(configFactory.configClass().getName());</span>
+<span class="fc" id="L122">        notifyDelegate(new NetworkConfigEvent(CONFIG_UNREGISTERED, configFactory.configKey(),</span>
+<span class="fc" id="L123">                                              configFactory.configClass()));</span>
+<span class="fc" id="L124">    }</span>
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;S, C extends Config&lt;S&gt;&gt; ConfigFactory&lt;S, C&gt; getConfigFactory(Class&lt;C&gt; configClass) {
+<span class="fc" id="L129">        return (ConfigFactory&lt;S, C&gt;) factoriesByConfig.get(configClass.getName());</span>
+    }
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;S&gt; Set&lt;S&gt; getSubjects(Class&lt;S&gt; subjectClass) {
+<span class="fc" id="L135">        ImmutableSet.Builder&lt;S&gt; builder = ImmutableSet.builder();</span>
+<span class="fc" id="L136">        configs.keySet().forEach(k -&gt; {</span>
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">            if (subjectClass.isInstance(k.subject)) {</span>
+<span class="fc" id="L138">                builder.add((S) k.subject);</span>
+            }
+<span class="fc" id="L140">        });</span>
+<span class="fc" id="L141">        return builder.build();</span>
+    }
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;S, C extends Config&lt;S&gt;&gt; Set&lt;S&gt; getSubjects(Class&lt;S&gt; subjectClass, Class&lt;C&gt; configClass) {
+<span class="fc" id="L147">        ImmutableSet.Builder&lt;S&gt; builder = ImmutableSet.builder();</span>
+<span class="fc" id="L148">        String cName = configClass.getName();</span>
+<span class="fc" id="L149">        configs.keySet().forEach(k -&gt; {</span>
+<span class="pc bpc" id="L150" title="2 of 4 branches missed.">            if (subjectClass.isInstance(k.subject) &amp;&amp; cName.equals(k.configClass)) {</span>
+<span class="fc" id="L151">                builder.add((S) k.subject);</span>
+            }
+<span class="fc" id="L153">        });</span>
+<span class="fc" id="L154">        return builder.build();</span>
+    }
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;S&gt; Set&lt;Class&lt;? extends Config&lt;S&gt;&gt;&gt; getConfigClasses(S subject) {
+<span class="fc" id="L160">        ImmutableSet.Builder&lt;Class&lt;? extends Config&lt;S&gt;&gt;&gt; builder = ImmutableSet.builder();</span>
+<span class="fc" id="L161">        configs.keySet().forEach(k -&gt; {</span>
+<span class="pc bpc" id="L162" title="2 of 4 branches missed.">            if (Objects.equals(subject, k.subject) &amp;&amp; delegate != null) {</span>
+<span class="fc" id="L163">                builder.add(factoriesByConfig.get(k.configClass).configClass());</span>
+            }
+<span class="fc" id="L165">        });</span>
+<span class="fc" id="L166">        return builder.build();</span>
+    }
+
+    @Override
+    public &lt;S, T extends Config&lt;S&gt;&gt; T getConfig(S subject, Class&lt;T&gt; configClass) {
+        // TODO: need to identify and address the root cause for timeouts.
+<span class="fc" id="L172">        Versioned&lt;JsonNode&gt; json = Tools.retryable(configs::get, ConsistentMapException.class, 1, MAX_BACKOFF)</span>
+<span class="fc" id="L173">                .apply(key(subject, configClass));</span>
+<span class="fc bfc" id="L174" title="All 2 branches covered.">        return json != null ? createConfig(subject, configClass, json.value()) : null;</span>
+    }
+
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; C createConfig(S subject, Class&lt;C&gt; configClass) {
+<span class="fc" id="L180">        ConfigFactory&lt;S, C&gt; factory = getConfigFactory(configClass);</span>
+<span class="fc" id="L181">        Versioned&lt;JsonNode&gt; json = configs.computeIfAbsent(key(subject, configClass),</span>
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">                                                             k -&gt; factory.isList() ?</span>
+<span class="pc" id="L183">                                                                     mapper.createArrayNode() :</span>
+<span class="fc" id="L184">                                                                     mapper.createObjectNode());</span>
+<span class="fc" id="L185">        return createConfig(subject, configClass, json.value());</span>
+    }
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; C applyConfig(S subject, Class&lt;C&gt; configClass, JsonNode json) {
+<span class="fc" id="L190">        return createConfig(subject, configClass,</span>
+<span class="fc" id="L191">                            configs.putAndGet(key(subject, configClass), json).value());</span>
+    }
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; void clearConfig(S subject, Class&lt;C&gt; configClass) {
+<span class="fc" id="L196">        configs.remove(key(subject, configClass));</span>
+<span class="fc" id="L197">    }</span>
+
+    /**
+     * Produces a config from the specified subject, config class and raw JSON.
+     *
+     * @param subject     config subject
+     * @param configClass config class
+     * @param json        raw JSON data
+     * @return config object or null of no factory found or if the specified
+     * JSON is null
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private &lt;S, C extends Config&lt;S&gt;&gt; C createConfig(S subject, Class&lt;C&gt; configClass,
+                                                    JsonNode json) {
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        if (json != null) {</span>
+<span class="fc" id="L212">            ConfigFactory&lt;S, C&gt; factory = factoriesByConfig.get(configClass.getName());</span>
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">            if (factory != null) {</span>
+<span class="fc" id="L214">                C config = factory.createConfig();</span>
+<span class="fc" id="L215">                config.init(subject, factory.configKey(), json, mapper, applyDelegate);</span>
+<span class="fc" id="L216">                return config;</span>
+            }
+        }
+<span class="fc" id="L219">        return null;</span>
+    }
+
+
+    // Auxiliary delegate to receive notifications about changes applied to
+    // the network configuration - by the apps.
+<span class="fc" id="L225">    private class InternalApplyDelegate implements ConfigApplyDelegate {</span>
+        @Override
+        public void onApply(Config config) {
+<span class="nc" id="L228">            configs.put(key(config.subject(), config.getClass()), config.node());</span>
+<span class="nc" id="L229">        }</span>
+    }
+
+    // Produces a key for uniquely tracking a subject config.
+    private static ConfigKey key(Object subject, Class&lt;?&gt; configClass) {
+<span class="fc" id="L234">        return new ConfigKey(subject, configClass);</span>
+    }
+
+    // Auxiliary key to track subject configurations.
+    private static final class ConfigKey {
+        final Object subject;
+        final String configClass;
+
+<span class="fc" id="L242">        private ConfigKey(Object subject, Class&lt;?&gt; configClass) {</span>
+<span class="fc" id="L243">            this.subject = subject;</span>
+<span class="fc" id="L244">            this.configClass = configClass.getName();</span>
+<span class="fc" id="L245">        }</span>
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L249">            return Objects.hash(subject, configClass);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="pc bpc" id="L254" title="1 of 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L255">                return true;</span>
+            }
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">            if (obj instanceof ConfigKey) {</span>
+<span class="fc" id="L258">                final ConfigKey other = (ConfigKey) obj;</span>
+<span class="pc bpc" id="L259" title="1 of 2 branches missed.">                return Objects.equals(this.subject, other.subject)</span>
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">                        &amp;&amp; Objects.equals(this.configClass, other.configClass);</span>
+            }
+<span class="nc" id="L262">            return false;</span>
+        }
+    }
+
+<span class="fc" id="L266">    private class InternalMapListener implements MapEventListener&lt;ConfigKey, JsonNode&gt; {</span>
+        @Override
+        public void event(MapEvent&lt;ConfigKey, JsonNode&gt; event) {
+            NetworkConfigEvent.Type type;
+<span class="pc bfc" id="L270" title="All 3 branches covered.">            switch (event.type()) {</span>
+                case INSERT:
+<span class="fc" id="L272">                    type = CONFIG_ADDED;</span>
+<span class="fc" id="L273">                    break;</span>
+                case UPDATE:
+<span class="fc" id="L275">                    type = CONFIG_UPDATED;</span>
+<span class="fc" id="L276">                    break;</span>
+                case REMOVE:
+                default:
+<span class="fc" id="L279">                    type = CONFIG_REMOVED;</span>
+                    break;
+            }
+<span class="fc" id="L282">            ConfigFactory factory = factoriesByConfig.get(event.key().configClass);</span>
+<span class="pc bpc" id="L283" title="1 of 2 branches missed.">            if (factory != null) {</span>
+<span class="fc" id="L284">                notifyDelegate(new NetworkConfigEvent(type, event.key().subject,</span>
+<span class="fc" id="L285">                                                      factory.configClass()));</span>
+            }
+<span class="fc" id="L287">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

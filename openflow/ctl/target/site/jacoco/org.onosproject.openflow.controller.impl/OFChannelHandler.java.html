@@ -1,0 +1,1322 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OFChannelHandler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-ctl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.openflow.controller.impl</a> &gt; <span class="el_source">OFChannelHandler.java</span></div><h1>OFChannelHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+//CHECKSTYLE:OFF
+package org.onosproject.openflow.controller.impl;
+
+import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.RejectedExecutionException;
+
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.jboss.netty.channel.ChannelStateEvent;
+import org.jboss.netty.channel.ExceptionEvent;
+import org.jboss.netty.channel.MessageEvent;
+import org.jboss.netty.handler.timeout.IdleStateAwareChannelHandler;
+import org.jboss.netty.handler.timeout.IdleStateEvent;
+import org.jboss.netty.handler.timeout.ReadTimeoutException;
+import org.onosproject.openflow.controller.driver.OpenFlowSwitchDriver;
+import org.onosproject.openflow.controller.driver.SwitchStateException;
+import org.projectfloodlight.openflow.exceptions.OFParseError;
+import org.projectfloodlight.openflow.protocol.OFAsyncGetReply;
+import org.projectfloodlight.openflow.protocol.OFBadRequestCode;
+import org.projectfloodlight.openflow.protocol.OFBarrierReply;
+import org.projectfloodlight.openflow.protocol.OFBarrierRequest;
+import org.projectfloodlight.openflow.protocol.OFDescStatsReply;
+import org.projectfloodlight.openflow.protocol.OFDescStatsRequest;
+import org.projectfloodlight.openflow.protocol.OFEchoReply;
+import org.projectfloodlight.openflow.protocol.OFEchoRequest;
+import org.projectfloodlight.openflow.protocol.OFErrorMsg;
+import org.projectfloodlight.openflow.protocol.OFErrorType;
+import org.projectfloodlight.openflow.protocol.OFExperimenter;
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFFeaturesReply;
+import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
+import org.projectfloodlight.openflow.protocol.OFFlowRemoved;
+import org.projectfloodlight.openflow.protocol.OFGetConfigReply;
+import org.projectfloodlight.openflow.protocol.OFGetConfigRequest;
+import org.projectfloodlight.openflow.protocol.OFHello;
+import org.projectfloodlight.openflow.protocol.OFHelloElem;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPortDescStatsReply;
+import org.projectfloodlight.openflow.protocol.OFPortDescStatsRequest;
+import org.projectfloodlight.openflow.protocol.OFPortStatus;
+import org.projectfloodlight.openflow.protocol.OFQueueGetConfigReply;
+import org.projectfloodlight.openflow.protocol.OFRoleReply;
+import org.projectfloodlight.openflow.protocol.OFSetConfig;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsReplyFlags;
+import org.projectfloodlight.openflow.protocol.OFStatsType;
+import org.projectfloodlight.openflow.protocol.OFType;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.errormsg.OFBadRequestErrorMsg;
+import org.projectfloodlight.openflow.protocol.errormsg.OFFlowModFailedErrorMsg;
+import org.projectfloodlight.openflow.types.U32;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Channel handler deals with the switch connection and dispatches
+ * switch messages to the appropriate locations.
+ */
+class OFChannelHandler extends IdleStateAwareChannelHandler {
+<span class="nc" id="L82">    private static final Logger log = LoggerFactory.getLogger(OFChannelHandler.class);</span>
+
+    private static final String RESET_BY_PEER = &quot;Connection reset by peer&quot;;
+    private static final String BROKEN_PIPE = &quot;Broken pipe&quot;;
+
+    private final Controller controller;
+    private OpenFlowSwitchDriver sw;
+    private long thisdpid; // channelHandler cached value of connected switch id
+    private Channel channel;
+    // State needs to be volatile because the HandshakeTimeoutHandler
+    // needs to check if the handshake is complete
+    private volatile ChannelState state;
+
+    // When a switch with a duplicate dpid is found (i.e we already have a
+    // connected switch with the same dpid), the new switch is immediately
+    // disconnected. At that point netty callsback channelDisconnected() which
+    // proceeds to cleaup switch state - we need to ensure that it does not cleanup
+    // switch state for the older (still connected) switch
+    private volatile Boolean duplicateDpidFound;
+
+    // Temporary storage for switch-features and port-description
+    private OFFeaturesReply featuresReply;
+    private List&lt;OFPortDescStatsReply&gt; portDescReplies;
+    //private OFPortDescStatsReply portDescReply;
+    // a concurrent ArrayList to temporarily store port status messages
+    // before we are ready to deal with them
+    private final CopyOnWriteArrayList&lt;OFPortStatus&gt; pendingPortStatusMsg;
+
+    //Indicates the openflow version used by this switch
+    protected OFVersion ofVersion;
+    protected OFFactory factory13;
+    protected OFFactory factory10;
+
+    /** transaction Ids to use during handshake. Since only one thread
+     * calls into an OFChannelHandler instance, we don't need atomic.
+     * We will count down
+     */
+<span class="nc" id="L119">    private int handshakeTransactionIds = -1;</span>
+
+    /**
+     * Create a new unconnected OFChannelHandler.
+     * @param controller parent controller
+     */
+<span class="nc" id="L125">    OFChannelHandler(Controller controller) {</span>
+<span class="nc" id="L126">        this.controller = controller;</span>
+<span class="nc" id="L127">        this.state = ChannelState.INIT;</span>
+<span class="nc" id="L128">        this.pendingPortStatusMsg = new CopyOnWriteArrayList&lt;OFPortStatus&gt;();</span>
+<span class="nc" id="L129">        this.portDescReplies = new ArrayList&lt;OFPortDescStatsReply&gt;();</span>
+<span class="nc" id="L130">        factory13 = controller.getOFMessageFactory13();</span>
+<span class="nc" id="L131">        factory10 = controller.getOFMessageFactory10();</span>
+<span class="nc" id="L132">        duplicateDpidFound = Boolean.FALSE;</span>
+<span class="nc" id="L133">    }</span>
+
+
+
+    // XXX S consider if necessary
+    public void disconnectSwitch() {
+<span class="nc" id="L139">        sw.disconnectSwitch();</span>
+<span class="nc" id="L140">    }</span>
+
+
+
+    //*************************
+    //  Channel State Machine
+    //*************************
+
+    /**
+     * The state machine for handling the switch/channel state. All state
+     * transitions should happen from within the state machine (and not from other
+     * parts of the code)
+     */
+<span class="nc" id="L153">    enum ChannelState {</span>
+        /**
+         * Initial state before channel is connected.
+         */
+<span class="nc" id="L157">        INIT(false) {</span>
+            @Override
+            void processOFMessage(OFChannelHandler h, OFMessage m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L161">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L162">            }</span>
+
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m)
+                    throws IOException {
+                // need to implement since its abstract but it will never
+                // be called
+<span class="nc" id="L169">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException {
+<span class="nc" id="L174">                unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L175">            }</span>
+        },
+
+        /**
+         * We send a OF 1.3 HELLO to the switch and wait for a Hello from the switch.
+         * Once we receive the reply, we decide on OF 1.3 or 1.0 switch - no other
+         * protocol version is accepted.
+         * We send an OFFeaturesRequest depending on the protocol version selected
+         * Next state is WAIT_FEATURES_REPLY
+         */
+<span class="nc" id="L185">        WAIT_HELLO(false) {</span>
+            @Override
+            void processOFHello(OFChannelHandler h, OFHello m)
+                    throws IOException {
+                // TODO We could check for the optional bitmap, but for now
+                // we are just checking the version number.
+<span class="nc bnc" id="L191" title="All 2 branches missed.">                if (m.getVersion().getWireVersion() &gt;= OFVersion.OF_13.getWireVersion()) {</span>
+<span class="nc" id="L192">                    log.debug(&quot;Received {} Hello from {} - switching to OF &quot;</span>
+<span class="nc" id="L193">                            + &quot;version 1.3&quot;, m.getVersion(),</span>
+<span class="nc" id="L194">                            h.channel.getRemoteAddress());</span>
+<span class="nc" id="L195">                    h.sendHandshakeHelloMessage();</span>
+<span class="nc" id="L196">                    h.ofVersion = OFVersion.OF_13;</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                } else if (m.getVersion().getWireVersion() &gt;= OFVersion.OF_10.getWireVersion()) {</span>
+<span class="nc" id="L198">                    log.debug(&quot;Received {} Hello from {} - switching to OF &quot;</span>
+<span class="nc" id="L199">                            + &quot;version 1.0&quot;, m.getVersion(),</span>
+<span class="nc" id="L200">                            h.channel.getRemoteAddress());</span>
+<span class="nc" id="L201">                    OFHello hi =</span>
+<span class="nc" id="L202">                            h.factory10.buildHello()</span>
+<span class="nc" id="L203">                                    .setXid(h.handshakeTransactionIds--)</span>
+<span class="nc" id="L204">                                    .build();</span>
+<span class="nc" id="L205">                    h.channel.write(Collections.singletonList(hi));</span>
+<span class="nc" id="L206">                    h.ofVersion = OFVersion.OF_10;</span>
+<span class="nc" id="L207">                } else {</span>
+<span class="nc" id="L208">                    log.error(&quot;Received Hello of version {} from switch at {}. &quot;</span>
+                            + &quot;This controller works with OF1.0 and OF1.3 &quot;
+                            + &quot;switches. Disconnecting switch ...&quot;,
+<span class="nc" id="L211">                            m.getVersion(), h.channel.getRemoteAddress());</span>
+<span class="nc" id="L212">                    h.channel.disconnect();</span>
+<span class="nc" id="L213">                    return;</span>
+                }
+<span class="nc" id="L215">                h.sendHandshakeFeaturesRequestMessage();</span>
+<span class="nc" id="L216">                h.setState(WAIT_FEATURES_REPLY);</span>
+<span class="nc" id="L217">            }</span>
+            @Override
+            void processOFFeaturesReply(OFChannelHandler h, OFFeaturesReply  m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L221">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L222">            }</span>
+            @Override
+            void processOFStatisticsReply(OFChannelHandler h,
+                    OFStatsReply  m)
+                            throws IOException, SwitchStateException {
+<span class="nc" id="L227">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L228">            }</span>
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m) {
+<span class="nc" id="L231">                logErrorDisconnect(h, m);</span>
+<span class="nc" id="L232">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException {
+<span class="nc" id="L237">                unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L238">            }</span>
+        },
+
+
+        /**
+         * We are waiting for a features reply message. Once we receive it, the
+         * behavior depends on whether this is a 1.0 or 1.3 switch. For 1.0,
+         * we send a SetConfig request, barrier, and GetConfig request and the
+         * next state is WAIT_CONFIG_REPLY. For 1.3, we send a Port description
+         * request and the next state is WAIT_PORT_DESC_REPLY.
+         */
+<span class="nc" id="L249">        WAIT_FEATURES_REPLY(false) {</span>
+            @Override
+            void processOFFeaturesReply(OFChannelHandler h, OFFeaturesReply  m)
+                    throws IOException {
+<span class="nc" id="L253">                h.thisdpid = m.getDatapathId().getLong();</span>
+<span class="nc" id="L254">                log.debug(&quot;Received features reply for switch at {} with dpid {}&quot;,</span>
+<span class="nc" id="L255">                        h.getSwitchInfoString(), h.thisdpid);</span>
+
+<span class="nc" id="L257">                h.featuresReply = m; //temp store</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">                if (h.ofVersion == OFVersion.OF_10) {</span>
+<span class="nc" id="L259">                    h.sendHandshakeSetConfig();</span>
+<span class="nc" id="L260">                    h.setState(WAIT_CONFIG_REPLY);</span>
+                } else {
+                    //version is 1.3, must get switchport information
+<span class="nc" id="L263">                    h.sendHandshakeOFPortDescRequest();</span>
+<span class="nc" id="L264">                    h.setState(WAIT_PORT_DESC_REPLY);</span>
+                }
+<span class="nc" id="L266">            }</span>
+            @Override
+            void processOFStatisticsReply(OFChannelHandler h,
+                    OFStatsReply  m)
+                            throws IOException, SwitchStateException {
+<span class="nc" id="L271">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L272">            }</span>
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m) {
+<span class="nc" id="L275">                logErrorDisconnect(h, m);</span>
+<span class="nc" id="L276">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException {
+<span class="nc" id="L281">                h.pendingPortStatusMsg.add(m);</span>
+<span class="nc" id="L282">            }</span>
+        },
+
+        /**
+         * We are waiting for a description of the 1.3 switch ports.
+         * Once received, we send a SetConfig request
+         * Next State is WAIT_CONFIG_REPLY
+         */
+<span class="nc" id="L290">        WAIT_PORT_DESC_REPLY(false) {</span>
+
+            @Override
+            void processOFStatisticsReply(OFChannelHandler h, OFStatsReply m)
+                    throws SwitchStateException {
+                // Read port description
+<span class="nc bnc" id="L296" title="All 2 branches missed.">                if (m.getStatsType() != OFStatsType.PORT_DESC) {</span>
+<span class="nc" id="L297">                    log.warn(&quot;Expecting port description stats but received stats &quot;</span>
+<span class="nc" id="L298">                            + &quot;type {} from {}. Ignoring ...&quot;, m.getStatsType(),</span>
+<span class="nc" id="L299">                            h.channel.getRemoteAddress());</span>
+<span class="nc" id="L300">                    return;</span>
+                }
+<span class="nc bnc" id="L302" title="All 2 branches missed.">                if (m.getFlags().contains(OFStatsReplyFlags.REPLY_MORE)) {</span>
+<span class="nc" id="L303">                    log.debug(&quot;Stats reply indicates more stats from sw {} for &quot;</span>
+                            + &quot;port description&quot;,
+<span class="nc" id="L305">                            h.getSwitchInfoString());</span>
+<span class="nc" id="L306">                    h.portDescReplies.add((OFPortDescStatsReply)m);</span>
+<span class="nc" id="L307">                    return;</span>
+                }
+                else {
+<span class="nc" id="L310">                    h.portDescReplies.add((OFPortDescStatsReply)m);</span>
+                }
+                //h.portDescReply = (OFPortDescStatsReply) m; // temp store
+<span class="nc" id="L313">                log.info(&quot;Received port desc reply for switch at {}&quot;,</span>
+<span class="nc" id="L314">                        h.getSwitchInfoString());</span>
+                try {
+<span class="nc" id="L316">                    h.sendHandshakeSetConfig();</span>
+<span class="nc" id="L317">                } catch (IOException e) {</span>
+<span class="nc" id="L318">                    log.error(&quot;Unable to send setConfig after PortDescReply. &quot;</span>
+<span class="nc" id="L319">                            + &quot;Error: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L320">                }</span>
+<span class="nc" id="L321">                h.setState(WAIT_CONFIG_REPLY);</span>
+<span class="nc" id="L322">            }</span>
+
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L327">                logErrorDisconnect(h, m);</span>
+
+<span class="nc" id="L329">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L334">                h.pendingPortStatusMsg.add(m);</span>
+
+<span class="nc" id="L336">            }</span>
+        },
+
+        /**
+         * We are waiting for a config reply message. Once we receive it
+         * we send a DescriptionStatsRequest to the switch.
+         * Next state: WAIT_DESCRIPTION_STAT_REPLY
+         */
+<span class="nc" id="L344">        WAIT_CONFIG_REPLY(false) {</span>
+            @Override
+            void processOFGetConfigReply(OFChannelHandler h, OFGetConfigReply m)
+                    throws IOException {
+<span class="nc bnc" id="L348" title="All 2 branches missed.">                if (m.getMissSendLen() == 0xffff) {</span>
+<span class="nc" id="L349">                    log.trace(&quot;Config Reply from switch {} confirms &quot;</span>
+                            + &quot;miss length set to 0xffff&quot;,
+<span class="nc" id="L351">                            h.getSwitchInfoString());</span>
+                } else {
+                    // FIXME: we can't really deal with switches that don't send
+                    // full packets. Shouldn't we drop the connection here?
+<span class="nc" id="L355">                    log.warn(&quot;Config Reply from switch {} has&quot;</span>
+                            + &quot;miss length set to {}&quot;,
+<span class="nc" id="L357">                            h.getSwitchInfoString(),</span>
+<span class="nc" id="L358">                            m.getMissSendLen());</span>
+                }
+<span class="nc" id="L360">                h.sendHandshakeDescriptionStatsRequest();</span>
+<span class="nc" id="L361">                h.setState(WAIT_DESCRIPTION_STAT_REPLY);</span>
+<span class="nc" id="L362">            }</span>
+
+            @Override
+            void processOFBarrierReply(OFChannelHandler h, OFBarrierReply m) {
+                // do nothing;
+<span class="nc" id="L367">            }</span>
+
+            @Override
+            void processOFFeaturesReply(OFChannelHandler h, OFFeaturesReply  m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L372">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L373">            }</span>
+            @Override
+            void processOFStatisticsReply(OFChannelHandler h,
+                    OFStatsReply  m)
+                            throws IOException, SwitchStateException {
+<span class="nc" id="L378">                log.error(&quot;Received multipart(stats) message sub-type {}&quot;,</span>
+<span class="nc" id="L379">                        m.getStatsType());</span>
+<span class="nc" id="L380">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L381">            }</span>
+
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m) {
+<span class="nc" id="L385">                logErrorDisconnect(h, m);</span>
+<span class="nc" id="L386">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException {
+<span class="nc" id="L391">                h.pendingPortStatusMsg.add(m);</span>
+<span class="nc" id="L392">            }</span>
+        },
+
+
+        /**
+         * We are waiting for a OFDescriptionStat message from the switch.
+         * Once we receive any stat message we try to parse it. If it's not
+         * a description stats message we disconnect. If its the expected
+         * description stats message, we:
+         *    - use the switch driver to bind the switch and get an IOFSwitch instance
+         *    - setup the IOFSwitch instance
+         *    - add switch controller and send the initial role
+         *      request to the switch.
+         * Next state: WAIT_INITIAL_ROLE
+         *      In the typical case, where switches support role request messages
+         *      the next state is where we expect the role reply message.
+         *      In the special case that where the switch does not support any kind
+         *      of role request messages, we don't send a role message, but we do
+         *      request mastership from the registry service. This controller
+         *      should become master once we hear back from the registry service.
+         * All following states will have a h.sw instance!
+         */
+<span class="nc" id="L414">        WAIT_DESCRIPTION_STAT_REPLY(false) {</span>
+            @Override
+            void processOFStatisticsReply(OFChannelHandler h, OFStatsReply m)
+                    throws SwitchStateException {
+                // Read description, if it has been updated
+<span class="nc bnc" id="L419" title="All 2 branches missed.">                if (m.getStatsType() != OFStatsType.DESC) {</span>
+<span class="nc" id="L420">                    log.warn(&quot;Expecting Description stats but received stats &quot;</span>
+<span class="nc" id="L421">                            + &quot;type {} from {}. Ignoring ...&quot;, m.getStatsType(),</span>
+<span class="nc" id="L422">                            h.channel.getRemoteAddress());</span>
+<span class="nc" id="L423">                    return;</span>
+                }
+<span class="nc" id="L425">                OFDescStatsReply drep = (OFDescStatsReply) m;</span>
+<span class="nc" id="L426">                log.info(&quot;Received switch description reply {} from switch at {}&quot;,</span>
+<span class="nc" id="L427">                         drep, h.channel.getRemoteAddress());</span>
+                // Here is where we differentiate between different kinds of switches
+<span class="nc" id="L429">                h.sw = h.controller.getOFSwitchInstance(h.thisdpid, drep, h.ofVersion);</span>
+
+<span class="nc" id="L431">                h.sw.setOFVersion(h.ofVersion);</span>
+<span class="nc" id="L432">                h.sw.setFeaturesReply(h.featuresReply);</span>
+                //h.sw.setPortDescReply(h.portDescReply);
+<span class="nc" id="L434">                h.sw.setPortDescReplies(h.portDescReplies);</span>
+<span class="nc" id="L435">                h.sw.setConnected(true);</span>
+<span class="nc" id="L436">                h.sw.setChannel(h.channel);</span>
+//                boolean success = h.sw.connectSwitch();
+//
+//                if (!success) {
+//                    disconnectDuplicate(h);
+//                    return;
+//                }
+                // set switch information
+
+
+
+<span class="nc" id="L447">                log.debug(&quot;Switch {} bound to class {}, description {}&quot;,</span>
+<span class="nc" id="L448">                        new Object[] {h.sw, h.sw.getClass(), drep });</span>
+                //Put switch in EQUAL mode until we hear back from the global registry
+                //log.debug(&quot;Setting new switch {} to EQUAL and sending Role request&quot;,
+                //        h.sw.getStringId());
+                //h.sw.activateEqualSwitch();
+                //h.setSwitchRole(RoleState.EQUAL);
+
+<span class="nc" id="L455">                h.sw.startDriverHandshake();</span>
+<span class="nc bnc" id="L456" title="All 2 branches missed.">                if (h.sw.isDriverHandshakeComplete()) {</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">                    if (!h.sw.connectSwitch()) {</span>
+<span class="nc" id="L458">                        disconnectDuplicate(h);</span>
+                    }
+<span class="nc" id="L460">                    handlePendingPortStatusMessages(h);</span>
+<span class="nc" id="L461">                    h.setState(ACTIVE);</span>
+                } else {
+<span class="nc" id="L463">                    h.setState(WAIT_SWITCH_DRIVER_SUB_HANDSHAKE);</span>
+                }
+
+<span class="nc" id="L466">            }</span>
+
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m) {
+<span class="nc" id="L470">                logErrorDisconnect(h, m);</span>
+<span class="nc" id="L471">            }</span>
+
+            @Override
+            void processOFFeaturesReply(OFChannelHandler h, OFFeaturesReply  m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L476">                illegalMessageReceived(h, m);</span>
+<span class="nc" id="L477">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException {
+<span class="nc" id="L482">                h.pendingPortStatusMsg.add(m);</span>
+<span class="nc" id="L483">            }</span>
+        },
+
+
+        /**
+         * We are waiting for the respective switch driver to complete its
+         * configuration. Notice that we do not consider this to be part of the main
+         * switch-controller handshake. But we do consider it as a step that comes
+         * before we declare the switch as available to the controller.
+         * Next State: depends on the role of this controller for this switch - either
+         * MASTER or EQUAL.
+         */
+<span class="nc" id="L495">        WAIT_SWITCH_DRIVER_SUB_HANDSHAKE(true) {</span>
+
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m)
+                    throws IOException {
+                // will never be called. We override processOFMessage
+<span class="nc" id="L501">            }</span>
+
+
+
+            @Override
+            void processOFMessage(OFChannelHandler h, OFMessage m)
+                    throws IOException, SwitchStateException {
+
+<span class="nc bnc" id="L509" title="All 2 branches missed.">                if (h.sw.isDriverHandshakeComplete()) {</span>
+<span class="nc" id="L510">                    moveToActive(h);</span>
+<span class="nc" id="L511">                    h.state.processOFMessage(h, m);</span>
+<span class="nc" id="L512">                    return;</span>
+
+                }
+
+<span class="nc bnc" id="L516" title="All 2 branches missed.">                if (m.getType() == OFType.ECHO_REQUEST) {</span>
+<span class="nc" id="L517">                    processOFEchoRequest(h, (OFEchoRequest) m);</span>
+<span class="nc bnc" id="L518" title="All 2 branches missed.">                } else if (m.getType() == OFType.ECHO_REPLY) {</span>
+<span class="nc" id="L519">                    processOFEchoReply(h, (OFEchoReply) m);</span>
+<span class="nc bnc" id="L520" title="All 2 branches missed.">                } else if (m.getType() == OFType.ROLE_REPLY) {</span>
+<span class="nc" id="L521">                    h.sw.handleRole(m);</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">                } else if (m.getType() == OFType.ERROR) {</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">                    if (!h.sw.handleRoleError((OFErrorMsg)m)) {</span>
+<span class="nc" id="L524">                        h.sw.processDriverHandshakeMessage(m);</span>
+<span class="nc bnc" id="L525" title="All 2 branches missed.">                        if (h.sw.isDriverHandshakeComplete()) {</span>
+<span class="nc" id="L526">                            moveToActive(h);</span>
+                        }
+                    }
+                } else {
+<span class="nc bnc" id="L530" title="All 2 branches missed.">                    if (m.getType() == OFType.EXPERIMENTER &amp;&amp;</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">                            ((OFExperimenter) m).getExperimenter() ==</span>
+                            RoleManager.NICIRA_EXPERIMENTER) {
+<span class="nc" id="L533">                        h.sw.handleNiciraRole(m);</span>
+                    } else {
+<span class="nc" id="L535">                        h.sw.processDriverHandshakeMessage(m);</span>
+<span class="nc bnc" id="L536" title="All 2 branches missed.">                        if (h.sw.isDriverHandshakeComplete()) {</span>
+<span class="nc" id="L537">                            moveToActive(h);</span>
+                        }
+                    }
+                }
+<span class="nc" id="L541">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws IOException, SwitchStateException {
+<span class="nc" id="L546">                h.pendingPortStatusMsg.add(m);</span>
+<span class="nc" id="L547">            }</span>
+
+            private void moveToActive(OFChannelHandler h) {
+<span class="nc" id="L550">                boolean success = h.sw.connectSwitch();</span>
+<span class="nc" id="L551">                handlePendingPortStatusMessages(h);</span>
+<span class="nc" id="L552">                h.setState(ACTIVE);</span>
+<span class="nc bnc" id="L553" title="All 2 branches missed.">                if (!success) {</span>
+<span class="nc" id="L554">                    disconnectDuplicate(h);</span>
+                }
+<span class="nc" id="L556">            }</span>
+
+        },
+
+
+        /**
+         * This controller is in MASTER role for this switch. We enter this state
+         * after requesting and winning control from the global registry.
+         * The main handshake as well as the switch-driver sub-handshake
+         * is complete at this point.
+         * // XXX S reconsider below
+         * In the (near) future we may deterministically assign controllers to
+         * switches at startup.
+         * We only leave this state if the switch disconnects or
+         * if we send a role request for SLAVE /and/ receive the role reply for
+         * SLAVE.
+         */
+<span class="nc" id="L573">        ACTIVE(true) {</span>
+            @Override
+            void processOFError(OFChannelHandler h, OFErrorMsg m)
+                    throws IOException, SwitchStateException {
+                // if we get here, then the error message is for something else
+<span class="nc bnc" id="L578" title="All 2 branches missed.">                if (m.getErrType() == OFErrorType.BAD_REQUEST &amp;&amp;</span>
+<span class="nc bnc" id="L579" title="All 2 branches missed.">                        ((OFBadRequestErrorMsg) m).getCode() ==</span>
+                        OFBadRequestCode.EPERM) {
+                    // We are the master controller and the switch returned
+                    // a permission error. This is a likely indicator that
+                    // the switch thinks we are slave. Reassert our
+                    // role
+                    // FIXME: this could be really bad during role transitions
+                    // if two controllers are master (even if its only for
+                    // a brief period). We might need to see if these errors
+                    // persist before we reassert
+
+<span class="nc" id="L590">                    h.sw.reassertRole();</span>
+<span class="nc bnc" id="L591" title="All 2 branches missed.">                } else if (m.getErrType() == OFErrorType.FLOW_MOD_FAILED &amp;&amp;</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">                        ((OFFlowModFailedErrorMsg) m).getCode() ==</span>
+                        OFFlowModFailedCode.ALL_TABLES_FULL) {
+<span class="nc" id="L594">                    h.sw.setTableFull(true);</span>
+                } else {
+<span class="nc" id="L596">                    logError(h, m);</span>
+                }
+<span class="nc" id="L598">                h.dispatchMessage(m);</span>
+<span class="nc" id="L599">            }</span>
+
+            @Override
+            void processOFStatisticsReply(OFChannelHandler h,
+                    OFStatsReply m) {
+<span class="nc bnc" id="L604" title="All 2 branches missed.">                if (m.getStatsType().equals(OFStatsType.PORT_DESC)) {</span>
+<span class="nc" id="L605">                    h.sw.setPortDescReply((OFPortDescStatsReply) m);</span>
+                }
+<span class="nc" id="L607">                h.dispatchMessage(m);</span>
+<span class="nc" id="L608">            }</span>
+
+            @Override
+            void processOFExperimenter(OFChannelHandler h, OFExperimenter m)
+                    throws SwitchStateException {
+<span class="nc" id="L613">                h.sw.handleNiciraRole(m);</span>
+<span class="nc" id="L614">            }</span>
+
+            @Override
+            void processOFRoleReply(OFChannelHandler h, OFRoleReply m)
+                    throws SwitchStateException {
+<span class="nc" id="L619">                h.sw.handleRole(m);</span>
+<span class="nc" id="L620">            }</span>
+
+            @Override
+            void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                    throws SwitchStateException {
+<span class="nc" id="L625">                handlePortStatusMessage(h, m, true);</span>
+                //h.dispatchMessage(m);
+<span class="nc" id="L627">            }</span>
+
+            @Override
+            void processOFPacketIn(OFChannelHandler h, OFPacketIn m) {
+//                OFPacketOut out =
+//                        h.sw.factory().buildPacketOut()
+//                                .setXid(m.getXid())
+//                                .setBufferId(m.getBufferId()).build();
+//                h.sw.sendMsg(out);
+<span class="nc" id="L636">                h.dispatchMessage(m);</span>
+<span class="nc" id="L637">            }</span>
+
+            @Override
+            void processOFFlowRemoved(OFChannelHandler h,
+                    OFFlowRemoved m) {
+<span class="nc" id="L642">                h.dispatchMessage(m);</span>
+<span class="nc" id="L643">            }</span>
+
+            @Override
+            void processOFBarrierReply(OFChannelHandler h, OFBarrierReply m) {
+<span class="nc" id="L647">                h.dispatchMessage(m);</span>
+<span class="nc" id="L648">            }</span>
+
+            @Override
+            void processOFFeaturesReply(OFChannelHandler h, OFFeaturesReply  m) {
+<span class="nc" id="L652">                h.sw.setFeaturesReply(m);</span>
+<span class="nc" id="L653">                h.dispatchMessage(m);</span>
+<span class="nc" id="L654">            }</span>
+
+        };
+
+        private final boolean handshakeComplete;
+<span class="nc" id="L659">        ChannelState(boolean handshakeComplete) {</span>
+<span class="nc" id="L660">            this.handshakeComplete = handshakeComplete;</span>
+<span class="nc" id="L661">        }</span>
+
+        /**
+         * Is this a state in which the handshake has completed?
+         * @return true if the handshake is complete
+         */
+        public boolean isHandshakeComplete() {
+<span class="nc" id="L668">            return handshakeComplete;</span>
+        }
+
+        /**
+         * Get a string specifying the switch connection, state, and
+         * message received. To be used as message for SwitchStateException
+         * or log messages
+         * @param h The channel handler (to get switch information_
+         * @param m The OFMessage that has just been received
+         * @param details A string giving more details about the exact nature
+         * of the problem.
+         * @return display string
+         */
+        // needs to be protected because enum members are actually subclasses
+        protected String getSwitchStateMessage(OFChannelHandler h,
+                OFMessage m,
+                String details) {
+<span class="nc" id="L685">            return String.format(&quot;Switch: [%s], State: [%s], received: [%s]&quot;</span>
+                    + &quot;, details: %s&quot;,
+<span class="nc" id="L687">                    h.getSwitchInfoString(),</span>
+<span class="nc" id="L688">                    this.toString(),</span>
+<span class="nc" id="L689">                    m.getType().toString(),</span>
+                    details);
+        }
+
+        /**
+         * We have an OFMessage we didn't expect given the current state and
+         * we want to treat this as an error.
+         * We currently throw an exception that will terminate the connection
+         * However, we could be more forgiving
+         * @param h the channel handler that received the message
+         * @param m the message
+         * @throws SwitchStateException we always throw the exception
+         */
+        // needs to be protected because enum members are actually subclasses
+        protected void illegalMessageReceived(OFChannelHandler h, OFMessage m)
+                throws SwitchStateException {
+<span class="nc" id="L705">            String msg = getSwitchStateMessage(h, m,</span>
+                    &quot;Switch should never send this message in the current state&quot;);
+<span class="nc" id="L707">            throw new SwitchStateException(msg);</span>
+
+        }
+
+        /**
+         * We have an OFMessage we didn't expect given the current state and
+         * we want to ignore the message.
+         * @param h the channel handler the received the message
+         * @param m the message
+         */
+        protected void unhandledMessageReceived(OFChannelHandler h,
+                OFMessage m) {
+<span class="nc bnc" id="L719" title="All 2 branches missed.">            if (log.isDebugEnabled()) {</span>
+<span class="nc" id="L720">                String msg = getSwitchStateMessage(h, m,</span>
+                        &quot;Ignoring unexpected message&quot;);
+<span class="nc" id="L722">                log.debug(msg);</span>
+            }
+<span class="nc" id="L724">        }</span>
+
+        /**
+         * Log an OpenFlow error message from a switch.
+         * @param h The switch that sent the error
+         * @param error The error message
+         */
+        protected void logError(OFChannelHandler h, OFErrorMsg error) {
+<span class="nc" id="L732">            log.error(&quot;{} from switch {} in state {}&quot;,</span>
+                    new Object[] {
+                    error,
+<span class="nc" id="L735">                    h.getSwitchInfoString(),</span>
+<span class="nc" id="L736">                    this.toString()});</span>
+<span class="nc" id="L737">        }</span>
+
+        /**
+         * Log an OpenFlow error message from a switch and disconnect the
+         * channel.
+         *
+         * @param h the IO channel for this switch.
+         * @param error The error message
+         */
+        protected void logErrorDisconnect(OFChannelHandler h, OFErrorMsg error) {
+<span class="nc" id="L747">            logError(h, error);</span>
+<span class="nc" id="L748">            h.channel.disconnect();</span>
+<span class="nc" id="L749">        }</span>
+
+        /**
+         * log an error message for a duplicate dpid and disconnect this channel.
+         * @param h the IO channel for this switch.
+         */
+        protected void disconnectDuplicate(OFChannelHandler h) {
+<span class="nc" id="L756">            log.error(&quot;Duplicated dpid or incompleted cleanup - &quot;</span>
+<span class="nc" id="L757">                    + &quot;disconnecting channel {}&quot;, h.getSwitchInfoString());</span>
+<span class="nc" id="L758">            h.duplicateDpidFound = Boolean.TRUE;</span>
+<span class="nc" id="L759">            h.channel.disconnect();</span>
+<span class="nc" id="L760">        }</span>
+
+
+
+        /**
+         * Handles all pending port status messages before a switch is declared
+         * activated in MASTER or EQUAL role. Note that since this handling
+         * precedes the activation (and therefore notification to IOFSwitchListerners)
+         * the changes to ports will already be visible once the switch is
+         * activated. As a result, no notifications are sent out for these
+         * pending portStatus messages.
+         *
+         * @param h the channel handler that received the message
+         */
+        protected void handlePendingPortStatusMessages(OFChannelHandler h) {
+            try {
+<span class="nc" id="L776">                handlePendingPortStatusMessages(h, 0);</span>
+<span class="nc" id="L777">            } catch (SwitchStateException e) {</span>
+<span class="nc" id="L778">                log.error(e.getMessage());</span>
+<span class="nc" id="L779">            }</span>
+<span class="nc" id="L780">        }</span>
+
+        private void handlePendingPortStatusMessages(OFChannelHandler h, int index)
+                throws SwitchStateException {
+<span class="nc bnc" id="L784" title="All 2 branches missed.">            if (h.sw == null) {</span>
+<span class="nc" id="L785">                String msg = &quot;State machine error: switch is null. Should never &quot; +</span>
+                        &quot;happen&quot;;
+<span class="nc" id="L787">                throw new SwitchStateException(msg);</span>
+            }
+<span class="nc" id="L789">            log.info(&quot;Processing {} pending port status messages for {}&quot;,</span>
+<span class="nc" id="L790">                     h.pendingPortStatusMsg.size(), h.sw.getStringId());</span>
+
+<span class="nc" id="L792">            ArrayList&lt;OFPortStatus&gt; temp  = new ArrayList&lt;OFPortStatus&gt;();</span>
+<span class="nc bnc" id="L793" title="All 2 branches missed.">            for (OFPortStatus ps: h.pendingPortStatusMsg) {</span>
+<span class="nc" id="L794">                temp.add(ps);</span>
+<span class="nc" id="L795">                handlePortStatusMessage(h, ps, false);</span>
+<span class="nc" id="L796">            }</span>
+            // expensive but ok - we don't expect too many port-status messages
+            // note that we cannot use clear(), because of the reasons below
+<span class="nc" id="L799">            h.pendingPortStatusMsg.removeAll(temp);</span>
+<span class="nc" id="L800">            temp.clear();</span>
+            // the iterator above takes a snapshot of the list - so while we were
+            // dealing with the pending port-status messages, we could have received
+            // newer ones. Handle them recursively, but break the recursion after
+            // five steps to avoid an attack.
+<span class="nc bnc" id="L805" title="All 4 branches missed.">            if (!h.pendingPortStatusMsg.isEmpty() &amp;&amp; ++index &lt; 5) {</span>
+<span class="nc" id="L806">                handlePendingPortStatusMessages(h, index);</span>
+            }
+<span class="nc" id="L808">        }</span>
+
+        /**
+         * Handle a port status message.
+         *
+         * Handle a port status message by updating the port maps in the
+         * IOFSwitch instance and notifying Controller about the change so
+         * it can dispatch a switch update.
+         *
+         * @param h The OFChannelHhandler that received the message
+         * @param m The PortStatus message we received
+         * @param doNotify if true switch port changed events will be
+         * dispatched
+         * @throws SwitchStateException if the switch is not bound to the channel
+         *
+         */
+        protected void handlePortStatusMessage(OFChannelHandler h, OFPortStatus m,
+                boolean doNotify) throws SwitchStateException {
+<span class="nc bnc" id="L826" title="All 2 branches missed.">            if (h.sw == null) {</span>
+<span class="nc" id="L827">                String msg = getSwitchStateMessage(h, m,</span>
+                        &quot;State machine error: switch is null. Should never &quot; +
+                        &quot;happen&quot;);
+<span class="nc" id="L830">                throw new SwitchStateException(msg);</span>
+            }
+
+<span class="nc" id="L833">            h.sw.handleMessage(m);</span>
+<span class="nc" id="L834">        }</span>
+
+
+        /**
+         * Process an OF message received on the channel and
+         * update state accordingly.
+         *
+         * The main &quot;event&quot; of the state machine. Process the received message,
+         * send follow up message if required and update state if required.
+         *
+         * Switches on the message type and calls more specific event handlers
+         * for each individual OF message type. If we receive a message that
+         * is supposed to be sent from a controller to a switch we throw
+         * a SwitchStateExeption.
+         *
+         * The more specific handlers can also throw SwitchStateExceptions
+         *
+         * @param h The OFChannelHandler that received the message
+         * @param m The message we received.
+         * @throws SwitchStateException if the switch is not bound to the channel
+         * @throws IOException if unable to send message back to the switch
+         */
+        void processOFMessage(OFChannelHandler h, OFMessage m)
+                throws IOException, SwitchStateException {
+<span class="nc bnc" id="L858" title="All 16 branches missed.">            switch(m.getType()) {</span>
+            case HELLO:
+<span class="nc" id="L860">                processOFHello(h, (OFHello) m);</span>
+<span class="nc" id="L861">                break;</span>
+            case BARRIER_REPLY:
+<span class="nc" id="L863">                processOFBarrierReply(h, (OFBarrierReply) m);</span>
+<span class="nc" id="L864">                break;</span>
+            case ECHO_REPLY:
+<span class="nc" id="L866">                processOFEchoReply(h, (OFEchoReply) m);</span>
+<span class="nc" id="L867">                break;</span>
+            case ECHO_REQUEST:
+<span class="nc" id="L869">                processOFEchoRequest(h, (OFEchoRequest) m);</span>
+<span class="nc" id="L870">                break;</span>
+            case ERROR:
+<span class="nc" id="L872">                processOFError(h, (OFErrorMsg) m);</span>
+<span class="nc" id="L873">                break;</span>
+            case FEATURES_REPLY:
+<span class="nc" id="L875">                processOFFeaturesReply(h, (OFFeaturesReply) m);</span>
+<span class="nc" id="L876">                break;</span>
+            case FLOW_REMOVED:
+<span class="nc" id="L878">                processOFFlowRemoved(h, (OFFlowRemoved) m);</span>
+<span class="nc" id="L879">                break;</span>
+            case GET_CONFIG_REPLY:
+<span class="nc" id="L881">                processOFGetConfigReply(h, (OFGetConfigReply) m);</span>
+<span class="nc" id="L882">                break;</span>
+            case PACKET_IN:
+<span class="nc" id="L884">                processOFPacketIn(h, (OFPacketIn) m);</span>
+<span class="nc" id="L885">                break;</span>
+            case PORT_STATUS:
+<span class="nc" id="L887">                processOFPortStatus(h, (OFPortStatus) m);</span>
+<span class="nc" id="L888">                break;</span>
+            case QUEUE_GET_CONFIG_REPLY:
+<span class="nc" id="L890">                processOFQueueGetConfigReply(h, (OFQueueGetConfigReply) m);</span>
+<span class="nc" id="L891">                break;</span>
+            case STATS_REPLY: // multipart_reply in 1.3
+<span class="nc" id="L893">                processOFStatisticsReply(h, (OFStatsReply) m);</span>
+<span class="nc" id="L894">                break;</span>
+            case EXPERIMENTER:
+<span class="nc" id="L896">                processOFExperimenter(h, (OFExperimenter) m);</span>
+<span class="nc" id="L897">                break;</span>
+            case ROLE_REPLY:
+<span class="nc" id="L899">                processOFRoleReply(h, (OFRoleReply) m);</span>
+<span class="nc" id="L900">                break;</span>
+            case GET_ASYNC_REPLY:
+<span class="nc" id="L902">                processOFGetAsyncReply(h, (OFAsyncGetReply) m);</span>
+<span class="nc" id="L903">                break;</span>
+
+                // The following messages are sent to switches. The controller
+                // should never receive them
+            case SET_CONFIG:
+            case GET_CONFIG_REQUEST:
+            case PACKET_OUT:
+            case PORT_MOD:
+            case QUEUE_GET_CONFIG_REQUEST:
+            case BARRIER_REQUEST:
+            case STATS_REQUEST: // multipart request in 1.3
+            case FEATURES_REQUEST:
+            case FLOW_MOD:
+            case GROUP_MOD:
+            case TABLE_MOD:
+            case GET_ASYNC_REQUEST:
+            case SET_ASYNC:
+            case METER_MOD:
+            default:
+<span class="nc" id="L922">                illegalMessageReceived(h, m);</span>
+                break;
+            }
+<span class="nc" id="L925">        }</span>
+
+        /*-----------------------------------------------------------------
+         * Default implementation for message handlers in any state.
+         *
+         * Individual states must override these if they want a behavior
+         * that differs from the default.
+         *
+         * In general, these handlers simply ignore the message and do
+         * nothing.
+         *
+         * There are some exceptions though, since some messages really
+         * are handled the same way in every state (e.g., ECHO_REQUST) or
+         * that are only valid in a single state (e.g., HELLO, GET_CONFIG_REPLY
+         -----------------------------------------------------------------*/
+
+        void processOFHello(OFChannelHandler h, OFHello m)
+                throws IOException, SwitchStateException {
+            // we only expect hello in the WAIT_HELLO state
+<span class="nc" id="L944">            log.warn(&quot;Received Hello outside WAIT_HELLO state; switch {} is not complaint.&quot;,</span>
+<span class="nc" id="L945">                     h.channel.getRemoteAddress());</span>
+<span class="nc" id="L946">        }</span>
+
+        void processOFBarrierReply(OFChannelHandler h, OFBarrierReply m)
+                throws IOException {
+            // Silently ignore.
+<span class="nc" id="L951">        }</span>
+
+        void processOFEchoRequest(OFChannelHandler h, OFEchoRequest m)
+                throws IOException {
+<span class="nc bnc" id="L955" title="All 2 branches missed.">            if (h.ofVersion == null) {</span>
+<span class="nc" id="L956">                log.error(&quot;No OF version set for {}. Not sending Echo REPLY&quot;,</span>
+<span class="nc" id="L957">                        h.channel.getRemoteAddress());</span>
+<span class="nc" id="L958">                return;</span>
+            }
+<span class="nc bnc" id="L960" title="All 2 branches missed.">            OFFactory factory = (h.ofVersion == OFVersion.OF_13) ?</span>
+<span class="nc" id="L961">                    h.controller.getOFMessageFactory13() : h.controller.getOFMessageFactory10();</span>
+<span class="nc" id="L962">                    OFEchoReply reply = factory</span>
+<span class="nc" id="L963">                            .buildEchoReply()</span>
+<span class="nc" id="L964">                            .setXid(m.getXid())</span>
+<span class="nc" id="L965">                            .setData(m.getData())</span>
+<span class="nc" id="L966">                            .build();</span>
+<span class="nc" id="L967">                    h.channel.write(Collections.singletonList(reply));</span>
+<span class="nc" id="L968">        }</span>
+
+        void processOFEchoReply(OFChannelHandler h, OFEchoReply m)
+                throws IOException {
+            // Do nothing with EchoReplies !!
+<span class="nc" id="L973">        }</span>
+
+        // no default implementation for OFError
+        // every state must override it
+        abstract void processOFError(OFChannelHandler h, OFErrorMsg m)
+                throws IOException, SwitchStateException;
+
+
+        void processOFFeaturesReply(OFChannelHandler h, OFFeaturesReply  m)
+                throws IOException, SwitchStateException {
+<span class="nc" id="L983">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L984">        }</span>
+
+        void processOFFlowRemoved(OFChannelHandler h, OFFlowRemoved m)
+                throws IOException {
+<span class="nc" id="L988">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L989">        }</span>
+
+        void processOFGetConfigReply(OFChannelHandler h, OFGetConfigReply m)
+                throws IOException, SwitchStateException {
+            // we only expect config replies in the WAIT_CONFIG_REPLY state
+<span class="nc" id="L994">            illegalMessageReceived(h, m);</span>
+<span class="nc" id="L995">        }</span>
+
+        void processOFPacketIn(OFChannelHandler h, OFPacketIn m)
+                throws IOException {
+<span class="nc" id="L999">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L1000">        }</span>
+
+        // no default implementation. Every state needs to handle it.
+        abstract void processOFPortStatus(OFChannelHandler h, OFPortStatus m)
+                throws IOException, SwitchStateException;
+
+        void processOFQueueGetConfigReply(OFChannelHandler h,
+                OFQueueGetConfigReply m)
+                        throws IOException {
+<span class="nc" id="L1009">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L1010">        }</span>
+
+        void processOFStatisticsReply(OFChannelHandler h, OFStatsReply m)
+                throws IOException, SwitchStateException {
+<span class="nc" id="L1014">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L1015">        }</span>
+
+        void processOFExperimenter(OFChannelHandler h, OFExperimenter m)
+                throws IOException, SwitchStateException {
+            // TODO: it might make sense to parse the vendor message here
+            // into the known vendor messages we support and then call more
+            // specific event handlers
+<span class="nc" id="L1022">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L1023">        }</span>
+
+        void processOFRoleReply(OFChannelHandler h, OFRoleReply m)
+                throws SwitchStateException, IOException {
+<span class="nc" id="L1027">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L1028">        }</span>
+
+        void processOFGetAsyncReply(OFChannelHandler h,
+                OFAsyncGetReply m) {
+<span class="nc" id="L1032">            unhandledMessageReceived(h, m);</span>
+<span class="nc" id="L1033">        }</span>
+
+    }
+
+
+
+    //*************************
+    //  Channel handler methods
+    //*************************
+
+    @Override
+    public void channelConnected(ChannelHandlerContext ctx,
+            ChannelStateEvent e) throws Exception {
+<span class="nc" id="L1046">        channel = e.getChannel();</span>
+<span class="nc" id="L1047">        log.info(&quot;New switch connection from {}&quot;,</span>
+<span class="nc" id="L1048">                channel.getRemoteAddress());</span>
+        /*
+            hack to wait for the switch to tell us what it's
+            max version is. This is not spec compliant and should
+            be removed as soon as switches behave better.
+         */
+        //sendHandshakeHelloMessage();
+<span class="nc" id="L1055">        setState(ChannelState.WAIT_HELLO);</span>
+<span class="nc" id="L1056">    }</span>
+
+    @Override
+    public void channelDisconnected(ChannelHandlerContext ctx,
+            ChannelStateEvent e) throws Exception {
+<span class="nc" id="L1061">        log.info(&quot;Switch disconnected callback for sw:{}. Cleaning up ...&quot;,</span>
+<span class="nc" id="L1062">                getSwitchInfoString());</span>
+<span class="nc bnc" id="L1063" title="All 2 branches missed.">        if (thisdpid != 0) {</span>
+<span class="nc bnc" id="L1064" title="All 2 branches missed.">            if (!duplicateDpidFound) {</span>
+                // if the disconnected switch (on this ChannelHandler)
+                // was not one with a duplicate-dpid, it is safe to remove all
+                // state for it at the controller. Notice that if the disconnected
+                // switch was a duplicate-dpid, calling the method below would clear
+                // all state for the original switch (with the same dpid),
+                // which we obviously don't want.
+<span class="nc" id="L1071">                log.info(&quot;{}:removal called&quot;, getSwitchInfoString());</span>
+<span class="nc bnc" id="L1072" title="All 2 branches missed.">                if (sw != null) {</span>
+<span class="nc" id="L1073">                    sw.removeConnectedSwitch();</span>
+                }
+            } else {
+                // A duplicate was disconnected on this ChannelHandler,
+                // this is the same switch reconnecting, but the original state was
+                // not cleaned up - XXX check liveness of original ChannelHandler
+<span class="nc" id="L1079">                log.info(&quot;{}:duplicate found&quot;, getSwitchInfoString());</span>
+<span class="nc" id="L1080">                duplicateDpidFound = Boolean.FALSE;</span>
+            }
+        } else {
+<span class="nc" id="L1083">            log.warn(&quot;no dpid in channelHandler registered for &quot;</span>
+<span class="nc" id="L1084">                    + &quot;disconnected switch {}&quot;, getSwitchInfoString());</span>
+        }
+<span class="nc" id="L1086">    }</span>
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e)
+            throws Exception {
+<span class="nc bnc" id="L1091" title="All 2 branches missed.">        if (e.getCause() instanceof ReadTimeoutException) {</span>
+            // switch timeout
+<span class="nc" id="L1093">            log.error(&quot;Disconnecting switch {} due to read timeout&quot;,</span>
+<span class="nc" id="L1094">                    getSwitchInfoString());</span>
+<span class="nc" id="L1095">            ctx.getChannel().close();</span>
+<span class="nc bnc" id="L1096" title="All 2 branches missed.">        } else if (e.getCause() instanceof HandshakeTimeoutException) {</span>
+<span class="nc" id="L1097">            log.error(&quot;Disconnecting switch {}: failed to complete handshake&quot;,</span>
+<span class="nc" id="L1098">                    getSwitchInfoString());</span>
+<span class="nc" id="L1099">            ctx.getChannel().close();</span>
+<span class="nc bnc" id="L1100" title="All 2 branches missed.">        } else if (e.getCause() instanceof ClosedChannelException) {</span>
+<span class="nc" id="L1101">            log.debug(&quot;Channel for sw {} already closed&quot;, getSwitchInfoString());</span>
+<span class="nc bnc" id="L1102" title="All 2 branches missed.">        } else if (e.getCause() instanceof IOException) {</span>
+<span class="nc bnc" id="L1103" title="All 2 branches missed.">            if (!e.getCause().getMessage().equals(RESET_BY_PEER) &amp;&amp;</span>
+<span class="nc bnc" id="L1104" title="All 2 branches missed.">                    !e.getCause().getMessage().equals(BROKEN_PIPE)) {</span>
+<span class="nc" id="L1105">                log.error(&quot;Disconnecting switch {} due to IO Error: {}&quot;,</span>
+<span class="nc" id="L1106">                          getSwitchInfoString(), e.getCause().getMessage());</span>
+<span class="nc bnc" id="L1107" title="All 2 branches missed.">                if (log.isDebugEnabled()) {</span>
+                    // still print stack trace if debug is enabled
+<span class="nc" id="L1109">                    log.debug(&quot;StackTrace for previous Exception: &quot;, e.getCause());</span>
+                }
+            }
+<span class="nc" id="L1112">            ctx.getChannel().close();</span>
+<span class="nc bnc" id="L1113" title="All 2 branches missed.">        } else if (e.getCause() instanceof SwitchStateException) {</span>
+<span class="nc" id="L1114">            log.error(&quot;Disconnecting switch {} due to switch state error: {}&quot;,</span>
+<span class="nc" id="L1115">                    getSwitchInfoString(), e.getCause().getMessage());</span>
+<span class="nc bnc" id="L1116" title="All 2 branches missed.">            if (log.isDebugEnabled()) {</span>
+                // still print stack trace if debug is enabled
+<span class="nc" id="L1118">                log.debug(&quot;StackTrace for previous Exception: &quot;, e.getCause());</span>
+            }
+<span class="nc" id="L1120">            ctx.getChannel().close();</span>
+<span class="nc bnc" id="L1121" title="All 2 branches missed.">        } else if (e.getCause() instanceof OFParseError) {</span>
+<span class="nc" id="L1122">            log.error(&quot;Disconnecting switch &quot;</span>
+<span class="nc" id="L1123">                    + getSwitchInfoString() +</span>
+                    &quot; due to message parse failure&quot;,
+<span class="nc" id="L1125">                    e.getCause());</span>
+<span class="nc" id="L1126">            ctx.getChannel().close();</span>
+<span class="nc bnc" id="L1127" title="All 2 branches missed.">        } else if (e.getCause() instanceof RejectedExecutionException) {</span>
+<span class="nc" id="L1128">            log.warn(&quot;Could not process message: queue full&quot;);</span>
+        } else {
+<span class="nc" id="L1130">            log.error(&quot;Error while processing message from switch &quot;</span>
+<span class="nc" id="L1131">                    + getSwitchInfoString()</span>
+<span class="nc" id="L1132">                    + &quot;state &quot; + this.state, e.getCause());</span>
+<span class="nc" id="L1133">            ctx.getChannel().close();</span>
+        }
+<span class="nc" id="L1135">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L1139">        return getSwitchInfoString();</span>
+    }
+
+    @Override
+    public void channelIdle(ChannelHandlerContext ctx, IdleStateEvent e)
+            throws Exception {
+<span class="nc bnc" id="L1145" title="All 2 branches missed.">        OFFactory factory = (ofVersion == OFVersion.OF_13) ? factory13 : factory10;</span>
+<span class="nc" id="L1146">        OFMessage m = factory.buildEchoRequest().build();</span>
+<span class="nc" id="L1147">        log.debug(&quot;Sending Echo Request on idle channel: {}&quot;,</span>
+<span class="nc" id="L1148">                e.getChannel().getPipeline().getLast().toString());</span>
+<span class="nc" id="L1149">        e.getChannel().write(Collections.singletonList(m));</span>
+        // XXX S some problems here -- echo request has no transaction id, and
+        // echo reply is not correlated to the echo request.
+<span class="nc" id="L1152">    }</span>
+
+    @Override
+    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
+            throws Exception {
+<span class="nc bnc" id="L1157" title="All 2 branches missed.">        if (e.getMessage() instanceof List) {</span>
+            @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L1159">            List&lt;OFMessage&gt; msglist = (List&lt;OFMessage&gt;) e.getMessage();</span>
+
+
+<span class="nc bnc" id="L1162" title="All 2 branches missed.">            for (OFMessage ofm : msglist) {</span>
+                // Do the actual packet processing
+<span class="nc" id="L1164">                state.processOFMessage(this, ofm);</span>
+<span class="nc" id="L1165">            }</span>
+<span class="nc" id="L1166">        } else {</span>
+<span class="nc" id="L1167">            state.processOFMessage(this, (OFMessage) e.getMessage());</span>
+        }
+<span class="nc" id="L1169">    }</span>
+
+
+
+    //*************************
+    //  Channel utility methods
+    //*************************
+
+    /**
+     * Is this a state in which the handshake has completed?
+     * @return true if the handshake is complete
+     */
+    public boolean isHandshakeComplete() {
+<span class="nc" id="L1182">        return this.state.isHandshakeComplete();</span>
+    }
+
+    private void dispatchMessage(OFMessage m) {
+<span class="nc" id="L1186">        sw.handleMessage(m);</span>
+<span class="nc" id="L1187">    }</span>
+
+    /**
+     * Return a string describing this switch based on the already available
+     * information (DPID and/or remote socket).
+     * @return display string
+     */
+    private String getSwitchInfoString() {
+<span class="nc bnc" id="L1195" title="All 2 branches missed.">        if (sw != null) {</span>
+<span class="nc" id="L1196">            return sw.toString();</span>
+        }
+        String channelString;
+<span class="nc bnc" id="L1199" title="All 4 branches missed.">        if (channel == null || channel.getRemoteAddress() == null) {</span>
+<span class="nc" id="L1200">            channelString = &quot;?&quot;;</span>
+        } else {
+<span class="nc" id="L1202">            channelString = channel.getRemoteAddress().toString();</span>
+        }
+        String dpidString;
+<span class="nc bnc" id="L1205" title="All 2 branches missed.">        if (featuresReply == null) {</span>
+<span class="nc" id="L1206">            dpidString = &quot;?&quot;;</span>
+        } else {
+<span class="nc" id="L1208">            dpidString = featuresReply.getDatapathId().toString();</span>
+        }
+<span class="nc" id="L1210">        return String.format(&quot;[%s DPID[%s]]&quot;, channelString, dpidString);</span>
+    }
+
+    /**
+     * Update the channels state. Only called from the state machine.
+     * TODO: enforce restricted state transitions
+     * @param state
+     */
+    private void setState(ChannelState state) {
+<span class="nc" id="L1219">        this.state = state;</span>
+<span class="nc" id="L1220">    }</span>
+
+    /**
+     * Send hello message to the switch using the handshake transactions ids.
+     * @throws IOException
+     */
+    private void sendHandshakeHelloMessage() throws IOException {
+        // The OF protocol requires us to start things off by sending the highest
+        // version of the protocol supported.
+
+        // bitmap represents OF1.0 (ofp_version=0x01) and OF1.3 (ofp_version=0x04)
+        // see Sec. 7.5.1 of the OF1.3.4 spec
+<span class="nc" id="L1232">        U32 bitmap = U32.ofRaw(0x00000012);</span>
+<span class="nc" id="L1233">        OFHelloElem hem = factory13.buildHelloElemVersionbitmap()</span>
+<span class="nc" id="L1234">                .setBitmaps(Collections.singletonList(bitmap))</span>
+<span class="nc" id="L1235">                .build();</span>
+<span class="nc" id="L1236">        OFMessage.Builder mb = factory13.buildHello()</span>
+<span class="nc" id="L1237">                .setXid(this.handshakeTransactionIds--)</span>
+<span class="nc" id="L1238">                .setElements(Collections.singletonList(hem));</span>
+<span class="nc" id="L1239">        log.info(&quot;Sending OF_13 Hello to {}&quot;, channel.getRemoteAddress());</span>
+<span class="nc" id="L1240">        channel.write(Collections.singletonList(mb.build()));</span>
+<span class="nc" id="L1241">    }</span>
+
+    /**
+     * Send featuresRequest msg to the switch using the handshake transactions ids.
+     * @throws IOException
+     */
+    private void sendHandshakeFeaturesRequestMessage() throws IOException {
+<span class="nc bnc" id="L1248" title="All 2 branches missed.">        OFFactory factory = (ofVersion == OFVersion.OF_13) ? factory13 : factory10;</span>
+<span class="nc" id="L1249">        OFMessage m = factory.buildFeaturesRequest()</span>
+<span class="nc" id="L1250">                .setXid(this.handshakeTransactionIds--)</span>
+<span class="nc" id="L1251">                .build();</span>
+<span class="nc" id="L1252">        channel.write(Collections.singletonList(m));</span>
+<span class="nc" id="L1253">    }</span>
+
+    /**
+     * Send the configuration requests to tell the switch we want full
+     * packets.
+     * @throws IOException
+     */
+    private void sendHandshakeSetConfig() throws IOException {
+<span class="nc bnc" id="L1261" title="All 2 branches missed.">        OFFactory factory = (ofVersion == OFVersion.OF_13) ? factory13 : factory10;</span>
+        //log.debug(&quot;Sending CONFIG_REQUEST to {}&quot;, channel.getRemoteAddress());
+<span class="nc" id="L1263">        List&lt;OFMessage&gt; msglist = new ArrayList&lt;OFMessage&gt;(3);</span>
+
+        // Ensure we receive the full packet via PacketIn
+        // FIXME: We don't set the reassembly flags.
+	// Only send config to switches to send full packets, if they have a buffer.
+        // Saves a packet &amp; OFSetConfig can't be handled by certain switches.
+<span class="nc bnc" id="L1269" title="All 2 branches missed.">        if(this.featuresReply.getNBuffers() &gt; 0) {</span>
+<span class="nc" id="L1270">            OFSetConfig sc = factory</span>
+<span class="nc" id="L1271">                    .buildSetConfig()</span>
+<span class="nc" id="L1272">                    .setMissSendLen((short) 0xffff)</span>
+<span class="nc" id="L1273">                    .setXid(this.handshakeTransactionIds--)</span>
+<span class="nc" id="L1274">                    .build();</span>
+<span class="nc" id="L1275">            msglist.add(sc);</span>
+        }
+
+        // Barrier
+<span class="nc" id="L1279">        OFBarrierRequest br = factory</span>
+<span class="nc" id="L1280">                .buildBarrierRequest()</span>
+<span class="nc" id="L1281">                .setXid(this.handshakeTransactionIds--)</span>
+<span class="nc" id="L1282">                .build();</span>
+<span class="nc" id="L1283">        msglist.add(br);</span>
+
+        // Verify (need barrier?)
+<span class="nc" id="L1286">        OFGetConfigRequest gcr = factory</span>
+<span class="nc" id="L1287">                .buildGetConfigRequest()</span>
+<span class="nc" id="L1288">                .setXid(this.handshakeTransactionIds--)</span>
+<span class="nc" id="L1289">                .build();</span>
+<span class="nc" id="L1290">        msglist.add(gcr);</span>
+<span class="nc" id="L1291">        channel.write(msglist);</span>
+<span class="nc" id="L1292">    }</span>
+
+    /**
+     * send a description state request.
+     * @throws IOException
+     */
+    private void sendHandshakeDescriptionStatsRequest() throws IOException {
+        // Get Description to set switch-specific flags
+<span class="nc bnc" id="L1300" title="All 2 branches missed.">        OFFactory factory = (ofVersion == OFVersion.OF_13) ? factory13 : factory10;</span>
+<span class="nc" id="L1301">        OFDescStatsRequest dreq = factory</span>
+<span class="nc" id="L1302">                .buildDescStatsRequest()</span>
+<span class="nc" id="L1303">                .setXid(handshakeTransactionIds--)</span>
+<span class="nc" id="L1304">                .build();</span>
+<span class="nc" id="L1305">        channel.write(Collections.singletonList(dreq));</span>
+<span class="nc" id="L1306">    }</span>
+
+    private void sendHandshakeOFPortDescRequest() throws IOException {
+        // Get port description for 1.3 switch
+<span class="nc" id="L1310">        OFPortDescStatsRequest preq = factory13</span>
+<span class="nc" id="L1311">                .buildPortDescStatsRequest()</span>
+<span class="nc" id="L1312">                .setXid(handshakeTransactionIds--)</span>
+<span class="nc" id="L1313">                .build();</span>
+<span class="nc" id="L1314">        channel.write(Collections.singletonList(preq));</span>
+<span class="nc" id="L1315">    }</span>
+
+    ChannelState getStateForTesting() {
+<span class="nc" id="L1318">        return state;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

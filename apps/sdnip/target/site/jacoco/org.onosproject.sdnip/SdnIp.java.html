@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SdnIp.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-sdnip</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.sdnip</a> &gt; <span class="el_source">SdnIp.java</span></div><h1>SdnIp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.sdnip;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.LeadershipEvent;
+import org.onosproject.cluster.LeadershipEventListener;
+import org.onosproject.cluster.LeadershipService;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.routing.IntentSynchronizationService;
+import org.onosproject.routing.RoutingService;
+import org.onosproject.routing.SdnIpService;
+import org.onosproject.routing.config.RoutingConfigurationService;
+import org.slf4j.Logger;
+
+import java.util.Objects;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Component for the SDN-IP peering application.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L50">public class SdnIp implements SdnIpService {</span>
+
+    private static final String SDN_IP_APP = &quot;org.onosproject.sdnip&quot;;
+<span class="nc" id="L53">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentService intentService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LeadershipService leadershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected RoutingService routingService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected RoutingConfigurationService config;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService networkConfigService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected InterfaceService interfaceService;
+
+    private IntentSynchronizer intentSynchronizer;
+    private PeerConnectivityManager peerConnectivity;
+    private SdnIpFib fib;
+
+<span class="nc" id="L86">    private LeadershipEventListener leadershipEventListener =</span>
+        new InnerLeadershipEventListener();
+    private ApplicationId appId;
+    private ControllerNode localControllerNode;
+
+    @Activate
+    protected void activate() {
+<span class="nc" id="L93">        log.info(&quot;SDN-IP started&quot;);</span>
+
+<span class="nc" id="L95">        appId = coreService.registerApplication(SDN_IP_APP);</span>
+
+<span class="nc" id="L97">        localControllerNode = clusterService.getLocalNode();</span>
+
+<span class="nc" id="L99">        intentSynchronizer = new IntentSynchronizer(appId, intentService);</span>
+<span class="nc" id="L100">        intentSynchronizer.start();</span>
+
+<span class="nc" id="L102">        peerConnectivity = new PeerConnectivityManager(appId,</span>
+                                                       intentSynchronizer,
+                                                       networkConfigService,
+<span class="nc" id="L105">                coreService.getAppId(RoutingService.ROUTER_APP_ID),</span>
+                                                       interfaceService);
+<span class="nc" id="L107">        peerConnectivity.start();</span>
+
+<span class="nc" id="L109">        fib = new SdnIpFib(appId, interfaceService, intentSynchronizer);</span>
+
+<span class="nc" id="L111">        routingService.addFibListener(fib);</span>
+<span class="nc" id="L112">        routingService.start();</span>
+
+<span class="nc" id="L114">        leadershipService.addListener(leadershipEventListener);</span>
+<span class="nc" id="L115">        leadershipService.runForLeadership(appId.name());</span>
+<span class="nc" id="L116">    }</span>
+
+    @Deactivate
+    protected void deactivate() {
+<span class="nc" id="L120">        routingService.stop();</span>
+<span class="nc" id="L121">        peerConnectivity.stop();</span>
+<span class="nc" id="L122">        intentSynchronizer.stop();</span>
+
+<span class="nc" id="L124">        leadershipService.withdraw(appId.name());</span>
+<span class="nc" id="L125">        leadershipService.removeListener(leadershipEventListener);</span>
+
+<span class="nc" id="L127">        log.info(&quot;SDN-IP Stopped&quot;);</span>
+<span class="nc" id="L128">    }</span>
+
+    @Override
+    public void modifyPrimary(boolean isPrimary) {
+<span class="nc" id="L132">        intentSynchronizer.leaderChanged(isPrimary);</span>
+<span class="nc" id="L133">    }</span>
+
+    @Override
+    public IntentSynchronizationService getIntentSynchronizationService() {
+<span class="nc" id="L137">        return intentSynchronizer;</span>
+    }
+
+    /**
+     * Converts DPIDs of the form xx:xx:xx:xx:xx:xx:xx to OpenFlow provider
+     * device URIs.
+     *
+     * @param dpid the DPID string to convert
+     * @return the URI string for this device
+     */
+    static String dpidToUri(String dpid) {
+<span class="fc" id="L148">        return &quot;of:&quot; + dpid.replace(&quot;:&quot;, &quot;&quot;);</span>
+    }
+
+    /**
+     * A listener for Leadership Events.
+     */
+<span class="nc" id="L154">    private class InnerLeadershipEventListener</span>
+        implements LeadershipEventListener {
+
+        @Override
+        public void event(LeadershipEvent event) {
+<span class="nc" id="L159">            log.debug(&quot;Leadership Event: time = {} type = {} event = {}&quot;,</span>
+<span class="nc" id="L160">                      event.time(), event.type(), event);</span>
+
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (!event.subject().topic().equals(appId.name())) {</span>
+<span class="nc" id="L163">                return;         // Not our topic: ignore</span>
+            }
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            if (!Objects.equals(event.subject().leader(), localControllerNode.id())) {</span>
+<span class="nc" id="L166">                return;         // The event is not about this instance: ignore</span>
+            }
+
+<span class="nc bnc" id="L169" title="All 4 branches missed.">            switch (event.type()) {</span>
+            case LEADER_ELECTED:
+<span class="nc" id="L171">                log.info(&quot;SDN-IP Leader Elected&quot;);</span>
+<span class="nc" id="L172">                intentSynchronizer.leaderChanged(true);</span>
+<span class="nc" id="L173">                break;</span>
+            case LEADER_BOOTED:
+<span class="nc" id="L175">                log.info(&quot;SDN-IP Leader Lost Election&quot;);</span>
+<span class="nc" id="L176">                intentSynchronizer.leaderChanged(false);</span>
+<span class="nc" id="L177">                break;</span>
+            case LEADER_REELECTED:
+<span class="nc" id="L179">                break;</span>
+            default:
+                break;
+            }
+<span class="nc" id="L183">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

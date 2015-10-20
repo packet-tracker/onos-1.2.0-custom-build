@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NeighborDiscoveryOptions.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.ndp</a> &gt; <span class="el_source">NeighborDiscoveryOptions.java</span></div><h1>NeighborDiscoveryOptions.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.ndp;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Neighbor Discovery Protocol packet options.
+ */
+<span class="fc" id="L33">public class NeighborDiscoveryOptions extends BasePacket {</span>
+    public static final byte TYPE_SOURCE_LL_ADDRESS = 1;
+    public static final byte TYPE_TARGET_LL_ADDRESS = 2;
+    public static final byte TYPE_PREFIX_INFORMATION = 3;
+    public static final byte TYPE_REDIRECTED_HEADER = 4;
+    public static final byte TYPE_MTU = 5;
+
+    public static final byte INITIAL_HEADER_REQUIRED = 2;
+
+    private static final String BUFFER_UNDERFLOW_ERROR =
+            &quot;Not enough bytes in buffer to read option&quot;;
+
+<span class="fc" id="L45">    private final List&lt;Option&gt; options = new ArrayList&lt;&gt;();</span>
+
+    /**
+     * Packet option.
+     */
+    public final class Option {
+        private final byte type;
+        private final byte[] data;
+
+        /**
+         * Constructor.
+         *
+         * @param type the option type
+         * @param data the option data
+         */
+<span class="fc" id="L60">        private Option(byte type, byte[] data) {</span>
+<span class="fc" id="L61">            this.type = type;</span>
+<span class="fc" id="L62">            this.data = Arrays.copyOfRange(data, 0, data.length);</span>
+<span class="fc" id="L63">        }</span>
+
+        /**
+         * Gets the option type.
+         *
+         * @return the option type
+         */
+        public byte type() {
+<span class="fc" id="L71">            return this.type;</span>
+        }
+
+        /**
+         * Gets the option data.
+         *
+         * @return the option data
+         */
+        public byte[] data() {
+<span class="fc" id="L80">            return this.data;</span>
+        }
+
+        /**
+         * Gets the option data length (in number of octets).
+         *
+         * @return the option data length (in number of octets)
+         */
+        public int dataLength() {
+<span class="fc" id="L89">            return data.length;</span>
+        }
+
+        /**
+         * Gets the option length (in number of octets), including the type and
+         * length fields (one octet each).
+         *
+         * @return the option length (in number of octets), including the type
+         * and length fields
+         */
+        private int optionLength() {
+<span class="fc" id="L100">            return 2 + dataLength();</span>
+        }
+
+        /**
+         * Gets the option length field value (in units of 8 octets).
+         *
+         * @return the option length field value (in units of 8 octets)
+         */
+        private byte optionLengthField() {
+<span class="fc" id="L109">            return (byte) ((optionLength() + 7) / 8);</span>
+        }
+
+        /**
+         * Gets the option length on the wire (in number of octets).
+         *
+         * @return the option length on the wire (in number of octets)
+         */
+        private int optionWireLength() {
+<span class="fc" id="L118">            return 8 * optionLengthField();</span>
+        }
+    }
+
+    /**
+     * Adds a Neighbor Discovery Protocol packet option.
+     *
+     * @param type the option type
+     * @param data the option data
+     * @return this
+     */
+    public NeighborDiscoveryOptions addOption(byte type, byte[] data) {
+<span class="fc" id="L130">        options.add(new Option(type, data));</span>
+<span class="fc" id="L131">        return this;</span>
+    }
+
+    /**
+     * Gets the Neighbor Discovery Protocol packet options.
+     *
+     * @return the Neighbor Discovery Protocol packet options
+     */
+    public List&lt;NeighborDiscoveryOptions.Option&gt; options() {
+<span class="fc" id="L140">        return this.options;</span>
+    }
+
+    /**
+     * Checks whether any options are included.
+     *
+     * @return true if options are included, otherwise false
+     */
+    public boolean hasOptions() {
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">        return !this.options.isEmpty();</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+        // Compute first the total length on the wire for all options
+
+<span class="fc" id="L156">        int wireLength = 0;</span>
+
+<span class="fc bfc" id="L158" title="All 2 branches covered.">        for (Option option : this.options) {</span>
+<span class="fc" id="L159">            wireLength += option.optionWireLength();</span>
+<span class="fc" id="L160">        }</span>
+
+<span class="fc" id="L162">        final byte[] data = new byte[wireLength];</span>
+<span class="fc" id="L163">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+        //
+        // Serialize all options
+        //
+<span class="fc bfc" id="L168" title="All 2 branches covered.">        for (Option option : this.options) {</span>
+<span class="fc" id="L169">            bb.put(option.type());</span>
+<span class="fc" id="L170">            bb.put(option.optionLengthField());</span>
+<span class="fc" id="L171">            bb.put(option.data());</span>
+            // Add the padding
+<span class="fc" id="L173">            int paddingLength =</span>
+<span class="fc" id="L174">                option.optionWireLength() - option.optionLength();</span>
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">            for (int i = 0; i &lt; paddingLength; i++) {</span>
+<span class="nc" id="L176">                bb.put((byte) 0);</span>
+            }
+<span class="fc" id="L178">        }</span>
+
+<span class="fc" id="L180">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L185">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="nc" id="L187">        options.clear();</span>
+
+        //
+        // Deserialize all options
+        //
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        while (bb.hasRemaining()) {</span>
+<span class="nc" id="L193">            byte type = bb.get();</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if (!bb.hasRemaining()) {</span>
+<span class="nc" id="L195">                break;</span>
+            }
+<span class="nc" id="L197">            byte lengthField = bb.get();</span>
+<span class="nc" id="L198">            int dataLength = lengthField * 8;   // The data length field is in</span>
+            // unit of 8 octets
+
+            // Exclude the type and length fields
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (dataLength &lt; 2) {</span>
+<span class="nc" id="L203">                break;</span>
+            }
+<span class="nc" id="L205">            dataLength -= 2;</span>
+
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if (bb.remaining() &lt; dataLength) {</span>
+<span class="nc" id="L208">                break;</span>
+            }
+<span class="nc" id="L210">            byte[] optionData = new byte[dataLength];</span>
+<span class="nc" id="L211">            bb.get(optionData, 0, optionData.length);</span>
+<span class="nc" id="L212">            addOption(type, optionData);</span>
+<span class="nc" id="L213">        }</span>
+
+<span class="nc" id="L215">        return this;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L220">        final int prime = 31;</span>
+<span class="nc" id="L221">        int result = 1;</span>
+
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        for (Option option : this.options) {</span>
+<span class="nc" id="L224">            result = prime * result + option.type();</span>
+<span class="nc" id="L225">            result = prime * result + Arrays.hashCode(option.data());</span>
+<span class="nc" id="L226">        }</span>
+<span class="nc" id="L227">        return result;</span>
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L233">            return true;</span>
+        }
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">        if (obj instanceof NeighborDiscoveryOptions) {</span>
+<span class="fc" id="L236">            NeighborDiscoveryOptions other = (NeighborDiscoveryOptions) obj;</span>
+<span class="fc" id="L237">            return this.options.equals(other.options);</span>
+        }
+<span class="nc" id="L239">        return false;</span>
+    }
+
+    public static Deserializer&lt;NeighborDiscoveryOptions&gt; deserializer() {
+<span class="fc" id="L243">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L244">            checkInput(data, offset, length, INITIAL_HEADER_REQUIRED);</span>
+
+<span class="fc" id="L246">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L248">            NeighborDiscoveryOptions ndo = new NeighborDiscoveryOptions();</span>
+
+<span class="fc" id="L250">            ndo.options.clear();</span>
+
+            //
+            // Deserialize all options
+            //
+<span class="fc bfc" id="L255" title="All 2 branches covered.">            while (bb.hasRemaining()) {</span>
+<span class="fc" id="L256">                byte type = bb.get();</span>
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">                if (!bb.hasRemaining()) {</span>
+<span class="nc" id="L258">                    throw new DeserializationException(BUFFER_UNDERFLOW_ERROR);</span>
+                }
+<span class="fc" id="L260">                byte lengthField = bb.get();</span>
+<span class="fc" id="L261">                int dataLength = lengthField * 8;   // The data length field is in</span>
+                // unit of 8 octets
+
+                // Exclude the type and length fields
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">                if (dataLength &lt; 2) {</span>
+<span class="nc" id="L266">                    break;</span>
+                }
+<span class="fc" id="L268">                dataLength -= 2;</span>
+
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">                if (bb.remaining() &lt; dataLength) {</span>
+<span class="nc" id="L271">                    throw new DeserializationException(BUFFER_UNDERFLOW_ERROR);</span>
+                }
+<span class="fc" id="L273">                byte[] optionData = new byte[dataLength];</span>
+<span class="fc" id="L274">                bb.get(optionData, 0, optionData.length);</span>
+<span class="fc" id="L275">                ndo.addOption(type, optionData);</span>
+<span class="fc" id="L276">            }</span>
+
+<span class="fc" id="L278">            return ndo;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

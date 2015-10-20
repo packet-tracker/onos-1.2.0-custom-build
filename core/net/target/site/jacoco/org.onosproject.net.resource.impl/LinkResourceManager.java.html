@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LinkResourceManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.resource.impl</a> &gt; <span class="el_source">LinkResourceManager.java</span></div><h1>LinkResourceManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.resource.impl;
+
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.event.AbstractListenerManager;
+import org.onosproject.net.Link;
+import org.onosproject.net.intent.IntentId;
+import org.onosproject.net.resource.ResourceAllocation;
+import org.onosproject.net.resource.ResourceRequest;
+import org.onosproject.net.resource.ResourceType;
+import org.onosproject.net.resource.link.BandwidthResourceAllocation;
+import org.onosproject.net.resource.link.BandwidthResourceRequest;
+import org.onosproject.net.resource.link.DefaultLinkResourceAllocations;
+import org.onosproject.net.resource.link.LambdaResource;
+import org.onosproject.net.resource.link.LambdaResourceAllocation;
+import org.onosproject.net.resource.link.LambdaResourceRequest;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.onosproject.net.resource.link.LinkResourceEvent;
+import org.onosproject.net.resource.link.LinkResourceListener;
+import org.onosproject.net.resource.link.LinkResourceRequest;
+import org.onosproject.net.resource.link.LinkResourceService;
+import org.onosproject.net.resource.link.LinkResourceStore;
+import org.onosproject.net.resource.link.LinkResourceStoreDelegate;
+import org.onosproject.net.resource.link.MplsLabel;
+import org.onosproject.net.resource.link.MplsLabelResourceAllocation;
+import org.onosproject.net.resource.link.MplsLabelResourceRequest;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Provides basic implementation of link resources allocation.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L68">public class LinkResourceManager</span>
+        extends AbstractListenerManager&lt;LinkResourceEvent, LinkResourceListener&gt;
+        implements LinkResourceService {
+
+<span class="nc" id="L72">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private LinkResourceStore store;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L79">        eventDispatcher.addSink(LinkResourceEvent.class, listenerRegistry);</span>
+<span class="nc" id="L80">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L81">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L85">        eventDispatcher.removeSink(LinkResourceEvent.class);</span>
+<span class="nc" id="L86">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L87">    }</span>
+
+    /**
+     * Returns available lambdas on specified link.
+     *
+     * @param link the link
+     * @return available lambdas on specified link
+     */
+    private Set&lt;LambdaResource&gt; getAvailableLambdas(Link link) {
+<span class="nc" id="L96">        checkNotNull(link);</span>
+<span class="nc" id="L97">        Set&lt;ResourceAllocation&gt; resAllocs = store.getFreeResources(link);</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if (resAllocs == null) {</span>
+<span class="nc" id="L99">            return Collections.emptySet();</span>
+        }
+<span class="nc" id="L101">        Set&lt;LambdaResource&gt; lambdas = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        for (ResourceAllocation res : resAllocs) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">            if (res.type() == ResourceType.LAMBDA) {</span>
+<span class="nc" id="L104">                lambdas.add(((LambdaResourceAllocation) res).lambda());</span>
+            }
+<span class="nc" id="L106">        }</span>
+<span class="nc" id="L107">        return lambdas;</span>
+    }
+
+
+    /**
+     * Returns available lambdas on specified links.
+     *
+     * @param links the links
+     * @return available lambdas on specified links
+     */
+    private Iterable&lt;LambdaResource&gt; getAvailableLambdas(Iterable&lt;Link&gt; links) {
+<span class="nc" id="L118">        checkNotNull(links);</span>
+<span class="nc" id="L119">        Iterator&lt;Link&gt; i = links.iterator();</span>
+<span class="nc" id="L120">        checkArgument(i.hasNext());</span>
+<span class="nc" id="L121">        Set&lt;LambdaResource&gt; lambdas = new HashSet&lt;&gt;(getAvailableLambdas(i.next()));</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        while (i.hasNext()) {</span>
+<span class="nc" id="L123">            lambdas.retainAll(getAvailableLambdas(i.next()));</span>
+        }
+<span class="nc" id="L125">        return lambdas;</span>
+    }
+
+
+    /**
+     * Returns available MPLS label on specified link.
+     *
+     * @param link the link
+     * @return available MPLS labels on specified link
+     */
+    private Iterable&lt;MplsLabel&gt; getAvailableMplsLabels(Link link) {
+<span class="nc" id="L136">        Set&lt;ResourceAllocation&gt; resAllocs = store.getFreeResources(link);</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if (resAllocs == null) {</span>
+<span class="nc" id="L138">            return Collections.emptySet();</span>
+        }
+<span class="nc" id="L140">        Set&lt;MplsLabel&gt; mplsLabels = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        for (ResourceAllocation res : resAllocs) {</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if (res.type() == ResourceType.MPLS_LABEL) {</span>
+
+<span class="nc" id="L144">                mplsLabels.add(((MplsLabelResourceAllocation) res).mplsLabel());</span>
+            }
+<span class="nc" id="L146">        }</span>
+
+<span class="nc" id="L148">        return mplsLabels;</span>
+    }
+
+    @Override
+    public LinkResourceAllocations requestResources(LinkResourceRequest req) {
+<span class="nc" id="L153">        checkPermission(LINK_WRITE);</span>
+
+        // TODO Concatenate multiple bandwidth requests.
+        // TODO Support multiple lambda resource requests.
+        // TODO Throw appropriate exception.
+<span class="nc" id="L158">        Set&lt;ResourceAllocation&gt; allocs = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L159">        Map&lt;Link, Set&lt;ResourceAllocation&gt;&gt; allocsPerLink = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        for (ResourceRequest r : req.resources()) {</span>
+<span class="nc bnc" id="L161" title="All 4 branches missed.">            switch (r.type()) {</span>
+            case BANDWIDTH:
+<span class="nc" id="L163">                BandwidthResourceRequest br = (BandwidthResourceRequest) r;</span>
+<span class="nc" id="L164">                allocs.add(new BandwidthResourceAllocation(br.bandwidth()));</span>
+<span class="nc" id="L165">                break;</span>
+            case LAMBDA:
+<span class="nc" id="L167">                Iterator&lt;LambdaResource&gt; lambdaIterator =</span>
+<span class="nc" id="L168">                        getAvailableLambdas(req.links()).iterator();</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">                if (lambdaIterator.hasNext()) {</span>
+<span class="nc" id="L170">                    allocs.add(new LambdaResourceAllocation(lambdaIterator.next()));</span>
+                } else {
+<span class="nc" id="L172">                    log.info(&quot;Failed to allocate lambda resource.&quot;);</span>
+<span class="nc" id="L173">                    return null;</span>
+                }
+                break;
+            case MPLS_LABEL:
+<span class="nc bnc" id="L177" title="All 2 branches missed.">                for (Link link : req.links()) {</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                    if (allocsPerLink.get(link) == null) {</span>
+<span class="nc" id="L179">                        allocsPerLink.put(link, new HashSet&lt;&gt;());</span>
+                    }
+<span class="nc" id="L181">                    Iterator&lt;MplsLabel&gt; mplsIter = getAvailableMplsLabels(link)</span>
+<span class="nc" id="L182">                            .iterator();</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                    if (mplsIter.hasNext()) {</span>
+<span class="nc" id="L184">                        allocsPerLink.get(link)</span>
+<span class="nc" id="L185">                                .add(new MplsLabelResourceAllocation(mplsIter</span>
+<span class="nc" id="L186">                                             .next()));</span>
+                    } else {
+<span class="nc" id="L188">                        log.info(&quot;Failed to allocate MPLS resource.&quot;);</span>
+<span class="nc" id="L189">                        break;</span>
+                    }
+<span class="nc" id="L191">                }</span>
+<span class="nc" id="L192">                break;</span>
+            default:
+                break;
+            }
+<span class="nc" id="L196">        }</span>
+
+<span class="nc" id="L198">        Map&lt;Link, Set&lt;ResourceAllocation&gt;&gt; allocations = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        for (Link link : req.links()) {</span>
+<span class="nc" id="L200">            allocations.put(link, new HashSet&lt;&gt;(allocs));</span>
+<span class="nc" id="L201">            Set&lt;ResourceAllocation&gt; linkAllocs = allocsPerLink.get(link);</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (linkAllocs != null) {</span>
+<span class="nc" id="L203">                allocations.get(link).addAll(linkAllocs);</span>
+            }
+<span class="nc" id="L205">        }</span>
+<span class="nc" id="L206">        LinkResourceAllocations result =</span>
+                new DefaultLinkResourceAllocations(req, allocations);
+<span class="nc" id="L208">        store.allocateResources(result);</span>
+<span class="nc" id="L209">        return result;</span>
+
+    }
+
+    @Override
+    public void releaseResources(LinkResourceAllocations allocations) {
+<span class="nc" id="L215">        checkPermission(LINK_WRITE);</span>
+<span class="nc" id="L216">        final LinkResourceEvent event = store.releaseResources(allocations);</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (event != null) {</span>
+<span class="nc" id="L218">            post(event);</span>
+        }
+<span class="nc" id="L220">    }</span>
+
+    @Override
+    public LinkResourceAllocations updateResources(LinkResourceRequest req,
+            LinkResourceAllocations oldAllocations) {
+<span class="nc" id="L225">        checkPermission(LINK_WRITE);</span>
+<span class="nc" id="L226">        releaseResources(oldAllocations);</span>
+<span class="nc" id="L227">         return requestResources(req);</span>
+    }
+
+    @Override
+    public Iterable&lt;LinkResourceAllocations&gt; getAllocations() {
+<span class="nc" id="L232">        checkPermission(LINK_READ);</span>
+<span class="nc" id="L233">        return store.getAllocations();</span>
+    }
+
+    @Override
+    public Iterable&lt;LinkResourceAllocations&gt; getAllocations(Link link) {
+<span class="nc" id="L238">        checkPermission(LINK_READ);</span>
+<span class="nc" id="L239">        return store.getAllocations(link);</span>
+    }
+
+    @Override
+    public LinkResourceAllocations getAllocations(IntentId intentId) {
+<span class="nc" id="L244">        checkPermission(LINK_READ);</span>
+<span class="nc" id="L245">        return store.getAllocations(intentId);</span>
+    }
+
+    @Override
+    public Iterable&lt;ResourceRequest&gt; getAvailableResources(Link link) {
+<span class="nc" id="L250">        checkPermission(LINK_READ);</span>
+
+<span class="nc" id="L252">        Set&lt;ResourceAllocation&gt; freeRes = store.getFreeResources(link);</span>
+<span class="nc" id="L253">        Set&lt;ResourceRequest&gt; result = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">        for (ResourceAllocation alloc : freeRes) {</span>
+<span class="nc bnc" id="L255" title="All 4 branches missed.">            switch (alloc.type()) {</span>
+            case BANDWIDTH:
+<span class="nc" id="L257">                result.add(new BandwidthResourceRequest(</span>
+<span class="nc" id="L258">                        ((BandwidthResourceAllocation) alloc).bandwidth()));</span>
+<span class="nc" id="L259">                break;</span>
+            case LAMBDA:
+<span class="nc" id="L261">                result.add(new LambdaResourceRequest());</span>
+<span class="nc" id="L262">                break;</span>
+            case MPLS_LABEL:
+<span class="nc" id="L264">                result.add(new MplsLabelResourceRequest());</span>
+<span class="nc" id="L265">                break;</span>
+            default:
+                break;
+            }
+<span class="nc" id="L269">        }</span>
+<span class="nc" id="L270">        return result;</span>
+    }
+
+    @Override
+    public Iterable&lt;ResourceRequest&gt; getAvailableResources(Link link,
+            LinkResourceAllocations allocations) {
+<span class="nc" id="L276">        checkPermission(LINK_READ);</span>
+
+<span class="nc" id="L278">        Set&lt;ResourceAllocation&gt; allocatedRes = allocations.getResourceAllocation(link);</span>
+<span class="nc" id="L279">        Set&lt;ResourceRequest&gt; result = Sets.newHashSet(getAvailableResources(link));</span>
+<span class="nc" id="L280">        result.removeAll(allocatedRes);</span>
+<span class="nc" id="L281">        return result;</span>
+    }
+
+    /**
+     * Store delegate to re-post events emitted from the store.
+     */
+<span class="nc" id="L287">    private class InternalStoreDelegate implements LinkResourceStoreDelegate {</span>
+        @Override
+        public void notify(LinkResourceEvent event) {
+<span class="nc" id="L290">            post(event);</span>
+<span class="nc" id="L291">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TCP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">TCP.java</span></div><h1>TCP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+import static org.onlab.packet.PacketUtils.*;
+
+/**
+ * Implements TCP packet format.
+ */
+
+<span class="fc" id="L30">public class TCP extends BasePacket {</span>
+
+    private static final short TCP_HEADER_LENGTH = 20;
+
+    protected int sourcePort;
+    protected int destinationPort;
+    protected int sequence;
+    protected int acknowledge;
+    protected byte dataOffset;
+    protected short flags;
+    protected short windowSize;
+    protected short checksum;
+    protected short urgentPointer;
+    protected byte[] options;
+
+    /**
+     * Gets TCP source port.
+     *
+     * @return TCP source port
+     */
+    public int getSourcePort() {
+<span class="fc" id="L51">        return this.sourcePort;</span>
+    }
+
+    /**
+     * Sets TCP source port.
+     *
+     * @param sourcePort the sourcePort to set (unsigned 16 bits integer)
+     * @return this
+     */
+    public TCP setSourcePort(final int sourcePort) {
+<span class="fc" id="L61">        this.sourcePort = sourcePort;</span>
+<span class="fc" id="L62">        return this;</span>
+    }
+
+    /**
+     * Gets TCP destination port.
+     *
+     * @return the destinationPort
+     */
+    public int getDestinationPort() {
+<span class="fc" id="L71">        return this.destinationPort;</span>
+    }
+
+    /**
+     * Sets TCP destination port.
+     *
+     * @param destinationPort the destinationPort to set (unsigned 16 bits integer)
+     * @return this
+     */
+    public TCP setDestinationPort(final int destinationPort) {
+<span class="fc" id="L81">        this.destinationPort = destinationPort;</span>
+<span class="fc" id="L82">        return this;</span>
+    }
+
+    /**
+     * Gets checksum.
+     *
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="fc" id="L91">        return this.checksum;</span>
+    }
+
+    /**
+     * Sets checksum.
+     *
+     * @param checksum the checksum to set
+     * @return this
+     */
+    public TCP setChecksum(final short checksum) {
+<span class="nc" id="L101">        this.checksum = checksum;</span>
+<span class="nc" id="L102">        return this;</span>
+    }
+
+    /**
+     * Gets sequence number.
+     *
+     * @return the sequence number
+     */
+    public int getSequence() {
+<span class="fc" id="L111">        return this.sequence;</span>
+    }
+
+    /**
+     * Sets sequence number.
+     *
+     * @param seq the sequence number to set
+     * @return this
+     */
+    public TCP setSequence(final int seq) {
+<span class="fc" id="L121">        this.sequence = seq;</span>
+<span class="fc" id="L122">        return this;</span>
+    }
+
+    /**
+     * Gets acknowledge number.
+     *
+     * @return the acknowledge number
+     */
+    public int getAcknowledge() {
+<span class="fc" id="L131">        return this.acknowledge;</span>
+    }
+
+    /**
+     * Sets acknowledge number.
+     *
+     * @param ack the acknowledge number to set
+     * @return this
+     */
+    public TCP setAcknowledge(final int ack) {
+<span class="fc" id="L141">        this.acknowledge = ack;</span>
+<span class="fc" id="L142">        return this;</span>
+    }
+
+    /**
+     * Gets offset.
+     *
+     * @return the offset
+     */
+    public byte getDataOffset() {
+<span class="fc" id="L151">        return this.dataOffset;</span>
+    }
+
+    /**
+     * Sets offset.
+     *
+     * @param offset the offset to set
+     * @return this
+     */
+    public TCP setDataOffset(final byte offset) {
+<span class="fc" id="L161">        this.dataOffset = offset;</span>
+<span class="fc" id="L162">        return this;</span>
+    }
+
+    /**
+     * Gets TCP flags.
+     *
+     * @return the TCP flags
+     */
+    public short getFlags() {
+<span class="fc" id="L171">        return this.flags;</span>
+    }
+
+    /**
+     * Sets TCP flags.
+     *
+     * @param flags the TCP flags to set
+     * @return this
+     */
+    public TCP setFlags(final short flags) {
+<span class="fc" id="L181">        this.flags = flags;</span>
+<span class="fc" id="L182">        return this;</span>
+    }
+
+    /**
+     * Gets TCP window size.
+     *
+     * @return the TCP window size
+     */
+    public short getWindowSize() {
+<span class="fc" id="L191">        return this.windowSize;</span>
+    }
+
+    /**
+     * Sets TCP window size.
+     *
+     * @param windowSize the TCP window size to set
+     * @return this
+     */
+    public TCP setWindowSize(final short windowSize) {
+<span class="fc" id="L201">        this.windowSize = windowSize;</span>
+<span class="fc" id="L202">        return this;</span>
+    }
+
+    @Override
+    public void resetChecksum() {
+<span class="fc" id="L207">        this.checksum = 0;</span>
+<span class="fc" id="L208">        super.resetChecksum();</span>
+<span class="fc" id="L209">    }</span>
+
+    /**
+     * Gets urgent pointer.
+     *
+     * @return the urgent pointer
+     */
+    public short getUrgentPointer() {
+<span class="fc" id="L217">        return this.urgentPointer;</span>
+    }
+
+    /**
+     * Sets urgent pointer.
+     *
+     * @param urgentPointer the urgent pointer to set
+     * @return this
+     */
+    public TCP setUrgentPointer(final short urgentPointer) {
+<span class="fc" id="L227">        this.urgentPointer = urgentPointer;</span>
+<span class="fc" id="L228">        return this;</span>
+    }
+
+    /**
+     * Gets TCP options.
+     *
+     * @return the TCP options
+     */
+    public byte[] getOptions() {
+<span class="nc" id="L237">        return this.options;</span>
+    }
+
+    /**
+     * Sets TCP options.
+     *
+     * @param options the options to set
+     * @return this
+     */
+    public TCP setOptions(final byte[] options) {
+<span class="nc" id="L247">        this.options = options;</span>
+<span class="nc" id="L248">        this.dataOffset = (byte) (20 + options.length + 3 &gt;&gt; 2);</span>
+<span class="nc" id="L249">        return this;</span>
+    }
+
+    /**
+     * Serializes the packet. Will compute and set the following fields if they
+     * are set to specific values at the time serialize is called: -checksum : 0
+     * -length : 0
+     */
+    @Override
+    public byte[] serialize() {
+        int length;
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">        if (this.dataOffset == 0) {</span>
+<span class="nc" id="L261">            this.dataOffset = 5; // default header length</span>
+        }
+<span class="fc" id="L263">        length = this.dataOffset &lt;&lt; 2;</span>
+<span class="fc" id="L264">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="nc" id="L266">            this.payload.setParent(this);</span>
+<span class="nc" id="L267">            payloadData = this.payload.serialize();</span>
+<span class="nc" id="L268">            length += payloadData.length;</span>
+        }
+
+<span class="fc" id="L271">        final byte[] data = new byte[length];</span>
+<span class="fc" id="L272">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L274">        bb.putShort((short) (this.sourcePort &amp; 0xffff));</span>
+<span class="fc" id="L275">        bb.putShort((short) (this.destinationPort &amp; 0xffff));</span>
+<span class="fc" id="L276">        bb.putInt(this.sequence);</span>
+<span class="fc" id="L277">        bb.putInt(this.acknowledge);</span>
+<span class="fc" id="L278">        bb.putShort((short) (this.flags | this.dataOffset &lt;&lt; 12));</span>
+<span class="fc" id="L279">        bb.putShort(this.windowSize);</span>
+<span class="fc" id="L280">        bb.putShort(this.checksum);</span>
+<span class="fc" id="L281">        bb.putShort(this.urgentPointer);</span>
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">        if (this.dataOffset &gt; 5) {</span>
+            int padding;
+<span class="nc" id="L284">            bb.put(this.options);</span>
+<span class="nc" id="L285">            padding = (this.dataOffset &lt;&lt; 2) - 20 - this.options.length;</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">            for (int i = 0; i &lt; padding; i++) {</span>
+<span class="nc" id="L287">                bb.put((byte) 0);</span>
+            }
+        }
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L291">            bb.put(payloadData);</span>
+        }
+
+<span class="pc bpc" id="L294" title="1 of 4 branches missed.">        if (this.parent != null &amp;&amp; this.parent instanceof IPv4) {</span>
+<span class="fc" id="L295">            ((IPv4) this.parent).setProtocol(IPv4.PROTOCOL_TCP);</span>
+        }
+
+        // compute checksum if needed
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">        if (this.checksum == 0) {</span>
+<span class="fc" id="L300">            bb.rewind();</span>
+<span class="fc" id="L301">            int accumulation = 0;</span>
+
+            // compute pseudo header mac
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">            if (this.parent != null) {</span>
+<span class="fc bfc" id="L305" title="All 2 branches covered.">                if (this.parent instanceof IPv4) {</span>
+<span class="fc" id="L306">                    final IPv4 ipv4 = (IPv4) this.parent;</span>
+<span class="fc" id="L307">                    accumulation += (ipv4.getSourceAddress() &gt;&gt; 16 &amp; 0xffff)</span>
+<span class="fc" id="L308">                            + (ipv4.getSourceAddress() &amp; 0xffff);</span>
+<span class="fc" id="L309">                    accumulation += (ipv4.getDestinationAddress() &gt;&gt; 16 &amp; 0xffff)</span>
+<span class="fc" id="L310">                            + (ipv4.getDestinationAddress() &amp; 0xffff);</span>
+<span class="fc" id="L311">                    accumulation += ipv4.getProtocol() &amp; 0xff;</span>
+<span class="fc" id="L312">                    accumulation += length &amp; 0xffff;</span>
+<span class="pc bpc" id="L313" title="1 of 2 branches missed.">                } else if (this.parent instanceof IPv6) {</span>
+<span class="fc" id="L314">                    final IPv6 ipv6 = (IPv6) this.parent;</span>
+<span class="fc" id="L315">                    final int bbLength =</span>
+                            Ip6Address.BYTE_LENGTH * 2 // IPv6 src, dst
+                                    + 2  // nextHeader (with padding)
+                                    + 4; // length
+<span class="fc" id="L319">                    final ByteBuffer bbChecksum = ByteBuffer.allocate(bbLength);</span>
+<span class="fc" id="L320">                    bbChecksum.put(ipv6.getSourceAddress());</span>
+<span class="fc" id="L321">                    bbChecksum.put(ipv6.getDestinationAddress());</span>
+<span class="fc" id="L322">                    bbChecksum.put((byte) 0); // padding</span>
+<span class="fc" id="L323">                    bbChecksum.put(ipv6.getNextHeader());</span>
+<span class="fc" id="L324">                    bbChecksum.putInt(length);</span>
+<span class="fc" id="L325">                    bbChecksum.rewind();</span>
+<span class="fc bfc" id="L326" title="All 2 branches covered.">                    for (int i = 0; i &lt; bbLength / 2; ++i) {</span>
+<span class="fc" id="L327">                        accumulation += 0xffff &amp; bbChecksum.getShort();</span>
+                    }
+                }
+            }
+
+<span class="fc bfc" id="L332" title="All 2 branches covered.">            for (int i = 0; i &lt; length / 2; ++i) {</span>
+<span class="fc" id="L333">                accumulation += 0xffff &amp; bb.getShort();</span>
+            }
+            // pad to an even number of shorts
+<span class="pc bpc" id="L336" title="1 of 2 branches missed.">            if (length % 2 &gt; 0) {</span>
+<span class="nc" id="L337">                accumulation += (bb.get() &amp; 0xff) &lt;&lt; 8;</span>
+            }
+
+<span class="fc" id="L340">            accumulation = (accumulation &gt;&gt; 16 &amp; 0xffff)</span>
+                    + (accumulation &amp; 0xffff);
+<span class="fc" id="L342">            this.checksum = (short) (~accumulation &amp; 0xffff);</span>
+<span class="fc" id="L343">            bb.putShort(16, this.checksum);</span>
+        }
+<span class="fc" id="L345">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L351">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L352">        this.sourcePort = (bb.getShort() &amp; 0xffff);</span>
+<span class="nc" id="L353">        this.destinationPort = (bb.getShort() &amp; 0xffff);</span>
+<span class="nc" id="L354">        this.sequence = bb.getInt();</span>
+<span class="nc" id="L355">        this.acknowledge = bb.getInt();</span>
+<span class="nc" id="L356">        this.flags = bb.getShort();</span>
+<span class="nc" id="L357">        this.dataOffset = (byte) (this.flags &gt;&gt; 12 &amp; 0xf);</span>
+<span class="nc" id="L358">        this.flags = (short) (this.flags &amp; 0x1ff);</span>
+<span class="nc" id="L359">        this.windowSize = bb.getShort();</span>
+<span class="nc" id="L360">        this.checksum = bb.getShort();</span>
+<span class="nc" id="L361">        this.urgentPointer = bb.getShort();</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        if (this.dataOffset &gt; 5) {</span>
+<span class="nc" id="L363">            int optLength = (this.dataOffset &lt;&lt; 2) - 20;</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">            if (bb.limit() &lt; bb.position() + optLength) {</span>
+<span class="nc" id="L365">                optLength = bb.limit() - bb.position();</span>
+            }
+            try {
+<span class="nc" id="L368">                this.options = new byte[optLength];</span>
+<span class="nc" id="L369">                bb.get(this.options, 0, optLength);</span>
+<span class="nc" id="L370">            } catch (final IndexOutOfBoundsException e) {</span>
+<span class="nc" id="L371">                this.options = null;</span>
+<span class="nc" id="L372">            }</span>
+        }
+
+<span class="nc" id="L375">        this.payload = new Data();</span>
+<span class="nc" id="L376">        this.payload = this.payload.deserialize(data, bb.position(), bb.limit()</span>
+<span class="nc" id="L377">                - bb.position());</span>
+<span class="nc" id="L378">        this.payload.setParent(this);</span>
+<span class="nc" id="L379">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L389">        final int prime = 5807;</span>
+<span class="nc" id="L390">        int result = super.hashCode();</span>
+<span class="nc" id="L391">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L392">        result = prime * result + this.destinationPort;</span>
+<span class="nc" id="L393">        result = prime * result + this.sourcePort;</span>
+<span class="nc" id="L394">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L404" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L405">            return true;</span>
+        }
+<span class="pc bpc" id="L407" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L408">            return false;</span>
+        }
+<span class="pc bpc" id="L410" title="1 of 2 branches missed.">        if (!(obj instanceof TCP)) {</span>
+<span class="nc" id="L411">            return false;</span>
+        }
+<span class="fc" id="L413">        final TCP other = (TCP) obj;</span>
+        // May want to compare fields based on the flags set
+<span class="pc bpc" id="L415" title="17 of 20 branches missed.">        return this.checksum == other.checksum</span>
+                &amp;&amp; this.destinationPort == other.destinationPort
+                &amp;&amp; this.sourcePort == other.sourcePort
+                &amp;&amp; this.sequence == other.sequence
+                &amp;&amp; this.acknowledge == other.acknowledge
+                &amp;&amp; this.dataOffset == other.dataOffset
+                &amp;&amp; this.flags == other.flags
+                &amp;&amp; this.windowSize == other.windowSize
+                &amp;&amp; this.urgentPointer == other.urgentPointer
+<span class="pc bnc" id="L424" title="All 2 branches missed.">                &amp;&amp; (this.dataOffset == 5 || Arrays.equals(this.options, other.options));</span>
+    }
+
+    /**
+     * Deserializer function for TCP packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;TCP&gt; deserializer() {
+<span class="fc" id="L433">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L434">            checkInput(data, offset, length, TCP_HEADER_LENGTH);</span>
+
+<span class="fc" id="L436">            TCP tcp = new TCP();</span>
+
+<span class="fc" id="L438">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L439">            tcp.sourcePort = (bb.getShort() &amp; 0xffff);</span>
+<span class="fc" id="L440">            tcp.destinationPort = (bb.getShort() &amp; 0xffff);</span>
+<span class="fc" id="L441">            tcp.sequence = bb.getInt();</span>
+<span class="fc" id="L442">            tcp.acknowledge = bb.getInt();</span>
+<span class="fc" id="L443">            tcp.flags = bb.getShort();</span>
+<span class="fc" id="L444">            tcp.dataOffset = (byte) (tcp.flags &gt;&gt; 12 &amp; 0xf);</span>
+<span class="fc" id="L445">            tcp.flags = (short) (tcp.flags &amp; 0x1ff);</span>
+<span class="fc" id="L446">            tcp.windowSize = bb.getShort();</span>
+<span class="fc" id="L447">            tcp.checksum = bb.getShort();</span>
+<span class="fc" id="L448">            tcp.urgentPointer = bb.getShort();</span>
+<span class="pc bpc" id="L449" title="1 of 2 branches missed.">            if (tcp.dataOffset &gt; 5) {</span>
+<span class="nc" id="L450">                int optLength = (tcp.dataOffset &lt;&lt; 2) - 20;</span>
+<span class="nc" id="L451">                checkHeaderLength(length, TCP_HEADER_LENGTH + tcp.dataOffset);</span>
+<span class="nc" id="L452">                tcp.options = new byte[optLength];</span>
+<span class="nc" id="L453">                bb.get(tcp.options, 0, optLength);</span>
+            }
+
+<span class="fc" id="L456">            tcp.payload = Data.deserializer()</span>
+<span class="fc" id="L457">                    .deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+<span class="fc" id="L458">            tcp.payload.setParent(tcp);</span>
+<span class="fc" id="L459">            return tcp;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

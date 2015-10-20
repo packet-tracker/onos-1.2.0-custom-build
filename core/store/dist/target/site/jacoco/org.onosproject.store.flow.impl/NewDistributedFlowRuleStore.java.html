@@ -1,0 +1,854 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NewDistributedFlowRuleStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.flow.impl</a> &gt; <span class="el_source">NewDistributedFlowRuleStore.java</span></div><h1>NewDistributedFlowRuleStore.java</h1><pre class="source lang-java linenums"> /*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.flow.impl;
+
+import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.Futures;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.Tools;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.core.CoreService;
+import org.onosproject.core.IdGenerator;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.CompletedBatchOperation;
+import org.onosproject.net.flow.DefaultFlowEntry;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowEntry.FlowEntryState;
+import org.onosproject.net.flow.FlowId;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleBatchEntry;
+import org.onosproject.net.flow.FlowRuleBatchEntry.FlowRuleOperation;
+import org.onosproject.net.flow.FlowRuleBatchEvent;
+import org.onosproject.net.flow.FlowRuleBatchOperation;
+import org.onosproject.net.flow.FlowRuleBatchRequest;
+import org.onosproject.net.flow.FlowRuleEvent;
+import org.onosproject.net.flow.FlowRuleEvent.Type;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.FlowRuleStore;
+import org.onosproject.net.flow.FlowRuleStoreDelegate;
+import org.onosproject.net.flow.StoredFlowEntry;
+import org.onosproject.net.flow.TableStatisticsEntry;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.ClusterMessage;
+import org.onosproject.store.cluster.messaging.ClusterMessageHandler;
+import org.onosproject.store.flow.ReplicaInfoEvent;
+import org.onosproject.store.flow.ReplicaInfoEventListener;
+import org.onosproject.store.flow.ReplicaInfoService;
+import org.onosproject.store.impl.MastershipBasedTimestamp;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.serializers.StoreSerializer;
+import org.onosproject.store.serializers.custom.DistributedStoreSerializers;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.WallClockTimestamp;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.Dictionary;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.onlab.util.Tools.get;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.net.flow.FlowRuleEvent.Type.RULE_REMOVED;
+import static org.onosproject.store.flow.impl.FlowStoreMessageSubjects.*;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of flow rules using a distributed state management protocol.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L108">public class NewDistributedFlowRuleStore</span>
+        extends AbstractStore&lt;FlowRuleBatchEvent, FlowRuleStoreDelegate&gt;
+        implements FlowRuleStore {
+
+<span class="nc" id="L112">    private final Logger log = getLogger(getClass());</span>
+
+    private static final int MESSAGE_HANDLER_THREAD_POOL_SIZE = 8;
+    private static final boolean DEFAULT_BACKUP_ENABLED = true;
+    private static final int DEFAULT_BACKUP_PERIOD_MILLIS = 2000;
+    private static final long FLOW_RULE_STORE_TIMEOUT_MILLIS = 5000;
+    // number of devices whose flow entries will be backed up in one communication round
+    private static final int FLOW_TABLE_BACKUP_BATCH_SIZE = 1;
+
+<span class="nc" id="L121">    @Property(name = &quot;msgHandlerPoolSize&quot;, intValue = MESSAGE_HANDLER_THREAD_POOL_SIZE,</span>
+            label = &quot;Number of threads in the message handler pool&quot;)
+    private int msgHandlerPoolSize = MESSAGE_HANDLER_THREAD_POOL_SIZE;
+
+<span class="nc" id="L125">    @Property(name = &quot;backupEnabled&quot;, boolValue = DEFAULT_BACKUP_ENABLED,</span>
+            label = &quot;Indicates whether backups are enabled or not&quot;)
+    private boolean backupEnabled = DEFAULT_BACKUP_ENABLED;
+
+<span class="nc" id="L129">    @Property(name = &quot;backupPeriod&quot;, intValue = DEFAULT_BACKUP_PERIOD_MILLIS,</span>
+            label = &quot;Delay in ms between successive backup runs&quot;)
+    private int backupPeriod = DEFAULT_BACKUP_PERIOD_MILLIS;
+
+<span class="nc" id="L133">    private InternalFlowTable flowTable = new InternalFlowTable();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ReplicaInfoService replicaInfoManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService configService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+<span class="nc" id="L156">    private Map&lt;Long, NodeId&gt; pendingResponses = Maps.newConcurrentMap();</span>
+    private ExecutorService messageHandlingExecutor;
+
+    private ScheduledFuture&lt;?&gt; backupTask;
+<span class="nc" id="L160">    private final ScheduledExecutorService backupSenderExecutor =</span>
+<span class="nc" id="L161">            Executors.newSingleThreadScheduledExecutor(groupedThreads(&quot;onos/flow&quot;, &quot;backup-sender&quot;));</span>
+
+    private EventuallyConsistentMap&lt;DeviceId, List&lt;TableStatisticsEntry&gt;&gt; deviceTableStats;
+<span class="nc" id="L164">    private final EventuallyConsistentMapListener&lt;DeviceId, List&lt;TableStatisticsEntry&gt;&gt; tableStatsListener =</span>
+            new InternalTableStatsListener();
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+<span class="nc" id="L170">    protected static final StoreSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L173">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L174">                    .register(DistributedStoreSerializers.STORE_COMMON)</span>
+<span class="nc" id="L175">                    .nextId(DistributedStoreSerializers.STORE_CUSTOM_BEGIN)</span>
+<span class="nc" id="L176">                    .build();</span>
+<span class="nc" id="L177">        }</span>
+    };
+
+<span class="nc" id="L180">    protected static final KryoNamespace.Builder SERIALIZER_BUILDER = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L181">            .register(KryoNamespaces.API)</span>
+<span class="nc" id="L182">            .register(MastershipBasedTimestamp.class);</span>
+
+
+    private IdGenerator idGenerator;
+    private NodeId local;
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="nc" id="L190">        configService.registerProperties(getClass());</span>
+
+<span class="nc" id="L192">        idGenerator = coreService.getIdGenerator(FlowRuleService.FLOW_OP_TOPIC);</span>
+
+<span class="nc" id="L194">        local = clusterService.getLocalNode().id();</span>
+
+<span class="nc" id="L196">        messageHandlingExecutor = Executors.newFixedThreadPool(</span>
+<span class="nc" id="L197">                msgHandlerPoolSize, groupedThreads(&quot;onos/store/flow&quot;, &quot;message-handlers&quot;));</span>
+
+<span class="nc" id="L199">        registerMessageHandlers(messageHandlingExecutor);</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (backupEnabled) {</span>
+<span class="nc" id="L202">            replicaInfoManager.addListener(flowTable);</span>
+<span class="nc" id="L203">            backupTask = backupSenderExecutor.scheduleWithFixedDelay(</span>
+<span class="nc" id="L204">                    flowTable::backup,</span>
+                    0,
+                    backupPeriod,
+                    TimeUnit.MILLISECONDS);
+        }
+
+<span class="nc" id="L210">        deviceTableStats = storageService.&lt;DeviceId, List&lt;TableStatisticsEntry&gt;&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L211">                .withName(&quot;onos-flow-table-stats&quot;)</span>
+<span class="nc" id="L212">                .withSerializer(SERIALIZER_BUILDER)</span>
+<span class="nc" id="L213">                .withAntiEntropyPeriod(5, TimeUnit.SECONDS)</span>
+<span class="nc" id="L214">                .withTimestampProvider((k, v) -&gt; new WallClockTimestamp())</span>
+<span class="nc" id="L215">                .withTombstonesDisabled()</span>
+<span class="nc" id="L216">                .build();</span>
+<span class="nc" id="L217">        deviceTableStats.addListener(tableStatsListener);</span>
+
+<span class="nc" id="L219">        logConfig(&quot;Started&quot;);</span>
+<span class="nc" id="L220">    }</span>
+
+    @Deactivate
+    public void deactivate(ComponentContext context) {
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (backupEnabled) {</span>
+<span class="nc" id="L225">            replicaInfoManager.removeListener(flowTable);</span>
+<span class="nc" id="L226">            backupTask.cancel(true);</span>
+        }
+<span class="nc" id="L228">        configService.unregisterProperties(getClass(), false);</span>
+<span class="nc" id="L229">        unregisterMessageHandlers();</span>
+<span class="nc" id="L230">        deviceTableStats.removeListener(tableStatsListener);</span>
+<span class="nc" id="L231">        deviceTableStats.destroy();</span>
+<span class="nc" id="L232">        messageHandlingExecutor.shutdownNow();</span>
+<span class="nc" id="L233">        backupSenderExecutor.shutdownNow();</span>
+<span class="nc" id="L234">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L235">    }</span>
+
+    @SuppressWarnings(&quot;rawtypes&quot;)
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (context == null) {</span>
+<span class="nc" id="L241">            backupEnabled = DEFAULT_BACKUP_ENABLED;</span>
+<span class="nc" id="L242">            logConfig(&quot;Default config&quot;);</span>
+<span class="nc" id="L243">            return;</span>
+        }
+
+<span class="nc" id="L246">        Dictionary properties = context.getProperties();</span>
+        int newPoolSize;
+        boolean newBackupEnabled;
+        int newBackupPeriod;
+        try {
+<span class="nc" id="L251">            String s = get(properties, &quot;msgHandlerPoolSize&quot;);</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">            newPoolSize = isNullOrEmpty(s) ? msgHandlerPoolSize : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L254">            s = get(properties, &quot;backupEnabled&quot;);</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">            newBackupEnabled = isNullOrEmpty(s) ? backupEnabled : Boolean.parseBoolean(s.trim());</span>
+
+<span class="nc" id="L257">            s = get(properties, &quot;backupPeriod&quot;);</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">            newBackupPeriod = isNullOrEmpty(s) ? backupPeriod : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L260">        } catch (NumberFormatException | ClassCastException e) {</span>
+<span class="nc" id="L261">            newPoolSize = MESSAGE_HANDLER_THREAD_POOL_SIZE;</span>
+<span class="nc" id="L262">            newBackupEnabled = DEFAULT_BACKUP_ENABLED;</span>
+<span class="nc" id="L263">            newBackupPeriod = DEFAULT_BACKUP_PERIOD_MILLIS;</span>
+<span class="nc" id="L264">        }</span>
+
+<span class="nc" id="L266">        boolean restartBackupTask = false;</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        if (newBackupEnabled != backupEnabled) {</span>
+<span class="nc" id="L268">            backupEnabled = newBackupEnabled;</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">            if (!backupEnabled) {</span>
+<span class="nc" id="L270">                replicaInfoManager.removeListener(flowTable);</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">                if (backupTask != null) {</span>
+<span class="nc" id="L272">                    backupTask.cancel(false);</span>
+<span class="nc" id="L273">                    backupTask = null;</span>
+                }
+            } else {
+<span class="nc" id="L276">                replicaInfoManager.addListener(flowTable);</span>
+            }
+<span class="nc" id="L278">            restartBackupTask = backupEnabled;</span>
+        }
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (newBackupPeriod != backupPeriod) {</span>
+<span class="nc" id="L281">            backupPeriod = newBackupPeriod;</span>
+<span class="nc" id="L282">            restartBackupTask = backupEnabled;</span>
+        }
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        if (restartBackupTask) {</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">            if (backupTask != null) {</span>
+                // cancel previously running task
+<span class="nc" id="L287">                backupTask.cancel(false);</span>
+            }
+<span class="nc" id="L289">            backupTask = backupSenderExecutor.scheduleWithFixedDelay(</span>
+<span class="nc" id="L290">                    flowTable::backup,</span>
+                    0,
+                    backupPeriod,
+                    TimeUnit.MILLISECONDS);
+        }
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (newPoolSize != msgHandlerPoolSize) {</span>
+<span class="nc" id="L296">            msgHandlerPoolSize = newPoolSize;</span>
+<span class="nc" id="L297">            ExecutorService oldMsgHandler = messageHandlingExecutor;</span>
+<span class="nc" id="L298">            messageHandlingExecutor = Executors.newFixedThreadPool(</span>
+<span class="nc" id="L299">                    msgHandlerPoolSize, groupedThreads(&quot;onos/store/flow&quot;, &quot;message-handlers&quot;));</span>
+
+            // replace previously registered handlers.
+<span class="nc" id="L302">            registerMessageHandlers(messageHandlingExecutor);</span>
+<span class="nc" id="L303">            oldMsgHandler.shutdown();</span>
+        }
+<span class="nc" id="L305">        logConfig(&quot;Reconfigured&quot;);</span>
+<span class="nc" id="L306">    }</span>
+
+    private void registerMessageHandlers(ExecutorService executor) {
+
+<span class="nc" id="L310">        clusterCommunicator.addSubscriber(APPLY_BATCH_FLOWS, new OnStoreBatch(), executor);</span>
+<span class="nc" id="L311">        clusterCommunicator.&lt;FlowRuleBatchEvent&gt;addSubscriber(</span>
+                REMOTE_APPLY_COMPLETED, SERIALIZER::decode, this::notifyDelegate, executor);
+<span class="nc" id="L313">        clusterCommunicator.addSubscriber(</span>
+                GET_FLOW_ENTRY, SERIALIZER::decode, flowTable::getFlowEntry, SERIALIZER::encode, executor);
+<span class="nc" id="L315">        clusterCommunicator.addSubscriber(</span>
+                GET_DEVICE_FLOW_ENTRIES, SERIALIZER::decode, flowTable::getFlowEntries, SERIALIZER::encode, executor);
+<span class="nc" id="L317">        clusterCommunicator.addSubscriber(</span>
+                REMOVE_FLOW_ENTRY, SERIALIZER::decode, this::removeFlowRuleInternal, SERIALIZER::encode, executor);
+<span class="nc" id="L319">        clusterCommunicator.addSubscriber(</span>
+                REMOVE_FLOW_ENTRY, SERIALIZER::decode, this::removeFlowRuleInternal, SERIALIZER::encode, executor);
+<span class="nc" id="L321">        clusterCommunicator.addSubscriber(</span>
+<span class="nc" id="L322">                FLOW_TABLE_BACKUP, SERIALIZER::decode, flowTable::onBackupReceipt, SERIALIZER::encode, executor);</span>
+<span class="nc" id="L323">    }</span>
+
+    private void unregisterMessageHandlers() {
+<span class="nc" id="L326">        clusterCommunicator.removeSubscriber(REMOVE_FLOW_ENTRY);</span>
+<span class="nc" id="L327">        clusterCommunicator.removeSubscriber(GET_DEVICE_FLOW_ENTRIES);</span>
+<span class="nc" id="L328">        clusterCommunicator.removeSubscriber(GET_FLOW_ENTRY);</span>
+<span class="nc" id="L329">        clusterCommunicator.removeSubscriber(APPLY_BATCH_FLOWS);</span>
+<span class="nc" id="L330">        clusterCommunicator.removeSubscriber(REMOTE_APPLY_COMPLETED);</span>
+<span class="nc" id="L331">        clusterCommunicator.removeSubscriber(FLOW_TABLE_BACKUP);</span>
+<span class="nc" id="L332">    }</span>
+
+    private void logConfig(String prefix) {
+<span class="nc" id="L335">        log.info(&quot;{} with msgHandlerPoolSize = {}; backupEnabled = {}, backupPeriod = {}&quot;,</span>
+<span class="nc" id="L336">                 prefix, msgHandlerPoolSize, backupEnabled, backupPeriod);</span>
+<span class="nc" id="L337">    }</span>
+
+    // This is not a efficient operation on a distributed sharded
+    // flow store. We need to revisit the need for this operation or at least
+    // make it device specific.
+    @Override
+    public int getFlowRuleCount() {
+<span class="nc" id="L344">        AtomicInteger sum = new AtomicInteger(0);</span>
+<span class="nc" id="L345">        deviceService.getDevices().forEach(device -&gt; sum.addAndGet(Iterables.size(getFlowEntries(device.id()))));</span>
+<span class="nc" id="L346">        return sum.get();</span>
+    }
+
+    @Override
+    public FlowEntry getFlowEntry(FlowRule rule) {
+<span class="nc" id="L351">        NodeId master = mastershipService.getMasterFor(rule.deviceId());</span>
+
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L354">            log.debug(&quot;Failed to getFlowEntry: No master for {}&quot;, rule.deviceId());</span>
+<span class="nc" id="L355">            return null;</span>
+        }
+
+<span class="nc bnc" id="L358" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+<span class="nc" id="L359">            return flowTable.getFlowEntry(rule);</span>
+        }
+
+<span class="nc" id="L362">        log.trace(&quot;Forwarding getFlowEntry to {}, which is the primary (master) for device {}&quot;,</span>
+<span class="nc" id="L363">                  master, rule.deviceId());</span>
+
+<span class="nc" id="L365">        return Tools.futureGetOrElse(clusterCommunicator.sendAndReceive(rule,</span>
+                                    FlowStoreMessageSubjects.GET_FLOW_ENTRY,
+                                    SERIALIZER::encode,
+                                    SERIALIZER::decode,
+                                    master),
+                               FLOW_RULE_STORE_TIMEOUT_MILLIS,
+                               TimeUnit.MILLISECONDS,
+                               null);
+    }
+
+    @Override
+    public Iterable&lt;FlowEntry&gt; getFlowEntries(DeviceId deviceId) {
+<span class="nc" id="L377">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+
+<span class="nc bnc" id="L379" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L380">            log.debug(&quot;Failed to getFlowEntries: No master for {}&quot;, deviceId);</span>
+<span class="nc" id="L381">            return Collections.emptyList();</span>
+        }
+
+<span class="nc bnc" id="L384" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+<span class="nc" id="L385">            return flowTable.getFlowEntries(deviceId);</span>
+        }
+
+<span class="nc" id="L388">        log.trace(&quot;Forwarding getFlowEntries to {}, which is the primary (master) for device {}&quot;,</span>
+                  master, deviceId);
+
+<span class="nc" id="L391">        return Tools.futureGetOrElse(clusterCommunicator.sendAndReceive(deviceId,</span>
+                                    FlowStoreMessageSubjects.GET_DEVICE_FLOW_ENTRIES,
+                                    SERIALIZER::encode,
+                                    SERIALIZER::decode,
+                                    master),
+                               FLOW_RULE_STORE_TIMEOUT_MILLIS,
+                               TimeUnit.MILLISECONDS,
+<span class="nc" id="L398">                               Collections.emptyList());</span>
+    }
+
+    @Override
+    public void storeFlowRule(FlowRule rule) {
+<span class="nc" id="L403">        storeBatch(new FlowRuleBatchOperation(</span>
+<span class="nc" id="L404">                Collections.singletonList(new FlowRuleBatchEntry(FlowRuleOperation.ADD, rule)),</span>
+<span class="nc" id="L405">                rule.deviceId(), idGenerator.getNewId()));</span>
+<span class="nc" id="L406">    }</span>
+
+    @Override
+    public void storeBatch(FlowRuleBatchOperation operation) {
+<span class="nc bnc" id="L410" title="All 2 branches missed.">        if (operation.getOperations().isEmpty()) {</span>
+<span class="nc" id="L411">            notifyDelegate(FlowRuleBatchEvent.completed(</span>
+<span class="nc" id="L412">                    new FlowRuleBatchRequest(operation.id(), Collections.emptySet()),</span>
+<span class="nc" id="L413">                    new CompletedBatchOperation(true, Collections.emptySet(), operation.deviceId())));</span>
+<span class="nc" id="L414">            return;</span>
+        }
+
+<span class="nc" id="L417">        DeviceId deviceId = operation.deviceId();</span>
+<span class="nc" id="L418">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+
+<span class="nc bnc" id="L420" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L421">            log.warn(&quot;No master for {} : flows will be marked for removal&quot;, deviceId);</span>
+
+<span class="nc" id="L423">            updateStoreInternal(operation);</span>
+
+<span class="nc" id="L425">            notifyDelegate(FlowRuleBatchEvent.completed(</span>
+<span class="nc" id="L426">                    new FlowRuleBatchRequest(operation.id(), Collections.emptySet()),</span>
+<span class="nc" id="L427">                    new CompletedBatchOperation(true, Collections.emptySet(), operation.deviceId())));</span>
+<span class="nc" id="L428">            return;</span>
+        }
+
+<span class="nc bnc" id="L431" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+<span class="nc" id="L432">            storeBatchInternal(operation);</span>
+<span class="nc" id="L433">            return;</span>
+        }
+
+<span class="nc" id="L436">        log.trace(&quot;Forwarding storeBatch to {}, which is the primary (master) for device {}&quot;,</span>
+                  master, deviceId);
+
+<span class="nc" id="L439">        clusterCommunicator.unicast(operation,</span>
+                                    APPLY_BATCH_FLOWS,
+                                    SERIALIZER::encode,
+                                    master)
+<span class="nc" id="L443">                           .whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">                               if (error != null) {</span>
+<span class="nc" id="L445">                                   log.warn(&quot;Failed to storeBatch: {} to {}&quot;, operation, master, error);</span>
+
+<span class="nc" id="L447">                                   Set&lt;FlowRule&gt; allFailures = operation.getOperations()</span>
+<span class="nc" id="L448">                                           .stream()</span>
+<span class="nc" id="L449">                                           .map(op -&gt; op.target())</span>
+<span class="nc" id="L450">                                           .collect(Collectors.toSet());</span>
+
+<span class="nc" id="L452">                                   notifyDelegate(FlowRuleBatchEvent.completed(</span>
+<span class="nc" id="L453">                                           new FlowRuleBatchRequest(operation.id(), Collections.emptySet()),</span>
+                                           new CompletedBatchOperation(false, allFailures, deviceId)));
+                               }
+<span class="nc" id="L456">                           });</span>
+<span class="nc" id="L457">    }</span>
+
+    private void storeBatchInternal(FlowRuleBatchOperation operation) {
+
+<span class="nc" id="L461">        final DeviceId did = operation.deviceId();</span>
+        //final Collection&lt;FlowEntry&gt; ft = flowTable.getFlowEntries(did);
+<span class="nc" id="L463">        Set&lt;FlowRuleBatchEntry&gt; currentOps = updateStoreInternal(operation);</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">        if (currentOps.isEmpty()) {</span>
+<span class="nc" id="L465">            batchOperationComplete(FlowRuleBatchEvent.completed(</span>
+<span class="nc" id="L466">                    new FlowRuleBatchRequest(operation.id(), Collections.emptySet()),</span>
+<span class="nc" id="L467">                    new CompletedBatchOperation(true, Collections.emptySet(), did)));</span>
+<span class="nc" id="L468">            return;</span>
+        }
+
+<span class="nc" id="L471">        notifyDelegate(FlowRuleBatchEvent.requested(new</span>
+<span class="nc" id="L472">                           FlowRuleBatchRequest(operation.id(),</span>
+<span class="nc" id="L473">                                                currentOps), operation.deviceId()));</span>
+<span class="nc" id="L474">    }</span>
+
+    private Set&lt;FlowRuleBatchEntry&gt; updateStoreInternal(FlowRuleBatchOperation operation) {
+<span class="nc" id="L477">        return operation.getOperations().stream().map(</span>
+                op -&gt; {
+                    StoredFlowEntry entry;
+<span class="nc bnc" id="L480" title="All 4 branches missed.">                    switch (op.operator()) {</span>
+                        case ADD:
+<span class="nc" id="L482">                            entry = new DefaultFlowEntry(op.target());</span>
+                            // always add requested FlowRule
+                            // Note: 2 equal FlowEntry may have different treatment
+<span class="nc" id="L485">                            flowTable.remove(entry.deviceId(), entry);</span>
+<span class="nc" id="L486">                            flowTable.add(entry);</span>
+
+<span class="nc" id="L488">                            return op;</span>
+                        case REMOVE:
+<span class="nc" id="L490">                            entry = flowTable.getFlowEntry(op.target());</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">                            if (entry != null) {</span>
+<span class="nc" id="L492">                                entry.setState(FlowEntryState.PENDING_REMOVE);</span>
+<span class="nc" id="L493">                                return op;</span>
+                            }
+                            break;
+                        case MODIFY:
+                            //TODO: figure this out at some point
+<span class="nc" id="L498">                            break;</span>
+                        default:
+<span class="nc" id="L500">                            log.warn(&quot;Unknown flow operation operator: {}&quot;, op.operator());</span>
+                    }
+<span class="nc" id="L502">                    return null;</span>
+                }
+<span class="nc bnc" id="L504" title="All 2 branches missed.">        ).filter(op -&gt; op != null).collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public void deleteFlowRule(FlowRule rule) {
+<span class="nc" id="L509">        storeBatch(</span>
+                new FlowRuleBatchOperation(
+<span class="nc" id="L511">                        Collections.singletonList(</span>
+                                new FlowRuleBatchEntry(
+                                        FlowRuleOperation.REMOVE,
+<span class="nc" id="L514">                                        rule)), rule.deviceId(), idGenerator.getNewId()));</span>
+<span class="nc" id="L515">    }</span>
+
+    @Override
+    public FlowRuleEvent addOrUpdateFlowRule(FlowEntry rule) {
+<span class="nc" id="L519">        NodeId master = mastershipService.getMasterFor(rule.deviceId());</span>
+<span class="nc bnc" id="L520" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+<span class="nc" id="L521">            return addOrUpdateFlowRuleInternal(rule);</span>
+        }
+
+<span class="nc" id="L524">        log.warn(&quot;Tried to update FlowRule {} state,&quot;</span>
+                         + &quot; while the Node was not the master.&quot;, rule);
+<span class="nc" id="L526">        return null;</span>
+    }
+
+    private FlowRuleEvent addOrUpdateFlowRuleInternal(FlowEntry rule) {
+        // check if this new rule is an update to an existing entry
+<span class="nc" id="L531">        StoredFlowEntry stored = flowTable.getFlowEntry(rule);</span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">        if (stored != null) {</span>
+<span class="nc" id="L533">            stored.setBytes(rule.bytes());</span>
+<span class="nc" id="L534">            stored.setLife(rule.life());</span>
+<span class="nc" id="L535">            stored.setPackets(rule.packets());</span>
+<span class="nc bnc" id="L536" title="All 2 branches missed.">            if (stored.state() == FlowEntryState.PENDING_ADD) {</span>
+<span class="nc" id="L537">                stored.setState(FlowEntryState.ADDED);</span>
+<span class="nc" id="L538">                return new FlowRuleEvent(Type.RULE_ADDED, rule);</span>
+            }
+<span class="nc" id="L540">            return new FlowRuleEvent(Type.RULE_UPDATED, rule);</span>
+        }
+
+        // TODO: Confirm if this behavior is correct. See SimpleFlowRuleStore
+        // TODO: also update backup if the behavior is correct.
+<span class="nc" id="L545">        flowTable.add(rule);</span>
+<span class="nc" id="L546">        return null;</span>
+    }
+
+    @Override
+    public FlowRuleEvent removeFlowRule(FlowEntry rule) {
+<span class="nc" id="L551">        final DeviceId deviceId = rule.deviceId();</span>
+<span class="nc" id="L552">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+
+<span class="nc bnc" id="L554" title="All 2 branches missed.">        if (Objects.equal(local, master)) {</span>
+            // bypass and handle it locally
+<span class="nc" id="L556">            return removeFlowRuleInternal(rule);</span>
+        }
+
+<span class="nc bnc" id="L559" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L560">            log.warn(&quot;Failed to removeFlowRule: No master for {}&quot;, deviceId);</span>
+            // TODO: revisit if this should be null (=&quot;no-op&quot;) or Exception
+<span class="nc" id="L562">            return null;</span>
+        }
+
+<span class="nc" id="L565">        log.trace(&quot;Forwarding removeFlowRule to {}, which is the master for device {}&quot;,</span>
+                  master, deviceId);
+
+<span class="nc" id="L568">        return Futures.get(clusterCommunicator.sendAndReceive(</span>
+                               rule,
+                               REMOVE_FLOW_ENTRY,
+                               SERIALIZER::encode,
+                               SERIALIZER::decode,
+                               master),
+                           FLOW_RULE_STORE_TIMEOUT_MILLIS,
+                           TimeUnit.MILLISECONDS,
+                           RuntimeException.class);
+    }
+
+    private FlowRuleEvent removeFlowRuleInternal(FlowEntry rule) {
+<span class="nc" id="L580">        final DeviceId deviceId = rule.deviceId();</span>
+        // This is where one could mark a rule as removed and still keep it in the store.
+<span class="nc" id="L582">        final boolean removed = flowTable.remove(deviceId, rule); //flowEntries.remove(deviceId, rule);</span>
+<span class="nc bnc" id="L583" title="All 2 branches missed.">        return removed ? new FlowRuleEvent(RULE_REMOVED, rule) : null;</span>
+    }
+
+    @Override
+    public void batchOperationComplete(FlowRuleBatchEvent event) {
+        //FIXME: need a per device pending response
+<span class="nc" id="L589">        NodeId nodeId = pendingResponses.remove(event.subject().batchId());</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">        if (nodeId == null) {</span>
+<span class="nc" id="L591">            notifyDelegate(event);</span>
+        } else {
+            // TODO check unicast return value
+<span class="nc" id="L594">            clusterCommunicator.unicast(event, REMOTE_APPLY_COMPLETED, SERIALIZER::encode, nodeId);</span>
+            //error log: log.warn(&quot;Failed to respond to peer for batch operation result&quot;);
+        }
+<span class="nc" id="L597">    }</span>
+
+<span class="nc" id="L599">    private final class OnStoreBatch implements ClusterMessageHandler {</span>
+
+        @Override
+        public void handle(final ClusterMessage message) {
+<span class="nc" id="L603">            FlowRuleBatchOperation operation = SERIALIZER.decode(message.payload());</span>
+<span class="nc" id="L604">            log.debug(&quot;received batch request {}&quot;, operation);</span>
+
+<span class="nc" id="L606">            final DeviceId deviceId = operation.deviceId();</span>
+<span class="nc" id="L607">            NodeId master = mastershipService.getMasterFor(deviceId);</span>
+<span class="nc bnc" id="L608" title="All 2 branches missed.">            if (!Objects.equal(local, master)) {</span>
+<span class="nc" id="L609">                Set&lt;FlowRule&gt; failures = new HashSet&lt;&gt;(operation.size());</span>
+<span class="nc bnc" id="L610" title="All 2 branches missed.">                for (FlowRuleBatchEntry op : operation.getOperations()) {</span>
+<span class="nc" id="L611">                    failures.add(op.target());</span>
+<span class="nc" id="L612">                }</span>
+<span class="nc" id="L613">                CompletedBatchOperation allFailed = new CompletedBatchOperation(false, failures, deviceId);</span>
+                // This node is no longer the master, respond as all failed.
+                // TODO: we might want to wrap response in envelope
+                // to distinguish sw programming failure and hand over
+                // it make sense in the latter case to retry immediately.
+<span class="nc" id="L618">                message.respond(SERIALIZER.encode(allFailed));</span>
+<span class="nc" id="L619">                return;</span>
+            }
+
+<span class="nc" id="L622">            pendingResponses.put(operation.id(), message.sender());</span>
+<span class="nc" id="L623">            storeBatchInternal(operation);</span>
+<span class="nc" id="L624">        }</span>
+    }
+
+<span class="nc" id="L627">    private class InternalFlowTable implements ReplicaInfoEventListener {</span>
+
+<span class="nc" id="L629">        private final Map&lt;DeviceId, Map&lt;FlowId, Set&lt;StoredFlowEntry&gt;&gt;&gt;</span>
+<span class="nc" id="L630">                flowEntries = Maps.newConcurrentMap();</span>
+
+<span class="nc" id="L632">        private final Map&lt;DeviceId, Long&gt; lastBackupTimes = Maps.newConcurrentMap();</span>
+<span class="nc" id="L633">        private final Map&lt;DeviceId, Long&gt; lastUpdateTimes = Maps.newConcurrentMap();</span>
+<span class="nc" id="L634">        private final Map&lt;DeviceId, NodeId&gt; lastBackupNodes = Maps.newConcurrentMap();</span>
+
+        @Override
+        public void event(ReplicaInfoEvent event) {
+<span class="nc bnc" id="L638" title="All 2 branches missed.">            if (!backupEnabled) {</span>
+<span class="nc" id="L639">                return;</span>
+            }
+<span class="nc bnc" id="L641" title="All 2 branches missed.">            if (event.type() == ReplicaInfoEvent.Type.BACKUPS_CHANGED) {</span>
+<span class="nc" id="L642">                DeviceId deviceId = event.subject();</span>
+<span class="nc" id="L643">                NodeId master = mastershipService.getMasterFor(deviceId);</span>
+<span class="nc bnc" id="L644" title="All 2 branches missed.">                if (!Objects.equal(local, master)) {</span>
+                 // ignore since this event is for a device this node does not manage.
+<span class="nc" id="L646">                    return;</span>
+                }
+<span class="nc" id="L648">                NodeId newBackupNode = getBackupNode(deviceId);</span>
+<span class="nc" id="L649">                NodeId currentBackupNode = lastBackupNodes.get(deviceId);</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">                if (Objects.equal(newBackupNode, currentBackupNode)) {</span>
+                    // ignore since backup location hasn't changed.
+<span class="nc" id="L652">                    return;</span>
+                }
+<span class="nc bnc" id="L654" title="All 4 branches missed.">                if (currentBackupNode != null &amp;&amp; newBackupNode == null) {</span>
+                    // Current backup node is most likely down and no alternate backup node
+                    // has been chosen. Clear current backup location so that we can resume
+                    // backups when either current backup comes online or a different backup node
+                    // is chosen.
+<span class="nc" id="L659">                    log.warn(&quot;Lost backup location {} for deviceId {} and no alternate backup node exists. &quot;</span>
+                            + &quot;Flows can be lost if the master goes down&quot;, currentBackupNode, deviceId);
+<span class="nc" id="L661">                    lastBackupNodes.remove(deviceId);</span>
+<span class="nc" id="L662">                    lastBackupTimes.remove(deviceId);</span>
+<span class="nc" id="L663">                    return;</span>
+                    // TODO: Pick any available node as backup and ensure hand-off occurs when
+                    // a new master is elected.
+                }
+<span class="nc" id="L667">                log.debug(&quot;Backup location for {} has changed from {} to {}.&quot;,</span>
+                        deviceId, currentBackupNode, newBackupNode);
+<span class="nc" id="L669">                backupSenderExecutor.schedule(() -&gt; backupFlowEntries(newBackupNode, Sets.newHashSet(deviceId)),</span>
+                        0,
+                        TimeUnit.SECONDS);
+            }
+<span class="nc" id="L673">        }</span>
+
+        private void sendBackups(NodeId nodeId, Set&lt;DeviceId&gt; deviceIds) {
+            // split up the devices into smaller batches and send them separately.
+<span class="nc" id="L677">            Iterables.partition(deviceIds, FLOW_TABLE_BACKUP_BATCH_SIZE)</span>
+<span class="nc" id="L678">                     .forEach(ids -&gt; backupFlowEntries(nodeId, Sets.newHashSet(ids)));</span>
+<span class="nc" id="L679">        }</span>
+
+        private void backupFlowEntries(NodeId nodeId, Set&lt;DeviceId&gt; deviceIds) {
+<span class="nc bnc" id="L682" title="All 2 branches missed.">            if (deviceIds.isEmpty()) {</span>
+<span class="nc" id="L683">                return;</span>
+            }
+<span class="nc" id="L685">            log.debug(&quot;Sending flowEntries for devices {} to {} as backup.&quot;, deviceIds, nodeId);</span>
+            Map&lt;DeviceId, Map&lt;FlowId, Set&lt;StoredFlowEntry&gt;&gt;&gt; deviceFlowEntries =
+<span class="nc" id="L687">                    Maps.newConcurrentMap();</span>
+<span class="nc" id="L688">            deviceIds.forEach(id -&gt; deviceFlowEntries.put(id, ImmutableMap.copyOf(getFlowTable(id))));</span>
+<span class="nc" id="L689">            clusterCommunicator.&lt;Map&lt;DeviceId, Map&lt;FlowId, Set&lt;StoredFlowEntry&gt;&gt;&gt;, Set&lt;DeviceId&gt;&gt;sendAndReceive(</span>
+                                        deviceFlowEntries,
+                                        FLOW_TABLE_BACKUP,
+                                        SERIALIZER::encode,
+                                        SERIALIZER::decode,
+                                        nodeId)
+<span class="nc" id="L695">                               .whenComplete((backedupDevices, error) -&gt; {</span>
+<span class="nc bnc" id="L696" title="All 2 branches missed.">                                   Set&lt;DeviceId&gt; devicesNotBackedup = error != null ?</span>
+<span class="nc" id="L697">                                           deviceFlowEntries.keySet() :</span>
+<span class="nc" id="L698">                                           Sets.difference(deviceFlowEntries.keySet(), backedupDevices);</span>
+<span class="nc bnc" id="L699" title="All 2 branches missed.">                                   if (devicesNotBackedup.size() &gt; 0) {</span>
+<span class="nc" id="L700">                                       log.warn(&quot;Failed to backup devices: {}. Reason: {}&quot;,</span>
+<span class="nc" id="L701">                                               devicesNotBackedup, error.getMessage());</span>
+                                   }
+<span class="nc bnc" id="L703" title="All 2 branches missed.">                                   if (backedupDevices != null) {</span>
+<span class="nc" id="L704">                                       backedupDevices.forEach(id -&gt; {</span>
+<span class="nc" id="L705">                                           lastBackupTimes.put(id, System.currentTimeMillis());</span>
+<span class="nc" id="L706">                                           lastBackupNodes.put(id, nodeId);</span>
+<span class="nc" id="L707">                                       });</span>
+                                   }
+<span class="nc" id="L709">                               });</span>
+<span class="nc" id="L710">        }</span>
+
+        /**
+         * Returns the flow table for specified device.
+         *
+         * @param deviceId identifier of the device
+         * @return Map representing Flow Table of given device.
+         */
+        private Map&lt;FlowId, Set&lt;StoredFlowEntry&gt;&gt; getFlowTable(DeviceId deviceId) {
+<span class="nc" id="L719">            return flowEntries.computeIfAbsent(deviceId, id -&gt; Maps.newConcurrentMap());</span>
+        }
+
+        private Set&lt;StoredFlowEntry&gt; getFlowEntriesInternal(DeviceId deviceId, FlowId flowId) {
+<span class="nc" id="L723">            return getFlowTable(deviceId).computeIfAbsent(flowId, id -&gt; Sets.newCopyOnWriteArraySet());</span>
+        }
+
+        private StoredFlowEntry getFlowEntryInternal(FlowRule rule) {
+<span class="nc" id="L727">            Set&lt;StoredFlowEntry&gt; flowEntries = getFlowEntriesInternal(rule.deviceId(), rule.id());</span>
+<span class="nc" id="L728">            return flowEntries.stream()</span>
+<span class="nc" id="L729">                              .filter(entry -&gt; Objects.equal(entry, rule))</span>
+<span class="nc" id="L730">                              .findAny()</span>
+<span class="nc" id="L731">                              .orElse(null);</span>
+        }
+
+        private Set&lt;FlowEntry&gt; getFlowEntriesInternal(DeviceId deviceId) {
+<span class="nc" id="L735">            Set&lt;FlowEntry&gt; result = Sets.newHashSet();</span>
+<span class="nc" id="L736">            getFlowTable(deviceId).values().forEach(result::addAll);</span>
+<span class="nc" id="L737">            return result;</span>
+        }
+
+        public StoredFlowEntry getFlowEntry(FlowRule rule) {
+<span class="nc" id="L741">            return getFlowEntryInternal(rule);</span>
+        }
+
+        public Set&lt;FlowEntry&gt; getFlowEntries(DeviceId deviceId) {
+<span class="nc" id="L745">            return getFlowEntriesInternal(deviceId);</span>
+        }
+
+        public void add(FlowEntry rule) {
+<span class="nc" id="L749">            getFlowEntriesInternal(rule.deviceId(), rule.id()).add((StoredFlowEntry) rule);</span>
+<span class="nc" id="L750">            lastUpdateTimes.put(rule.deviceId(), System.currentTimeMillis());</span>
+<span class="nc" id="L751">        }</span>
+
+        public boolean remove(DeviceId deviceId, FlowEntry rule) {
+            try {
+<span class="nc" id="L755">                return getFlowEntriesInternal(deviceId, rule.id()).remove(rule);</span>
+            } finally {
+<span class="nc" id="L757">                lastUpdateTimes.put(deviceId, System.currentTimeMillis());</span>
+            }
+        }
+
+        private NodeId getBackupNode(DeviceId deviceId) {
+<span class="nc" id="L762">            List&lt;NodeId&gt; deviceStandbys = replicaInfoManager.getReplicaInfoFor(deviceId).backups();</span>
+            // pick the standby which is most likely to become next master
+<span class="nc bnc" id="L764" title="All 2 branches missed.">            return deviceStandbys.isEmpty() ? null : deviceStandbys.get(0);</span>
+        }
+
+        private void backup() {
+<span class="nc bnc" id="L768" title="All 2 branches missed.">            if (!backupEnabled) {</span>
+<span class="nc" id="L769">                return;</span>
+            }
+            try {
+                // determine the set of devices that we need to backup during this run.
+<span class="nc" id="L773">                Set&lt;DeviceId&gt; devicesToBackup = mastershipService.getDevicesOf(local)</span>
+<span class="nc" id="L774">                            .stream()</span>
+<span class="nc" id="L775">                            .filter(deviceId -&gt; {</span>
+<span class="nc" id="L776">                                Long lastBackupTime = lastBackupTimes.get(deviceId);</span>
+<span class="nc" id="L777">                                Long lastUpdateTime = lastUpdateTimes.get(deviceId);</span>
+<span class="nc" id="L778">                                NodeId lastBackupNode = lastBackupNodes.get(deviceId);</span>
+<span class="nc" id="L779">                                NodeId newBackupNode = getBackupNode(deviceId);</span>
+<span class="nc bnc" id="L780" title="All 2 branches missed.">                                return lastBackupTime == null</span>
+<span class="nc bnc" id="L781" title="All 4 branches missed.">                                        ||  !Objects.equal(lastBackupNode, newBackupNode)</span>
+<span class="nc bnc" id="L782" title="All 2 branches missed.">                                        || (lastUpdateTime != null &amp;&amp; lastUpdateTime &gt; lastBackupTime);</span>
+                            })
+<span class="nc" id="L784">                            .collect(Collectors.toSet());</span>
+
+                // compute a mapping from node to the set of devices whose flow entries it should backup
+<span class="nc" id="L787">                Map&lt;NodeId, Set&lt;DeviceId&gt;&gt; devicesToBackupByNode = Maps.newHashMap();</span>
+<span class="nc" id="L788">                devicesToBackup.forEach(deviceId -&gt; {</span>
+<span class="nc" id="L789">                    NodeId backupLocation = getBackupNode(deviceId);</span>
+<span class="nc bnc" id="L790" title="All 2 branches missed.">                    if (backupLocation != null) {</span>
+<span class="nc" id="L791">                        devicesToBackupByNode.computeIfAbsent(backupLocation, nodeId -&gt; Sets.newHashSet())</span>
+<span class="nc" id="L792">                                             .add(deviceId);</span>
+                    }
+<span class="nc" id="L794">                });</span>
+                // send the device flow entries to their respective backup nodes
+<span class="nc" id="L796">                devicesToBackupByNode.forEach(this::sendBackups);</span>
+<span class="nc" id="L797">            } catch (Exception e) {</span>
+<span class="nc" id="L798">                log.error(&quot;Backup failed.&quot;, e);</span>
+<span class="nc" id="L799">            }</span>
+<span class="nc" id="L800">        }</span>
+
+        private Set&lt;DeviceId&gt; onBackupReceipt(Map&lt;DeviceId, Map&lt;FlowId, Set&lt;StoredFlowEntry&gt;&gt;&gt; flowTables) {
+<span class="nc" id="L803">            log.debug(&quot;Received flowEntries for {} to backup&quot;, flowTables.keySet());</span>
+<span class="nc" id="L804">            Set&lt;DeviceId&gt; backedupDevices = Sets.newHashSet();</span>
+            try {
+<span class="nc" id="L806">                flowTables.forEach((deviceId, deviceFlowTable) -&gt; {</span>
+                    // Only process those devices are that not managed by the local node.
+<span class="nc bnc" id="L808" title="All 2 branches missed.">                    if (!Objects.equal(local, mastershipService.getMasterFor(deviceId))) {</span>
+<span class="nc" id="L809">                        Map&lt;FlowId, Set&lt;StoredFlowEntry&gt;&gt; backupFlowTable = getFlowTable(deviceId);</span>
+<span class="nc" id="L810">                        backupFlowTable.clear();</span>
+<span class="nc" id="L811">                        backupFlowTable.putAll(deviceFlowTable);</span>
+<span class="nc" id="L812">                        backedupDevices.add(deviceId);</span>
+                    }
+<span class="nc" id="L814">                });</span>
+<span class="nc" id="L815">            } catch (Exception e) {</span>
+<span class="nc" id="L816">                log.warn(&quot;Failure processing backup request&quot;, e);</span>
+<span class="nc" id="L817">            }</span>
+<span class="nc" id="L818">            return backedupDevices;</span>
+        }
+    }
+
+    @Override
+    public FlowRuleEvent updateTableStatistics(DeviceId deviceId,
+                                               List&lt;TableStatisticsEntry&gt; tableStats) {
+<span class="nc" id="L825">        deviceTableStats.put(deviceId, tableStats);</span>
+<span class="nc" id="L826">        return null;</span>
+    }
+
+    @Override
+    public Iterable&lt;TableStatisticsEntry&gt; getTableStatistics(DeviceId deviceId) {
+<span class="nc" id="L831">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+
+<span class="nc bnc" id="L833" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L834">            log.debug(&quot;Failed to getTableStats: No master for {}&quot;, deviceId);</span>
+<span class="nc" id="L835">            return Collections.emptyList();</span>
+        }
+
+<span class="nc" id="L838">        List&lt;TableStatisticsEntry&gt; tableStats = deviceTableStats.get(deviceId);</span>
+<span class="nc bnc" id="L839" title="All 2 branches missed.">        if (tableStats == null) {</span>
+<span class="nc" id="L840">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L842">        return ImmutableList.copyOf(tableStats);</span>
+    }
+
+<span class="nc" id="L845">    private class InternalTableStatsListener</span>
+        implements EventuallyConsistentMapListener&lt;DeviceId, List&lt;TableStatisticsEntry&gt;&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;DeviceId,
+                          List&lt;TableStatisticsEntry&gt;&gt; event) {
+            //TODO: Generate an event to listeners (do we need?)
+<span class="nc" id="L851">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

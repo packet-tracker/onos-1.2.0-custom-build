@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpenFlowDeviceValueMapper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-device</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.device.impl</a> &gt; <span class="el_source">OpenFlowDeviceValueMapper.java</span></div><h1>OpenFlowDeviceValueMapper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.of.device.impl;
+
+import org.onosproject.net.OduSignalType;
+
+import com.google.common.collect.BiMap;
+import com.google.common.collect.EnumHashBiMap;
+
+/**
+ * Collection of helper methods to convert protocol agnostic models to values used in OpenFlow spec.
+ */
+final class OpenFlowDeviceValueMapper {
+
+    // prohibit instantiation
+<span class="nc" id="L29">    private OpenFlowDeviceValueMapper() {}</span>
+
+<span class="nc" id="L31">    private static final BiMap&lt;OduSignalType, Byte&gt; ODU_SIGNAL_TYPES = EnumHashBiMap.create(OduSignalType.class);</span>
+    static {
+        // See ONF &quot;Optical Transport Protocol Extensions Version 1.0&quot; for the following values
+<span class="nc" id="L34">        ODU_SIGNAL_TYPES.put(OduSignalType.ODU1, (byte) 1);         // OFPODUT_ODU1 of enum ofp_odu_signal_type</span>
+<span class="nc" id="L35">        ODU_SIGNAL_TYPES.put(OduSignalType.ODU2, (byte) 2);         // OFPODUT_ODU2 of enum ofp_odu_signal_type</span>
+<span class="nc" id="L36">        ODU_SIGNAL_TYPES.put(OduSignalType.ODU3, (byte) 3);         // OFPODUT_ODU3 of enum ofp_odu_signal_type</span>
+<span class="nc" id="L37">        ODU_SIGNAL_TYPES.put(OduSignalType.ODU4, (byte) 4);         // OFPODUT_ODU4 of enum ofp_odu_signal_type</span>
+<span class="nc" id="L38">        ODU_SIGNAL_TYPES.put(OduSignalType.ODU0, (byte) 10);        // OFPODUT_ODU0 of enum ofp_odu_signal_type</span>
+<span class="nc" id="L39">        ODU_SIGNAL_TYPES.put(OduSignalType.ODU2e, (byte) 11);       // OFPODUT_ODU2E of enum ofp_odu_signal_type</span>
+<span class="nc" id="L40">    }</span>
+
+    /**
+     * Looks up the specified input value to the corresponding value with the specified map.
+     *
+     * @param map bidirectional mapping
+     * @param input input value
+     * @param cls class of output value
+     * @param &lt;I&gt; type of input value
+     * @param &lt;O&gt; type of output value
+     * @return the corresponding value stored in the specified map
+     */
+    private static &lt;I, O&gt; O lookup(BiMap&lt;I, O&gt; map, I input, Class&lt;O&gt; cls) {
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        if (!map.containsKey(input)) {</span>
+<span class="nc" id="L54">            throw new RuntimeException(</span>
+<span class="nc" id="L55">                    String.format(&quot;No mapping found for %s when converting to %s&quot;, input, cls.getName()));</span>
+        }
+
+<span class="nc" id="L58">        return map.get(input);</span>
+    }
+
+    /**
+     * Looks up the the corresponding {@link OduSignalType} instance
+     * from the specified byte value for ODU signal type defined in
+     * ONF &quot;Optical Transport Protocol Extensions Version 1.0&quot;.
+     *
+     * @param signalType byte value as ODU (Optical channel Data Unit) signal type defined the spec
+     * @return the corresponding OchSignalType instance
+     */
+    static OduSignalType lookupOduSignalType(byte signalType) {
+<span class="nc" id="L70">        return lookup(ODU_SIGNAL_TYPES.inverse(), signalType, OduSignalType.class);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

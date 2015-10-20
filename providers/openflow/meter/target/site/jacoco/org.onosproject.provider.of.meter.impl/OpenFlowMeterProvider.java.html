@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpenFlowMeterProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-meter</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.meter.impl</a> &gt; <span class="el_source">OpenFlowMeterProvider.java</span></div><h1>OpenFlowMeterProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.provider.of.meter.impl;
+
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalCause;
+import com.google.common.cache.RemovalNotification;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.meter.Band;
+import org.onosproject.net.meter.DefaultBand;
+import org.onosproject.net.meter.DefaultMeter;
+import org.onosproject.net.meter.Meter;
+import org.onosproject.net.meter.MeterFailReason;
+import org.onosproject.net.meter.MeterId;
+import org.onosproject.net.meter.MeterOperation;
+import org.onosproject.net.meter.MeterOperations;
+import org.onosproject.net.meter.MeterProvider;
+import org.onosproject.net.meter.MeterProviderRegistry;
+import org.onosproject.net.meter.MeterProviderService;
+import org.onosproject.net.meter.MeterState;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.openflow.controller.Dpid;
+import org.onosproject.openflow.controller.OpenFlowController;
+import org.onosproject.openflow.controller.OpenFlowEventListener;
+import org.onosproject.openflow.controller.OpenFlowSwitch;
+import org.onosproject.openflow.controller.OpenFlowSwitchListener;
+import org.onosproject.openflow.controller.RoleState;
+import org.projectfloodlight.openflow.protocol.OFErrorMsg;
+import org.projectfloodlight.openflow.protocol.OFErrorType;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFMeterBandStats;
+import org.projectfloodlight.openflow.protocol.OFMeterConfigStatsReply;
+import org.projectfloodlight.openflow.protocol.OFMeterStats;
+import org.projectfloodlight.openflow.protocol.OFMeterStatsReply;
+import org.projectfloodlight.openflow.protocol.OFPortStatus;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsType;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.errormsg.OFMeterModFailedErrorMsg;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Provider which uses an OpenFlow controller to handle meters.
+ */
+@Component(immediate = true, enabled = true)
+public class OpenFlowMeterProvider extends AbstractProvider implements MeterProvider {
+
+
+<span class="nc" id="L82">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected OpenFlowController controller;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MeterProviderRegistry providerRegistry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    private MeterProviderService providerService;
+
+<span class="nc" id="L95">    private static final AtomicLong XID_COUNTER = new AtomicLong(1);</span>
+
+    static final int POLL_INTERVAL = 10;
+    static final long TIMEOUT = 30;
+
+    private Cache&lt;Long, MeterOperation&gt; pendingOperations;
+
+
+<span class="nc" id="L103">    private InternalMeterListener listener = new InternalMeterListener();</span>
+<span class="nc" id="L104">    private Map&lt;Dpid, MeterStatsCollector&gt; collectors = Maps.newHashMap();</span>
+
+    /**
+     * Creates a OpenFlow meter provider.
+     */
+    public OpenFlowMeterProvider() {
+<span class="nc" id="L110">        super(new ProviderId(&quot;of&quot;, &quot;org.onosproject.provider.meter&quot;));</span>
+<span class="nc" id="L111">    }</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L115">        providerService = providerRegistry.register(this);</span>
+
+<span class="nc" id="L117">        pendingOperations = CacheBuilder.newBuilder()</span>
+<span class="nc" id="L118">                .expireAfterWrite(TIMEOUT, TimeUnit.SECONDS)</span>
+<span class="nc" id="L119">                .removalListener((RemovalNotification&lt;Long, MeterOperation&gt; notification) -&gt; {</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">                    if (notification.getCause() == RemovalCause.EXPIRED) {</span>
+<span class="nc" id="L121">                        providerService.meterOperationFailed(notification.getValue(),</span>
+                                                             MeterFailReason.TIMEOUT);
+                    }
+<span class="nc" id="L124">                }).build();</span>
+
+<span class="nc" id="L126">        controller.addEventListener(listener);</span>
+<span class="nc" id="L127">        controller.addListener(listener);</span>
+
+<span class="nc" id="L129">        controller.getSwitches().forEach((sw -&gt; createStatsCollection(sw)));</span>
+<span class="nc" id="L130">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L134">        providerRegistry.unregister(this);</span>
+<span class="nc" id="L135">        controller.removeEventListener(listener);</span>
+<span class="nc" id="L136">        controller.removeListener(listener);</span>
+<span class="nc" id="L137">        providerService = null;</span>
+<span class="nc" id="L138">    }</span>
+
+    @Override
+    public void performMeterOperation(DeviceId deviceId, MeterOperations meterOps) {
+<span class="nc" id="L142">        Dpid dpid = Dpid.dpid(deviceId.uri());</span>
+<span class="nc" id="L143">        OpenFlowSwitch sw = controller.getSwitch(dpid);</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (sw == null) {</span>
+<span class="nc" id="L145">            log.error(&quot;Unknown device {}&quot;, deviceId);</span>
+<span class="nc" id="L146">            meterOps.operations().forEach(op -&gt;</span>
+<span class="nc" id="L147">                                                  providerService.meterOperationFailed(op,</span>
+                                                                                       MeterFailReason.UNKNOWN_DEVICE)
+            );
+<span class="nc" id="L150">            return;</span>
+        }
+
+<span class="nc" id="L153">        meterOps.operations().forEach(op -&gt; performOperation(sw, op));</span>
+<span class="nc" id="L154">    }</span>
+
+    @Override
+    public void performMeterOperation(DeviceId deviceId, MeterOperation meterOp) {
+<span class="nc" id="L158">        Dpid dpid = Dpid.dpid(deviceId.uri());</span>
+<span class="nc" id="L159">        OpenFlowSwitch sw = controller.getSwitch(dpid);</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (sw == null) {</span>
+<span class="nc" id="L161">            log.error(&quot;Unknown device {}&quot;, deviceId);</span>
+<span class="nc" id="L162">            providerService.meterOperationFailed(meterOp,</span>
+                                                 MeterFailReason.UNKNOWN_DEVICE);
+<span class="nc" id="L164">            return;</span>
+        }
+
+<span class="nc" id="L167">        performOperation(sw, meterOp);</span>
+
+<span class="nc" id="L169">    }</span>
+
+    private void performOperation(OpenFlowSwitch sw, MeterOperation op) {
+
+<span class="nc" id="L173">        pendingOperations.put(op.meter().id().id(), op);</span>
+
+
+<span class="nc" id="L176">        Meter meter = op.meter();</span>
+<span class="nc" id="L177">        MeterModBuilder builder = MeterModBuilder.builder(meter.id().id(), sw.factory());</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        if (meter.isBurst()) {</span>
+<span class="nc" id="L179">            builder.burst();</span>
+        }
+<span class="nc" id="L181">        builder.withBands(meter.bands())</span>
+<span class="nc" id="L182">                .withId(meter.id())</span>
+<span class="nc" id="L183">                .withRateUnit(meter.unit());</span>
+
+<span class="nc bnc" id="L185" title="All 4 branches missed.">        switch (op.type()) {</span>
+            case ADD:
+<span class="nc" id="L187">                sw.sendMsg(builder.add());</span>
+<span class="nc" id="L188">                break;</span>
+            case REMOVE:
+<span class="nc" id="L190">                sw.sendMsg(builder.remove());</span>
+<span class="nc" id="L191">                break;</span>
+            case MODIFY:
+<span class="nc" id="L193">                sw.sendMsg(builder.modify());</span>
+<span class="nc" id="L194">                break;</span>
+            default:
+<span class="nc" id="L196">                log.warn(&quot;Unknown Meter command {}; not sending anything&quot;,</span>
+<span class="nc" id="L197">                         op.type());</span>
+<span class="nc" id="L198">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.UNKNOWN_COMMAND);
+        }
+
+<span class="nc" id="L202">    }</span>
+
+    private void createStatsCollection(OpenFlowSwitch sw) {
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (isMeterSupported(sw)) {</span>
+<span class="nc" id="L206">            MeterStatsCollector msc = new MeterStatsCollector(sw, POLL_INTERVAL);</span>
+<span class="nc" id="L207">            msc.start();</span>
+<span class="nc" id="L208">            collectors.put(new Dpid(sw.getId()), msc);</span>
+        }
+<span class="nc" id="L210">    }</span>
+
+    private boolean isMeterSupported(OpenFlowSwitch sw) {
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (sw.factory().getVersion() == OFVersion.OF_10 ||</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                sw.factory().getVersion() == OFVersion.OF_11 ||</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">                sw.factory().getVersion() == OFVersion.OF_12) {</span>
+<span class="nc" id="L216">            return false;</span>
+        }
+
+<span class="nc" id="L219">        return true;</span>
+    }
+
+    private void pushMeterStats(Dpid dpid, OFStatsReply msg) {
+<span class="nc" id="L223">        DeviceId deviceId = DeviceId.deviceId(Dpid.uri(dpid));</span>
+
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (msg.getStatsType() == OFStatsType.METER) {</span>
+<span class="nc" id="L226">            OFMeterStatsReply reply = (OFMeterStatsReply) msg;</span>
+<span class="nc" id="L227">            Collection&lt;Meter&gt; meters = buildMeters(deviceId, reply.getEntries());</span>
+            //TODO do meter accounting here.
+<span class="nc" id="L229">            providerService.pushMeterMetrics(deviceId, meters);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        } else if (msg.getStatsType() == OFStatsType.METER_CONFIG) {</span>
+<span class="nc" id="L231">            OFMeterConfigStatsReply reply  = (OFMeterConfigStatsReply) msg;</span>
+            // FIXME: Map&lt;Long, Meter&gt; meters = collectMeters(deviceId, reply);
+        }
+
+<span class="nc" id="L235">    }</span>
+
+    private Map&lt;Long, Meter&gt; collectMeters(DeviceId deviceId,
+                                           OFMeterConfigStatsReply reply) {
+<span class="nc" id="L239">        return Maps.newHashMap();</span>
+        //TODO: Needs a fix to be applied to loxi MeterConfig stat is incorrect
+    }
+
+    private Collection&lt;Meter&gt; buildMeters(DeviceId deviceId,
+                                          List&lt;OFMeterStats&gt; entries) {
+<span class="nc" id="L245">        return entries.stream().map(stat -&gt; {</span>
+<span class="nc" id="L246">            DefaultMeter.Builder builder = DefaultMeter.builder();</span>
+<span class="nc" id="L247">            Collection&lt;Band&gt; bands = buildBands(stat.getBandStats());</span>
+<span class="nc" id="L248">            builder.forDevice(deviceId)</span>
+<span class="nc" id="L249">                    .withId(MeterId.meterId(stat.getMeterId()))</span>
+                    //FIXME: need to encode appId in meter id, but that makes
+                    // things a little annoying for debugging
+<span class="nc" id="L252">                    .fromApp(coreService.getAppId(&quot;org.onosproject.core&quot;))</span>
+<span class="nc" id="L253">                    .withBands(bands);</span>
+<span class="nc" id="L254">            DefaultMeter meter = builder.build();</span>
+<span class="nc" id="L255">            meter.setState(MeterState.ADDED);</span>
+<span class="nc" id="L256">            meter.setLife(stat.getDurationSec());</span>
+<span class="nc" id="L257">            meter.setProcessedBytes(stat.getByteInCount().getValue());</span>
+<span class="nc" id="L258">            meter.setProcessedPackets(stat.getPacketInCount().getValue());</span>
+<span class="nc" id="L259">            meter.setReferenceCount(stat.getFlowCount());</span>
+
+            // marks the meter as seen on the dataplane
+<span class="nc" id="L262">            pendingOperations.invalidate(stat.getMeterId());</span>
+<span class="nc" id="L263">            return meter;</span>
+<span class="nc" id="L264">        }).collect(Collectors.toSet());</span>
+    }
+
+    private Collection&lt;Band&gt; buildBands(List&lt;OFMeterBandStats&gt; bandStats) {
+<span class="nc" id="L268">        return bandStats.stream().map(stat -&gt; {</span>
+<span class="nc" id="L269">            DefaultBand band = DefaultBand.builder().build();</span>
+<span class="nc" id="L270">            band.setBytes(stat.getByteBandCount().getValue());</span>
+<span class="nc" id="L271">            band.setPackets(stat.getPacketBandCount().getValue());</span>
+<span class="nc" id="L272">            return band;</span>
+<span class="nc" id="L273">        }).collect(Collectors.toSet());</span>
+    }
+
+    private void signalMeterError(OFMeterModFailedErrorMsg meterError,
+                                  MeterOperation op) {
+<span class="nc bnc" id="L278" title="All 13 branches missed.">        switch (meterError.getCode()) {</span>
+            case UNKNOWN:
+<span class="nc" id="L280">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.UNKNOWN_DEVICE);
+<span class="nc" id="L282">                break;</span>
+            case METER_EXISTS:
+<span class="nc" id="L284">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.EXISTING_METER);
+<span class="nc" id="L286">                break;</span>
+            case INVALID_METER:
+<span class="nc" id="L288">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.INVALID_METER);
+<span class="nc" id="L290">                break;</span>
+            case UNKNOWN_METER:
+<span class="nc" id="L292">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.UNKNOWN);
+<span class="nc" id="L294">                break;</span>
+            case BAD_COMMAND:
+<span class="nc" id="L296">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.UNKNOWN_COMMAND);
+<span class="nc" id="L298">                break;</span>
+            case BAD_FLAGS:
+<span class="nc" id="L300">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.UNKNOWN_FLAGS);
+<span class="nc" id="L302">                break;</span>
+            case BAD_RATE:
+<span class="nc" id="L304">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.BAD_RATE);
+<span class="nc" id="L306">                break;</span>
+            case BAD_BURST:
+<span class="nc" id="L308">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.BAD_BURST);
+<span class="nc" id="L310">                break;</span>
+            case BAD_BAND:
+<span class="nc" id="L312">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.BAD_BAND);
+<span class="nc" id="L314">                break;</span>
+            case BAD_BAND_VALUE:
+<span class="nc" id="L316">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.BAD_BAND_VALUE);
+<span class="nc" id="L318">                break;</span>
+            case OUT_OF_METERS:
+<span class="nc" id="L320">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.OUT_OF_METERS);
+<span class="nc" id="L322">                break;</span>
+            case OUT_OF_BANDS:
+<span class="nc" id="L324">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.OUT_OF_BANDS);
+<span class="nc" id="L326">                break;</span>
+            default:
+<span class="nc" id="L328">                providerService.meterOperationFailed(op,</span>
+                                                     MeterFailReason.UNKNOWN);
+        }
+<span class="nc" id="L331">    }</span>
+
+<span class="nc" id="L333">    private class InternalMeterListener</span>
+            implements OpenFlowSwitchListener, OpenFlowEventListener {
+        @Override
+        public void handleMessage(Dpid dpid, OFMessage msg) {
+<span class="nc bnc" id="L337" title="All 3 branches missed.">            switch (msg.getType()) {</span>
+                case STATS_REPLY:
+<span class="nc" id="L339">                    pushMeterStats(dpid, (OFStatsReply) msg);</span>
+<span class="nc" id="L340">                    break;</span>
+                case ERROR:
+<span class="nc" id="L342">                    OFErrorMsg error = (OFErrorMsg) msg;</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">                    if (error.getErrType() == OFErrorType.METER_MOD_FAILED) {</span>
+<span class="nc" id="L344">                        MeterOperation op =</span>
+<span class="nc" id="L345">                                pendingOperations.getIfPresent(error.getXid());</span>
+<span class="nc" id="L346">                        pendingOperations.invalidate(error.getXid());</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">                        if (op == null) {</span>
+<span class="nc" id="L348">                            log.warn(&quot;Unknown Meter operation failed {}&quot;, error);</span>
+                        } else {
+<span class="nc" id="L350">                            OFMeterModFailedErrorMsg meterError =</span>
+                                    (OFMeterModFailedErrorMsg) error;
+<span class="nc" id="L352">                            signalMeterError(meterError, op);</span>
+                        }
+<span class="nc" id="L354">                    }</span>
+                    break;
+                default:
+                    break;
+            }
+
+<span class="nc" id="L360">        }</span>
+
+        @Override
+        public void switchAdded(Dpid dpid) {
+<span class="nc" id="L364">            createStatsCollection(controller.getSwitch(dpid));</span>
+<span class="nc" id="L365">        }</span>
+
+        @Override
+        public void switchRemoved(Dpid dpid) {
+<span class="nc" id="L369">            MeterStatsCollector msc = collectors.remove(dpid);</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (msc != null) {</span>
+<span class="nc" id="L371">                msc.stop();</span>
+            }
+<span class="nc" id="L373">        }</span>
+
+        @Override
+        public void switchChanged(Dpid dpid) {
+
+<span class="nc" id="L378">        }</span>
+
+        @Override
+        public void portChanged(Dpid dpid, OFPortStatus status) {
+
+<span class="nc" id="L383">        }</span>
+
+        @Override
+        public void receivedRoleReply(Dpid dpid, RoleState requested, RoleState response) {
+
+<span class="nc" id="L388">        }</span>
+    }
+
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

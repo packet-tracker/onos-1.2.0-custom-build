@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NeighborSolicitation.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.ndp</a> &gt; <span class="el_source">NeighborSolicitation.java</span></div><h1>NeighborSolicitation.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.ndp;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+import org.onlab.packet.Ip6Address;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements ICMPv6 Neighbor Solicitation packet format. (RFC 4861)
+ */
+<span class="fc" id="L32">public class NeighborSolicitation extends BasePacket {</span>
+    public static final byte HEADER_LENGTH = 20; // bytes
+
+<span class="fc" id="L35">    protected byte[] targetAddress = new byte[Ip6Address.BYTE_LENGTH];</span>
+
+<span class="fc" id="L37">    private final NeighborDiscoveryOptions options =</span>
+        new NeighborDiscoveryOptions();
+
+    /**
+     * Gets target address.
+     *
+     * @return the target IPv6 address
+     */
+    public byte[] getTargetAddress() {
+<span class="fc" id="L46">        return this.targetAddress;</span>
+    }
+
+    /**
+     * Sets target address.
+     *
+     * @param targetAddress the target IPv6 address to set
+     * @return this
+     */
+    public NeighborSolicitation setTargetAddress(final byte[] targetAddress) {
+<span class="fc" id="L56">        this.targetAddress =</span>
+<span class="fc" id="L57">            Arrays.copyOfRange(targetAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="fc" id="L58">        return this;</span>
+    }
+
+    /**
+     * Gets the Neighbor Discovery Protocol packet options.
+     *
+     * @return the Neighbor Discovery Protocol packet options
+     */
+    public List&lt;NeighborDiscoveryOptions.Option&gt; getOptions() {
+<span class="fc" id="L67">        return this.options.options();</span>
+    }
+
+    /**
+     * Adds a Neighbor Discovery Protocol packet option.
+     *
+     * @param type the option type
+     * @param data the option data
+     * @return this
+     */
+    public NeighborSolicitation addOption(final byte type,
+                                          final byte[] data) {
+<span class="fc" id="L79">        this.options.addOption(type, data);</span>
+<span class="fc" id="L80">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L85">        byte[] optionsData = null;</span>
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">        if (this.options.hasOptions()) {</span>
+<span class="fc" id="L87">            optionsData = this.options.serialize();</span>
+        }
+
+<span class="fc" id="L90">        int optionsLength = 0;</span>
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">        if (optionsData != null) {</span>
+<span class="fc" id="L92">            optionsLength = optionsData.length;</span>
+        }
+
+<span class="fc" id="L95">        final byte[] data = new byte[HEADER_LENGTH + optionsLength];</span>
+<span class="fc" id="L96">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L98">        bb.putInt(0);</span>
+<span class="fc" id="L99">        bb.put(this.targetAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="pc bpc" id="L100" title="1 of 2 branches missed.">        if (optionsData != null) {</span>
+<span class="fc" id="L101">            bb.put(optionsData);</span>
+        }
+
+<span class="fc" id="L104">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L109">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="nc" id="L111">        bb.getInt();</span>
+<span class="nc" id="L112">        bb.get(this.targetAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+
+<span class="nc" id="L114">        this.options.deserialize(data, bb.position(),</span>
+<span class="nc" id="L115">                                 bb.limit() - bb.position());</span>
+
+<span class="nc" id="L117">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L127">        final int prime = 5807;</span>
+<span class="nc" id="L128">        int result = super.hashCode();</span>
+        ByteBuffer bb;
+<span class="nc" id="L130">        bb = ByteBuffer.wrap(this.targetAddress);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        for (int i = 0; i &lt; this.targetAddress.length / 4; i++) {</span>
+<span class="nc" id="L132">            result = prime * result + bb.getInt();</span>
+        }
+<span class="nc" id="L134">        result = prime * result + this.options.hashCode();</span>
+<span class="nc" id="L135">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L146">            return true;</span>
+        }
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L149">            return false;</span>
+        }
+<span class="pc bpc" id="L151" title="1 of 2 branches missed.">        if (!(obj instanceof NeighborSolicitation)) {</span>
+<span class="nc" id="L152">            return false;</span>
+        }
+<span class="fc" id="L154">        final NeighborSolicitation other = (NeighborSolicitation) obj;</span>
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">        if (!Arrays.equals(this.targetAddress, other.targetAddress)) {</span>
+<span class="fc" id="L156">            return false;</span>
+        }
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        if (!this.options.equals(other.options)) {</span>
+<span class="nc" id="L159">            return false;</span>
+        }
+<span class="nc" id="L161">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for neighbor solicitation packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;NeighborSolicitation&gt; deserializer() {
+<span class="fc" id="L170">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L171">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="fc" id="L173">            NeighborSolicitation neighborSolicitation = new NeighborSolicitation();</span>
+
+<span class="fc" id="L175">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L177">            bb.getInt();</span>
+<span class="fc" id="L178">            bb.get(neighborSolicitation.targetAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">            if (bb.limit() - bb.position() &gt; 0) {</span>
+<span class="fc" id="L181">                NeighborDiscoveryOptions options = NeighborDiscoveryOptions.deserializer()</span>
+<span class="fc" id="L182">                        .deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+
+<span class="fc bfc" id="L184" title="All 2 branches covered.">                for (NeighborDiscoveryOptions.Option option : options.options()) {</span>
+<span class="fc" id="L185">                    neighborSolicitation.addOption(option.type(), option.data());</span>
+<span class="fc" id="L186">                }</span>
+            }
+
+<span class="fc" id="L189">            return neighborSolicitation;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NetconfDeviceProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-netconf-provider-device</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.netconf.device.impl</a> &gt; <span class="el_source">NetconfDeviceProvider.java</span></div><h1>NetconfDeviceProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.netconf.device.impl;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.onlab.util.Tools.delay;
+import static org.onlab.util.Tools.get;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Dictionary;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.packet.ChassisId;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.device.DefaultDeviceDescription;
+import org.onosproject.net.device.DeviceDescription;
+import org.onosproject.net.device.DeviceProvider;
+import org.onosproject.net.device.DeviceProviderRegistry;
+import org.onosproject.net.device.DeviceProviderService;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.provider.netconf.device.impl.NetconfDevice.DeviceState;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+/**
+ * Provider which will try to fetch the details of NETCONF devices from the core
+ * and run a capability discovery on each of the device.
+ */
+@Component(immediate = true)
+public class NetconfDeviceProvider extends AbstractProvider
+        implements DeviceProvider {
+
+<span class="fc" id="L69">    private final Logger log = getLogger(NetconfDeviceProvider.class);</span>
+
+<span class="fc" id="L71">    protected Map&lt;DeviceId, NetconfDevice&gt; netconfDeviceMap = new ConcurrentHashMap&lt;DeviceId, NetconfDevice&gt;();</span>
+
+    private DeviceProviderService providerService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceProviderRegistry providerRegistry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+<span class="fc" id="L87">    private ExecutorService deviceBuilder = Executors</span>
+<span class="fc" id="L88">            .newFixedThreadPool(1, groupedThreads(&quot;onos/netconf&quot;, &quot;device-creator&quot;));</span>
+
+    // Delay between events in ms.
+    private static final int EVENTINTERVAL = 5;
+
+    private static final String SCHEME = &quot;netconf&quot;;
+
+<span class="fc" id="L95">    @Property(name = &quot;devConfigs&quot;, value = &quot;&quot;, label = &quot;Instance-specific configurations&quot;)</span>
+    private String devConfigs = null;
+
+<span class="fc" id="L98">    @Property(name = &quot;devPasswords&quot;, value = &quot;&quot;, label = &quot;Instance-specific password&quot;)</span>
+    private String devPasswords = null;
+
+    /**
+     * Creates a provider with the supplier identifier.
+     */
+    public NetconfDeviceProvider() {
+<span class="fc" id="L105">        super(new ProviderId(&quot;netconf&quot;, &quot;org.onosproject.provider.netconf&quot;));</span>
+<span class="fc" id="L106">    }</span>
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="fc" id="L110">        cfgService.registerProperties(getClass());</span>
+<span class="fc" id="L111">        providerService = providerRegistry.register(this);</span>
+<span class="fc" id="L112">        modified(context);</span>
+<span class="fc" id="L113">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L114">    }</span>
+
+    @Deactivate
+    public void deactivate(ComponentContext context) {
+<span class="fc" id="L118">        cfgService.unregisterProperties(getClass(), false);</span>
+        try {
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">            for (Entry&lt;DeviceId, NetconfDevice&gt; deviceEntry : netconfDeviceMap</span>
+<span class="fc" id="L121">                    .entrySet()) {</span>
+<span class="nc" id="L122">                deviceBuilder.submit(new DeviceCreator(deviceEntry.getValue(),</span>
+                                                       false));
+<span class="nc" id="L124">            }</span>
+<span class="fc" id="L125">            deviceBuilder.awaitTermination(1000, TimeUnit.MILLISECONDS);</span>
+<span class="nc" id="L126">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L127">            log.error(&quot;Device builder did not terminate&quot;);</span>
+<span class="fc" id="L128">        }</span>
+<span class="fc" id="L129">        deviceBuilder.shutdownNow();</span>
+<span class="fc" id="L130">        netconfDeviceMap.clear();</span>
+<span class="fc" id="L131">        providerRegistry.unregister(this);</span>
+<span class="fc" id="L132">        providerService = null;</span>
+<span class="fc" id="L133">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L134">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">        if (context == null) {</span>
+<span class="nc" id="L139">            log.info(&quot;No configuration file&quot;);</span>
+<span class="nc" id="L140">            return;</span>
+        }
+<span class="fc" id="L142">        Dictionary&lt;?, ?&gt; properties = context.getProperties();</span>
+<span class="fc" id="L143">        String deviceCfgValue = get(properties, &quot;devConfigs&quot;);</span>
+<span class="fc" id="L144">        log.info(&quot;Settings: devConfigs={}&quot;, deviceCfgValue);</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (!isNullOrEmpty(deviceCfgValue)) {</span>
+<span class="fc" id="L146">            addOrRemoveDevicesConfig(deviceCfgValue);</span>
+        }
+<span class="fc" id="L148">    }</span>
+
+    private void addOrRemoveDevicesConfig(String deviceConfig) {
+<span class="fc bfc" id="L151" title="All 2 branches covered.">        for (String deviceEntry : deviceConfig.split(&quot;,&quot;)) {</span>
+<span class="fc" id="L152">            NetconfDevice device = processDeviceEntry(deviceEntry);</span>
+<span class="fc bfc" id="L153" title="All 2 branches covered.">            if (device != null) {</span>
+<span class="fc" id="L154">                log.info(&quot;Device Detail: username: {}, host={}, port={}, state={}&quot;,</span>
+<span class="fc" id="L155">                        device.getUsername(), device.getSshHost(),</span>
+<span class="fc" id="L156">                         device.getSshPort(), device.getDeviceState().name());</span>
+<span class="fc bfc" id="L157" title="All 2 branches covered.">                if (device.isActive()) {</span>
+<span class="fc" id="L158">                    deviceBuilder.submit(new DeviceCreator(device, true));</span>
+                } else {
+<span class="fc" id="L160">                    deviceBuilder.submit(new DeviceCreator(device, false));</span>
+                }
+            }
+        }
+<span class="fc" id="L164">    }</span>
+
+    private NetconfDevice processDeviceEntry(String deviceEntry) {
+<span class="pc bpc" id="L167" title="1 of 2 branches missed.">        if (deviceEntry == null) {</span>
+<span class="nc" id="L168">            log.info(&quot;No content for Device Entry, so cannot proceed further.&quot;);</span>
+<span class="nc" id="L169">            return null;</span>
+        }
+<span class="fc" id="L171">        log.info(&quot;Trying to convert Device Entry String: &quot; + deviceEntry</span>
+                + &quot; to a Netconf Device Object&quot;);
+<span class="fc" id="L173">        NetconfDevice device = null;</span>
+        try {
+<span class="fc" id="L175">            String userInfo = deviceEntry.substring(0, deviceEntry</span>
+<span class="fc" id="L176">                    .lastIndexOf('@'));</span>
+<span class="fc" id="L177">            String hostInfo = deviceEntry.substring(deviceEntry</span>
+<span class="fc" id="L178">                    .lastIndexOf('@') + 1);</span>
+<span class="fc" id="L179">            String[] infoSplit = userInfo.split(&quot;:&quot;);</span>
+<span class="fc" id="L180">            String username = infoSplit[0];</span>
+<span class="fc" id="L181">            String password = infoSplit[1];</span>
+<span class="fc" id="L182">            infoSplit = hostInfo.split(&quot;:&quot;);</span>
+<span class="fc" id="L183">            String hostIp = infoSplit[0];</span>
+            Integer hostPort;
+            try {
+<span class="fc" id="L186">                hostPort = Integer.parseInt(infoSplit[1]);</span>
+<span class="fc" id="L187">            } catch (NumberFormatException nfe) {</span>
+<span class="fc" id="L188">                log.error(&quot;Bad Configuration Data: Failed to parse host port number string: &quot;</span>
+                        + infoSplit[1]);
+<span class="fc" id="L190">                throw nfe;</span>
+<span class="fc" id="L191">            }</span>
+<span class="fc" id="L192">            String deviceState = infoSplit[2];</span>
+<span class="pc bpc" id="L193" title="2 of 4 branches missed.">            if (isNullOrEmpty(username) || isNullOrEmpty(password)</span>
+<span class="pc bpc" id="L194" title="1 of 4 branches missed.">                    || isNullOrEmpty(hostIp) || hostPort == 0) {</span>
+<span class="fc" id="L195">                log.warn(&quot;Bad Configuration Data: both user and device information parts of Configuration &quot;</span>
+                        + deviceEntry + &quot; should be non-nullable&quot;);
+            } else {
+<span class="fc" id="L198">                device = new NetconfDevice(hostIp, hostPort, username, password);</span>
+<span class="pc bpc" id="L199" title="1 of 2 branches missed.">                if (!isNullOrEmpty(deviceState)) {</span>
+<span class="fc bfc" id="L200" title="All 2 branches covered.">                    if (deviceState.toUpperCase().equals(DeviceState.ACTIVE</span>
+<span class="fc" id="L201">                                                                 .name())) {</span>
+<span class="fc" id="L202">                        device.setDeviceState(DeviceState.ACTIVE);</span>
+<span class="fc" id="L203">                    } else if (deviceState.toUpperCase()</span>
+<span class="fc bfc" id="L204" title="All 2 branches covered.">                            .equals(DeviceState.INACTIVE.name())) {</span>
+<span class="fc" id="L205">                        device.setDeviceState(DeviceState.INACTIVE);</span>
+                    } else {
+<span class="fc" id="L207">                        log.warn(&quot;Device State Information can not be empty, so marking the state as INVALID&quot;);</span>
+<span class="fc" id="L208">                        device.setDeviceState(DeviceState.INVALID);</span>
+                    }
+                } else {
+<span class="nc" id="L211">                    log.warn(&quot;The device entry do not specify state information, so marking the state as INVALID&quot;);</span>
+<span class="nc" id="L212">                    device.setDeviceState(DeviceState.INVALID);</span>
+                }
+            }
+<span class="fc" id="L215">        } catch (ArrayIndexOutOfBoundsException aie) {</span>
+<span class="fc" id="L216">            log.error(&quot;Error while reading config infromation from the config file: &quot;</span>
+                              + &quot;The user, host and device state infomation should be &quot;
+                              + &quot;in the order 'userInfo@hostInfo:deviceState'&quot;
+                              + deviceEntry, aie);
+<span class="fc" id="L220">        } catch (Exception e) {</span>
+<span class="fc" id="L221">            log.error(&quot;Error while parsing config information for the device entry: &quot;</span>
+                              + deviceEntry, e);
+<span class="fc" id="L223">        }</span>
+<span class="fc" id="L224">        return device;</span>
+    }
+
+    @Override
+    public void triggerProbe(DeviceId deviceId) {
+        // TODO Auto-generated method stub
+<span class="nc" id="L230">    }</span>
+
+    @Override
+    public void roleChanged(DeviceId deviceId, MastershipRole newRole) {
+
+<span class="nc" id="L235">    }</span>
+
+    @Override
+    public boolean isReachable(DeviceId deviceId) {
+<span class="fc" id="L239">        NetconfDevice netconfDevice = netconfDeviceMap.get(deviceId);</span>
+<span class="fc bfc" id="L240" title="All 2 branches covered.">        if (netconfDevice == null) {</span>
+<span class="fc" id="L241">            log.warn(&quot;BAD REQUEST: the requested device id: &quot;</span>
+<span class="fc" id="L242">                    + deviceId.toString()</span>
+                    + &quot;  is not associated to any NETCONF Device&quot;);
+<span class="fc" id="L244">            return false;</span>
+        }
+<span class="fc" id="L246">        return netconfDevice.isReachable();</span>
+    }
+
+    /**
+     * This class is intended to add or remove Configured Netconf Devices.
+     * Functionality relies on 'createFlag' and 'NetconfDevice' content. The
+     * functionality runs as a thread and dependening on the 'createFlag' value
+     * it will create or remove Device entry from the core.
+     */
+    private class DeviceCreator implements Runnable {
+
+        private NetconfDevice device;
+        private boolean createFlag;
+
+<span class="fc" id="L260">        public DeviceCreator(NetconfDevice device, boolean createFlag) {</span>
+<span class="fc" id="L261">            this.device = device;</span>
+<span class="fc" id="L262">            this.createFlag = createFlag;</span>
+<span class="fc" id="L263">        }</span>
+
+        @Override
+        public void run() {
+<span class="nc bnc" id="L267" title="All 2 branches missed.">            if (createFlag) {</span>
+<span class="nc" id="L268">                log.info(&quot;Trying to create Device Info on ONOS core&quot;);</span>
+<span class="nc" id="L269">                advertiseDevices();</span>
+            } else {
+<span class="nc" id="L271">                log.info(&quot;Trying to remove Device Info on ONOS core&quot;);</span>
+<span class="nc" id="L272">                removeDevices();</span>
+            }
+<span class="nc" id="L274">        }</span>
+
+        /**
+         * For each Netconf Device, remove the entry from the device store.
+         */
+        private void removeDevices() {
+<span class="nc bnc" id="L280" title="All 2 branches missed.">            if (device == null) {</span>
+<span class="nc" id="L281">                log.warn(&quot;The Request Netconf Device is null, cannot proceed further&quot;);</span>
+<span class="nc" id="L282">                return;</span>
+            }
+            try {
+<span class="nc" id="L285">                DeviceId did = getDeviceId();</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">                if (!netconfDeviceMap.containsKey(did)) {</span>
+<span class="nc" id="L287">                    log.error(&quot;BAD Request: 'Currently device is not discovered, &quot;</span>
+                            + &quot;so cannot remove/disconnect the device: &quot;
+<span class="nc" id="L289">                            + device.deviceInfo() + &quot;'&quot;);</span>
+<span class="nc" id="L290">                    return;</span>
+                }
+<span class="nc" id="L292">                providerService.deviceDisconnected(did);</span>
+<span class="nc" id="L293">                device.disconnect();</span>
+<span class="nc" id="L294">                netconfDeviceMap.remove(did);</span>
+<span class="nc" id="L295">                delay(EVENTINTERVAL);</span>
+<span class="nc" id="L296">            } catch (URISyntaxException uriSyntaxExcpetion) {</span>
+<span class="nc" id="L297">                log.error(&quot;Syntax Error while creating URI for the device: &quot;</span>
+<span class="nc" id="L298">                                  + device.deviceInfo()</span>
+                                  + &quot; couldn't remove the device from the store&quot;,
+                          uriSyntaxExcpetion);
+<span class="nc" id="L301">            }</span>
+<span class="nc" id="L302">        }</span>
+
+        /**
+         * Initialize Netconf Device object, and notify core saying device
+         * connected.
+         */
+        private void advertiseDevices() {
+            try {
+<span class="pc bpc" id="L310" title="1 of 2 branches missed.">                if (device == null) {</span>
+<span class="nc" id="L311">                    log.warn(&quot;The Request Netconf Device is null, cannot proceed further&quot;);</span>
+<span class="nc" id="L312">                    return;</span>
+                }
+<span class="nc" id="L314">                device.init();</span>
+<span class="nc" id="L315">                DeviceId did = getDeviceId();</span>
+<span class="nc" id="L316">                ChassisId cid = new ChassisId();</span>
+<span class="nc" id="L317">                DeviceDescription desc = new DefaultDeviceDescription(</span>
+<span class="nc" id="L318">                                                                      did.uri(),</span>
+                                                                      Device.Type.OTHER,
+                                                                      &quot;&quot;, &quot;&quot;,
+                                                                      &quot;&quot;, &quot;&quot;,
+                                                                      cid);
+<span class="nc" id="L323">                log.info(&quot;Persisting Device&quot; + did.uri().toString());</span>
+
+<span class="nc" id="L325">                netconfDeviceMap.put(did, device);</span>
+<span class="nc" id="L326">                providerService.deviceConnected(did, desc);</span>
+<span class="nc" id="L327">                log.info(&quot;Done with Device Info Creation on ONOS core. Device Info: &quot;</span>
+<span class="nc" id="L328">                        + device.deviceInfo() + &quot; &quot; + did.uri().toString());</span>
+<span class="nc" id="L329">                delay(EVENTINTERVAL);</span>
+<span class="nc" id="L330">            } catch (URISyntaxException e) {</span>
+<span class="nc" id="L331">                log.error(&quot;Syntax Error while creating URI for the device: &quot;</span>
+<span class="nc" id="L332">                        + device.deviceInfo()</span>
+                        + &quot; couldn't persist the device onto the store&quot;, e);
+<span class="nc" id="L334">            } catch (SocketTimeoutException e) {</span>
+<span class="nc" id="L335">                log.error(&quot;Error while setting connection for the device: &quot;</span>
+<span class="nc" id="L336">                        + device.deviceInfo(), e);</span>
+<span class="nc" id="L337">            } catch (IOException e) {</span>
+<span class="nc" id="L338">                log.error(&quot;Error while setting connection for the device: &quot;</span>
+<span class="nc" id="L339">                        + device.deviceInfo(), e);</span>
+<span class="nc" id="L340">            } catch (Exception e) {</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">                log.error(&quot;Error while initializing session for the device: &quot;</span>
+<span class="nc" id="L342">                        + (device != null ? device.deviceInfo() : null), e);</span>
+<span class="nc" id="L343">            }</span>
+<span class="nc" id="L344">        }</span>
+
+        /**
+         * This will build a device id for the device.
+         */
+        private DeviceId getDeviceId() throws URISyntaxException {
+<span class="nc" id="L350">            String additionalSSP = new StringBuilder(device.getUsername())</span>
+<span class="nc" id="L351">                    .append(&quot;@&quot;).append(device.getSshHost()).append(&quot;:&quot;)</span>
+<span class="nc" id="L352">                    .append(device.getSshPort()).toString();</span>
+<span class="nc" id="L353">            DeviceId did = DeviceId.deviceId(new URI(SCHEME, additionalSSP,</span>
+                                                     null));
+<span class="nc" id="L355">            return did;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

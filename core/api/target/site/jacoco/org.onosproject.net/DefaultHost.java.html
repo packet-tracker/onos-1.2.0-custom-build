@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultHost.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">DefaultHost.java</span></div><h1>DefaultHost.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import org.onosproject.net.provider.ProviderId;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * A basic implementation of a Host.
+ */
+public class DefaultHost extends AbstractElement implements Host {
+
+    private final MacAddress mac;
+    private final VlanId vlan;
+    private final HostLocation location;
+    private final Set&lt;IpAddress&gt; ips;
+
+    /**
+     * Creates an end-station host using the supplied information.
+     *
+     * @param providerId provider identity
+     * @param id         host identifier
+     * @param mac        host MAC address
+     * @param vlan       host VLAN identifier
+     * @param location   host location
+     * @param ips        host IP addresses
+     * @param annotations optional key/value annotations
+     */
+    public DefaultHost(ProviderId providerId, HostId id, MacAddress mac,
+                       VlanId vlan, HostLocation location, Set&lt;IpAddress&gt; ips,
+                       Annotations... annotations) {
+<span class="fc" id="L54">        super(providerId, id, annotations);</span>
+<span class="fc" id="L55">        this.mac = mac;</span>
+<span class="fc" id="L56">        this.vlan = vlan;</span>
+<span class="fc" id="L57">        this.location = location;</span>
+<span class="fc" id="L58">        this.ips = new HashSet&lt;&gt;(ips);</span>
+<span class="fc" id="L59">    }</span>
+
+    @Override
+    public HostId id() {
+<span class="fc" id="L63">        return (HostId) id;</span>
+    }
+
+    @Override
+    public MacAddress mac() {
+<span class="fc" id="L68">        return mac;</span>
+    }
+
+    @Override
+    public Set&lt;IpAddress&gt; ipAddresses() {
+<span class="fc" id="L73">        return Collections.unmodifiableSet(ips);</span>
+    }
+
+    @Override
+    public HostLocation location() {
+<span class="fc" id="L78">        return location;</span>
+    }
+
+    @Override
+    public VlanId vlan() {
+<span class="fc" id="L83">        return vlan;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L88">        return Objects.hash(id, mac, vlan, location);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L93" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L94">            return true;</span>
+        }
+<span class="fc bfc" id="L96" title="All 2 branches covered.">        if (obj instanceof DefaultHost) {</span>
+<span class="fc" id="L97">            final DefaultHost other = (DefaultHost) obj;</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            return Objects.equals(this.id, other.id) &amp;&amp;</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">                    Objects.equals(this.mac, other.mac) &amp;&amp;</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">                    Objects.equals(this.vlan, other.vlan) &amp;&amp;</span>
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">                    Objects.equals(this.location, other.location);</span>
+        }
+<span class="fc" id="L103">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L108">        return toStringHelper(this)</span>
+<span class="fc" id="L109">                .add(&quot;id&quot;, id)</span>
+<span class="fc" id="L110">                .add(&quot;mac&quot;, mac)</span>
+<span class="fc" id="L111">                .add(&quot;vlan&quot;, vlan)</span>
+<span class="fc" id="L112">                .add(&quot;location&quot;, location)</span>
+<span class="fc" id="L113">                .add(&quot;ipAddresses&quot;, ips)</span>
+<span class="fc" id="L114">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,35 @@
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=C, weight=1.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]
+[TestEdge{src=A, dst=E, weight=3.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=3.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}, TestEdge{src=D, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=2.0}, TestEdge{src=D, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=D, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}]
+[TestEdge{src=A, dst=D, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=D, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=D, weight=1.0}, TestEdge{src=D, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}, TestEdge{src=D, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}, TestEdge{src=D, dst=C, weight=1.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}, TestEdge{src=D, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=C, weight=1.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}, TestEdge{src=D, dst=E, weight=1.0}, TestEdge{src=E, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=1.0}, TestEdge{src=D, dst=F, weight=1.0}]
+[TestEdge{src=A, dst=C, weight=1.0}, TestEdge{src=C, dst=E, weight=1.0}, TestEdge{src=E, dst=D, weight=1.0}, TestEdge{src=D, dst=F, weight=1.0}]
+DefaultPath{src=A, dst=B, cost=1.0, edges=[TestEdge{src=A, dst=B, weight=1.0}]}
+DefaultPath{src=A, dst=H, cost=3.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=2.0}, TestEdge{src=D, dst=H, weight=5.0}]}
+DefaultPath{src=A, dst=D, cost=2.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=2.0}]}
+DefaultPath{src=A, dst=C, cost=1.0, edges=[TestEdge{src=A, dst=C, weight=3.0}]}
+DefaultPath{src=A, dst=E, cost=2.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}]}
+DefaultPath{src=A, dst=G, cost=4.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]}
+DefaultPath{src=A, dst=F, cost=3.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}, TestEdge{src=E, dst=F, weight=1.0}]}
+DefaultPath{src=A, dst=B, cost=1.0, edges=[TestEdge{src=A, dst=B, weight=1.0}]}
+DefaultPath{src=A, dst=E, cost=5.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}]}
+DefaultPath{src=A, dst=G, cost=7.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}, TestEdge{src=E, dst=F, weight=1.0}, TestEdge{src=F, dst=G, weight=1.0}]}
+DefaultPath{src=A, dst=H, cost=8.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=2.0}, TestEdge{src=D, dst=H, weight=5.0}]}
+DefaultPath{src=A, dst=F, cost=6.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=E, weight=4.0}, TestEdge{src=E, dst=F, weight=1.0}]}
+DefaultPath{src=A, dst=D, cost=3.0, edges=[TestEdge{src=A, dst=B, weight=1.0}, TestEdge{src=B, dst=D, weight=2.0}]}
+DefaultPath{src=A, dst=C, cost=3.0, edges=[TestEdge{src=A, dst=C, weight=3.0}]}

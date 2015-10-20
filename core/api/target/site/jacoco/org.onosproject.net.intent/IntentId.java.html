@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentId.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">IntentId.java</span></div><h1>IntentId.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.net.newresource.ResourceConsumer;
+
+/**
+ * Intent identifier suitable as an external key.
+ * &lt;p&gt;This class is immutable.&lt;/p&gt;
+ */
+@Beta
+public final class IntentId implements ResourceConsumer {
+
+    private final long value;
+
+    /**
+     * Creates an intent identifier from the specified long representation.
+     *
+     * @param value long value
+     * @return intent identifier
+     */
+    public static IntentId valueOf(long value) {
+<span class="fc" id="L37">        return new IntentId(value);</span>
+    }
+
+    /**
+     * Constructor for serializer.
+     */
+<span class="fc" id="L43">    IntentId() {</span>
+<span class="fc" id="L44">        this.value = 0;</span>
+<span class="fc" id="L45">    }</span>
+
+    /**
+     * Constructs the ID corresponding to a given long value.
+     *
+     * @param value the underlying value of this ID
+     */
+<span class="fc" id="L52">    IntentId(long value) {</span>
+<span class="fc" id="L53">        this.value = value;</span>
+<span class="fc" id="L54">    }</span>
+
+    /**
+     * Returns the backing value.
+     *
+     * @return the value
+     */
+    public long fingerprint() {
+<span class="fc" id="L62">        return value;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L67">        return Long.hashCode(value);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L72" title="All 2 branches covered.">        if (obj == this) {</span>
+<span class="fc" id="L73">            return true;</span>
+        }
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        if (!(obj instanceof IntentId)) {</span>
+<span class="fc" id="L76">            return false;</span>
+        }
+<span class="fc" id="L78">        IntentId that = (IntentId) obj;</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        return this.value == that.value;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L84">        return &quot;0x&quot; + Long.toHexString(value);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

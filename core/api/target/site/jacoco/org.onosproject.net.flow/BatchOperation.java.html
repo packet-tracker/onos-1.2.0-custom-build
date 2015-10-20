@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BatchOperation.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow</a> &gt; <span class="el_source">BatchOperation.java</span></div><h1>BatchOperation.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * A list of BatchOperationEntry.
+ *
+ * @param &lt;T&gt; the enum of operators &lt;br&gt;
+ *            This enum must be defined in each sub-classes.
+ */
+public abstract class BatchOperation&lt;T extends BatchOperationEntry&lt;?, ?&gt;&gt; {
+
+    private final List&lt;T&gt; ops;
+
+    /**
+     * Creates new {@link BatchOperation} object.
+     */
+<span class="fc" id="L38">    public BatchOperation() {</span>
+<span class="fc" id="L39">        ops = new LinkedList&lt;&gt;();</span>
+<span class="fc" id="L40">    }</span>
+
+    /**
+     * Creates {@link BatchOperation} object from a list of batch operation
+     * entries.
+     *
+     * @param batchOperations the list of batch operation entries.
+     */
+<span class="fc" id="L48">    public BatchOperation(Collection&lt;T&gt; batchOperations) {</span>
+<span class="fc" id="L49">        ops = new LinkedList&lt;&gt;(checkNotNull(batchOperations));</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     * Removes all operations maintained in this object.
+     */
+    public void clear() {
+<span class="fc" id="L56">        ops.clear();</span>
+<span class="fc" id="L57">    }</span>
+
+    /**
+     * Returns the number of operations in this object.
+     *
+     * @return the number of operations in this object
+     */
+    public int size() {
+<span class="fc" id="L65">        return ops.size();</span>
+    }
+
+    /**
+     * Returns the operations in this object.
+     *
+     * @return the operations in this object
+     */
+    public List&lt;T&gt; getOperations() {
+<span class="fc" id="L74">        return Collections.unmodifiableList(ops);</span>
+    }
+
+    /**
+     * Adds an operation.
+     * FIXME: Brian promises that the Intent Framework
+     * will not modify the batch operation after it has submitted it.
+     * Ali would prefer immutablity, but trusts brian for better or
+     * for worse.
+     *
+     * @param entry the operation to be added
+     * @return this object if succeeded, null otherwise
+     */
+    public BatchOperation&lt;T&gt; addOperation(T entry) {
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">        return ops.add(entry) ? this : null;</span>
+    }
+
+    /**
+     * Add all operations from another batch to this batch.
+     *
+     * @param another another batch
+     * @return true if success
+     */
+    public boolean addAll(BatchOperation&lt;T&gt; another) {
+<span class="fc" id="L98">        return ops.addAll(another.getOperations());</span>
+    }
+
+    @Override
+    public boolean equals(Object o) {
+<span class="fc bfc" id="L103" title="All 2 branches covered.">        if (this == o) {</span>
+<span class="fc" id="L104">            return true;</span>
+        }
+
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if (o == null) {</span>
+<span class="fc" id="L108">            return false;</span>
+        }
+
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (getClass() != o.getClass()) {</span>
+<span class="fc" id="L112">            return false;</span>
+        }
+<span class="fc" id="L114">        BatchOperation&lt;?&gt; other = (BatchOperation&lt;?&gt;) o;</span>
+
+<span class="fc" id="L116">        return this.ops.equals(other.ops);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L121">        return ops.hashCode();</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L126">        return ops.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

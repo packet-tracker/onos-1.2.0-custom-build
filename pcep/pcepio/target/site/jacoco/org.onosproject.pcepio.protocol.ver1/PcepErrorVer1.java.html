@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepErrorVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepErrorVer1.java</span></div><h1>PcepErrorVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepError;
+import org.onosproject.pcepio.protocol.PcepErrorObject;
+import org.onosproject.pcepio.protocol.PcepRPObject;
+import org.onosproject.pcepio.protocol.PcepTEObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PcepError list which contains RP or TE objects.
+ * Reference:PCEP Extension for Transporting TE Data draft-dhodylee-pce-pcep-te-data-extn-02.
+ */
+public class PcepErrorVer1 implements PcepError {
+
+    /*
+           &lt;error&gt;::=[&lt;request-id-list&gt; | &lt;te-id-list&gt;]
+                      &lt;error-obj-list&gt;
+
+           &lt;request-id-list&gt;::=&lt;RP&gt;[&lt;request-id-list&gt;]
+
+           &lt;te-id-list&gt;::=&lt;TE&gt;[&lt;te-id-list&gt;]
+     */
+
+<span class="fc" id="L48">    protected static final Logger log = LoggerFactory.getLogger(PcepErrorVer1.class);</span>
+
+    private boolean isErroInfoSet;
+    //PcepErrorObject list
+    private LinkedList&lt;PcepErrorObject&gt; llErrObjList;
+    //PcepRPObject list
+    private LinkedList&lt;PcepRPObject&gt; llRPObjList;
+    //PcepTEObject list
+    private LinkedList&lt;PcepTEObject&gt; llTEObjList;
+    private boolean isTEObjListSet;
+
+    public static final int OBJECT_HEADER_LENGTH = 4;
+
+    /**
+     * Constructor to initialize variable.
+     */
+<span class="fc" id="L64">    public PcepErrorVer1() {</span>
+<span class="fc" id="L65">        this.llRPObjList = null;</span>
+<span class="fc" id="L66">        this.llTEObjList = null;</span>
+<span class="fc" id="L67">        this.llErrObjList = null;</span>
+<span class="fc" id="L68">    }</span>
+
+    /**
+     * Constructor to initialize variable.
+     *
+     * @param llRPObjList list of PcepRPObject
+     * @param llTEObjList list of PcepTEObject
+     * @param llErrObjListObjList list of PcepErrorObject
+     */
+    public PcepErrorVer1(LinkedList&lt;PcepRPObject&gt; llRPObjList, LinkedList&lt;PcepTEObject&gt; llTEObjList,
+<span class="fc" id="L78">            LinkedList&lt;PcepErrorObject&gt; llErrObjListObjList) {</span>
+<span class="fc" id="L79">        this.llRPObjList = llRPObjList;</span>
+<span class="fc" id="L80">        this.llTEObjList = llTEObjList;</span>
+<span class="fc" id="L81">        this.llErrObjList = llErrObjListObjList;</span>
+<span class="fc" id="L82">    }</span>
+
+    /**
+     * Constructor to initialize PcepError.
+     *
+     * @param llErrObjList list of PcepErrorObject
+     */
+<span class="nc" id="L89">    public PcepErrorVer1(LinkedList&lt;PcepErrorObject&gt; llErrObjList) {</span>
+<span class="nc" id="L90">        this.llRPObjList = null;</span>
+<span class="nc" id="L91">        this.llTEObjList = null;</span>
+<span class="nc" id="L92">        this.llErrObjList = llErrObjList;</span>
+<span class="nc" id="L93">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepRPObject&gt; getRPObjList() {
+<span class="fc" id="L97">        return this.llRPObjList;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepTEObject&gt; getTEObjList() {
+<span class="fc" id="L102">        return this.llTEObjList;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepErrorObject&gt; getErrorObjList() {
+<span class="fc" id="L107">        return this.llErrObjList;</span>
+    }
+
+    /**
+     * Parse RP List from the channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public void parseRPList(ChannelBuffer cb) throws PcepParseException {
+        byte yObjClass;
+        byte yObjType;
+
+<span class="fc" id="L120">        llRPObjList = new LinkedList&lt;&gt;();</span>
+
+        // caller should verify for RP object
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="nc" id="L124">            log.debug(&quot;Unable to find RP Object&quot;);</span>
+<span class="nc" id="L125">            return;</span>
+        }
+
+<span class="fc" id="L128">        cb.markReaderIndex();</span>
+<span class="fc" id="L129">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L130">        cb.resetReaderIndex();</span>
+<span class="fc" id="L131">        yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L132">        yObjType = tempObjHeader.getObjType();</span>
+        PcepRPObject rpObj;
+<span class="pc bpc" id="L134" title="1 of 4 branches missed.">        while ((yObjClass == PcepRPObjectVer1.RP_OBJ_CLASS) &amp;&amp; (yObjType == PcepRPObjectVer1.RP_OBJ_TYPE)) {</span>
+<span class="fc" id="L135">            rpObj = PcepRPObjectVer1.read(cb);</span>
+<span class="fc" id="L136">            llRPObjList.add(rpObj);</span>
+
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">            if (cb.readableBytes() &gt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L139">                cb.markReaderIndex();</span>
+<span class="fc" id="L140">                tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L141">                cb.resetReaderIndex();</span>
+<span class="fc" id="L142">                yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L143">                yObjType = tempObjHeader.getObjType();</span>
+            } else {
+                break;
+            }
+        }
+<span class="fc" id="L148">    }</span>
+
+    /**
+     * Parse TE List from the channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public void parseTEList(ChannelBuffer cb) throws PcepParseException {
+        byte yObjClass;
+        byte yObjType;
+
+<span class="fc" id="L160">        llTEObjList = new LinkedList&lt;&gt;();</span>
+
+        // caller should verify for TE object
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="nc" id="L164">            log.debug(&quot;Unable to find TE Object&quot;);</span>
+<span class="nc" id="L165">            return;</span>
+        }
+
+<span class="fc" id="L168">        cb.markReaderIndex();</span>
+<span class="fc" id="L169">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L170">        cb.resetReaderIndex();</span>
+<span class="fc" id="L171">        yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L172">        yObjType = tempObjHeader.getObjType();</span>
+        PcepTEObject teObj;
+<span class="pc bpc" id="L174" title="3 of 6 branches missed.">        while ((yObjClass == PcepTEObjectVer1.TE_OBJ_CLASS) &amp;&amp; ((yObjType == PcepTEObjectVer1.TE_OBJ_TYPE_NODE_VALUE)</span>
+                || (yObjType == PcepTEObjectVer1.TE_OBJ_TYPE_LINK_VALUE))) {
+<span class="fc" id="L176">            teObj = PcepTEObjectVer1.read(cb);</span>
+<span class="fc" id="L177">            llTEObjList.add(teObj);</span>
+
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">            if (cb.readableBytes() &gt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L180">                cb.markReaderIndex();</span>
+<span class="fc" id="L181">                tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L182">                cb.resetReaderIndex();</span>
+<span class="fc" id="L183">                yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L184">                yObjType = tempObjHeader.getObjType();</span>
+            } else {
+                break;
+            }
+        }
+<span class="fc" id="L189">    }</span>
+
+    /**
+     * parseErrObjList from the channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public void parseErrObjList(ChannelBuffer cb) throws PcepParseException {
+        byte yObjClass;
+        byte yObjType;
+<span class="fc" id="L200">        boolean bIsErrorObjFound = false;</span>
+
+<span class="fc" id="L202">        llErrObjList = new LinkedList&lt;&gt;();</span>
+
+        // caller should verify for RP object
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="nc" id="L206">            throw new PcepParseException(&quot;Unable to find PCEP-ERROR Object&quot;);</span>
+        }
+
+<span class="fc" id="L209">        cb.markReaderIndex();</span>
+<span class="fc" id="L210">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L211">        cb.resetReaderIndex();</span>
+<span class="fc" id="L212">        yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L213">        yObjType = tempObjHeader.getObjType();</span>
+        PcepErrorObject errorObject;
+<span class="pc bpc" id="L215" title="1 of 4 branches missed.">        while ((yObjClass == PcepErrorObjectVer1.ERROR_OBJ_CLASS) &amp;&amp; (yObjType == PcepErrorObjectVer1.ERROR_OBJ_TYPE)) {</span>
+<span class="fc" id="L216">            errorObject = PcepErrorObjectVer1.read(cb);</span>
+<span class="fc" id="L217">            llErrObjList.add(errorObject);</span>
+<span class="fc" id="L218">            bIsErrorObjFound = true;</span>
+
+<span class="fc bfc" id="L220" title="All 2 branches covered.">            if (cb.readableBytes() &gt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L221">                cb.markReaderIndex();</span>
+<span class="fc" id="L222">                tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L223">                cb.resetReaderIndex();</span>
+<span class="fc" id="L224">                yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L225">                yObjType = tempObjHeader.getObjType();</span>
+            } else {
+                break;
+            }
+        }
+
+<span class="pc bpc" id="L231" title="1 of 2 branches missed.">        if (!bIsErrorObjFound) {</span>
+<span class="nc" id="L232">            throw new PcepParseException(&quot;At least one PCEP-ERROR Object should be present.&quot;);</span>
+        }
+<span class="fc" id="L234">    }</span>
+
+    /**
+     * Reads the byte stream of PcepError from channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @return PcepError error part of PCEP-ERROR
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public static PcepErrorVer1 read(ChannelBuffer cb) throws PcepParseException {
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="nc" id="L245">            throw new PcepParseException(&quot;Unknown Object&quot;);</span>
+        }
+
+<span class="fc" id="L248">        PcepErrorVer1 pcepError = new PcepErrorVer1();</span>
+        // check whether any PCEP Error Info is present
+<span class="fc" id="L250">        cb.markReaderIndex();</span>
+<span class="fc" id="L251">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L252">        cb.resetReaderIndex();</span>
+<span class="fc" id="L253">        byte yObjClass = tempObjHeader.getObjClass();</span>
+
+        //If RPlist present then store it.RPList and TEList are optional
+<span class="fc bfc" id="L256" title="All 2 branches covered.">        if (yObjClass == PcepRPObjectVer1.RP_OBJ_CLASS) {</span>
+<span class="fc" id="L257">            log.debug(&quot;RP_LIST&quot;);</span>
+<span class="fc" id="L258">            pcepError.parseRPList(cb);</span>
+<span class="fc" id="L259">            yObjClass = checkNextObject(cb);</span>
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">        } else if (yObjClass == PcepTEObjectVer1.TE_OBJ_CLASS) {</span>
+<span class="fc" id="L261">            log.debug(&quot;TE_LIST&quot;);</span>
+<span class="fc" id="L262">            pcepError.parseTEList(cb);</span>
+<span class="fc" id="L263">            yObjClass = checkNextObject(cb);</span>
+        }
+
+<span class="pc bpc" id="L266" title="1 of 2 branches missed.">        if (yObjClass == PcepErrorObjectVer1.ERROR_OBJ_CLASS) {</span>
+<span class="fc" id="L267">            log.debug(&quot;PCEP-ERROR obj list&quot;);</span>
+<span class="fc" id="L268">            pcepError.parseErrObjList(cb);</span>
+<span class="fc" id="L269">            yObjClass = checkNextObject(cb);</span>
+        }
+
+<span class="fc" id="L272">        return pcepError;</span>
+    }
+
+    /**
+     * Checks Next Object.
+     *
+     * @param cb of type channel buffer.
+     * @return object type class.
+     */
+    private static byte checkNextObject(ChannelBuffer cb) {
+<span class="fc bfc" id="L282" title="All 2 branches covered.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L283">            return 0;</span>
+        }
+<span class="fc" id="L285">        cb.markReaderIndex();</span>
+<span class="fc" id="L286">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L287">        cb.resetReaderIndex();</span>
+<span class="fc" id="L288">        return tempObjHeader.getObjClass();</span>
+    }
+
+    /**
+     * Writes the byte stream of PCEP error to the channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @return object length index
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+<span class="nc" id="L300">        int iLenStartIndex = cb.writerIndex();</span>
+
+        // RPlist is optional
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (this.isErroInfoSet) {</span>
+<span class="nc" id="L304">            ListIterator&lt;PcepRPObject&gt; rpObjlistIterator = this.llRPObjList.listIterator();</span>
+<span class="nc bnc" id="L305" title="All 2 branches missed.">            while (rpObjlistIterator.hasNext()) {</span>
+<span class="nc" id="L306">                rpObjlistIterator.next().write(cb);</span>
+            }
+        }
+
+        // TElist is optional
+<span class="nc bnc" id="L311" title="All 2 branches missed.">        if (this.isTEObjListSet) {</span>
+<span class="nc" id="L312">            ListIterator&lt;PcepTEObject&gt; teObjlistIterator = this.llTEObjList.listIterator();</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">            while (teObjlistIterator.hasNext()) {</span>
+<span class="nc" id="L314">                teObjlistIterator.next().write(cb);</span>
+            }
+        }
+        //ErrList is mandatory
+<span class="nc" id="L318">        ListIterator&lt;PcepErrorObject&gt; errlistIterator = this.llErrObjList.listIterator();</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        while (errlistIterator.hasNext()) {</span>
+<span class="nc" id="L320">            errlistIterator.next().write(cb);</span>
+        }
+
+<span class="nc" id="L323">        return cb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Builder for error part of PCEP-ERROR.
+     */
+<span class="nc" id="L329">    public static class Builder implements PcepError.Builder {</span>
+
+        private LinkedList&lt;PcepRPObject&gt; llRPObjList;
+        private LinkedList&lt;PcepTEObject&gt; llTEObjList;
+        private LinkedList&lt;PcepErrorObject&gt; llErrObjList;
+
+        @Override
+        public PcepError build() {
+<span class="nc" id="L337">            return new PcepErrorVer1(llRPObjList, llTEObjList, llErrObjList);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepRPObject&gt; getRPObjList() {
+<span class="nc" id="L342">            return this.llRPObjList;</span>
+        }
+
+        @Override
+        public Builder setRPObjList(LinkedList&lt;PcepRPObject&gt; llRPObjList) {
+<span class="nc" id="L347">            this.llRPObjList = llRPObjList;</span>
+<span class="nc" id="L348">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepTEObject&gt; getTEObjList() {
+<span class="nc" id="L353">            return this.llTEObjList;</span>
+        }
+
+        @Override
+        public Builder setTEObjList(LinkedList&lt;PcepTEObject&gt; llTEObjList) {
+<span class="nc" id="L358">            this.llTEObjList = llTEObjList;</span>
+<span class="nc" id="L359">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepErrorObject&gt; getErrorObjList() {
+<span class="nc" id="L364">            return this.llErrObjList;</span>
+        }
+
+        @Override
+        public Builder setErrorObjList(LinkedList&lt;PcepErrorObject&gt; llErrObjList) {
+<span class="nc" id="L369">            this.llErrObjList = llErrObjList;</span>
+<span class="nc" id="L370">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public void setRPObjList(LinkedList&lt;PcepRPObject&gt; llRPObjList) {
+<span class="nc" id="L377">        this.llRPObjList = llRPObjList;</span>
+<span class="nc" id="L378">    }</span>
+
+    @Override
+    public void setTEObjList(LinkedList&lt;PcepTEObject&gt; llTEObjList) {
+<span class="nc" id="L382">        this.llTEObjList = llTEObjList;</span>
+<span class="nc" id="L383">    }</span>
+
+    @Override
+    public void setErrorObjList(LinkedList&lt;PcepErrorObject&gt; llErrObjList) {
+<span class="nc" id="L387">        this.llErrObjList = llErrObjList;</span>
+<span class="nc" id="L388">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L392">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L393">                .omitNullValues()</span>
+<span class="nc" id="L394">                .add(&quot;RpObjectList&quot;, llRPObjList)</span>
+<span class="nc" id="L395">                .add(&quot;TeObjectList&quot;, llTEObjList)</span>
+<span class="nc" id="L396">                .add(&quot;ErrorObjectList&quot;, llErrObjList)</span>
+<span class="nc" id="L397">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

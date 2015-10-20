@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UtilityClassChecker.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-junit</a> &gt; <a href="index.source.html" class="el_package">org.onlab.junit</a> &gt; <span class="el_source">UtilityClassChecker.java</span></div><h1>UtilityClassChecker.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.junit;
+
+import org.hamcrest.Description;
+import org.hamcrest.StringDescription;
+import org.onlab.junit.TestUtils.TestUtilsException;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+
+
+/**
+ * Hamcrest style class for verifying that a class follows the
+ * accepted rules for utility classes.
+ *
+ * The rules that are enforced for utility classes:
+ *    - the class must be declared final
+ *    - the class must have only one constructor
+ *    - the constructor must be private and inaccessible to callers
+ *    - the class must have only static methods
+ */
+
+<span class="fc" id="L38">public class UtilityClassChecker {</span>
+
+<span class="fc" id="L40">    private String failureReason = &quot;&quot;;</span>
+
+    /**
+     * Method to determine if a given class is a properly specified
+     * utility class.  In addition to checking that the class meets the criteria
+     * for utility classes, an object of the class type is allocated to force
+     * test code coverage onto the class constructor.
+     *
+     * @param clazz the class to check
+     * @return true if the given class is a properly specified utility class.
+     */
+    private boolean isProperlyDefinedUtilityClass(Class&lt;?&gt; clazz) {
+        // class must be declared final
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        if (!Modifier.isFinal(clazz.getModifiers())) {</span>
+<span class="fc" id="L54">            failureReason = &quot;a class that is not final&quot;;</span>
+<span class="fc" id="L55">            return false;</span>
+        }
+
+        // class must have only one constructor
+<span class="fc" id="L59">        final Constructor&lt;?&gt;[] constructors = clazz.getDeclaredConstructors();</span>
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (constructors.length != 1) {</span>
+<span class="fc" id="L61">            failureReason = &quot;a class with more than one constructor&quot;;</span>
+<span class="fc" id="L62">            return false;</span>
+        }
+
+        //  constructor must not be accessible outside of the class
+<span class="fc" id="L66">        final Constructor&lt;?&gt; constructor = constructors[0];</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">        if (constructor.isAccessible()) {</span>
+<span class="nc" id="L68">            failureReason = &quot;a class with an accessible default constructor&quot;;</span>
+<span class="nc" id="L69">            return false;</span>
+        }
+
+        // constructor must be private
+<span class="fc bfc" id="L73" title="All 2 branches covered.">        if (!Modifier.isPrivate(constructor.getModifiers())) {</span>
+<span class="fc" id="L74">            failureReason = &quot;a class with a default constructor that is not private&quot;;</span>
+<span class="fc" id="L75">            return false;</span>
+        }
+
+        // class must have only static methods
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">        for (final Method method : clazz.getMethods()) {</span>
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">            if (method.getDeclaringClass().equals(clazz)) {</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">                if (!Modifier.isStatic(method.getModifiers())) {</span>
+<span class="fc" id="L82">                    failureReason = &quot;a class with one or more non-static methods&quot;;</span>
+<span class="fc" id="L83">                    return false;</span>
+                }
+            }
+
+        }
+
+        try {
+<span class="nc" id="L90">            final Object newObject = TestUtils.callConstructor(constructor);</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">            if (newObject == null) {</span>
+<span class="nc" id="L92">                failureReason = &quot;could not instantiate a new object&quot;;</span>
+<span class="nc" id="L93">                return false;</span>
+            }
+<span class="nc" id="L95">        } catch (TestUtilsException e) {</span>
+<span class="nc" id="L96">            failureReason = &quot;could not instantiate a new object&quot;;</span>
+<span class="nc" id="L97">            return false;</span>
+<span class="nc" id="L98">        }</span>
+<span class="nc" id="L99">        return true;</span>
+    }
+
+    /**
+     * Describe why an error was reported.  Uses Hamcrest style Description
+     * interfaces.
+     *
+     * @param description the Description object to use for reporting the
+     *                    mismatch
+     */
+    public void describeMismatch(Description description) {
+<span class="fc" id="L110">        description.appendText(failureReason);</span>
+<span class="fc" id="L111">    }</span>
+
+    /**
+     * Describe the source object that caused an error, using a Hamcrest
+     * Matcher style interface.  In this case, it always returns
+     * that we are looking for a properly defined utility class.
+     *
+     * @param description the Description object to use to report the &quot;to&quot;
+     *                    object
+     */
+    public void describeTo(Description description) {
+<span class="fc" id="L122">        description.appendText(&quot;a properly defined utility class&quot;);</span>
+<span class="fc" id="L123">    }</span>
+
+    /**
+     * Assert that the given class adheres to the utility class rules.
+     *
+     * @param clazz the class to check
+     *
+     * @throws java.lang.AssertionError if the class is not a valid
+     *         utility class
+     */
+    public static void assertThatClassIsUtility(Class&lt;?&gt; clazz) {
+<span class="fc" id="L134">        final UtilityClassChecker checker = new UtilityClassChecker();</span>
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">        if (!checker.isProperlyDefinedUtilityClass(clazz)) {</span>
+<span class="fc" id="L136">            final Description toDescription = new StringDescription();</span>
+<span class="fc" id="L137">            final Description mismatchDescription = new StringDescription();</span>
+
+<span class="fc" id="L139">            checker.describeTo(toDescription);</span>
+<span class="fc" id="L140">            checker.describeMismatch(mismatchDescription);</span>
+<span class="fc" id="L141">            final String reason =</span>
+                &quot;\n&quot; +
+<span class="fc" id="L143">                &quot;Expected: is \&quot;&quot; + toDescription.toString() + &quot;\&quot;\n&quot; +</span>
+<span class="fc" id="L144">                &quot;    but : was \&quot;&quot; + mismatchDescription.toString() + &quot;\&quot;&quot;;</span>
+
+<span class="fc" id="L146">            throw new AssertionError(reason);</span>
+        }
+<span class="nc" id="L148">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

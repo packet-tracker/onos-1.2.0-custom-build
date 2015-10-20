@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MapDbPersistentStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.ecmap</a> &gt; <span class="el_source">MapDbPersistentStore.java</span></div><h1>MapDbPersistentStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.ecmap;
+
+import org.mapdb.DB;
+import org.mapdb.DBMaker;
+import org.mapdb.Hasher;
+import org.mapdb.Serializer;
+import org.onosproject.store.serializers.KryoSerializer;
+
+import java.io.File;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * MapDB based implementation of a persistent store.
+ */
+class MapDbPersistentStore&lt;K, V&gt; implements PersistentStore&lt;K, V&gt; {
+
+    private final ExecutorService executor;
+    private final KryoSerializer serializer;
+
+    private final DB database;
+
+    private final Map&lt;byte[], byte[]&gt; items;
+
+    /**
+     * Creates a new MapDB based persistent store.
+     *
+     * @param filename filename of the database on disk
+     * @param executor executor to use for tasks that write to the disk
+     * @param serializer serializer for keys and values
+     */
+    MapDbPersistentStore(String filename, ExecutorService executor,
+<span class="nc" id="L51">                         KryoSerializer serializer) {</span>
+<span class="nc" id="L52">        this.executor = checkNotNull(executor);</span>
+<span class="nc" id="L53">        this.serializer = checkNotNull(serializer);</span>
+
+<span class="nc" id="L55">        File databaseFile = new File(filename);</span>
+
+<span class="nc" id="L57">        database = DBMaker.newFileDB(databaseFile).make();</span>
+
+<span class="nc" id="L59">        items = database.createHashMap(&quot;items&quot;)</span>
+<span class="nc" id="L60">                .keySerializer(Serializer.BYTE_ARRAY)</span>
+<span class="nc" id="L61">                .valueSerializer(Serializer.BYTE_ARRAY)</span>
+<span class="nc" id="L62">                .hasher(Hasher.BYTE_ARRAY)</span>
+<span class="nc" id="L63">                .makeOrGet();</span>
+<span class="nc" id="L64">    }</span>
+
+    @Override
+    public void readInto(Map&lt;K, MapValue&lt;V&gt;&gt; items) {
+<span class="nc" id="L68">        this.items.forEach((keyBytes, valueBytes) -&gt;</span>
+<span class="nc" id="L69">                              items.put(serializer.decode(keyBytes),</span>
+<span class="nc" id="L70">                                        serializer.decode(valueBytes)));</span>
+<span class="nc" id="L71">    }</span>
+
+    @Override
+    public void update(K key, MapValue&lt;V&gt; value) {
+<span class="nc" id="L75">        executor.submit(() -&gt; updateInternal(key, value));</span>
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    public void remove(K key) {
+<span class="nc" id="L80">        executor.submit(() -&gt; removeInternal(key));</span>
+<span class="nc" id="L81">    }</span>
+
+    private void updateInternal(K key, MapValue&lt;V&gt; newValue) {
+<span class="nc" id="L84">        byte[] keyBytes = serializer.encode(key);</span>
+
+<span class="nc" id="L86">        items.compute(keyBytes, (k, existingBytes) -&gt; {</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">            MapValue&lt;V&gt; existing = existingBytes == null ? null :</span>
+<span class="nc" id="L88">                                      serializer.decode(existingBytes);</span>
+<span class="nc bnc" id="L89" title="All 4 branches missed.">            if (existing == null || newValue.isNewerThan(existing)) {</span>
+<span class="nc" id="L90">                return serializer.encode(newValue);</span>
+            } else {
+<span class="nc" id="L92">                return existingBytes;</span>
+            }
+        });
+<span class="nc" id="L95">        database.commit();</span>
+<span class="nc" id="L96">    }</span>
+
+    private void removeInternal(K key) {
+<span class="nc" id="L99">        byte[] keyBytes = serializer.encode(key);</span>
+<span class="nc" id="L100">        items.remove(keyBytes);</span>
+<span class="nc" id="L101">        database.commit();</span>
+<span class="nc" id="L102">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

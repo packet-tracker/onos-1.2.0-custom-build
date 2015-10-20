@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepKeepaliveMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepKeepaliveMsgVer1.java</span></div><h1>PcepKeepaliveMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepKeepaliveMsg;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP keep alive message.
+ */
+class PcepKeepaliveMsgVer1 implements PcepKeepaliveMsg {
+
+    /*
+    &lt;Keepalive Message&gt;::= &lt;Common Header&gt;
+
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Ver |  Flags  |  Message-Type |       Message-Length          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L45">    protected static final Logger log = LoggerFactory.getLogger(PcepKeepaliveMsgVer1.class);</span>
+    // Pcep version: 1
+    public static final byte PACKET_VERSION = 1;
+    public static final int PACKET_MINIMUM_LENGTH = 4;
+<span class="fc" id="L49">    public static final PcepType MSG_TYPE = PcepType.KEEP_ALIVE;</span>
+
+<span class="fc" id="L51">    public static final PcepKeepaliveMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader class for reading PCEP keepalive message from channel buffer.
+     */
+<span class="fc" id="L56">    static class Reader implements PcepMessageReader&lt;PcepKeepaliveMsg&gt; {</span>
+
+        @Override
+        public PcepKeepaliveMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L61" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L62">                throw new PcepParseException(&quot;Packet size is less than the minimum required length.&quot;);</span>
+            }
+            // fixed value property version == 1
+<span class="fc" id="L65">            byte version = cb.readByte();</span>
+<span class="fc" id="L66">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L68">                throw new PcepParseException(&quot;Wrong version: Expected=PcepVersion.KEEP_ALIVE_1(2), got=&quot; + version);</span>
+            }
+            // fixed value property type == 2
+<span class="fc" id="L71">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L73">                throw new PcepParseException(&quot;Wrong type: Expected=PcepType.KEEP_ALIVE_1(2), got=&quot; + type);</span>
+            }
+<span class="fc" id="L75">            short length = cb.readShort();</span>
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L77">                throw new PcepParseException(&quot;Wrong length: Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, was: &quot;</span>
+                        + length);
+            }
+<span class="fc" id="L80">            return new PcepKeepaliveMsgVer1();</span>
+        }
+    }
+
+    /**
+     * Default constructor.
+     */
+<span class="fc" id="L87">    PcepKeepaliveMsgVer1() {</span>
+<span class="fc" id="L88">    }</span>
+
+    /**
+     * Builder class for PCEP keepalive message.
+     */
+<span class="nc" id="L93">    static class Builder implements PcepKeepaliveMsg.Builder {</span>
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L96">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L101">            return PcepType.KEEP_ALIVE;</span>
+        }
+
+        @Override
+        public PcepKeepaliveMsg build() {
+<span class="nc" id="L106">            return new PcepKeepaliveMsgVer1();</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) {
+<span class="fc" id="L112">        WRITER.write(cb, this);</span>
+<span class="fc" id="L113">    }</span>
+
+<span class="fc" id="L115">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing the PCEP keepalive message to channel buffer.
+     */
+<span class="fc" id="L120">    static class Writer implements PcepMessageWriter&lt;PcepKeepaliveMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepKeepaliveMsgVer1 message) {
+<span class="fc" id="L124">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="fc" id="L126">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+            // message type
+<span class="fc" id="L128">            cb.writeByte(MSG_TYPE.getType());</span>
+            // length is length of variable message, will be updated at the end
+            // Store the position of message
+            // length in buffer
+<span class="fc" id="L132">            int msgLenIndex = cb.writerIndex();</span>
+<span class="fc" id="L133">            cb.writeShort((short) 0);</span>
+            // update message length field
+<span class="fc" id="L135">            int length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L136">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L137">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L142">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L147">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L152">        return MoreObjects.toStringHelper(getClass()).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepErrorMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepErrorMsgVer1.java</span></div><h1>PcepErrorMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepErrorInfo;
+import org.onosproject.pcepio.protocol.PcepErrorMsg;
+import org.onosproject.pcepio.protocol.PcepErrorObject;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepOpenObject;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.ErrorObjListWithOpen;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
+
+/**
+ * Provides PCEP Error Message.
+ */
+public class PcepErrorMsgVer1 implements PcepErrorMsg {
+
+    /*
+     * PCE Error message format.
+
+       &lt;PCErr Message&gt;                ::= &lt;Common Header&gt;
+                                        ( &lt;error-obj-list&gt; [&lt;Open&gt;] ) | &lt;error&gt;
+                                          [&lt;error-list&gt;]
+
+       &lt;error-obj-list&gt;               ::=&lt;PCEP-ERROR&gt;[&lt;error-obj-list&gt;]
+
+       &lt;error&gt;                        ::=[&lt;request-id-list&gt; | &lt;te-id-list&gt;]
+                                           &lt;error-obj-list&gt;
+
+       &lt;request-id-list&gt;              ::=&lt;RP&gt;[&lt;request-id-list&gt;]
+
+       &lt;te-id-list&gt;                   ::=&lt;TE&gt;[&lt;te-id-list&gt;]
+
+       &lt;error-list&gt;                   ::=&lt;error&gt;[&lt;error-list&gt;]
+     */
+
+<span class="fc" id="L62">    protected static final Logger log = LoggerFactory.getLogger(PcepOpenMsgVer1.class);</span>
+    public static final byte PACKET_VERSION = 1;
+    public static final int PACKET_MINIMUM_LENGTH = 12;
+<span class="fc" id="L65">    public static final PcepType MSG_TYPE = PcepType.ERROR;</span>
+
+    //Below either one should be present.
+    private ErrorObjListWithOpen errObjListWithOpen; //optional   ( &lt;error-obj-list&gt; [&lt;Open&gt;] )
+    private PcepErrorInfo errInfo; //optional     &lt;error&gt; [&lt;error-list&gt;]
+
+<span class="fc" id="L71">    public static final PcepErrorMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * constructor to initialize variables.
+     */
+<span class="nc" id="L76">    public PcepErrorMsgVer1() {</span>
+<span class="nc" id="L77">        errObjListWithOpen = null;</span>
+<span class="nc" id="L78">        errInfo = null;</span>
+<span class="nc" id="L79">    }</span>
+
+    /**
+     * Constructor to initialize variables.
+     *
+     * @param errObjListWithOpen error-object-list with open object
+     * @param errInfo error information
+     */
+<span class="fc" id="L87">    public PcepErrorMsgVer1(ErrorObjListWithOpen errObjListWithOpen, PcepErrorInfo errInfo) {</span>
+<span class="fc" id="L88">        this.errObjListWithOpen = errObjListWithOpen;</span>
+<span class="fc" id="L89">        this.errInfo = errInfo;</span>
+<span class="fc" id="L90">    }</span>
+
+    /**
+     * Reader class for reading PCEP error Message from channel buffer.
+     */
+<span class="fc" id="L95">    public static class Reader implements PcepMessageReader&lt;PcepErrorMsg&gt; {</span>
+
+        ErrorObjListWithOpen errObjListWithOpen;
+        PcepErrorInfo errInfo;
+        PcepObjectHeader tempObjHeader;
+
+        @Override
+        public PcepErrorMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L104">            errObjListWithOpen = null;</span>
+<span class="fc" id="L105">            errInfo = null;</span>
+<span class="fc" id="L106">            tempObjHeader = null;</span>
+
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L109">                throw new PcepParseException(&quot;Packet size is less than the minimum length.&quot;);</span>
+            }
+
+<span class="fc" id="L112">            byte version = cb.readByte();</span>
+<span class="fc" id="L113">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L115">                throw new PcepParseException(&quot;Wrong version: Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+            }
+            // fixed value property type == 1
+<span class="fc" id="L118">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L120">                throw new PcepParseException(&quot;Wrong type: Expected=PcepType.ERROR(6), got=&quot; + type);</span>
+            }
+<span class="fc" id="L122">            int length = cb.readShort();</span>
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L124">                throw new PcepParseException(</span>
+                        &quot;Wrong length: Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, was: &quot; + length);
+            }
+
+            //parse &lt;PCErr Message&gt;
+<span class="fc" id="L129">            parsePCErrMsg(cb);</span>
+
+            // If other than RP or TE or PCEP-ERROR present then it is error.
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">            if (0 &lt; cb.readableBytes()) {</span>
+<span class="nc" id="L133">                PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="nc" id="L134">                throw new PcepParseException(&quot;Unexpected Object found. Object Class : &quot; + tempObjHeader.getObjClass());</span>
+            }
+
+<span class="fc" id="L137">            return new PcepErrorMsgVer1(errObjListWithOpen, errInfo);</span>
+        }
+
+        /**
+         * Parsing PCErr Message.
+         *
+         * @param cb channel buffer.
+         * @throws PcepParseException if mandatory fields are missing
+         * output: this.errObjListWithOpen, this.errInfo
+         */
+        public void parsePCErrMsg(ChannelBuffer cb) throws PcepParseException {
+            //If PCEP-ERROR list is followed by OPEN Object then store into ErrorObjListWithOpen.
+            //     ( &lt;error-obj-list&gt; [&lt;Open&gt;]
+            //If PCEP-ERROR list is followed by RP or TE Object then store into errInfo. &lt;error&gt; [&lt;error-list&gt;]
+            //If only PCEP-ERROR list is present then store into ErrorObjListWithOpen.
+            PcepObjectHeader tempObjHeader;
+            LinkedList&lt;PcepErrorObject&gt; llErrObjList;
+
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">            if (0 &gt;= cb.readableBytes()) {</span>
+<span class="nc" id="L156">                throw new PcepParseException(&quot;PCEP-ERROR message came with empty objects.&quot;);</span>
+            }
+
+            //parse PCEP-ERROR list
+<span class="fc" id="L160">            llErrObjList = new LinkedList&lt;&gt;();</span>
+<span class="fc" id="L161">            tempObjHeader = parseErrorObjectList(llErrObjList, cb);</span>
+
+            //check whether OPEN-OBJECT is present.
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">            if ((tempObjHeader != null)</span>
+<span class="fc bfc" id="L165" title="All 2 branches covered.">                    &amp;&amp; (tempObjHeader.getObjClass() == PcepOpenObjectVer1.OPEN_OBJ_CLASS)) {</span>
+
+<span class="pc bpc" id="L167" title="1 of 2 branches missed.">                if (llErrObjList.isEmpty()) {</span>
+<span class="nc" id="L168">                    throw new PcepParseException(&quot;&lt;error-obj-list&gt; should be present if OPEN-OBJECT exists&quot;);</span>
+                }
+
+<span class="fc" id="L171">                PcepOpenObject pcepOpenObj = PcepOpenObjectVer1.read(cb);</span>
+<span class="fc" id="L172">                this.errObjListWithOpen = new ErrorObjListWithOpen(llErrObjList, pcepOpenObj);</span>
+
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">            } else if ((tempObjHeader != null) //check whether RP or TE Object is present.</span>
+<span class="fc bfc" id="L175" title="All 2 branches covered.">                    &amp;&amp; ((tempObjHeader.getObjClass() == PcepRPObjectVer1.RP_OBJ_CLASS)</span>
+<span class="fc bfc" id="L176" title="All 2 branches covered.">                            || (tempObjHeader.getObjClass() == PcepTEObjectVer1.TE_OBJ_CLASS))) {</span>
+
+<span class="fc" id="L178">                this.errInfo = new PcepErrorInfoVer1(null, null, llErrObjList);</span>
+<span class="fc" id="L179">                this.errInfo.read(cb);</span>
+
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">            } else if (!llErrObjList.isEmpty()) {</span>
+                //If only PCEP-ERROR list is present then store it in errObjListWithOpen.
+<span class="fc" id="L183">                this.errObjListWithOpen = new ErrorObjListWithOpen(llErrObjList);</span>
+            } else {
+<span class="nc" id="L185">                throw new PcepParseException(&quot;Empty PCEP-ERROR message.&quot;);</span>
+            }
+<span class="fc" id="L187">        }</span>
+
+        /**
+         * Parse error-obj-list.
+         *
+         * @param llErrObjList error object list output
+         * @param cb channel buffer input
+         * @throws PcepParseException if mandatory fields are missing
+         * @return error object header
+         */
+        public PcepObjectHeader parseErrorObjectList(LinkedList&lt;PcepErrorObject&gt; llErrObjList, ChannelBuffer cb)
+                throws PcepParseException {
+<span class="fc" id="L199">            PcepObjectHeader tempObjHeader = null;</span>
+
+<span class="fc bfc" id="L201" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+<span class="fc" id="L202">                cb.markReaderIndex();</span>
+<span class="fc" id="L203">                tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L204">                cb.resetReaderIndex();</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">                if (tempObjHeader.getObjClass() == PcepErrorObjectVer1.ERROR_OBJ_CLASS) {</span>
+<span class="fc" id="L206">                    llErrObjList.add(PcepErrorObjectVer1.read(cb));</span>
+                } else {
+                    break;
+                }
+            }
+<span class="fc" id="L211">            return tempObjHeader;</span>
+        }
+    }
+
+    /**
+     * Builder class for PCEP error message.
+     */
+<span class="nc" id="L218">    public static class Builder implements PcepErrorMsg.Builder {</span>
+        // Pcep error message fields
+
+<span class="nc" id="L221">        private ErrorObjListWithOpen errObjListWithOpen = null; //optional   ( &lt;error-obj-list&gt; [&lt;Open&gt;] )</span>
+<span class="nc" id="L222">        private PcepErrorInfo errInfo = null; //optional     &lt;error&gt; [&lt;error-list&gt;]</span>
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L226">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L231">            return PcepType.ERROR;</span>
+        }
+
+        @Override
+        public PcepErrorMsg build() {
+<span class="nc" id="L236">            return new PcepErrorMsgVer1(this.errObjListWithOpen, this.errInfo);</span>
+        }
+
+        @Override
+        public ErrorObjListWithOpen getErrorObjListWithOpen() {
+<span class="nc" id="L241">            return this.errObjListWithOpen;</span>
+        }
+
+        @Override
+        public Builder setErrorObjListWithOpen(ErrorObjListWithOpen errObjListWithOpen) {
+<span class="nc" id="L246">            this.errObjListWithOpen = errObjListWithOpen;</span>
+<span class="nc" id="L247">            return this;</span>
+        }
+
+        @Override
+        public PcepErrorInfo getPcepErrorInfo() {
+<span class="nc" id="L252">            return this.errInfo;</span>
+        }
+
+        @Override
+        public Builder setPcepErrorInfo(PcepErrorInfo errInfo) {
+<span class="nc" id="L257">            this.errInfo = errInfo;</span>
+<span class="nc" id="L258">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L264">        WRITER.write(cb, this);</span>
+<span class="fc" id="L265">    }</span>
+
+<span class="fc" id="L267">    public static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing PCEP error Message to channel buffer.
+     */
+<span class="fc" id="L272">    static class Writer implements PcepMessageWriter&lt;PcepErrorMsgVer1&gt; {</span>
+        @Override
+        public void write(ChannelBuffer cb, PcepErrorMsgVer1 message) throws PcepParseException {
+<span class="fc" id="L275">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="fc" id="L277">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+            // message type 0xC
+<span class="fc" id="L279">            cb.writeByte(MSG_TYPE.getType());</span>
+            // length is length of variable message, will be updated at the end
+            // Store the position of message
+            // length in buffer
+<span class="fc" id="L283">            int msgLenIndex = cb.writerIndex();</span>
+<span class="fc" id="L284">            cb.writeShort(0);</span>
+<span class="fc" id="L285">            ErrorObjListWithOpen errObjListWithOpen = message.getErrorObjListWithOpen();</span>
+<span class="fc" id="L286">            PcepErrorInfo errInfo = message.getPcepErrorInfo();</span>
+
+            // write ( &lt;error-obj-list&gt; [&lt;Open&gt;] ) if exists.
+            // otherwise write &lt;error&gt; [&lt;error-list&gt;]
+
+<span class="fc bfc" id="L291" title="All 2 branches covered.">            if ((errObjListWithOpen != null)</span>
+<span class="pc bpc" id="L292" title="1 of 2 branches missed.">                    &amp;&amp; (errObjListWithOpen.isErrorObjListWithOpenPresent())) {</span>
+<span class="fc" id="L293">                errObjListWithOpen.write(cb);</span>
+<span class="pc bpc" id="L294" title="2 of 4 branches missed.">            } else if ((errInfo != null) &amp;&amp; (errInfo.isErrorInfoPresent())) {</span>
+<span class="fc" id="L295">                errInfo.write(cb);</span>
+            } else {
+<span class="nc" id="L297">                throw new PcepParseException(&quot;Empty PCEP-ERROR message.&quot;);</span>
+            }
+            // PcepErrorMessage message length field
+<span class="fc" id="L300">            int length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L301">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L302">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L307">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L312">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public ErrorObjListWithOpen getErrorObjListWithOpen() {
+<span class="fc" id="L317">        return this.errObjListWithOpen;</span>
+    }
+
+    @Override
+    public void setErrorObjListWithOpen(ErrorObjListWithOpen errObjListWithOpen) {
+<span class="nc" id="L322">        this.errObjListWithOpen = errObjListWithOpen;</span>
+<span class="nc" id="L323">    }</span>
+
+    @Override
+    public PcepErrorInfo getPcepErrorInfo() {
+<span class="fc" id="L327">        return this.errInfo;</span>
+    }
+
+    @Override
+    public void setPcepErrorInfo(PcepErrorInfo errInfo) {
+<span class="nc" id="L332">        this.errInfo = errInfo;</span>
+<span class="nc" id="L333">    }</span>
+
+    /**
+     * Return list of Error types.
+     *
+     * @return error types list
+     */
+    public LinkedList&lt;Integer&gt; getErrorType() {
+<span class="nc" id="L341">        LinkedList&lt;Integer&gt; llErrorType = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if ((errObjListWithOpen != null)</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">                &amp;&amp; (errObjListWithOpen.isErrorObjListWithOpenPresent())) {</span>
+<span class="nc" id="L344">            llErrorType = errObjListWithOpen.getErrorType();</span>
+<span class="nc bnc" id="L345" title="All 4 branches missed.">        } else if ((errInfo != null) &amp;&amp; (errInfo.isErrorInfoPresent())) {</span>
+<span class="nc" id="L346">            llErrorType = errInfo.getErrorType();</span>
+        }
+
+<span class="nc" id="L349">        return llErrorType;</span>
+    }
+
+    /**
+     * Return list of Error values.
+     *
+     * @return error value list
+     */
+    public LinkedList&lt;Integer&gt; getErrorValue() {
+<span class="nc" id="L358">        LinkedList&lt;Integer&gt; llErrorValue = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        if ((errObjListWithOpen != null)</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">                &amp;&amp; (errObjListWithOpen.isErrorObjListWithOpenPresent())) {</span>
+<span class="nc" id="L361">            llErrorValue = errObjListWithOpen.getErrorValue();</span>
+<span class="nc bnc" id="L362" title="All 4 branches missed.">        } else if ((errInfo != null) &amp;&amp; (errInfo.isErrorInfoPresent())) {</span>
+<span class="nc" id="L363">            llErrorValue = errInfo.getErrorValue();</span>
+        }
+
+<span class="nc" id="L366">        return llErrorValue;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L371">        ToStringHelper toStrHelper = MoreObjects.toStringHelper(getClass());</span>
+
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        if ((errObjListWithOpen != null)</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">                &amp;&amp; (errObjListWithOpen.isErrorObjListWithOpenPresent())) {</span>
+<span class="nc" id="L375">            toStrHelper.add(&quot;ErrorObjectListWithOpen&quot;, errObjListWithOpen);</span>
+        }
+<span class="nc bnc" id="L377" title="All 4 branches missed.">        if ((errInfo != null) &amp;&amp; (errInfo.isErrorInfoPresent())) {</span>
+<span class="nc" id="L378">            toStrHelper.add(&quot;ErrorInfo&quot;, errInfo);</span>
+        }
+
+<span class="nc" id="L381">        return toStrHelper.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

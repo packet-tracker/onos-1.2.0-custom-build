@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepNaiIpv4Adjacency.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepNaiIpv4Adjacency.java</span></div><h1>PcepNaiIpv4Adjacency.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepNai;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Nai Ipv4 Adjacency.
+ */
+public class PcepNaiIpv4Adjacency implements PcepNai {
+
+    public static final byte ST_TYPE = 0x03;
+    private final int localIpv4Addr;
+    private final int remoteIpv4Addr;
+
+    /**
+     * Constructor to initialize variables.
+     *
+     * @param localIpv4 local ipv4 address
+     * @param remoteIpv4 remote ipv4 address
+     */
+<span class="fc" id="L41">    public PcepNaiIpv4Adjacency(int localIpv4, int remoteIpv4) {</span>
+<span class="fc" id="L42">        this.localIpv4Addr = localIpv4;</span>
+<span class="fc" id="L43">        this.remoteIpv4Addr = remoteIpv4;</span>
+<span class="fc" id="L44">    }</span>
+
+    /**
+     * Returns Object of Pcep nai Ipv4 Adjacency.
+     *
+     * @param localIpv4Addr local ipv4 address
+     * @param remoteIpv4Addr remote ipv4 address
+     * @return Object of Pcep nai Ipv4 Adjacency
+     */
+    public static PcepNaiIpv4Adjacency of(int localIpv4Addr, int remoteIpv4Addr) {
+<span class="fc" id="L54">        return new PcepNaiIpv4Adjacency(localIpv4Addr, remoteIpv4Addr);</span>
+    }
+
+    @Override
+    public byte getType() {
+<span class="nc" id="L59">        return ST_TYPE;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer bb) {
+<span class="nc" id="L64">        int iLenStartIndex = bb.writerIndex();</span>
+<span class="nc" id="L65">        bb.writeInt(localIpv4Addr);</span>
+<span class="nc" id="L66">        bb.writeInt(remoteIpv4Addr);</span>
+<span class="nc" id="L67">        return bb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of PcepNAIIpv4AdjacencyVer1.
+     *
+     * @param cb of channel buffer
+     * @return object of PcepNAIIpv4Adjacency
+     */
+    public static PcepNaiIpv4Adjacency read(ChannelBuffer cb) {
+<span class="nc" id="L77">        int localIpv4 = cb.readInt();</span>
+<span class="nc" id="L78">        int remoteIpv4 = cb.readInt();</span>
+<span class="nc" id="L79">        return new PcepNaiIpv4Adjacency(localIpv4, remoteIpv4);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L84">        return Objects.hash(localIpv4Addr, remoteIpv4Addr);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L89" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L90">            return true;</span>
+        }
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        if (obj instanceof PcepNaiIpv4Adjacency) {</span>
+<span class="fc" id="L93">            PcepNaiIpv4Adjacency other = (PcepNaiIpv4Adjacency) obj;</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">            return Objects.equals(this.localIpv4Addr, other.localIpv4Addr)</span>
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.remoteIpv4Addr, other.remoteIpv4Addr);</span>
+        }
+<span class="fc" id="L97">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L102">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L103">                .add(&quot;localIPv4Address&quot;, localIpv4Addr)</span>
+<span class="fc" id="L104">                .add(&quot;remoteIPv4Address&quot;, remoteIpv4Addr)</span>
+<span class="fc" id="L105">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

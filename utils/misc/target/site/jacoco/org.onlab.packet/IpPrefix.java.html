@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IpPrefix.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IpPrefix.java</span></div><h1>IpPrefix.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.util.Objects;
+
+/**
+ * A class representing an IP prefix. A prefix consists of an IP address and
+ * a subnet mask.
+ * This class is immutable.
+ * &lt;p&gt;
+ * NOTE: The stored IP address in the result IP prefix is masked to
+ * contain zeroes in all bits after the prefix length.
+ * &lt;/p&gt;
+ */
+public class IpPrefix {
+    // Maximum network mask length
+    public static final int MAX_INET_MASK_LENGTH = IpAddress.INET_BIT_LENGTH;
+    public static final int MAX_INET6_MASK_LENGTH = IpAddress.INET6_BIT_LENGTH;
+
+    private final IpAddress address;
+    private final short prefixLength;
+
+    /**
+     * Constructor for given IP address, and a prefix length.
+     *
+     * @param address the IP address
+     * @param prefixLength the prefix length
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+<span class="fc" id="L44">    protected IpPrefix(IpAddress address, int prefixLength) {</span>
+<span class="fc" id="L45">        checkPrefixLength(address.version(), prefixLength);</span>
+<span class="fc" id="L46">        this.address = IpAddress.makeMaskedAddress(address, prefixLength);</span>
+<span class="fc" id="L47">        this.prefixLength = (short) prefixLength;</span>
+<span class="fc" id="L48">    }</span>
+
+    /**
+     * Returns the IP version of the prefix.
+     *
+     * @return the IP version of the prefix
+     */
+    public IpAddress.Version version() {
+<span class="fc" id="L56">        return address.version();</span>
+    }
+
+    /**
+     * Tests whether the IP version of this prefix is IPv4.
+     *
+     * @return true if the IP version of this prefix is IPv4, otherwise false.
+     */
+    public boolean isIp4() {
+<span class="fc" id="L65">        return address.isIp4();</span>
+    }
+
+    /**
+     * Tests whether the IP version of this prefix is IPv6.
+     *
+     * @return true if the IP version of this prefix is IPv6, otherwise false.
+     */
+    public boolean isIp6() {
+<span class="fc" id="L74">        return address.isIp6();</span>
+    }
+
+    /**
+     * Returns the IP address value of the prefix.
+     *
+     * @return the IP address value of the prefix
+     */
+    public IpAddress address() {
+<span class="fc" id="L83">        return address;</span>
+    }
+
+    /**
+     * Returns the IP address prefix length.
+     *
+     * @return the IP address prefix length
+     */
+    public int prefixLength() {
+<span class="fc" id="L92">        return prefixLength;</span>
+    }
+
+    /**
+     * Gets the {@link Ip4Prefix} view of the IP prefix.
+     *
+     * @return the {@link Ip4Prefix} view of the IP prefix if it is IPv4,
+     * otherwise null
+     */
+    public Ip4Prefix getIp4Prefix() {
+<span class="fc bfc" id="L102" title="All 2 branches covered.">        if (!isIp4()) {</span>
+<span class="fc" id="L103">            return null;</span>
+        }
+
+        // Return this object itself if it is already instance of Ip4Prefix
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if (this instanceof Ip4Prefix) {</span>
+<span class="fc" id="L108">            return (Ip4Prefix) this;</span>
+        }
+<span class="fc" id="L110">        return Ip4Prefix.valueOf(address.getIp4Address(), prefixLength);</span>
+    }
+
+    /**
+     * Gets the {@link Ip6Prefix} view of the IP prefix.
+     *
+     * @return the {@link Ip6Prefix} view of the IP prefix if it is IPv6,
+     * otherwise null
+     */
+    public Ip6Prefix getIp6Prefix() {
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (!isIp6()) {</span>
+<span class="fc" id="L121">            return null;</span>
+        }
+
+        // Return this object itself if it is already instance of Ip6Prefix
+<span class="fc bfc" id="L125" title="All 2 branches covered.">        if (this instanceof Ip6Prefix) {</span>
+<span class="fc" id="L126">            return (Ip6Prefix) this;</span>
+        }
+<span class="fc" id="L128">        return Ip6Prefix.valueOf(address.getIp6Address(), prefixLength);</span>
+    }
+
+    /**
+     * Converts an integer and a prefix length into an IPv4 prefix.
+     *
+     * @param address an integer representing the IPv4 address
+     * @param prefixLength the prefix length
+     * @return an IP prefix
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    public static IpPrefix valueOf(int address, int prefixLength) {
+<span class="fc" id="L140">        return new IpPrefix(IpAddress.valueOf(address), prefixLength);</span>
+    }
+
+    /**
+     * Converts a byte array and a prefix length into an IP prefix.
+     *
+     * @param version the IP address version
+     * @param address the IP address value stored in network byte order
+     * @param prefixLength the prefix length
+     * @return an IP prefix
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    public static IpPrefix valueOf(IpAddress.Version version, byte[] address,
+                                   int prefixLength) {
+<span class="fc" id="L154">        return new IpPrefix(IpAddress.valueOf(version, address), prefixLength);</span>
+    }
+
+    /**
+     * Converts an IP address and a prefix length into an IP prefix.
+     *
+     * @param address the IP address
+     * @param prefixLength the prefix length
+     * @return an IP prefix
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    public static IpPrefix valueOf(IpAddress address, int prefixLength) {
+<span class="fc" id="L166">        return new IpPrefix(address, prefixLength);</span>
+    }
+
+    /**
+     * Converts a CIDR (slash) notation string (e.g., &quot;10.1.0.0/16&quot; or
+     * &quot;1111:2222::/64&quot;) into an IP prefix.
+     *
+     * @param address an IP prefix in string form (e.g. &quot;10.1.0.0/16&quot; or
+     * &quot;1111:2222::/64&quot;)
+     * @return an IP prefix
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    public static IpPrefix valueOf(String address) {
+<span class="fc" id="L179">        final String[] parts = address.split(&quot;/&quot;);</span>
+<span class="fc bfc" id="L180" title="All 2 branches covered.">        if (parts.length != 2) {</span>
+<span class="fc" id="L181">            String msg = &quot;Malformed IP prefix string: &quot; + address + &quot;. &quot; +</span>
+                &quot;Address must take form \&quot;x.x.x.x/y\&quot; or &quot; +
+                &quot;\&quot;xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx/y\&quot;&quot;;
+<span class="fc" id="L184">            throw new IllegalArgumentException(msg);</span>
+        }
+<span class="fc" id="L186">        IpAddress ipAddress = IpAddress.valueOf(parts[0]);</span>
+<span class="fc" id="L187">        int prefixLength = Integer.parseInt(parts[1]);</span>
+
+<span class="fc" id="L189">        return new IpPrefix(ipAddress, prefixLength);</span>
+    }
+
+    /**
+     * Determines whether a given IP prefix is contained within this prefix.
+     *
+     * @param other the IP prefix to test
+     * @return true if the other IP prefix is contained in this prefix,
+     * otherwise false
+     */
+    public boolean contains(IpPrefix other) {
+<span class="fc bfc" id="L200" title="All 2 branches covered.">        if (version() != other.version()) {</span>
+<span class="fc" id="L201">            return false;</span>
+        }
+
+<span class="fc bfc" id="L204" title="All 2 branches covered.">        if (this.prefixLength &gt; other.prefixLength) {</span>
+<span class="fc" id="L205">            return false;               // This prefix has smaller prefix size</span>
+        }
+
+        //
+        // Mask the other address with my prefix length.
+        // If the other prefix is within this prefix, the masked address must
+        // be same as the address of this prefix.
+        //
+<span class="fc" id="L213">        IpAddress maskedAddr =</span>
+<span class="fc" id="L214">            IpAddress.makeMaskedAddress(other.address, this.prefixLength);</span>
+<span class="fc" id="L215">        return this.address.equals(maskedAddr);</span>
+    }
+
+    /**
+     * Determines whether a given IP address is contained within this prefix.
+     *
+     * @param other the IP address to test
+     * @return true if the IP address is contained in this prefix, otherwise
+     * false
+     */
+    public boolean contains(IpAddress other) {
+<span class="fc bfc" id="L226" title="All 2 branches covered.">        if (version() != other.version()) {</span>
+<span class="fc" id="L227">            return false;</span>
+        }
+
+        //
+        // Mask the other address with my prefix length.
+        // If the other prefix is within this prefix, the masked address must
+        // be same as the address of this prefix.
+        //
+<span class="fc" id="L235">        IpAddress maskedAddr =</span>
+<span class="fc" id="L236">            IpAddress.makeMaskedAddress(other, this.prefixLength);</span>
+<span class="fc" id="L237">        return this.address.equals(maskedAddr);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L242">        return Objects.hash(address, prefixLength);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L248">            return true;</span>
+        }
+<span class="fc bfc" id="L250" title="All 4 branches covered.">        if ((obj == null) || (!(obj instanceof IpPrefix))) {</span>
+<span class="fc" id="L251">            return false;</span>
+        }
+<span class="fc" id="L253">        IpPrefix other = (IpPrefix) obj;</span>
+<span class="fc bfc" id="L254" title="All 2 branches covered.">        return ((prefixLength == other.prefixLength) &amp;&amp;</span>
+<span class="fc bfc" id="L255" title="All 2 branches covered.">                address.equals(other.address));</span>
+    }
+
+    @Override
+    /*
+     * (non-Javadoc)
+     * The format is &quot;x.x.x.x/y&quot; for IPv4 prefixes.
+     *
+     * @see java.lang.Object#toString()
+     */
+    public String toString() {
+<span class="fc" id="L266">        final StringBuilder builder = new StringBuilder();</span>
+<span class="fc" id="L267">        builder.append(address.toString());</span>
+<span class="fc" id="L268">        builder.append(&quot;/&quot;);</span>
+<span class="fc" id="L269">        builder.append(String.format(&quot;%d&quot;, prefixLength));</span>
+<span class="fc" id="L270">        return builder.toString();</span>
+    }
+
+    /**
+     * Checks whether the prefix length is valid.
+     *
+     * @param version the IP address version
+     * @param prefixLength the prefix length value to check
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    private static void checkPrefixLength(IpAddress.Version version,
+                                          int prefixLength) {
+<span class="fc" id="L282">        int maxPrefixLen = 0;</span>
+
+<span class="pc bpc" id="L284" title="1 of 3 branches missed.">        switch (version) {</span>
+        case INET:
+<span class="fc" id="L286">            maxPrefixLen = MAX_INET_MASK_LENGTH;</span>
+<span class="fc" id="L287">            break;</span>
+        case INET6:
+<span class="fc" id="L289">            maxPrefixLen = MAX_INET6_MASK_LENGTH;</span>
+<span class="fc" id="L290">            break;</span>
+        default:
+<span class="nc" id="L292">            String msg = &quot;Invalid IP version &quot; + version;</span>
+<span class="nc" id="L293">            throw new IllegalArgumentException(msg);</span>
+        }
+
+<span class="fc bfc" id="L296" title="All 4 branches covered.">        if ((prefixLength &lt; 0) || (prefixLength &gt; maxPrefixLen)) {</span>
+<span class="fc" id="L297">            String msg = &quot;Invalid prefix length &quot; + prefixLength + &quot;. &quot; +</span>
+                &quot;The value must be in the interval [0, &quot; +
+                maxPrefixLen + &quot;]&quot;;
+<span class="fc" id="L300">            throw new IllegalArgumentException(msg);</span>
+        }
+<span class="fc" id="L302">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RoutingConfigurationImpl.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.config.impl</a> &gt; <span class="el_source">RoutingConfigurationImpl.java</span></div><h1>RoutingConfigurationImpl.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.config.impl;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.googlecode.concurrenttrees.radix.node.concrete.DefaultByteArrayNodeFactory;
+import com.googlecode.concurrenttrees.radixinverted.ConcurrentInvertedRadixTree;
+import com.googlecode.concurrenttrees.radixinverted.InvertedRadixTree;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.MacAddress;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.config.ConfigFactory;
+import org.onosproject.net.config.NetworkConfigRegistry;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.config.basics.SubjectFactories;
+import org.onosproject.routing.config.BgpConfig;
+import org.onosproject.routing.config.BgpPeer;
+import org.onosproject.routing.config.BgpSpeaker;
+import org.onosproject.routing.config.Interface;
+import org.onosproject.routing.config.LocalIpPrefixEntry;
+import org.onosproject.routing.config.RoutingConfigurationService;
+import org.onosproject.routing.impl.Router;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+import static org.onosproject.routing.RouteEntry.createBinaryString;
+
+/**
+ * Implementation of RoutingConfigurationService which reads routing
+ * configuration from a file.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L69">public class RoutingConfigurationImpl implements RoutingConfigurationService {</span>
+
+<span class="nc" id="L71">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String CONFIG_DIR = &quot;../config&quot;;
+    private static final String DEFAULT_CONFIG_FILE = &quot;sdnip.json&quot;;
+<span class="nc" id="L75">    private String configFileName = DEFAULT_CONFIG_FILE;</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigRegistry registry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService configService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected InterfaceService interfaceService;
+
+<span class="nc" id="L89">    private Map&lt;String, BgpSpeaker&gt; bgpSpeakers = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="nc" id="L90">    private Map&lt;IpAddress, BgpPeer&gt; bgpPeers = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="nc" id="L91">    private Set&lt;IpAddress&gt; gatewayIpAddresses = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L92">    private Set&lt;ConnectPoint&gt; bgpPeerConnectPoints = new HashSet&lt;&gt;();</span>
+
+<span class="nc" id="L94">    private InvertedRadixTree&lt;LocalIpPrefixEntry&gt;</span>
+            localPrefixTable4 = new ConcurrentInvertedRadixTree&lt;&gt;(
+                    new DefaultByteArrayNodeFactory());
+<span class="nc" id="L97">    private InvertedRadixTree&lt;LocalIpPrefixEntry&gt;</span>
+            localPrefixTable6 = new ConcurrentInvertedRadixTree&lt;&gt;(
+                    new DefaultByteArrayNodeFactory());
+
+    private MacAddress virtualGatewayMacAddress;
+
+<span class="nc" id="L103">    private ConfigFactory configFactory =</span>
+<span class="nc" id="L104">            new ConfigFactory(SubjectFactories.APP_SUBJECT_FACTORY, BgpConfig.class, &quot;bgp&quot;) {</span>
+        @Override
+        public BgpConfig createConfig() {
+<span class="nc" id="L107">            return new BgpConfig();</span>
+        }
+    };
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L113">        registry.registerConfigFactory(configFactory);</span>
+<span class="nc" id="L114">        readConfiguration();</span>
+<span class="nc" id="L115">        log.info(&quot;Routing configuration service started&quot;);</span>
+<span class="nc" id="L116">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L120">        registry.unregisterConfigFactory(configFactory);</span>
+<span class="nc" id="L121">        log.info(&quot;Routing configuration service stopped&quot;);</span>
+<span class="nc" id="L122">    }</span>
+
+    /**
+     * Reads SDN-IP related information contained in the configuration file.
+     *
+     * @param configFilename the name of the configuration file for the SDN-IP
+     * application
+     */
+    private void readConfiguration(String configFilename) {
+<span class="nc" id="L131">        File configFile = new File(CONFIG_DIR, configFilename);</span>
+<span class="nc" id="L132">        ObjectMapper mapper = new ObjectMapper();</span>
+
+        try {
+<span class="nc" id="L135">            log.info(&quot;Loading config: {}&quot;, configFile.getAbsolutePath());</span>
+<span class="nc" id="L136">            Configuration config = mapper.readValue(configFile,</span>
+                                                    Configuration.class);
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            for (BgpSpeaker speaker : config.getBgpSpeakers()) {</span>
+<span class="nc" id="L139">                bgpSpeakers.put(speaker.name(), speaker);</span>
+<span class="nc" id="L140">            }</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">            for (BgpPeer peer : config.getPeers()) {</span>
+<span class="nc" id="L142">                bgpPeers.put(peer.ipAddress(), peer);</span>
+<span class="nc" id="L143">                bgpPeerConnectPoints.add(peer.connectPoint());</span>
+<span class="nc" id="L144">            }</span>
+
+<span class="nc bnc" id="L146" title="All 2 branches missed.">            for (LocalIpPrefixEntry entry : config.getLocalIp4PrefixEntries()) {</span>
+<span class="nc" id="L147">                localPrefixTable4.put(createBinaryString(entry.ipPrefix()),</span>
+                                      entry);
+<span class="nc" id="L149">                gatewayIpAddresses.add(entry.getGatewayIpAddress());</span>
+<span class="nc" id="L150">            }</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            for (LocalIpPrefixEntry entry : config.getLocalIp6PrefixEntries()) {</span>
+<span class="nc" id="L152">                localPrefixTable6.put(createBinaryString(entry.ipPrefix()),</span>
+                                      entry);
+<span class="nc" id="L154">                gatewayIpAddresses.add(entry.getGatewayIpAddress());</span>
+<span class="nc" id="L155">            }</span>
+
+<span class="nc" id="L157">            virtualGatewayMacAddress = config.getVirtualGatewayMacAddress();</span>
+
+<span class="nc" id="L159">        } catch (FileNotFoundException e) {</span>
+<span class="nc" id="L160">            log.warn(&quot;Configuration file not found: {}&quot;, configFileName);</span>
+<span class="nc" id="L161">        } catch (IOException e) {</span>
+<span class="nc" id="L162">            log.error(&quot;Error loading configuration&quot;, e);</span>
+<span class="nc" id="L163">        }</span>
+<span class="nc" id="L164">    }</span>
+
+    /**
+     * Instructs the configuration reader to read the configuration from the
+     * file.
+     */
+    public void readConfiguration() {
+<span class="nc" id="L171">        readConfiguration(configFileName);</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    public Map&lt;String, BgpSpeaker&gt; getBgpSpeakers() {
+<span class="nc" id="L176">        return Collections.unmodifiableMap(bgpSpeakers);</span>
+    }
+
+    @Override
+    public Map&lt;IpAddress, BgpPeer&gt; getBgpPeers() {
+<span class="nc" id="L181">        return Collections.unmodifiableMap(bgpPeers);</span>
+    }
+
+    @Override
+    public Set&lt;Interface&gt; getInterfaces() {
+<span class="nc" id="L186">        return Collections.emptySet();</span>
+    }
+
+    @Override
+    public Set&lt;ConnectPoint&gt; getBgpPeerConnectPoints() {
+        // TODO perhaps cache this result in future
+<span class="nc" id="L192">        ApplicationId routerAppId = coreService.getAppId(Router.ROUTER_APP_ID);</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        if (routerAppId == null) {</span>
+<span class="nc" id="L194">            return Collections.emptySet();</span>
+        }
+
+<span class="nc" id="L197">        BgpConfig bgpConfig = configService.getConfig(routerAppId, BgpConfig.class);</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (bgpConfig == null) {</span>
+<span class="nc" id="L199">            return Collections.emptySet();</span>
+        } else {
+<span class="nc" id="L201">            return bgpConfig.bgpSpeakers().stream()</span>
+<span class="nc" id="L202">                    .flatMap(speaker -&gt; speaker.peers().stream())</span>
+<span class="nc" id="L203">                    .map(peer -&gt; interfaceService.getMatchingInterface(peer))</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">                    .filter(intf -&gt; intf != null)</span>
+<span class="nc" id="L205">                    .map(intf -&gt; intf.connectPoint())</span>
+<span class="nc" id="L206">                    .collect(Collectors.toSet());</span>
+        }
+    }
+
+    @Override
+    public Interface getInterface(ConnectPoint connectPoint) {
+<span class="nc" id="L212">        return null;</span>
+    }
+
+    @Override
+    public Interface getInterface(IpAddress ip) {
+<span class="nc" id="L217">        return null;</span>
+    }
+
+    @Override
+    public Interface getMatchingInterface(IpAddress ipAddress) {
+<span class="nc" id="L222">        return null;</span>
+    }
+
+    @Override
+    public boolean isIpAddressLocal(IpAddress ipAddress) {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (ipAddress.isIp4()) {</span>
+<span class="nc" id="L228">            return localPrefixTable4.getValuesForKeysPrefixing(</span>
+<span class="nc" id="L229">                    createBinaryString(</span>
+<span class="nc" id="L230">                    IpPrefix.valueOf(ipAddress, Ip4Address.BIT_LENGTH)))</span>
+<span class="nc" id="L231">                    .iterator().hasNext();</span>
+        } else {
+<span class="nc" id="L233">            return localPrefixTable6.getValuesForKeysPrefixing(</span>
+<span class="nc" id="L234">                    createBinaryString(</span>
+<span class="nc" id="L235">                    IpPrefix.valueOf(ipAddress, Ip6Address.BIT_LENGTH)))</span>
+<span class="nc" id="L236">                    .iterator().hasNext();</span>
+        }
+    }
+
+    @Override
+    public boolean isIpPrefixLocal(IpPrefix ipPrefix) {
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        return (localPrefixTable4.getValueForExactKey(</span>
+<span class="nc" id="L243">                createBinaryString(ipPrefix)) != null ||</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">                localPrefixTable6.getValueForExactKey(</span>
+<span class="nc" id="L245">                createBinaryString(ipPrefix)) != null);</span>
+    }
+
+    @Override
+    public boolean isVirtualGatewayIpAddress(IpAddress ipAddress) {
+<span class="nc" id="L250">        return gatewayIpAddresses.contains(ipAddress);</span>
+    }
+
+    @Override
+    public MacAddress getVirtualGatewayMacAddress() {
+<span class="nc" id="L255">        return virtualGatewayMacAddress;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

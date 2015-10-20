@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Compiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-stc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.stc</a> &gt; <span class="el_source">Compiler.java</span></div><h1>Compiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.stc;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import org.apache.commons.configuration.HierarchicalConfiguration;
+import org.onlab.graph.DepthFirstSearch;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.onlab.graph.DepthFirstSearch.EdgeType.BACK_EDGE;
+import static org.onlab.graph.GraphPathSearch.ALL_PATHS;
+import static org.onlab.stc.Scenario.loadScenario;
+
+/**
+ * Entity responsible for loading a scenario and producing a redy-to-execute
+ * process flow graph.
+ */
+public class Compiler {
+
+    private static final String DEFAULT_LOG_DIR = &quot;${WORKSPACE}/tmp/stc/&quot;;
+
+    private static final String IMPORT = &quot;import&quot;;
+    private static final String GROUP = &quot;group&quot;;
+    private static final String STEP = &quot;step&quot;;
+    private static final String PARALLEL = &quot;parallel&quot;;
+    private static final String DEPENDENCY = &quot;dependency&quot;;
+
+    private static final String LOG_DIR = &quot;[@logDir]&quot;;
+    private static final String NAME = &quot;[@name]&quot;;
+    private static final String COMMAND = &quot;[@exec]&quot;;
+    private static final String ENV = &quot;[@env]&quot;;
+    private static final String CWD = &quot;[@cwd]&quot;;
+    private static final String REQUIRES = &quot;[@requires]&quot;;
+    private static final String IF = &quot;[@if]&quot;;
+    private static final String UNLESS = &quot;[@unless]&quot;;
+    private static final String VAR = &quot;[@var]&quot;;
+    private static final String FILE = &quot;[@file]&quot;;
+    private static final String NAMESPACE = &quot;[@namespace]&quot;;
+
+    static final String PROP_START = &quot;${&quot;;
+    static final String PROP_END = &quot;}&quot;;
+    private static final String HASH = &quot;#&quot;;
+
+    private final Scenario scenario;
+
+<span class="fc" id="L71">    private final Map&lt;String, Step&gt; steps = Maps.newHashMap();</span>
+<span class="fc" id="L72">    private final Map&lt;String, Step&gt; inactiveSteps = Maps.newHashMap();</span>
+<span class="fc" id="L73">    private final Map&lt;String, String&gt; requirements = Maps.newHashMap();</span>
+<span class="fc" id="L74">    private final Set&lt;Dependency&gt; dependencies = Sets.newHashSet();</span>
+<span class="fc" id="L75">    private final List&lt;Integer&gt; parallels = Lists.newArrayList();</span>
+
+    private ProcessFlow processFlow;
+    private File logDir;
+
+<span class="fc" id="L80">    private String previous = null;</span>
+<span class="fc" id="L81">    private String pfx = &quot;&quot;;</span>
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">    private boolean debugOn = System.getenv(&quot;debug&quot;) != null;</span>
+
+    /**
+     * Creates a new compiler for the specified scenario.
+     *
+     * @param scenario scenario to be compiled
+     */
+<span class="fc" id="L89">    public Compiler(Scenario scenario) {</span>
+<span class="fc" id="L90">        this.scenario = scenario;</span>
+<span class="fc" id="L91">    }</span>
+
+    /**
+     * Returns the scenario being compiled.
+     *
+     * @return test scenario
+     */
+    public Scenario scenario() {
+<span class="fc" id="L99">        return scenario;</span>
+    }
+
+    /**
+     * Compiles the specified scenario to produce a final process flow graph.
+     */
+    public void compile() {
+<span class="fc" id="L106">        compile(scenario.definition(), null, null);</span>
+<span class="fc" id="L107">        compileRequirements();</span>
+
+        // Produce the process flow
+<span class="fc" id="L110">        processFlow = new ProcessFlow(ImmutableSet.copyOf(steps.values()),</span>
+<span class="fc" id="L111">                                      ImmutableSet.copyOf(dependencies));</span>
+
+<span class="fc" id="L113">        scanForCycles();</span>
+
+        // Extract the log directory if there was one specified
+<span class="fc" id="L116">        String defaultPath = DEFAULT_LOG_DIR + scenario.name();</span>
+<span class="fc" id="L117">        String path = scenario.definition().getString(LOG_DIR, defaultPath);</span>
+<span class="fc" id="L118">        logDir = new File(expand(path));</span>
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * Returns the step with the specified name.
+     *
+     * @param name step or group name
+     * @return test step or group
+     */
+    public Step getStep(String name) {
+<span class="fc" id="L128">        return steps.get(name);</span>
+    }
+
+    /**
+     * Returns the process flow generated from this scenario definition.
+     *
+     * @return process flow as a graph
+     */
+    public ProcessFlow processFlow() {
+<span class="fc" id="L137">        return processFlow;</span>
+    }
+
+    /**
+     * Returns the log directory where scenario logs should be kept.
+     *
+     * @return scenario logs directory
+     */
+    public File logDir() {
+<span class="fc" id="L146">        return logDir;</span>
+    }
+
+    /**
+     * Recursively elaborates this definition to produce a final process flow graph.
+     *
+     * @param cfg         hierarchical definition
+     * @param namespace   optional namespace
+     * @param parentGroup optional parent group
+     */
+    private void compile(HierarchicalConfiguration cfg,
+                         String namespace, Group parentGroup) {
+<span class="fc" id="L158">        String opfx = pfx;</span>
+<span class="fc" id="L159">        pfx = pfx + &quot;&gt;&quot;;</span>
+<span class="fc" id="L160">        print(&quot;pfx=%s namespace=%s&quot;, pfx, namespace);</span>
+
+        // Scan all imports
+<span class="fc" id="L163">        cfg.configurationsAt(IMPORT)</span>
+<span class="fc" id="L164">                .forEach(c -&gt; processImport(c, namespace, parentGroup));</span>
+
+        // Scan all steps
+<span class="fc" id="L167">        cfg.configurationsAt(STEP)</span>
+<span class="fc" id="L168">                .forEach(c -&gt; processStep(c, namespace, parentGroup));</span>
+
+        // Scan all groups
+<span class="fc" id="L171">        cfg.configurationsAt(GROUP)</span>
+<span class="fc" id="L172">                .forEach(c -&gt; processGroup(c, namespace, parentGroup));</span>
+
+        // Scan all parallel groups
+<span class="fc" id="L175">        cfg.configurationsAt(PARALLEL)</span>
+<span class="fc" id="L176">                .forEach(c -&gt; processParallelGroup(c, namespace, parentGroup));</span>
+
+        // Scan all dependencies
+<span class="fc" id="L179">        cfg.configurationsAt(DEPENDENCY)</span>
+<span class="fc" id="L180">                .forEach(c -&gt; processDependency(c, namespace));</span>
+
+<span class="fc" id="L182">        pfx = opfx;</span>
+<span class="fc" id="L183">    }</span>
+
+    /**
+     * Compiles requirements for all steps and groups accrued during the
+     * overall compilation process.
+     */
+    private void compileRequirements() {
+<span class="fc" id="L190">        requirements.forEach((name, requires) -&gt;</span>
+<span class="fc" id="L191">                                     compileRequirements(getStep(name), requires));</span>
+<span class="fc" id="L192">    }</span>
+
+    private void compileRequirements(Step src, String requires) {
+<span class="fc" id="L195">        split(requires).forEach(n -&gt; {</span>
+<span class="fc" id="L196">            boolean isSoft = n.startsWith(&quot;~&quot;);</span>
+<span class="fc" id="L197">            String name = n.replaceFirst(&quot;^~&quot;, &quot;&quot;);</span>
+<span class="fc" id="L198">            Step dst = getStep(name);</span>
+<span class="fc bfc" id="L199" title="All 2 branches covered.">            if (dst != null) {</span>
+<span class="fc" id="L200">                dependencies.add(new Dependency(src, dst, isSoft));</span>
+            }
+<span class="fc" id="L202">        });</span>
+<span class="fc" id="L203">    }</span>
+
+    /**
+     * Processes an import directive.
+     *
+     * @param cfg         hierarchical definition
+     * @param namespace   optional namespace
+     * @param parentGroup optional parent group
+     */
+    private void processImport(HierarchicalConfiguration cfg,
+                               String namespace, Group parentGroup) {
+<span class="fc" id="L214">        String file = checkNotNull(expand(cfg.getString(FILE)),</span>
+                                   &quot;Import directive must specify 'file'&quot;);
+<span class="fc" id="L216">        String newNamespace = expand(prefix(cfg.getString(NAMESPACE), namespace));</span>
+<span class="fc" id="L217">        print(&quot;import file=%s namespace=%s&quot;, file, newNamespace);</span>
+        try {
+<span class="fc" id="L219">            Scenario importScenario = loadScenario(new FileInputStream(file));</span>
+<span class="fc" id="L220">            compile(importScenario.definition(), newNamespace, parentGroup);</span>
+<span class="nc" id="L221">        } catch (IOException e) {</span>
+<span class="nc" id="L222">            throw new IllegalArgumentException(&quot;Unable to import scenario&quot;, e);</span>
+<span class="fc" id="L223">        }</span>
+<span class="fc" id="L224">    }</span>
+
+    /**
+     * Processes a step directive.
+     *
+     * @param cfg         hierarchical definition
+     * @param namespace   optional namespace
+     * @param parentGroup optional parent group
+     */
+    private void processStep(HierarchicalConfiguration cfg,
+                             String namespace, Group parentGroup) {
+<span class="fc" id="L235">        String name = expand(prefix(cfg.getString(NAME), namespace));</span>
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        String command = expand(cfg.getString(COMMAND, parentGroup != null ? parentGroup.command() : null), true);</span>
+<span class="fc bfc" id="L237" title="All 2 branches covered.">        String env = expand(cfg.getString(ENV, parentGroup != null ? parentGroup.env() : null));</span>
+<span class="fc bfc" id="L238" title="All 2 branches covered.">        String cwd = expand(cfg.getString(CWD, parentGroup != null ? parentGroup.cwd() : null));</span>
+
+<span class="fc" id="L240">        print(&quot;step name=%s command=%s env=%s cwd=%s&quot;, name, command, env, cwd);</span>
+<span class="fc" id="L241">        Step step = new Step(name, command, env, cwd, parentGroup);</span>
+<span class="fc" id="L242">        registerStep(step, cfg, namespace, parentGroup);</span>
+<span class="fc" id="L243">    }</span>
+
+    /**
+     * Processes a group directive.
+     *
+     * @param cfg         hierarchical definition
+     * @param namespace   optional namespace
+     * @param parentGroup optional parent group
+     */
+    private void processGroup(HierarchicalConfiguration cfg,
+                              String namespace, Group parentGroup) {
+<span class="fc" id="L254">        String name = expand(prefix(cfg.getString(NAME), namespace));</span>
+<span class="fc bfc" id="L255" title="All 2 branches covered.">        String command = expand(cfg.getString(COMMAND, parentGroup != null ? parentGroup.command() : null), true);</span>
+<span class="fc bfc" id="L256" title="All 2 branches covered.">        String env = expand(cfg.getString(ENV, parentGroup != null ? parentGroup.env() : null));</span>
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        String cwd = expand(cfg.getString(CWD, parentGroup != null ? parentGroup.cwd() : null));</span>
+
+<span class="fc" id="L259">        print(&quot;group name=%s command=%s env=%s cwd=%s&quot;, name, command, env, cwd);</span>
+<span class="fc" id="L260">        Group group = new Group(name, command, env, cwd, parentGroup);</span>
+<span class="pc bpc" id="L261" title="1 of 2 branches missed.">        if (registerStep(group, cfg, namespace, parentGroup)) {</span>
+<span class="fc" id="L262">            compile(cfg, namespace, group);</span>
+        }
+<span class="fc" id="L264">    }</span>
+
+    /**
+     * Registers the specified step or group.
+     *
+     * @param step        step or group
+     * @param cfg         hierarchical definition
+     * @param namespace   optional namespace
+     * @param parentGroup optional parent group
+     * @return true of the step or group was registered as active
+     */
+    private boolean registerStep(Step step, HierarchicalConfiguration cfg,
+                                 String namespace, Group parentGroup) {
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">        checkState(!steps.containsKey(step.name()), &quot;Step %s already exists&quot;, step.name());</span>
+<span class="fc" id="L278">        String ifClause = expand(cfg.getString(IF));</span>
+<span class="fc" id="L279">        String unlessClause = expand(cfg.getString(UNLESS));</span>
+
+<span class="pc bpc" id="L281" title="1 of 6 branches missed.">        if ((ifClause != null &amp;&amp; ifClause.length() == 0) ||</span>
+<span class="pc bpc" id="L282" title="1 of 4 branches missed.">                (unlessClause != null &amp;&amp; unlessClause.length() &gt; 0) ||</span>
+<span class="pc bpc" id="L283" title="1 of 2 branches missed.">                (parentGroup != null &amp;&amp; inactiveSteps.containsValue(parentGroup))) {</span>
+<span class="fc" id="L284">            inactiveSteps.put(step.name(), step);</span>
+<span class="fc" id="L285">            return false;</span>
+        }
+
+<span class="fc bfc" id="L288" title="All 2 branches covered.">        if (parentGroup != null) {</span>
+<span class="fc" id="L289">            parentGroup.addChild(step);</span>
+        }
+
+<span class="fc" id="L292">        steps.put(step.name(), step);</span>
+<span class="fc" id="L293">        processRequirements(step, expand(cfg.getString(REQUIRES)), namespace);</span>
+<span class="fc" id="L294">        previous = step.name();</span>
+<span class="fc" id="L295">        return true;</span>
+    }
+
+    /**
+     * Processes a parallel clone group directive.
+     *
+     * @param cfg         hierarchical definition
+     * @param namespace   optional namespace
+     * @param parentGroup optional parent group
+     */
+    private void processParallelGroup(HierarchicalConfiguration cfg,
+                                      String namespace, Group parentGroup) {
+<span class="fc" id="L307">        String var = cfg.getString(VAR);</span>
+<span class="fc" id="L308">        print(&quot;parallel var=%s&quot;, var);</span>
+
+<span class="fc" id="L310">        int i = 1;</span>
+<span class="fc bfc" id="L311" title="All 2 branches covered.">        while (condition(var, i).length() &gt; 0) {</span>
+<span class="fc" id="L312">            parallels.add(0, i);</span>
+<span class="fc" id="L313">            compile(cfg, namespace, parentGroup);</span>
+<span class="fc" id="L314">            parallels.remove(0);</span>
+<span class="fc" id="L315">            i++;</span>
+        }
+<span class="fc" id="L317">    }</span>
+
+    /**
+     * Returns the elaborated repetition construct conditional.
+     *
+     * @param var repetition var property
+     * @param i   index to elaborate
+     * @return elaborated string
+     */
+    private String condition(String var, Integer i) {
+<span class="fc" id="L327">        return expand(var.replaceFirst(&quot;#&quot;, i.toString())).trim();</span>
+    }
+
+    /**
+     * Processes a dependency directive.
+     *
+     * @param cfg       hierarchical definition
+     * @param namespace optional namespace
+     */
+    private void processDependency(HierarchicalConfiguration cfg, String namespace) {
+<span class="fc" id="L337">        String name = expand(prefix(cfg.getString(NAME), namespace));</span>
+<span class="fc" id="L338">        String requires = expand(cfg.getString(REQUIRES));</span>
+
+<span class="fc" id="L340">        print(&quot;dependency name=%s requires=%s&quot;, name, requires);</span>
+<span class="fc" id="L341">        Step step = getStep(name, namespace);</span>
+<span class="fc bfc" id="L342" title="All 2 branches covered.">        if (!inactiveSteps.containsValue(step)) {</span>
+<span class="fc" id="L343">            processRequirements(step, requires, namespace);</span>
+        }
+<span class="fc" id="L345">    }</span>
+
+    /**
+     * Processes the specified requiremenst string and adds dependency for
+     * each requirement of the given step.
+     *
+     * @param src       source step
+     * @param requires  comma-separated list of required steps
+     * @param namespace optional namespace
+     */
+    private void processRequirements(Step src, String requires, String namespace) {
+<span class="fc" id="L356">        String reqs = requirements.get(src.name());</span>
+<span class="fc bfc" id="L357" title="All 2 branches covered.">        for (String n : split(requires)) {</span>
+<span class="fc" id="L358">            boolean isSoft = n.startsWith(&quot;~&quot;);</span>
+<span class="fc" id="L359">            String name = n.replaceFirst(&quot;^~&quot;, &quot;&quot;);</span>
+<span class="pc bpc" id="L360" title="2 of 4 branches missed.">            name = previous != null &amp;&amp; name.equals(&quot;^&quot;) ? previous : name;</span>
+<span class="fc bfc" id="L361" title="All 2 branches covered.">            name = (isSoft ? &quot;~&quot; : &quot;&quot;) + expand(prefix(name, namespace));</span>
+<span class="fc bfc" id="L362" title="All 2 branches covered.">            reqs = reqs == null ? name : (reqs + &quot;,&quot; + name);</span>
+<span class="fc" id="L363">        }</span>
+<span class="fc" id="L364">        requirements.put(src.name(), reqs);</span>
+<span class="fc" id="L365">    }</span>
+
+    /**
+     * Retrieves the step or group with the specified name.
+     *
+     * @param name      step or group name
+     * @param namespace optional namespace
+     * @return step or group; null if none found in active or inactive steps
+     */
+    private Step getStep(String name, String namespace) {
+<span class="fc" id="L375">        String dName = prefix(name, namespace);</span>
+<span class="fc" id="L376">        Step step = steps.get(dName);</span>
+<span class="fc bfc" id="L377" title="All 2 branches covered.">        step = step != null ? step : inactiveSteps.get(dName);</span>
+<span class="pc bpc" id="L378" title="1 of 2 branches missed.">        checkArgument(step != null, &quot;Unknown step %s&quot;, dName);</span>
+<span class="fc" id="L379">        return step;</span>
+    }
+
+    /**
+     * Prefixes the specified name with the given namespace.
+     *
+     * @param name      name of a step or a group
+     * @param namespace optional namespace
+     * @return composite name
+     */
+    private String prefix(String name, String namespace) {
+<span class="fc bfc" id="L390" title="All 2 branches covered.">        return isNullOrEmpty(namespace) ? name : namespace + &quot;.&quot; + name;</span>
+    }
+
+    /**
+     * Expands any environment variables in the specified string. These are
+     * specified as ${property} tokens.
+     *
+     * @param string     string to be processed
+     * @param keepTokens true if the original unresolved tokens should be kept
+     * @return original string with expanded substitutions
+     */
+    private String expand(String string, boolean... keepTokens) {
+<span class="fc bfc" id="L402" title="All 2 branches covered.">        if (string == null) {</span>
+<span class="fc" id="L403">            return null;</span>
+        }
+
+<span class="fc" id="L406">        String pString = string;</span>
+<span class="fc" id="L407">        StringBuilder sb = new StringBuilder();</span>
+<span class="fc" id="L408">        int start, end, last = 0;</span>
+<span class="fc bfc" id="L409" title="All 2 branches covered.">        while ((start = pString.indexOf(PROP_START, last)) &gt;= 0) {</span>
+<span class="fc" id="L410">            end = pString.indexOf(PROP_END, start + PROP_START.length());</span>
+<span class="pc bpc" id="L411" title="1 of 2 branches missed.">            checkArgument(end &gt; start, &quot;Malformed property in %s&quot;, pString);</span>
+<span class="fc" id="L412">            sb.append(pString.substring(last, start));</span>
+<span class="fc" id="L413">            String prop = pString.substring(start + PROP_START.length(), end);</span>
+            String value;
+<span class="fc bfc" id="L415" title="All 2 branches covered.">            if (prop.equals(HASH)) {</span>
+<span class="fc" id="L416">                value = parallels.get(0).toString();</span>
+<span class="fc bfc" id="L417" title="All 2 branches covered.">            } else if (prop.endsWith(HASH)) {</span>
+<span class="fc" id="L418">                pString = pString.replaceFirst(&quot;#}&quot;, parallels.get(0).toString() + &quot;}&quot;);</span>
+<span class="fc" id="L419">                last = start;</span>
+<span class="fc" id="L420">                continue;</span>
+            } else {
+                // Try system property first, then fall back to env. variable.
+<span class="fc" id="L423">                value = System.getProperty(prop);</span>
+<span class="fc bfc" id="L424" title="All 2 branches covered.">                if (value == null) {</span>
+<span class="fc" id="L425">                    value = System.getenv(prop);</span>
+                }
+            }
+<span class="pc bpc" id="L428" title="3 of 6 branches missed.">            if (value == null &amp;&amp; keepTokens.length == 1 &amp;&amp; keepTokens[0]) {</span>
+<span class="nc" id="L429">                sb.append(&quot;${&quot;).append(prop).append(&quot;}&quot;);</span>
+            } else {
+<span class="fc bfc" id="L431" title="All 2 branches covered.">                sb.append(value != null ? value : &quot;&quot;);</span>
+            }
+<span class="fc" id="L433">            last = end + 1;</span>
+<span class="fc" id="L434">        }</span>
+<span class="fc" id="L435">        sb.append(pString.substring(last));</span>
+<span class="fc" id="L436">        return sb.toString().replace('\n', ' ').replace('\r', ' ');</span>
+    }
+
+    /**
+     * Splits the comma-separated string into a list of strings.
+     *
+     * @param string string to split
+     * @return list of strings
+     */
+    private List&lt;String&gt; split(String string) {
+<span class="fc" id="L446">        ImmutableList.Builder&lt;String&gt; builder = ImmutableList.builder();</span>
+<span class="fc bfc" id="L447" title="All 2 branches covered.">        String[] fields = string != null ? string.split(&quot;,&quot;) : new String[0];</span>
+<span class="fc bfc" id="L448" title="All 2 branches covered.">        for (String field : fields) {</span>
+<span class="fc" id="L449">            builder.add(field.trim());</span>
+        }
+<span class="fc" id="L451">        return builder.build();</span>
+    }
+
+    /**
+     * Scans the process flow graph for cyclic dependencies.
+     */
+    private void scanForCycles() {
+<span class="fc" id="L458">        DepthFirstSearch&lt;Step, Dependency&gt; dfs = new DepthFirstSearch&lt;&gt;();</span>
+        // Use a brute-force method of searching paths from all vertices.
+<span class="fc" id="L460">        processFlow().getVertexes().forEach(s -&gt; {</span>
+<span class="fc" id="L461">            DepthFirstSearch&lt;Step, Dependency&gt;.SpanningTreeResult r =</span>
+<span class="fc" id="L462">                    dfs.search(processFlow, s, null, null, ALL_PATHS);</span>
+<span class="pc bpc" id="L463" title="1 of 2 branches missed.">            r.edges().forEach((e, et) -&gt; checkArgument(et != BACK_EDGE,</span>
+                                                       &quot;Process flow has a cycle involving dependency from %s to %s&quot;,
+<span class="fc" id="L465">                                                       e.src().name, e.dst().name));</span>
+<span class="fc" id="L466">        });</span>
+<span class="fc" id="L467">    }</span>
+
+
+    /**
+     * Prints formatted output.
+     *
+     * @param format printf format string
+     * @param args   arguments to be printed
+     */
+    private void print(String format, Object... args) {
+<span class="pc bpc" id="L477" title="1 of 2 branches missed.">        if (debugOn) {</span>
+<span class="nc" id="L478">            System.err.println(pfx + String.format(format, args));</span>
+        }
+<span class="fc" id="L480">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

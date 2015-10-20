@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>L2ModificationInstruction.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.instructions</a> &gt; <span class="el_source">L2ModificationInstruction.java</span></div><h1>L2ModificationInstruction.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.instructions;
+
+import org.onlab.packet.EthType;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.VlanId;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Abstraction of a single traffic treatment step.
+ */
+<span class="fc" id="L30">public abstract class L2ModificationInstruction implements Instruction {</span>
+
+    /**
+     * Represents the type of traffic treatment.
+     */
+<span class="pc" id="L35">    public enum L2SubType {</span>
+        /**
+         * Ether src modification.
+         */
+<span class="fc" id="L39">        ETH_SRC,</span>
+
+        /**
+         * Ether dst modification.
+         */
+<span class="fc" id="L44">        ETH_DST,</span>
+
+        /**
+         * VLAN id modification.
+         */
+<span class="fc" id="L49">        VLAN_ID,</span>
+
+        /**
+         * VLAN priority modification.
+         */
+<span class="fc" id="L54">        VLAN_PCP,</span>
+
+        /**
+         * MPLS Label modification.
+         */
+<span class="fc" id="L59">        MPLS_LABEL,</span>
+
+        /**
+         * MPLS Push modification.
+         */
+<span class="fc" id="L64">        MPLS_PUSH,</span>
+
+        /**
+         * MPLS Pop modification.
+         */
+<span class="fc" id="L69">        MPLS_POP,</span>
+
+        /**
+         * MPLS TTL modification.
+         */
+<span class="fc" id="L74">        DEC_MPLS_TTL,</span>
+
+        /**
+         * VLAN Pop modification.
+         */
+<span class="fc" id="L79">        VLAN_POP,</span>
+
+        /**
+         * VLAN Push modification.
+         */
+<span class="fc" id="L84">        VLAN_PUSH,</span>
+
+        /**
+         * Tunnel id modification.
+         */
+<span class="fc" id="L89">        TUNNEL_ID,</span>
+
+        /**
+         * MPLS BOS instruction.
+         */
+<span class="fc" id="L94">        MPLS_BOS</span>
+    }
+
+    // TODO: Create factory class 'Instructions' that will have various factory
+    // to create specific instructions.
+
+    public abstract L2SubType subtype();
+
+    @Override
+    public final Type type() {
+<span class="fc" id="L104">        return Type.L2MODIFICATION;</span>
+    }
+
+    /**
+     * Represents a L2 src/dst modification instruction.
+     */
+    public static final class ModEtherInstruction extends L2ModificationInstruction {
+
+        private final L2SubType subtype;
+        private final MacAddress mac;
+
+<span class="fc" id="L115">        ModEtherInstruction(L2SubType subType, MacAddress addr) {</span>
+
+<span class="fc" id="L117">            this.subtype = subType;</span>
+<span class="fc" id="L118">            this.mac = addr;</span>
+<span class="fc" id="L119">        }</span>
+
+        @Override
+        public L2SubType subtype() {
+<span class="fc" id="L123">            return this.subtype;</span>
+        }
+
+        public MacAddress mac() {
+<span class="fc" id="L127">            return this.mac;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L132">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L133">                    .add(&quot;mac&quot;, mac).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L138">            return Objects.hash(type(), subtype, mac);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L144">                return true;</span>
+            }
+<span class="fc bfc" id="L146" title="All 2 branches covered.">            if (obj instanceof ModEtherInstruction) {</span>
+<span class="fc" id="L147">                ModEtherInstruction that = (ModEtherInstruction) obj;</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">                return  Objects.equals(mac, that.mac) &amp;&amp;</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">                        Objects.equals(subtype, that.subtype);</span>
+            }
+<span class="fc" id="L151">            return false;</span>
+        }
+    }
+
+    // TODO This instruction is reused for Pop-Mpls. Consider renaming.
+    public static final class PushHeaderInstructions extends
+            L2ModificationInstruction {
+
+
+        private final L2SubType subtype;
+        private final EthType ethernetType; // Ethernet type value: 16 bits
+
+<span class="fc" id="L163">        PushHeaderInstructions(L2SubType subType, EthType ethernetType) {</span>
+<span class="fc" id="L164">            this.subtype = subType;</span>
+<span class="fc" id="L165">            this.ethernetType = ethernetType;</span>
+<span class="fc" id="L166">        }</span>
+
+        public EthType ethernetType() {
+<span class="nc" id="L169">            return ethernetType;</span>
+        }
+
+        @Override
+        public L2SubType subtype() {
+<span class="nc" id="L174">            return this.subtype;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L179">            return toStringHelper(subtype().toString())</span>
+<span class="nc" id="L180">                    .add(&quot;ethernetType&quot;, ethernetType())</span>
+<span class="nc" id="L181">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L186">            return Objects.hash(type(), subtype, ethernetType);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L192">                return true;</span>
+            }
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if (obj instanceof PushHeaderInstructions) {</span>
+<span class="nc" id="L195">                PushHeaderInstructions that = (PushHeaderInstructions) obj;</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">                return  Objects.equals(subtype, that.subtype) &amp;&amp;</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                        Objects.equals(this.ethernetType, that.ethernetType);</span>
+            }
+<span class="nc" id="L199">            return false;</span>
+        }
+    }
+
+
+
+    /**
+     * Represents a VLAN id modification instruction.
+     */
+    public static final class ModVlanIdInstruction extends L2ModificationInstruction {
+
+        private final VlanId vlanId;
+
+<span class="fc" id="L212">        ModVlanIdInstruction(VlanId vlanId) {</span>
+<span class="fc" id="L213">            this.vlanId = vlanId;</span>
+<span class="fc" id="L214">        }</span>
+
+        @Override
+        public L2SubType subtype() {
+<span class="fc" id="L218">            return L2SubType.VLAN_ID;</span>
+        }
+
+        public VlanId vlanId() {
+<span class="fc" id="L222">            return this.vlanId;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L227">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L228">                    .add(&quot;id&quot;, vlanId).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L233">            return Objects.hash(type(), subtype(), vlanId);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L238" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L239">                return true;</span>
+            }
+<span class="fc bfc" id="L241" title="All 2 branches covered.">            if (obj instanceof ModVlanIdInstruction) {</span>
+<span class="fc" id="L242">                ModVlanIdInstruction that = (ModVlanIdInstruction) obj;</span>
+<span class="fc" id="L243">                return  Objects.equals(vlanId, that.vlanId);</span>
+            }
+<span class="fc" id="L245">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a VLAN PCP modification instruction.
+     */
+    public static final class ModVlanPcpInstruction extends L2ModificationInstruction {
+
+        private static final byte MASK = 0x7;
+        private final byte vlanPcp;
+
+<span class="fc" id="L257">        ModVlanPcpInstruction(byte vlanPcp) {</span>
+<span class="fc" id="L258">            this.vlanPcp = (byte) (vlanPcp &amp; MASK);</span>
+<span class="fc" id="L259">        }</span>
+
+        @Override
+        public L2SubType subtype() {
+<span class="fc" id="L263">            return L2SubType.VLAN_PCP;</span>
+        }
+
+        public byte vlanPcp() {
+<span class="fc" id="L267">            return this.vlanPcp;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L272">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L273">                    .add(&quot;pcp&quot;, Long.toHexString(vlanPcp)).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L278">            return Objects.hash(type(), subtype(), vlanPcp);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L283" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L284">                return true;</span>
+            }
+<span class="fc bfc" id="L286" title="All 2 branches covered.">            if (obj instanceof ModVlanPcpInstruction) {</span>
+<span class="fc" id="L287">                ModVlanPcpInstruction that = (ModVlanPcpInstruction) obj;</span>
+<span class="fc" id="L288">                return  Objects.equals(vlanPcp, that.vlanPcp);</span>
+            }
+<span class="fc" id="L290">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a VLAN POP modification instruction.
+     */
+    public static final class PopVlanInstruction extends L2ModificationInstruction {
+        private final L2SubType subtype;
+
+<span class="fc" id="L300">        PopVlanInstruction(L2SubType subType) {</span>
+<span class="fc" id="L301">            this.subtype = subType;</span>
+<span class="fc" id="L302">        }</span>
+
+        @Override
+        public L2SubType subtype() {
+<span class="nc" id="L306">            return subtype;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L311">            return toStringHelper(subtype().toString())</span>
+<span class="nc" id="L312">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L317">            return Objects.hash(type(), subtype);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L322" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L323">                return true;</span>
+            }
+<span class="nc bnc" id="L325" title="All 2 branches missed.">            if (obj instanceof PopVlanInstruction) {</span>
+<span class="nc" id="L326">                PopVlanInstruction that = (PopVlanInstruction) obj;</span>
+<span class="nc" id="L327">                return  Objects.equals(subtype, that.subtype);</span>
+            }
+<span class="nc" id="L329">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a MPLS label modification.
+     */
+    public static final class ModMplsLabelInstruction
+            extends L2ModificationInstruction {
+
+        private final MplsLabel mplsLabel;
+
+<span class="fc" id="L341">        ModMplsLabelInstruction(MplsLabel mplsLabel) {</span>
+<span class="fc" id="L342">            this.mplsLabel = mplsLabel;</span>
+<span class="fc" id="L343">        }</span>
+
+        /**
+         * @deprecated in Drake Release.
+         * @return integer value of label
+         */
+        // Consider changing return value to MplsLabel
+        // after deprecation process so that it'll be symmetric to
+        // MplsCriterion#label()
+        @Deprecated
+        public Integer label() {
+<span class="nc" id="L354">            return mplsLabel.toInt();</span>
+        }
+
+        public MplsLabel mplsLabel() {
+<span class="fc" id="L358">            return mplsLabel;</span>
+        }
+
+        @Override
+        public L2SubType subtype() {
+<span class="fc" id="L363">            return L2SubType.MPLS_LABEL;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L368">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L369">                    .add(&quot;mpls&quot;, mplsLabel).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L374">            return Objects.hash(type(), subtype(), mplsLabel);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L379" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L380">                return true;</span>
+            }
+<span class="fc bfc" id="L382" title="All 2 branches covered.">            if (obj instanceof ModMplsLabelInstruction) {</span>
+<span class="fc" id="L383">                ModMplsLabelInstruction that = (ModMplsLabelInstruction) obj;</span>
+<span class="fc" id="L384">                return Objects.equals(mplsLabel, that.mplsLabel);</span>
+            }
+<span class="fc" id="L386">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a MPLS BOS modification.
+     */
+    public static final class ModMplsBosInstruction
+            extends L2ModificationInstruction {
+
+        private final boolean mplsBos;
+
+<span class="nc" id="L398">        ModMplsBosInstruction(boolean mplsBos) {</span>
+<span class="nc" id="L399">            this.mplsBos = mplsBos;</span>
+<span class="nc" id="L400">        }</span>
+
+        public boolean mplsBos() {
+<span class="nc" id="L403">            return mplsBos;</span>
+        }
+
+        @Override
+        public L2SubType subtype() {
+<span class="nc" id="L408">            return L2SubType.MPLS_BOS;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L413">            return toStringHelper(subtype().toString()).add(&quot;bos&quot;, mplsBos)</span>
+<span class="nc" id="L414">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L419">            return Objects.hash(type(), subtype(), mplsBos);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L424" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L425">                return true;</span>
+            }
+<span class="nc bnc" id="L427" title="All 2 branches missed.">            if (obj instanceof ModMplsBosInstruction) {</span>
+<span class="nc" id="L428">                ModMplsBosInstruction that = (ModMplsBosInstruction) obj;</span>
+<span class="nc" id="L429">                return Objects.equals(mplsBos, that.mplsBos());</span>
+            }
+<span class="nc" id="L431">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a MPLS TTL modification.
+     */
+    public static final class ModMplsTtlInstruction
+            extends L2ModificationInstruction {
+
+<span class="nc" id="L441">        ModMplsTtlInstruction() {</span>
+<span class="nc" id="L442">        }</span>
+
+        @Override
+        public L2SubType subtype() {
+<span class="nc" id="L446">            return L2SubType.DEC_MPLS_TTL;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L451">            return toStringHelper(subtype().toString())</span>
+<span class="nc" id="L452">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L457">            return Objects.hash(type(), subtype());</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L462" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L463">                return true;</span>
+            }
+<span class="nc bnc" id="L465" title="All 2 branches missed.">            if (obj instanceof ModMplsTtlInstruction) {</span>
+<span class="nc" id="L466">                return true;</span>
+            }
+<span class="nc" id="L468">            return false;</span>
+        }
+    }
+
+    /**
+     * Represents a Tunnel id modification.
+     */
+    public static final class ModTunnelIdInstruction
+            extends L2ModificationInstruction {
+
+        private final long tunnelId;
+
+<span class="fc" id="L480">        ModTunnelIdInstruction(long tunnelId) {</span>
+<span class="fc" id="L481">            this.tunnelId = tunnelId;</span>
+<span class="fc" id="L482">        }</span>
+
+        public long tunnelId() {
+<span class="fc" id="L485">            return this.tunnelId;</span>
+        }
+
+        @Override
+        public L2SubType subtype() {
+<span class="fc" id="L490">            return L2SubType.TUNNEL_ID;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L495">            return toStringHelper(subtype().toString())</span>
+<span class="fc" id="L496">                    .add(&quot;id&quot;, Long.toHexString(tunnelId))</span>
+<span class="fc" id="L497">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L502">            return Objects.hash(type(), subtype(), tunnelId);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L507" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L508">                return true;</span>
+            }
+<span class="fc bfc" id="L510" title="All 2 branches covered.">            if (obj instanceof ModTunnelIdInstruction) {</span>
+<span class="fc" id="L511">                ModTunnelIdInstruction that = (ModTunnelIdInstruction) obj;</span>
+<span class="fc" id="L512">                return  Objects.equals(tunnelId, that.tunnelId);</span>
+            }
+<span class="fc" id="L514">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

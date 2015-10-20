@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>HostToHostIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">HostToHostIntentCompiler.java</span></div><h1>HostToHostIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.net.DefaultLink;
+import org.onosproject.net.DefaultPath;
+import org.onosproject.net.Host;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.intent.HostToHostIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.PathIntent;
+import org.onosproject.net.intent.constraint.AsymmetricPathConstraint;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+
+import static org.onosproject.net.flow.DefaultTrafficSelector.builder;
+
+/**
+ * A intent compiler for {@link HostToHostIntent}.
+ */
+@Component(immediate = true)
+<span class="fc" id="L47">public class HostToHostIntentCompiler</span>
+        extends ConnectivityIntentCompiler&lt;HostToHostIntent&gt; {
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L55">        intentManager.registerCompiler(HostToHostIntent.class, this);</span>
+<span class="nc" id="L56">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L60">        intentManager.unregisterCompiler(HostToHostIntent.class);</span>
+<span class="nc" id="L61">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(HostToHostIntent intent, List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+<span class="fc" id="L66">        boolean isAsymmetric = intent.constraints().contains(new AsymmetricPathConstraint());</span>
+<span class="fc" id="L67">        Path pathOne = getPath(intent, intent.one(), intent.two());</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">        Path pathTwo = isAsymmetric ?</span>
+<span class="pc" id="L69">                getPath(intent, intent.two(), intent.one()) : invertPath(pathOne);</span>
+
+<span class="fc" id="L71">        Host one = hostService.getHost(intent.one());</span>
+<span class="fc" id="L72">        Host two = hostService.getHost(intent.two());</span>
+
+<span class="fc" id="L74">        return Arrays.asList(createPathIntent(pathOne, one, two, intent),</span>
+<span class="fc" id="L75">                             createPathIntent(pathTwo, two, one, intent));</span>
+    }
+
+    // Inverts the specified path. This makes an assumption that each link in
+    // the path has a reverse link available. Under most circumstances, this
+    // assumption will hold.
+    private Path invertPath(Path path) {
+<span class="fc" id="L82">        List&lt;Link&gt; reverseLinks = new ArrayList&lt;&gt;(path.links().size());</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        for (Link link : path.links()) {</span>
+<span class="fc" id="L84">            reverseLinks.add(0, reverseLink(link));</span>
+<span class="fc" id="L85">        }</span>
+<span class="fc" id="L86">        return new DefaultPath(path.providerId(), reverseLinks, path.cost());</span>
+    }
+
+    // Produces a reverse variant of the specified link.
+    private Link reverseLink(Link link) {
+<span class="fc" id="L91">        return new DefaultLink(link.providerId(), link.dst(), link.src(),</span>
+<span class="fc" id="L92">                               link.type(), link.state(), link.isDurable());</span>
+    }
+
+    // Creates a path intent from the specified path and original connectivity intent.
+    private Intent createPathIntent(Path path, Host src, Host dst,
+                                    HostToHostIntent intent) {
+<span class="fc" id="L98">        TrafficSelector selector = builder(intent.selector())</span>
+<span class="fc" id="L99">                .matchEthSrc(src.mac()).matchEthDst(dst.mac()).build();</span>
+<span class="fc" id="L100">        return PathIntent.builder()</span>
+<span class="fc" id="L101">                .appId(intent.appId())</span>
+<span class="fc" id="L102">                .selector(selector)</span>
+<span class="fc" id="L103">                .treatment(intent.treatment())</span>
+<span class="fc" id="L104">                .path(path)</span>
+<span class="fc" id="L105">                .constraints(intent.constraints())</span>
+<span class="fc" id="L106">                .priority(intent.priority())</span>
+<span class="fc" id="L107">                .build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

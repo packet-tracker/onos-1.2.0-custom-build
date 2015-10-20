@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentAccumulator.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl</a> &gt; <span class="el_source">IntentAccumulator.java</span></div><h1>IntentAccumulator.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl;
+
+import com.google.common.collect.Maps;
+import org.onlab.util.AbstractAccumulator;
+import org.onosproject.net.intent.IntentBatchDelegate;
+import org.onosproject.net.intent.IntentData;
+import org.onosproject.net.intent.Key;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+
+/**
+ * An accumulator for building batches of intent operations. Only one batch should
+ * be in process per instance at a time.
+ */
+public class IntentAccumulator extends AbstractAccumulator&lt;IntentData&gt; {
+
+    private static final int DEFAULT_MAX_EVENTS = 1000;
+    private static final int DEFAULT_MAX_IDLE_MS = 10;
+    private static final int DEFAULT_MAX_BATCH_MS = 50;
+
+    // FIXME: Replace with a system-wide timer instance;
+    // TODO: Convert to use HashedWheelTimer or produce a variant of that; then decide which we want to adopt
+<span class="fc" id="L41">    private static final Timer TIMER = new Timer(&quot;onos-intent-op-batching&quot;);</span>
+
+    private final IntentBatchDelegate delegate;
+
+    private volatile boolean ready;
+
+    /**
+     * Creates an intent operation accumulator.
+     *
+     * @param delegate the intent batch delegate
+     */
+    protected IntentAccumulator(IntentBatchDelegate delegate) {
+<span class="fc" id="L53">        super(TIMER, DEFAULT_MAX_EVENTS, DEFAULT_MAX_BATCH_MS, DEFAULT_MAX_IDLE_MS);</span>
+<span class="fc" id="L54">        this.delegate = delegate;</span>
+        // Assume that the delegate is ready for work at the start
+<span class="fc" id="L56">        ready = true; //TODO validate the assumption that delegate is ready</span>
+<span class="fc" id="L57">    }</span>
+
+    @Override
+    public void processItems(List&lt;IntentData&gt; items) {
+<span class="fc" id="L61">        ready = false;</span>
+<span class="fc" id="L62">        delegate.execute(reduce(items));</span>
+<span class="fc" id="L63">    }</span>
+
+    private Collection&lt;IntentData&gt; reduce(List&lt;IntentData&gt; ops) {
+<span class="fc" id="L66">        Map&lt;Key, IntentData&gt; map = Maps.newHashMap();</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        for (IntentData op : ops) {</span>
+<span class="fc" id="L68">            map.put(op.key(), op);</span>
+<span class="fc" id="L69">        }</span>
+        //TODO check the version... or maybe store will handle this.
+<span class="fc" id="L71">        return map.values();</span>
+    }
+
+    @Override
+    public boolean isReady() {
+<span class="fc" id="L76">        return ready;</span>
+    }
+
+    public void ready() {
+<span class="fc" id="L80">        ready = true;</span>
+<span class="fc" id="L81">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

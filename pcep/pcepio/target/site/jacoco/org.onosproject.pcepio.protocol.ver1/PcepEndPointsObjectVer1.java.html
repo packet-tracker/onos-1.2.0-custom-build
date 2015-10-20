@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepEndPointsObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepEndPointsObjectVer1.java</span></div><h1>PcepEndPointsObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepEndPointsObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Endpoints Object.
+ */
+public class PcepEndPointsObjectVer1 implements PcepEndPointsObject {
+
+    /*
+     * RFC : 5440 , section : 7.6
+     * An End point is defined as follows:
+    END-POINTS Object-Class is 4.
+
+    END-POINTS Object-Type is 1 for IPv4 and 2 for IPv6.
+    0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                     Source IPv4 address                       |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                  Destination IPv4 address                     |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+     */
+<span class="fc" id="L50">    protected static final Logger log = LoggerFactory.getLogger(PcepEndPointsObjectVer1.class);</span>
+
+    static final byte END_POINTS_OBJ_TYPE = 1;
+    static final byte END_POINTS_OBJ_CLASS = 4;
+    static final byte END_POINTS_OBJECT_VERSION = 1;
+    static final short END_POINTS_OBJ_MINIMUM_LENGTH = 12;
+    public static byte endPointObjType;
+
+<span class="fc" id="L58">    static final PcepObjectHeader DEFAULT_END_POINTS_OBJECT_HEADER = new PcepObjectHeader(END_POINTS_OBJ_CLASS,</span>
+            END_POINTS_OBJ_TYPE, PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED,
+            END_POINTS_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader endPointsObjHeader;
+    public int sourceIpAddress;
+    public int destIpAddress;
+
+    /**
+     * Constructor to initialize all variables.
+     *
+     * @param endPointsObjHeader end points object header
+     * @param sourceIpAddress source IP address
+     * @param destIpAddress destination IP address
+     */
+<span class="fc" id="L73">    public PcepEndPointsObjectVer1(PcepObjectHeader endPointsObjHeader, int sourceIpAddress, int destIpAddress) {</span>
+
+<span class="fc" id="L75">        this.endPointsObjHeader = endPointsObjHeader;</span>
+<span class="fc" id="L76">        this.sourceIpAddress = sourceIpAddress;</span>
+<span class="fc" id="L77">        this.destIpAddress = destIpAddress;</span>
+<span class="fc" id="L78">    }</span>
+
+    /**
+     * Sets End Points Object Header.
+     *
+     * @param obj of PcepObjectHeader
+     */
+    public void setEndPointsObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L86">        this.endPointsObjHeader = obj;</span>
+<span class="nc" id="L87">    }</span>
+
+    @Override
+    public void setSourceIpAddress(int sourceIpAddress) {
+<span class="nc" id="L91">        this.sourceIpAddress = sourceIpAddress;</span>
+<span class="nc" id="L92">    }</span>
+
+    @Override
+    public void setDestIpAddress(int destIpAddress) {
+<span class="nc" id="L96">        this.destIpAddress = destIpAddress;</span>
+<span class="nc" id="L97">    }</span>
+
+    @Override
+    public int getSourceIpAddress() {
+<span class="nc" id="L101">        return this.sourceIpAddress;</span>
+    }
+
+    @Override
+    public int getDestIpAddress() {
+<span class="nc" id="L106">        return this.destIpAddress;</span>
+    }
+
+    /**
+     * Reads from channel buffer and returns object of PcepEndPointsObject.
+     *
+     * @param cb of channel buffer
+     * @return object of PcepEndPointsObject
+     * @throws PcepParseException while parsing channel buffer
+     */
+    public static PcepEndPointsObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader endPointsObjHeader;
+        int sourceIpAddress;
+        int destIpAddress;
+
+<span class="fc" id="L122">        endPointsObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        if (endPointsObjHeader.getObjType() == END_POINTS_OBJ_TYPE</span>
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">                &amp;&amp; endPointsObjHeader.getObjClass() == END_POINTS_OBJ_CLASS) {</span>
+<span class="fc" id="L125">            sourceIpAddress = cb.readInt();</span>
+<span class="fc" id="L126">            destIpAddress = cb.readInt();</span>
+        } else {
+<span class="nc" id="L128">            throw new PcepParseException(&quot;Expected PcepEndPointsObject.&quot;);</span>
+        }
+<span class="fc" id="L130">        return new PcepEndPointsObjectVer1(endPointsObjHeader, sourceIpAddress, destIpAddress);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L136">        int objStartIndex = cb.writerIndex();</span>
+        //write common header
+<span class="fc" id="L138">        int objLenIndex = endPointsObjHeader.write(cb);</span>
+
+        //write source IPv4 IP
+<span class="fc" id="L141">        cb.writeInt(sourceIpAddress);</span>
+        //write destination IPv4 IP
+<span class="fc" id="L143">        cb.writeInt(destIpAddress);</span>
+
+<span class="fc" id="L145">        int length = cb.writerIndex() - objStartIndex;</span>
+        //now write EndPoints Object Length
+<span class="fc" id="L147">        cb.setShort(objLenIndex, (short) length);</span>
+        //will be helpful during print().
+<span class="fc" id="L149">        endPointsObjHeader.setObjLen((short) length);</span>
+
+<span class="fc" id="L151">        return cb.writerIndex();</span>
+
+    }
+
+    /**
+     * Builder class for PCEP end points objects.
+     */
+<span class="nc" id="L158">    public static class Builder implements PcepEndPointsObject.Builder {</span>
+
+<span class="nc" id="L160">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L161">        private boolean bIsSourceIpAddressset = false;</span>
+<span class="nc" id="L162">        private boolean bIsDestIpAddressset = false;</span>
+        private PcepObjectHeader endpointsObjHeader;
+        private int sourceIpAddress;
+        private int destIpAddress;
+
+<span class="nc" id="L167">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L170">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepEndPointsObject build() throws PcepParseException {
+
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            PcepObjectHeader endpointsObjHeader = this.bIsHeaderSet ? this.endpointsObjHeader</span>
+                    : DEFAULT_END_POINTS_OBJECT_HEADER;
+
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L180">                endpointsObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L184">                endpointsObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc bnc" id="L187" title="All 2 branches missed.">            if (!this.bIsSourceIpAddressset) {</span>
+<span class="nc" id="L188">                throw new PcepParseException(&quot;SourceIpAddress not set while building EndPoints object&quot;);</span>
+            }
+
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            if (!this.bIsDestIpAddressset) {</span>
+<span class="nc" id="L192">                throw new PcepParseException(&quot;DestIpAddress not set while building EndPoints object&quot;);</span>
+            }
+
+<span class="nc" id="L195">            return new PcepEndPointsObjectVer1(endpointsObjHeader, this.sourceIpAddress, this.destIpAddress);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getEndPointsObjHeader() {
+<span class="nc" id="L200">            return this.endpointsObjHeader;</span>
+        }
+
+        @Override
+        public Builder setEndPointsObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L205">            this.endpointsObjHeader = obj;</span>
+<span class="nc" id="L206">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L207">            return this;</span>
+        }
+
+        @Override
+        public int getSourceIpAddress() {
+<span class="nc" id="L212">            return this.sourceIpAddress;</span>
+        }
+
+        @Override
+        public Builder setSourceIpAddress(int sourceIpAddress) {
+<span class="nc" id="L217">            this.sourceIpAddress = sourceIpAddress;</span>
+<span class="nc" id="L218">            this.bIsSourceIpAddressset = true;</span>
+<span class="nc" id="L219">            return this;</span>
+        }
+
+        @Override
+        public int getDestIpAddress() {
+<span class="nc" id="L224">            return this.destIpAddress;</span>
+        }
+
+        @Override
+        public Builder setDestIpAddress(int destIpAddress) {
+<span class="nc" id="L229">            this.destIpAddress = destIpAddress;</span>
+<span class="nc" id="L230">            this.bIsDestIpAddressset = true;</span>
+<span class="nc" id="L231">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L236">            this.bPFlag = value;</span>
+<span class="nc" id="L237">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L238">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L243">            this.bIFlag = value;</span>
+<span class="nc" id="L244">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L245">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L251">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L252">                .add(&quot;sourceIpAddress&quot;, sourceIpAddress)</span>
+<span class="nc" id="L253">                .add(&quot;destIpAddress&quot;, destIpAddress).toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

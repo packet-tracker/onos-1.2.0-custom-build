@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConstraintCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">ConstraintCodec.java</span></div><h1>ConstraintCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.intent.Constraint;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Constraint JSON codec.
+ */
+<span class="fc" id="L29">public final class ConstraintCodec extends JsonCodec&lt;Constraint&gt; {</span>
+
+    protected static final String MISSING_MEMBER_MESSAGE =
+            &quot; member is required in Constraint&quot;;
+    protected static final String TYPE = &quot;type&quot;;
+    protected static final String TYPES = &quot;types&quot;;
+    protected static final String INCLUSIVE = &quot;inclusive&quot;;
+    protected static final String KEY = &quot;key&quot;;
+    protected static final String THRESHOLD = &quot;threshold&quot;;
+    protected static final String BANDWIDTH = &quot;bandwidth&quot;;
+    protected static final String LAMBDA = &quot;lambda&quot;;
+    protected static final String LATENCY_MILLIS = &quot;latencyMillis&quot;;
+    protected static final String OBSTACLES = &quot;obstacles&quot;;
+    protected static final String WAYPOINTS = &quot;waypoints&quot;;
+
+    @Override
+    public ObjectNode encode(Constraint constraint, CodecContext context) {
+<span class="fc" id="L46">        checkNotNull(constraint, &quot;Constraint cannot be null&quot;);</span>
+
+<span class="fc" id="L48">        final EncodeConstraintCodecHelper encodeCodec =</span>
+                new EncodeConstraintCodecHelper(constraint, context);
+
+<span class="fc" id="L51">        return encodeCodec.encode();</span>
+    }
+
+    @Override
+    public Constraint decode(ObjectNode json, CodecContext context) {
+<span class="fc" id="L56">        checkNotNull(json, &quot;JSON cannot be null&quot;);</span>
+
+<span class="fc" id="L58">        final DecodeConstraintCodecHelper decodeCodec =</span>
+                new DecodeConstraintCodecHelper(json);
+
+<span class="fc" id="L61">        return decodeCodec.decode();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

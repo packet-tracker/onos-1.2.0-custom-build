@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PortFragmentId.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.device.impl</a> &gt; <span class="el_source">PortFragmentId.java</span></div><h1>PortFragmentId.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.device.impl;
+
+import java.util.Objects;
+
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.provider.ProviderId;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Identifier for PortDescription from a Provider.
+ */
+public final class PortFragmentId {
+    public final ProviderId providerId;
+    public final DeviceId deviceId;
+    public final PortNumber portNumber;
+
+    public PortFragmentId(DeviceId deviceId, ProviderId providerId,
+<span class="fc" id="L35">                          PortNumber portNumber) {</span>
+<span class="fc" id="L36">        this.providerId = providerId;</span>
+<span class="fc" id="L37">        this.deviceId = deviceId;</span>
+<span class="fc" id="L38">        this.portNumber = portNumber;</span>
+<span class="fc" id="L39">    }</span>
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L43">        return Objects.hash(providerId, deviceId, portNumber);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L49">            return true;</span>
+        }
+<span class="fc bfc" id="L51" title="All 2 branches covered.">        if (!(obj instanceof PortFragmentId)) {</span>
+<span class="fc" id="L52">            return false;</span>
+        }
+<span class="fc" id="L54">        PortFragmentId that = (PortFragmentId) obj;</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        return Objects.equals(this.deviceId, that.deviceId) &amp;&amp;</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">               Objects.equals(this.portNumber, that.portNumber) &amp;&amp;</span>
+<span class="fc bfc" id="L57" title="All 2 branches covered.">               Objects.equals(this.providerId, that.providerId);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L62">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L63">                .add(&quot;providerId&quot;, providerId)</span>
+<span class="fc" id="L64">                .add(&quot;deviceId&quot;, deviceId)</span>
+<span class="fc" id="L65">                .add(&quot;portNumber&quot;, portNumber)</span>
+<span class="fc" id="L66">                .toString();</span>
+    }
+
+    // for serializer
+    @SuppressWarnings(&quot;unused&quot;)
+<span class="nc" id="L71">    private PortFragmentId() {</span>
+<span class="nc" id="L72">        this.providerId = null;</span>
+<span class="nc" id="L73">        this.deviceId = null;</span>
+<span class="nc" id="L74">        this.portNumber = null;</span>
+<span class="nc" id="L75">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

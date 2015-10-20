@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TableModel.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.table</a> &gt; <span class="el_source">TableModel.java</span></div><h1>TableModel.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.table;
+
+import com.google.common.collect.Sets;
+import org.onosproject.ui.table.cell.DefaultCellComparator;
+import org.onosproject.ui.table.cell.DefaultCellFormatter;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * A simple model of table data.
+ * &lt;p&gt;
+ * Note that this is not a full MVC type model; the expected usage pattern
+ * is to create an empty table, add rows (by consulting the business model),
+ * sort rows (based on client request parameters), and finally produce the
+ * sorted list of rows.
+ * &lt;p&gt;
+ * The table also provides a mechanism for defining how cell values for a
+ * particular column should be formatted into strings, to help facilitate
+ * the encoding of the table data into a JSON structure.
+ * &lt;p&gt;
+ * Note that it is expected that all values for a particular column will
+ * be the same class.
+ */
+public class TableModel {
+
+<span class="fc" id="L52">    private static final CellComparator DEF_CMP = DefaultCellComparator.INSTANCE;</span>
+<span class="fc" id="L53">    private static final CellFormatter DEF_FMT = DefaultCellFormatter.INSTANCE;</span>
+
+    private final String[] columnIds;
+    private final Set&lt;String&gt; idSet;
+<span class="fc" id="L57">    private final Map&lt;String, CellComparator&gt; comparators = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L58">    private final Map&lt;String, CellFormatter&gt; formatters = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L59">    private final List&lt;Row&gt; rows = new ArrayList&lt;&gt;();</span>
+
+
+    /**
+     * Constructs a table (devoid of data) with the given column IDs.
+     *
+     * @param columnIds column identifiers
+     */
+<span class="fc" id="L67">    public TableModel(String... columnIds) {</span>
+<span class="fc" id="L68">        checkNotNull(columnIds, &quot;columnIds cannot be null&quot;);</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        checkArgument(columnIds.length &gt; 0, &quot;must be at least one column&quot;);</span>
+
+<span class="fc" id="L71">        idSet = Sets.newHashSet(columnIds);</span>
+<span class="fc bfc" id="L72" title="All 2 branches covered.">        if (idSet.size() != columnIds.length) {</span>
+<span class="fc" id="L73">            throw new IllegalArgumentException(&quot;duplicate column ID(s) detected&quot;);</span>
+        }
+
+<span class="fc" id="L76">        this.columnIds = Arrays.copyOf(columnIds, columnIds.length);</span>
+<span class="fc" id="L77">    }</span>
+
+    private void checkId(String id) {
+<span class="fc" id="L80">        checkNotNull(id, &quot;must provide a column ID&quot;);</span>
+<span class="fc bfc" id="L81" title="All 2 branches covered.">        if (!idSet.contains(id)) {</span>
+<span class="fc" id="L82">            throw new IllegalArgumentException(&quot;unknown column id: &quot; + id);</span>
+        }
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Returns the number of rows in this table model.
+     *
+     * @return number of rows
+     */
+    public int rowCount() {
+<span class="fc" id="L92">        return rows.size();</span>
+    }
+
+    /**
+     * Returns the number of columns in this table model.
+     *
+     * @return number of columns
+     */
+    public int columnCount() {
+<span class="fc" id="L101">        return columnIds.length;</span>
+    }
+
+    /**
+     * Returns the array of column IDs for this table model.
+     * &lt;p&gt;
+     * Implementation note: we are knowingly passing you a reference to
+     * our internal array to avoid copying. Don't mess with it. It's your
+     * table you'll break if you do!
+     *
+     * @return the column identifiers
+     */
+    public String[] getColumnIds() {
+<span class="fc" id="L114">        return columnIds;</span>
+    }
+
+    /**
+     * Returns the raw {@link Row} representation of the rows in this table.
+     *
+     * @return raw table rows
+     */
+    public Row[] getRows() {
+<span class="fc" id="L123">        return rows.toArray(new Row[rows.size()]);</span>
+    }
+
+    /**
+     * Sets a cell comparator for the specified column.
+     *
+     * @param columnId column identifier
+     * @param comparator comparator to use
+     */
+    public void setComparator(String columnId, CellComparator comparator) {
+<span class="nc" id="L133">        checkNotNull(comparator, &quot;must provide a comparator&quot;);</span>
+<span class="nc" id="L134">        checkId(columnId);</span>
+<span class="nc" id="L135">        comparators.put(columnId, comparator);</span>
+<span class="nc" id="L136">    }</span>
+
+    /**
+     * Returns the cell comparator to use on values in the specified column.
+     *
+     * @param columnId column identifier
+     * @return an appropriate cell comparator
+     */
+    private CellComparator getComparator(String columnId) {
+<span class="fc" id="L145">        checkId(columnId);</span>
+<span class="fc" id="L146">        CellComparator cmp = comparators.get(columnId);</span>
+<span class="pc bpc" id="L147" title="1 of 2 branches missed.">        return cmp == null ? DEF_CMP : cmp;</span>
+    }
+
+    /**
+     * Sets a cell formatter for the specified column.
+     *
+     * @param columnId column identifier
+     * @param formatter formatter to use
+     */
+    public void setFormatter(String columnId, CellFormatter formatter) {
+<span class="fc" id="L157">        checkNotNull(formatter, &quot;must provide a formatter&quot;);</span>
+<span class="fc" id="L158">        checkId(columnId);</span>
+<span class="fc" id="L159">        formatters.put(columnId, formatter);</span>
+<span class="fc" id="L160">    }</span>
+
+    /**
+     * Returns the cell formatter to use on values in the specified column.
+     *
+     * @param columnId column identifier
+     * @return an appropriate cell formatter
+     */
+    public CellFormatter getFormatter(String columnId) {
+<span class="fc" id="L169">        checkId(columnId);</span>
+<span class="fc" id="L170">        CellFormatter fmt = formatters.get(columnId);</span>
+<span class="fc bfc" id="L171" title="All 2 branches covered.">        return fmt == null ? DEF_FMT : fmt;</span>
+    }
+
+    /**
+     * Adds a row to the table model.
+     *
+     * @return the row, for chaining
+     */
+    public Row addRow() {
+<span class="fc" id="L180">        Row r = new Row();</span>
+<span class="fc" id="L181">        rows.add(r);</span>
+<span class="fc" id="L182">        return r;</span>
+    }
+
+    /**
+     * Sorts the table rows based on the specified column, in the
+     * specified direction.
+     *
+     * @param columnId column identifier
+     * @param dir sort direction
+     */
+    public void sort(String columnId, SortDir dir) {
+<span class="fc" id="L193">        Collections.sort(rows, new RowComparator(columnId, dir));</span>
+<span class="fc" id="L194">    }</span>
+
+
+    /** Designates sorting direction. */
+<span class="pc" id="L198">    public enum SortDir {</span>
+        /** Designates an ascending sort. */
+<span class="fc" id="L200">        ASC,</span>
+        /** Designates a descending sort. */
+<span class="fc" id="L202">        DESC</span>
+    }
+
+    /**
+     * Row comparator.
+     */
+    private class RowComparator implements Comparator&lt;Row&gt; {
+        private final String columnId;
+        private final SortDir dir;
+        private final CellComparator cellComparator;
+
+        /**
+         * Constructs a row comparator based on the specified
+         * column identifier and sort direction.
+         *
+         * @param columnId column identifier
+         * @param dir sort direction
+         */
+<span class="fc" id="L220">        public RowComparator(String columnId, SortDir dir) {</span>
+<span class="fc" id="L221">            this.columnId = columnId;</span>
+<span class="fc" id="L222">            this.dir = dir;</span>
+<span class="fc" id="L223">            cellComparator = getComparator(columnId);</span>
+<span class="fc" id="L224">        }</span>
+
+        @Override
+        public int compare(Row a, Row b) {
+<span class="fc" id="L228">            Object cellA = a.get(columnId);</span>
+<span class="fc" id="L229">            Object cellB = b.get(columnId);</span>
+<span class="fc" id="L230">            int result = cellComparator.compare(cellA, cellB);</span>
+<span class="fc bfc" id="L231" title="All 2 branches covered.">            return dir == SortDir.ASC ? result : -result;</span>
+        }
+    }
+
+    /**
+     * Model of a row.
+     */
+<span class="fc" id="L238">    public class Row {</span>
+<span class="fc" id="L239">        private final Map&lt;String, Object&gt; cells = new HashMap&lt;&gt;();</span>
+
+        /**
+         * Sets the cell value for the given column of this row.
+         *
+         * @param columnId column identifier
+         * @param value value to set
+         * @return self, for chaining
+         */
+        public Row cell(String columnId, Object value) {
+<span class="fc" id="L249">            checkId(columnId);</span>
+<span class="fc" id="L250">            cells.put(columnId, value);</span>
+<span class="fc" id="L251">            return this;</span>
+        }
+
+        /**
+         * Returns the value of the cell in the given column for this row.
+         *
+         * @param columnId column identifier
+         * @return cell value
+         */
+        public Object get(String columnId) {
+<span class="fc" id="L261">            return cells.get(columnId);</span>
+        }
+
+        /**
+         * Returns the value of the cell as a string, using the
+         * formatter appropriate for the column.
+         *
+         * @param columnId column identifier
+         * @return formatted cell value
+         */
+        String getAsString(String columnId) {
+<span class="fc" id="L272">            return getFormatter(columnId).format(get(columnId));</span>
+        }
+
+        /**
+         * Returns the row as an array of formatted strings.
+         *
+         * @return the formatted row data
+         */
+        public String[] getAsFormattedStrings() {
+<span class="fc" id="L281">            List&lt;String&gt; formatted = new ArrayList&lt;&gt;(columnCount());</span>
+<span class="fc bfc" id="L282" title="All 2 branches covered.">            for (String c : columnIds) {</span>
+<span class="fc" id="L283">                formatted.add(getAsString(c));</span>
+            }
+<span class="fc" id="L285">            return formatted.toArray(new String[formatted.size()]);</span>
+        }
+    }
+
+    private static final String DESC = &quot;desc&quot;;
+
+    /**
+     * Returns the appropriate sort direction for the given string.
+     * &lt;p&gt;
+     * The expected strings are &quot;asc&quot; for {@link SortDir#ASC ascending} and
+     * &quot;desc&quot; for {@link SortDir#DESC descending}. Any other value will
+     * default to ascending.
+     *
+     * @param s sort direction string encoding
+     * @return sort direction
+     */
+    public static SortDir sortDir(String s) {
+<span class="fc bfc" id="L302" title="All 2 branches covered.">        return !DESC.equals(s) ? SortDir.ASC : SortDir.DESC;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

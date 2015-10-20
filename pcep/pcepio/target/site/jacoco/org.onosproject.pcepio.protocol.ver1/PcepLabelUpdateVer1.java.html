@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelUpdateVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLabelUpdateVer1.java</span></div><h1>PcepLabelUpdateVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepFecObject;
+import org.onosproject.pcepio.protocol.PcepLabelObject;
+import org.onosproject.pcepio.protocol.PcepLabelUpdate;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.types.PcepLabelDownload;
+import org.onosproject.pcepio.types.PcepLabelMap;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP LABEL update .
+ * Reference :draft-zhao-pce-pcep-extension-for-pce-controller-01.
+ */
+public class PcepLabelUpdateVer1 implements PcepLabelUpdate {
+
+    /*
+     *       &lt;pce-label-update&gt;      ::= (&lt;pce-label-download&gt;|&lt;pce-label-map&gt;)
+
+            Where:
+             &lt;pce-label-download&gt;    ::= &lt;SRP&gt;
+                                         &lt;LSP&gt;
+                                         &lt;label-list&gt;
+
+             &lt;pce-label-map&gt;         ::= &lt;SRP&gt;
+                                         &lt;LABEL&gt;
+                                         &lt;FEC&gt;
+
+             &lt;label-list &gt;           ::= &lt;LABEL&gt;
+                                         [&lt;label-list&gt;]
+     */
+<span class="fc" id="L58">    protected static final Logger log = LoggerFactory.getLogger(PcepLabelUpdateVer1.class);</span>
+
+    //Either PceLabelDownload or PceLabelMap is mandatory.
+    //label Download
+    private PcepLabelDownload labelDownload;
+    private boolean isLabelDownloadSet;
+    //label Map
+    private PcepLabelMap labelMap;
+    private boolean isLabelMapSet;
+
+    /**
+     * Constructor to reset parameters.
+     */
+<span class="fc" id="L71">    public PcepLabelUpdateVer1() {</span>
+<span class="fc" id="L72">        this.labelDownload = null;</span>
+<span class="fc" id="L73">        this.isLabelDownloadSet = false;</span>
+<span class="fc" id="L74">        this.labelMap = null;</span>
+<span class="fc" id="L75">        this.isLabelMapSet = false;</span>
+<span class="fc" id="L76">    }</span>
+
+    /**
+     * Constructor to initialize PCEP label download.
+     *
+     * @param labelDownload PCEP label download
+     */
+<span class="nc" id="L83">    public PcepLabelUpdateVer1(PcepLabelDownload labelDownload) {</span>
+<span class="nc" id="L84">        this.labelDownload = labelDownload;</span>
+<span class="nc" id="L85">        this.isLabelDownloadSet = true;</span>
+<span class="nc" id="L86">        this.labelMap = null;</span>
+<span class="nc" id="L87">        this.isLabelMapSet = false;</span>
+<span class="nc" id="L88">    }</span>
+
+    /**
+     * Constructor to initialize PCEP label map.
+     *
+     * @param labelMap PCEP label map
+     */
+<span class="nc" id="L95">    public PcepLabelUpdateVer1(PcepLabelMap labelMap) {</span>
+<span class="nc" id="L96">        this.labelDownload = null;</span>
+<span class="nc" id="L97">        this.isLabelDownloadSet = false;</span>
+<span class="nc" id="L98">        this.labelMap = labelMap;</span>
+<span class="nc" id="L99">        this.isLabelMapSet = true;</span>
+<span class="nc" id="L100">    }</span>
+
+    /**
+     * builder class for PCEP label update.
+     */
+<span class="nc" id="L105">    static class Builder implements PcepLabelUpdate.Builder {</span>
+
+        private PcepLabelDownload labelDownload;
+        private boolean isLabelDownloadSet;
+        private PcepLabelMap labelMap;
+        private boolean isLabelMapSet;
+
+        @Override
+        public PcepLabelUpdate build() throws PcepParseException {
+
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            if (isLabelDownloadSet) {</span>
+<span class="nc" id="L116">                return new PcepLabelUpdateVer1(labelDownload);</span>
+            }
+<span class="nc bnc" id="L118" title="All 2 branches missed.">            if (isLabelMapSet) {</span>
+<span class="nc" id="L119">                return new PcepLabelUpdateVer1(labelMap);</span>
+            }
+<span class="nc bnc" id="L121" title="All 4 branches missed.">            if (!isLabelDownloadSet &amp;&amp; !isLabelMapSet) {</span>
+<span class="nc" id="L122">                throw new PcepParseException(</span>
+                        &quot;Label Download or Label Map is not set while building PcepLabelUpdate Message&quot;);
+            }
+<span class="nc" id="L125">            return new PcepLabelUpdateVer1();</span>
+        }
+
+        @Override
+        public Builder setLabelDownload(PcepLabelDownload labelDownload) {
+<span class="nc" id="L130">            this.labelDownload = labelDownload;</span>
+<span class="nc" id="L131">            this.isLabelDownloadSet = true;</span>
+<span class="nc" id="L132">            return this;</span>
+        }
+
+        @Override
+        public PcepLabelDownload getLabelDownload() {
+<span class="nc" id="L137">            return labelDownload;</span>
+        }
+
+        @Override
+        public Builder setLabelMap(PcepLabelMap labelMap) {
+<span class="nc" id="L142">            this.labelMap = labelMap;</span>
+<span class="nc" id="L143">            this.isLabelMapSet = true;</span>
+<span class="nc" id="L144">            return this;</span>
+        }
+
+        @Override
+        public PcepLabelMap getLabelMap() {
+<span class="nc" id="L149">            return labelMap;</span>
+        }
+    }
+
+    /**
+     * Reads PcepLabels from the byte stream received from channel buffer.
+     *
+     * @param cb of type channel buffer.
+     * @return PcepLabelUpdate object.
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepLabelUpdate read(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L162">        PcepLabelUpdateVer1 pceLabelUpdate = new PcepLabelUpdateVer1();</span>
+
+        PcepSrpObject srpObject;
+        PcepObjectHeader tempObjHeader;
+
+        //read SRP mandatory Object
+<span class="fc" id="L168">        srpObject = PcepSrpObjectVer1.read(cb);</span>
+
+        //checking next object
+<span class="fc" id="L171">        cb.markReaderIndex();</span>
+
+<span class="fc" id="L173">        tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L174">        cb.resetReaderIndex();</span>
+
+<span class="fc bfc" id="L176" title="All 2 branches covered.">        if (tempObjHeader.getObjClass() == PcepLspObjectVer1.LSP_OBJ_CLASS) {</span>
+
+            //now it is belong to &lt;pce-label-download&gt;
+<span class="fc" id="L179">            PcepLabelDownload labelDownload = new PcepLabelDownload();</span>
+
+            //set SRP
+<span class="fc" id="L182">            labelDownload.setSrpObject(srpObject);</span>
+
+            //read and set LSP
+<span class="fc" id="L185">            labelDownload.setLspObject(PcepLspObjectVer1.read(cb));</span>
+
+            //&lt;label-list&gt;
+<span class="fc" id="L188">            LinkedList&lt;PcepLabelObject&gt; llLabelList = new LinkedList&lt;&gt;();</span>
+            PcepLabelObject labelObject;
+
+<span class="fc bfc" id="L191" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+
+<span class="fc" id="L193">                cb.markReaderIndex();</span>
+<span class="fc" id="L194">                tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L195">                cb.resetReaderIndex();</span>
+
+<span class="fc bfc" id="L197" title="All 2 branches covered.">                if (tempObjHeader.getObjClass() != PcepLabelObjectVer1.LABEL_OBJ_CLASS) {</span>
+<span class="fc" id="L198">                    break;</span>
+                }
+<span class="fc" id="L200">                labelObject = PcepLabelObjectVer1.read(cb);</span>
+<span class="fc" id="L201">                llLabelList.add(labelObject);</span>
+            }
+<span class="fc" id="L203">            labelDownload.setLabelList(llLabelList);</span>
+<span class="fc" id="L204">            pceLabelUpdate.setLabelDownload(labelDownload);</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        } else if (tempObjHeader.getObjClass() == PcepLabelObjectVer1.LABEL_OBJ_CLASS) {</span>
+            //belong to &lt;pce-label-map&gt;
+<span class="fc" id="L207">            PcepLabelMap labelMap = new PcepLabelMap();</span>
+
+            //set SRP Object
+<span class="fc" id="L210">            labelMap.setSrpObject(srpObject);</span>
+
+            //read and set Label Object
+<span class="fc" id="L213">            labelMap.setLabelObject(PcepLabelObjectVer1.read(cb));</span>
+
+<span class="fc" id="L215">            cb.markReaderIndex();</span>
+<span class="fc" id="L216">            tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L217">            cb.resetReaderIndex();</span>
+
+<span class="fc" id="L219">            PcepFecObject fecObject = null;</span>
+<span class="pc bpc" id="L220" title="5 of 6 branches missed.">            switch (tempObjHeader.getObjType()) {</span>
+            case PcepFecObjectIPv4Ver1.FEC_OBJ_TYPE:
+<span class="fc" id="L222">                fecObject = PcepFecObjectIPv4Ver1.read(cb);</span>
+<span class="fc" id="L223">                break;</span>
+            case PcepFecObjectIPv6Ver1.FEC_OBJ_TYPE:
+<span class="nc" id="L225">                fecObject = PcepFecObjectIPv6Ver1.read(cb);</span>
+<span class="nc" id="L226">                break;</span>
+            case PcepFecObjectIPv4AdjacencyVer1.FEC_OBJ_TYPE:
+<span class="nc" id="L228">                fecObject = PcepFecObjectIPv4AdjacencyVer1.read(cb);</span>
+<span class="nc" id="L229">                break;</span>
+            case PcepFecObjectIPv6AdjacencyVer1.FEC_OBJ_TYPE:
+<span class="nc" id="L231">                fecObject = PcepFecObjectIPv6AdjacencyVer1.read(cb);</span>
+<span class="nc" id="L232">                break;</span>
+            case PcepFecObjectIPv4UnnumberedAdjacencyVer1.FEC_OBJ_TYPE:
+<span class="nc" id="L234">                fecObject = PcepFecObjectIPv4UnnumberedAdjacencyVer1.read(cb);</span>
+<span class="nc" id="L235">                break;</span>
+            default:
+<span class="nc" id="L237">                throw new PcepParseException(&quot;Unkown FEC object type &quot; + tempObjHeader.getObjType());</span>
+            }
+<span class="fc" id="L239">            labelMap.setFECObject(fecObject);</span>
+<span class="fc" id="L240">            pceLabelUpdate.setLabelMap(labelMap);</span>
+<span class="fc" id="L241">        } else {</span>
+<span class="nc" id="L242">            throw new PcepParseException(</span>
+                    &quot;Either &lt;pce-label-download&gt; or &lt;pce-label-map&gt; should be present. Received Class: &quot;
+<span class="nc" id="L244">                            + tempObjHeader.getObjClass());</span>
+        }
+<span class="fc" id="L246">        return pceLabelUpdate;</span>
+    }
+
+    @Override
+    public void write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L252" title="1 of 4 branches missed.">        if ((labelDownload != null) &amp;&amp; (labelMap != null)) {</span>
+<span class="nc" id="L253">            throw new PcepParseException(&quot;Label Download and Label Map both can't be present.&quot;);</span>
+        }
+
+<span class="pc bpc" id="L256" title="1 of 4 branches missed.">        if ((labelDownload == null) &amp;&amp; (labelMap == null)) {</span>
+<span class="nc" id="L257">            throw new PcepParseException(&quot;Either Label Download or Label Map should be present.&quot;);</span>
+        }
+
+<span class="fc bfc" id="L260" title="All 2 branches covered.">        if (labelDownload != null) {</span>
+
+            PcepLspObject lspObject;
+            PcepSrpObject srpObject;
+            PcepLabelObject labelObject;
+            LinkedList&lt;PcepLabelObject&gt; llLabelList;
+
+<span class="fc" id="L267">            srpObject = labelDownload.getSrpObject();</span>
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">            if (srpObject == null) {</span>
+<span class="nc" id="L269">                throw new PcepParseException(&quot;SRP Object is mandatory object for Label Download.&quot;);</span>
+            } else {
+<span class="fc" id="L271">                srpObject.write(cb);</span>
+            }
+
+<span class="fc" id="L274">            lspObject = labelDownload.getLspObject();</span>
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">            if (lspObject == null) {</span>
+<span class="nc" id="L276">                throw new PcepParseException(&quot;LSP Object is mandatory object for Label Download.&quot;);</span>
+            } else {
+<span class="fc" id="L278">                lspObject.write(cb);</span>
+            }
+
+<span class="fc" id="L281">            llLabelList = labelDownload.getLabelList();</span>
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">            if (llLabelList == null) {</span>
+<span class="nc" id="L283">                throw new PcepParseException(&quot;Label list is mandatory object for Label Download.&quot;);</span>
+            } else {
+<span class="fc" id="L285">                ListIterator&lt;PcepLabelObject&gt; listIterator = llLabelList.listIterator();</span>
+<span class="fc bfc" id="L286" title="All 2 branches covered.">                while (listIterator.hasNext()) {</span>
+<span class="fc" id="L287">                    labelObject = listIterator.next();</span>
+<span class="fc" id="L288">                    labelObject.write(cb);</span>
+                }
+            }
+        }
+
+<span class="fc bfc" id="L293" title="All 2 branches covered.">        if (labelMap != null) {</span>
+
+            PcepSrpObject srpObject;
+            PcepLabelObject labelObject;
+            PcepFecObject fecObject;
+
+<span class="fc" id="L299">            srpObject = labelMap.getSrpObject();</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">            if (srpObject == null) {</span>
+<span class="nc" id="L301">                throw new PcepParseException(&quot;SRP Object is mandatory object for Label map.&quot;);</span>
+            } else {
+<span class="fc" id="L303">                srpObject.write(cb);</span>
+            }
+<span class="fc" id="L305">            labelObject = labelMap.getLabelObject();</span>
+<span class="pc bpc" id="L306" title="1 of 2 branches missed.">            if (labelObject == null) {</span>
+<span class="nc" id="L307">                throw new PcepParseException(&quot;label Object is mandatory object for Label map.&quot;);</span>
+            } else {
+<span class="fc" id="L309">                labelObject.write(cb);</span>
+            }
+<span class="fc" id="L311">            fecObject = labelMap.getFECObject();</span>
+<span class="pc bpc" id="L312" title="1 of 2 branches missed.">            if (fecObject == null) {</span>
+<span class="nc" id="L313">                throw new PcepParseException(&quot;fec Object is mandatory object for Label map.&quot;);</span>
+            } else {
+<span class="fc" id="L315">                fecObject.write(cb);</span>
+            }
+        }
+<span class="fc" id="L318">    }</span>
+
+    @Override
+    public void setLabelDownload(PcepLabelDownload labelDownload) {
+<span class="pc bpc" id="L322" title="1 of 2 branches missed.">        if (this.isLabelMapSet) {</span>
+<span class="nc" id="L323">            return;</span>
+        }
+<span class="fc" id="L325">        this.labelDownload = labelDownload;</span>
+<span class="fc" id="L326">        this.isLabelDownloadSet = true;</span>
+<span class="fc" id="L327">    }</span>
+
+    @Override
+    public PcepLabelDownload getLabelDownload() {
+<span class="nc" id="L331">        return this.labelDownload;</span>
+    }
+
+    @Override
+    public void setLabelMap(PcepLabelMap labelMap) {
+<span class="pc bpc" id="L336" title="1 of 2 branches missed.">        if (this.isLabelDownloadSet) {</span>
+<span class="nc" id="L337">            return;</span>
+        }
+<span class="fc" id="L339">        this.labelMap = labelMap;</span>
+<span class="fc" id="L340">        this.isLabelMapSet = true;</span>
+<span class="fc" id="L341">    }</span>
+
+    @Override
+    public PcepLabelMap getLabelMap() {
+<span class="nc" id="L345">        return this.labelMap;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L350">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L351">                .omitNullValues()</span>
+<span class="nc" id="L352">                .add(&quot;LabelDownload&quot;, labelDownload)</span>
+<span class="nc" id="L353">                .add(&quot;LabelMap&quot;, labelMap)</span>
+<span class="nc" id="L354">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

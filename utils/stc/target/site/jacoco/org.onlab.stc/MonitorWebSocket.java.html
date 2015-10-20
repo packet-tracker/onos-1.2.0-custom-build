@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MonitorWebSocket.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-stc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.stc</a> &gt; <span class="el_source">MonitorWebSocket.java</span></div><h1>MonitorWebSocket.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.stc;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.eclipse.jetty.websocket.WebSocket;
+
+import java.io.IOException;
+
+import static org.onlab.stc.Coordinator.print;
+
+/**
+ * Web socket capable of interacting with the STC monitor GUI.
+ */
+public class MonitorWebSocket implements WebSocket.OnTextMessage, WebSocket.OnControl {
+
+    private static final long MAX_AGE_MS = 30_000;
+
+    private static final byte PING = 0x9;
+    private static final byte PONG = 0xA;
+<span class="nc" id="L35">    private static final byte[] PING_DATA = new byte[]{(byte) 0xde, (byte) 0xad};</span>
+
+    private final Monitor monitor;
+
+    private Connection connection;
+    private FrameConnection control;
+
+<span class="nc" id="L42">    private final ObjectMapper mapper = new ObjectMapper();</span>
+
+<span class="nc" id="L44">    private long lastActive = System.currentTimeMillis();</span>
+
+    /**
+     * Creates a new monitor client GUI web-socket.
+     *
+     * @param monitor shared process flow monitor
+     */
+<span class="nc" id="L51">    MonitorWebSocket(Monitor monitor) {</span>
+<span class="nc" id="L52">        this.monitor = monitor;</span>
+<span class="nc" id="L53">    }</span>
+
+    /**
+     * Issues a close on the connection.
+     */
+    synchronized void close() {
+<span class="nc" id="L59">        destroyHandlers();</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        if (connection.isOpen()) {</span>
+<span class="nc" id="L61">            connection.close();</span>
+        }
+<span class="nc" id="L63">    }</span>
+
+    /**
+     * Indicates if this connection is idle.
+     *
+     * @return true if idle or closed
+     */
+    synchronized boolean isIdle() {
+<span class="nc" id="L71">        long quietFor = System.currentTimeMillis() - lastActive;</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        boolean idle = quietFor &gt; MAX_AGE_MS;</span>
+<span class="nc bnc" id="L73" title="All 6 branches missed.">        if (idle || (connection != null &amp;&amp; !connection.isOpen())) {</span>
+<span class="nc" id="L74">            return true;</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        } else if (connection != null) {</span>
+            try {
+<span class="nc" id="L77">                control.sendControl(PING, PING_DATA, 0, PING_DATA.length);</span>
+<span class="nc" id="L78">            } catch (IOException e) {</span>
+<span class="nc" id="L79">                print(&quot;Unable to send ping message due to: %s&quot;, e);</span>
+<span class="nc" id="L80">            }</span>
+        }
+<span class="nc" id="L82">        return false;</span>
+    }
+
+    @Override
+    public void onOpen(Connection connection) {
+<span class="nc" id="L87">        this.connection = connection;</span>
+<span class="nc" id="L88">        this.control = (FrameConnection) connection;</span>
+        try {
+<span class="nc" id="L90">            createHandlers();</span>
+<span class="nc" id="L91">            sendMessage(message(&quot;flow&quot;, monitor.scenarioData()));</span>
+
+<span class="nc" id="L93">        } catch (Exception e) {</span>
+<span class="nc" id="L94">            print(&quot;Unable to open monitor connection: %s&quot;, e);</span>
+<span class="nc" id="L95">            this.connection.close();</span>
+<span class="nc" id="L96">            this.connection = null;</span>
+<span class="nc" id="L97">            this.control = null;</span>
+<span class="nc" id="L98">        }</span>
+<span class="nc" id="L99">    }</span>
+
+    @Override
+    public synchronized void onClose(int closeCode, String message) {
+<span class="nc" id="L103">        destroyHandlers();</span>
+<span class="nc" id="L104">    }</span>
+
+    @Override
+    public boolean onControl(byte controlCode, byte[] data, int offset, int length) {
+<span class="nc" id="L108">        lastActive = System.currentTimeMillis();</span>
+<span class="nc" id="L109">        return true;</span>
+    }
+
+    @Override
+    public void onMessage(String data) {
+<span class="nc" id="L114">        lastActive = System.currentTimeMillis();</span>
+        try {
+<span class="nc" id="L116">            ObjectNode message = (ObjectNode) mapper.reader().readTree(data);</span>
+            // TODO:
+<span class="nc" id="L118">            print(&quot;Got message: %s&quot;, message);</span>
+<span class="nc" id="L119">        } catch (Exception e) {</span>
+<span class="nc" id="L120">            print(&quot;Unable to parse GUI message %s due to %s&quot;, data, e);</span>
+<span class="nc" id="L121">        }</span>
+<span class="nc" id="L122">    }</span>
+
+    public synchronized void sendMessage(ObjectNode message) {
+        try {
+<span class="nc bnc" id="L126" title="All 2 branches missed.">            if (connection.isOpen()) {</span>
+<span class="nc" id="L127">                connection.sendMessage(message.toString());</span>
+            }
+<span class="nc" id="L129">        } catch (IOException e) {</span>
+<span class="nc" id="L130">            print(&quot;Unable to send message %s to GUI due to %s&quot;, message, e);</span>
+<span class="nc" id="L131">        }</span>
+<span class="nc" id="L132">    }</span>
+
+    public ObjectNode message(String type, ObjectNode payload) {
+<span class="nc" id="L135">        ObjectNode message = mapper.createObjectNode().put(&quot;event&quot;, type);</span>
+<span class="nc" id="L136">        message.set(&quot;payload&quot;, payload);</span>
+<span class="nc" id="L137">        return message;</span>
+    }
+
+    // Creates new message handlers.
+    private synchronized void createHandlers() {
+<span class="nc" id="L142">    }</span>
+
+    // Destroys message handlers.
+    private synchronized void destroyHandlers() {
+<span class="nc" id="L146">    }</span>
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

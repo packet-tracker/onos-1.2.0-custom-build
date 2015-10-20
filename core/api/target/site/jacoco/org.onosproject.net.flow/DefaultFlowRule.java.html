@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultFlowRule.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow</a> &gt; <span class="el_source">DefaultFlowRule.java</span></div><h1>DefaultFlowRule.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow;
+
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.DefaultGroupId;
+import org.onosproject.core.GroupId;
+import org.onosproject.net.DeviceId;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+public class DefaultFlowRule implements FlowRule {
+
+    private final DeviceId deviceId;
+    private final int priority;
+    private final TrafficSelector selector;
+    private final TrafficTreatment treatment;
+    private final long created;
+
+    private final FlowId id;
+
+    private final Short appId;
+
+    private final int timeout;
+    private final boolean permanent;
+    private final GroupId groupId;
+
+    private final Integer tableId;
+    private final FlowRuleExtPayLoad payLoad;
+
+<span class="fc" id="L48">    public DefaultFlowRule(FlowRule rule) {</span>
+<span class="fc" id="L49">        this.deviceId = rule.deviceId();</span>
+<span class="fc" id="L50">        this.priority = rule.priority();</span>
+<span class="fc" id="L51">        this.selector = rule.selector();</span>
+<span class="fc" id="L52">        this.treatment = rule.treatment();</span>
+<span class="fc" id="L53">        this.appId = rule.appId();</span>
+<span class="fc" id="L54">        this.groupId = rule.groupId();</span>
+<span class="fc" id="L55">        this.id = rule.id();</span>
+<span class="fc" id="L56">        this.timeout = rule.timeout();</span>
+<span class="fc" id="L57">        this.permanent = rule.isPermanent();</span>
+<span class="fc" id="L58">        this.created = System.currentTimeMillis();</span>
+<span class="fc" id="L59">        this.tableId = rule.tableId();</span>
+<span class="fc" id="L60">        this.payLoad = rule.payLoad();</span>
+<span class="fc" id="L61">    }</span>
+
+    private DefaultFlowRule(DeviceId deviceId, TrafficSelector selector,
+                            TrafficTreatment treatment, Integer priority,
+                            FlowId flowId, Boolean permanent, Integer timeout,
+<span class="fc" id="L66">                            Integer tableId) {</span>
+
+<span class="fc" id="L68">        this.deviceId = deviceId;</span>
+<span class="fc" id="L69">        this.selector = selector;</span>
+<span class="fc" id="L70">        this.treatment = treatment;</span>
+<span class="fc" id="L71">        this.priority = priority;</span>
+<span class="fc" id="L72">        this.appId = (short) (flowId.value() &gt;&gt;&gt; 48);</span>
+<span class="fc" id="L73">        this.id = flowId;</span>
+<span class="fc" id="L74">        this.permanent = permanent;</span>
+<span class="fc" id="L75">        this.timeout = timeout;</span>
+<span class="fc" id="L76">        this.tableId = tableId;</span>
+<span class="fc" id="L77">        this.created = System.currentTimeMillis();</span>
+
+
+        //FIXME: fields below will be removed.
+<span class="fc" id="L81">        this.groupId = new DefaultGroupId(0);</span>
+<span class="fc" id="L82">        this.payLoad = null;</span>
+<span class="fc" id="L83">    }</span>
+
+    /**
+     * Support for the third party flow rule. Creates a flow rule of flow table.
+     *
+     * @param deviceId the identity of the device where this rule applies
+     * @param selector the traffic selector that identifies what traffic this
+     *            rule
+     * @param treatment the traffic treatment that applies to selected traffic
+     * @param priority the flow rule priority given in natural order
+     * @param appId the application id of this flow
+     * @param timeout the timeout for this flow requested by an application
+     * @param permanent whether the flow is permanent i.e. does not time out
+     * @param payLoad 3rd-party origin private flow
+     */
+    public DefaultFlowRule(DeviceId deviceId, TrafficSelector selector,
+                           TrafficTreatment treatment, int priority,
+                           ApplicationId appId, int timeout, boolean permanent,
+<span class="fc" id="L101">                           FlowRuleExtPayLoad payLoad) {</span>
+
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">        if (priority &lt; FlowRule.MIN_PRIORITY) {</span>
+<span class="nc" id="L104">            throw new IllegalArgumentException(&quot;Priority cannot be less than &quot;</span>
+                    + MIN_PRIORITY);
+        }
+
+<span class="fc" id="L108">        this.deviceId = deviceId;</span>
+<span class="fc" id="L109">        this.priority = priority;</span>
+<span class="fc" id="L110">        this.selector = selector;</span>
+<span class="fc" id="L111">        this.treatment = treatment;</span>
+<span class="fc" id="L112">        this.appId = appId.id();</span>
+<span class="fc" id="L113">        this.groupId = new DefaultGroupId(0);</span>
+<span class="fc" id="L114">        this.timeout = timeout;</span>
+<span class="fc" id="L115">        this.permanent = permanent;</span>
+<span class="fc" id="L116">        this.tableId = 0;</span>
+<span class="fc" id="L117">        this.created = System.currentTimeMillis();</span>
+<span class="fc" id="L118">        this.payLoad = payLoad;</span>
+
+        /*
+         * id consists of the following. | appId (16 bits) | groupId (16 bits) |
+         * flowId (32 bits) |
+         */
+<span class="fc" id="L124">        this.id = FlowId.valueOf((((long) this.appId) &lt;&lt; 48)</span>
+<span class="fc" id="L125">                | (((long) this.groupId.id()) &lt;&lt; 32)</span>
+<span class="fc" id="L126">                | (this.hash() &amp; 0xffffffffL));</span>
+<span class="fc" id="L127">    }</span>
+
+    /**
+     * Support for the third party flow rule. Creates a flow rule of group
+     * table.
+     *
+     * @param deviceId the identity of the device where this rule applies
+     * @param selector the traffic selector that identifies what traffic this
+     *            rule
+     * @param treatment the traffic treatment that applies to selected traffic
+     * @param priority the flow rule priority given in natural order
+     * @param appId the application id of this flow
+     * @param groupId the group id of this flow
+     * @param timeout the timeout for this flow requested by an application
+     * @param permanent whether the flow is permanent i.e. does not time out
+     * @param payLoad 3rd-party origin private flow
+     *
+     */
+    public DefaultFlowRule(DeviceId deviceId, TrafficSelector selector,
+                           TrafficTreatment treatment, int priority,
+                           ApplicationId appId, GroupId groupId, int timeout,
+<span class="fc" id="L148">                           boolean permanent, FlowRuleExtPayLoad payLoad) {</span>
+
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">        if (priority &lt; FlowRule.MIN_PRIORITY) {</span>
+<span class="nc" id="L151">            throw new IllegalArgumentException(&quot;Priority cannot be less than &quot;</span>
+                    + MIN_PRIORITY);
+        }
+
+<span class="fc" id="L155">        this.deviceId = deviceId;</span>
+<span class="fc" id="L156">        this.priority = priority;</span>
+<span class="fc" id="L157">        this.selector = selector;</span>
+<span class="fc" id="L158">        this.treatment = treatment;</span>
+<span class="fc" id="L159">        this.appId = appId.id();</span>
+<span class="fc" id="L160">        this.groupId = groupId;</span>
+<span class="fc" id="L161">        this.timeout = timeout;</span>
+<span class="fc" id="L162">        this.permanent = permanent;</span>
+<span class="fc" id="L163">        this.created = System.currentTimeMillis();</span>
+<span class="fc" id="L164">        this.tableId = 0;</span>
+<span class="fc" id="L165">        this.payLoad = payLoad;</span>
+
+        /*
+         * id consists of the following. | appId (16 bits) | groupId (16 bits) |
+         * flowId (32 bits) |
+         */
+<span class="fc" id="L171">        this.id = FlowId.valueOf((((long) this.appId) &lt;&lt; 48)</span>
+<span class="fc" id="L172">                | (((long) this.groupId.id()) &lt;&lt; 32)</span>
+<span class="fc" id="L173">                | (this.hash() &amp; 0xffffffffL));</span>
+<span class="fc" id="L174">    }</span>
+
+    @Override
+    public FlowId id() {
+<span class="fc" id="L178">        return id;</span>
+    }
+
+    @Override
+    public short appId() {
+<span class="fc" id="L183">        return appId;</span>
+    }
+
+    @Override
+    public GroupId groupId() {
+<span class="fc" id="L188">        return groupId;</span>
+    }
+
+    @Override
+    public int priority() {
+<span class="fc" id="L193">        return priority;</span>
+    }
+
+    @Override
+    public DeviceId deviceId() {
+<span class="fc" id="L198">        return deviceId;</span>
+    }
+
+    @Override
+    public TrafficSelector selector() {
+<span class="fc" id="L203">        return selector;</span>
+    }
+
+    @Override
+    public TrafficTreatment treatment() {
+<span class="fc" id="L208">        return treatment;</span>
+    }
+
+    @Override
+    /*
+     * The priority and statistics can change on a given treatment and selector
+     *
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    public int hashCode() {
+<span class="fc" id="L220">        return Objects.hash(deviceId, selector, tableId, payLoad);</span>
+    }
+
+    //FIXME do we need this method in addition to hashCode()?
+    private int hash() {
+<span class="fc" id="L225">        return Objects.hash(deviceId, selector, tableId, payLoad);</span>
+    }
+
+    @Override
+    /*
+     * The priority and statistics can change on a given treatment and selector
+     *
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L237" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L238">            return true;</span>
+        }
+<span class="fc bfc" id="L240" title="All 2 branches covered.">        if (obj instanceof DefaultFlowRule) {</span>
+<span class="fc" id="L241">            DefaultFlowRule that = (DefaultFlowRule) obj;</span>
+<span class="fc bfc" id="L242" title="All 2 branches covered.">            return Objects.equals(deviceId, that.deviceId) &amp;&amp;</span>
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">                    Objects.equals(priority, that.priority) &amp;&amp;</span>
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">                    Objects.equals(selector, that.selector) &amp;&amp;</span>
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">                    Objects.equals(tableId, that.tableId)</span>
+<span class="pc bpc" id="L246" title="1 of 2 branches missed.">                     &amp;&amp; Objects.equals(payLoad, that.payLoad);</span>
+        }
+<span class="fc" id="L248">        return false;</span>
+    }
+
+    @Override
+    public boolean exactMatch(FlowRule rule) {
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        return this.equals(rule) &amp;&amp;</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">                Objects.equals(this.id, rule.id()) &amp;&amp;</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">                Objects.equals(this.treatment, rule.treatment());</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L260">        return toStringHelper(this)</span>
+<span class="fc" id="L261">                .add(&quot;id&quot;, Long.toHexString(id.value()))</span>
+<span class="fc" id="L262">                .add(&quot;deviceId&quot;, deviceId)</span>
+<span class="fc" id="L263">                .add(&quot;priority&quot;, priority)</span>
+<span class="pc bpc" id="L264" title="1 of 2 branches missed.">                .add(&quot;selector&quot;, selector.criteria())</span>
+<span class="fc" id="L265">                .add(&quot;treatment&quot;, treatment == null ? &quot;N/A&quot; : treatment.allInstructions())</span>
+<span class="fc" id="L266">                .add(&quot;tableId&quot;, tableId)</span>
+<span class="fc" id="L267">                .add(&quot;created&quot;, created)</span>
+<span class="fc" id="L268">                .add(&quot;payLoad&quot;, payLoad)</span>
+<span class="fc" id="L269">                .toString();</span>
+    }
+
+    @Override
+    public int timeout() {
+<span class="fc" id="L274">        return timeout;</span>
+    }
+
+    @Override
+    public boolean isPermanent() {
+<span class="fc" id="L279">        return permanent;</span>
+    }
+
+    @Override
+    public int tableId() {
+<span class="fc" id="L284">        return tableId;</span>
+    }
+
+    public static Builder builder() {
+<span class="fc" id="L288">        return new Builder();</span>
+    }
+
+<span class="fc" id="L291">    public static final class Builder implements FlowRule.Builder {</span>
+
+        private FlowId flowId;
+        private ApplicationId appId;
+        private Integer priority;
+        private DeviceId deviceId;
+<span class="fc" id="L297">        private Integer tableId = 0;</span>
+        private TrafficSelector selector;
+        private TrafficTreatment treatment;
+        private Integer timeout;
+        private Boolean permanent;
+
+        @Override
+        public FlowRule.Builder withCookie(long cookie) {
+<span class="fc" id="L305">            this.flowId = FlowId.valueOf(cookie);</span>
+<span class="fc" id="L306">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder fromApp(ApplicationId appId) {
+<span class="fc" id="L311">            this.appId = appId;</span>
+<span class="fc" id="L312">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder withPriority(int priority) {
+<span class="fc" id="L317">            this.priority = priority;</span>
+<span class="fc" id="L318">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder forDevice(DeviceId deviceId) {
+<span class="fc" id="L323">            this.deviceId = deviceId;</span>
+<span class="fc" id="L324">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder forTable(int tableId) {
+<span class="nc" id="L329">            this.tableId = tableId;</span>
+<span class="nc" id="L330">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder withSelector(TrafficSelector selector) {
+<span class="fc" id="L335">            this.selector = selector;</span>
+<span class="fc" id="L336">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder withTreatment(TrafficTreatment treatment) {
+<span class="fc" id="L341">            this.treatment = treatment;</span>
+<span class="fc" id="L342">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder makePermanent() {
+<span class="nc" id="L347">            this.timeout = 0;</span>
+<span class="nc" id="L348">            this.permanent = true;</span>
+<span class="nc" id="L349">            return this;</span>
+        }
+
+        @Override
+        public FlowRule.Builder makeTemporary(int timeout) {
+<span class="fc" id="L354">            this.permanent = false;</span>
+<span class="fc" id="L355">            this.timeout = timeout;</span>
+<span class="fc" id="L356">            return this;</span>
+        }
+
+        @Override
+        public FlowRule build() {
+<span class="pc bpc" id="L361" title="1 of 4 branches missed.">            checkArgument(flowId != null || appId != null, &quot;Either an application&quot; +</span>
+                    &quot; id or a cookie must be supplied&quot;);
+<span class="fc" id="L363">            checkNotNull(selector, &quot;Traffic selector cannot be null&quot;);</span>
+<span class="pc bpc" id="L364" title="3 of 4 branches missed.">            checkArgument(timeout != null || permanent != null, &quot;Must either have &quot; +</span>
+                    &quot;a timeout or be permanent&quot;);
+<span class="fc" id="L366">            checkNotNull(deviceId, &quot;Must refer to a device&quot;);</span>
+<span class="fc" id="L367">            checkNotNull(priority, &quot;Priority cannot be null&quot;);</span>
+<span class="pc bpc" id="L368" title="1 of 2 branches missed.">            checkArgument(priority &gt;= MIN_PRIORITY, &quot;Priority cannot be less than &quot; +</span>
+                    MIN_PRIORITY);
+
+            // Computing a flow ID based on appId takes precedence over setting
+            // the flow ID directly
+<span class="fc bfc" id="L373" title="All 2 branches covered.">            if (appId != null) {</span>
+<span class="fc" id="L374">                flowId = computeFlowId(appId);</span>
+            }
+
+<span class="fc" id="L377">            return new DefaultFlowRule(deviceId, selector, treatment, priority,</span>
+                                       flowId, permanent, timeout, tableId);
+        }
+
+        private FlowId computeFlowId(ApplicationId appId) {
+<span class="fc" id="L382">            return FlowId.valueOf((((long) appId.id()) &lt;&lt; 48)</span>
+<span class="fc" id="L383">                                   | (hash() &amp; 0xffffffffL));</span>
+        }
+
+        private int hash() {
+<span class="fc" id="L387">            return Objects.hash(deviceId, priority, selector, tableId);</span>
+        }
+
+    }
+
+    @Override
+    public FlowRuleExtPayLoad payLoad() {
+<span class="fc" id="L394">        return payLoad;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

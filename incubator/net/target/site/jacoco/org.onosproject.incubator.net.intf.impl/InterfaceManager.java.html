@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>InterfaceManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.intf.impl</a> &gt; <span class="el_source">InterfaceManager.java</span></div><h1>InterfaceManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.incubator.net.intf.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.VlanId;
+import org.onosproject.incubator.net.config.basics.ConfigException;
+import org.onosproject.incubator.net.config.basics.InterfaceConfig;
+import org.onosproject.incubator.net.intf.Interface;
+import org.onosproject.incubator.net.intf.InterfaceAdminService;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import static java.util.stream.Collectors.collectingAndThen;
+import static java.util.stream.Collectors.toSet;
+
+/**
+ * Manages the inventory of interfaces in the system.
+ */
+@Service
+@Component(immediate = true)
+<span class="fc" id="L54">public class InterfaceManager implements InterfaceService,</span>
+        InterfaceAdminService {
+
+<span class="fc" id="L57">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+<span class="fc" id="L59">    private static final Class&lt;ConnectPoint&gt; SUBJECT_CLASS = ConnectPoint.class;</span>
+<span class="fc" id="L60">    private static final Class&lt;InterfaceConfig&gt; CONFIG_CLASS = InterfaceConfig.class;</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService configService;
+
+<span class="fc" id="L65">    private final InternalConfigListener listener = new InternalConfigListener();</span>
+
+<span class="fc" id="L67">    private final Map&lt;ConnectPoint, Set&lt;Interface&gt;&gt; interfaces = Maps.newConcurrentMap();</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L71">        configService.addListener(listener);</span>
+
+        // TODO address concurrency issues here
+<span class="fc bfc" id="L74" title="All 2 branches covered.">        for (ConnectPoint subject : configService.getSubjects(SUBJECT_CLASS, CONFIG_CLASS)) {</span>
+<span class="fc" id="L75">            InterfaceConfig config = configService.getConfig(subject, CONFIG_CLASS);</span>
+
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">            if (config != null) {</span>
+<span class="fc" id="L78">                updateInterfaces(config);</span>
+            }
+<span class="fc" id="L80">        }</span>
+
+<span class="fc" id="L82">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L83">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L87">        configService.removeListener(listener);</span>
+
+<span class="nc" id="L89">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L90">    }</span>
+
+    @Override
+    public Set&lt;Interface&gt; getInterfaces() {
+<span class="fc" id="L94">        return interfaces.values()</span>
+<span class="fc" id="L95">                .stream()</span>
+<span class="fc" id="L96">                .flatMap(set -&gt; set.stream())</span>
+<span class="fc" id="L97">                .collect(collectingAndThen(toSet(), ImmutableSet::copyOf));</span>
+    }
+
+    @Override
+    public Set&lt;Interface&gt; getInterfacesByPort(ConnectPoint port) {
+<span class="fc" id="L102">        Set&lt;Interface&gt; intfs = interfaces.get(port);</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">        if (intfs == null) {</span>
+<span class="nc" id="L104">            return Collections.emptySet();</span>
+        }
+<span class="fc" id="L106">        return ImmutableSet.copyOf(intfs);</span>
+    }
+
+    @Override
+    public Set&lt;Interface&gt; getInterfacesByIp(IpAddress ip) {
+<span class="fc" id="L111">        return interfaces.values()</span>
+<span class="fc" id="L112">                .stream()</span>
+<span class="fc" id="L113">                .flatMap(set -&gt; set.stream())</span>
+<span class="fc" id="L114">                .filter(intf -&gt; intf.ipAddresses()</span>
+<span class="fc" id="L115">                        .stream()</span>
+<span class="fc" id="L116">                        .anyMatch(ia -&gt; ia.ipAddress().equals(ip)))</span>
+<span class="fc" id="L117">                .collect(collectingAndThen(toSet(), ImmutableSet::copyOf));</span>
+    }
+
+    @Override
+    public Interface getMatchingInterface(IpAddress ip) {
+<span class="fc" id="L122">        Optional&lt;Interface&gt; match = interfaces.values()</span>
+<span class="fc" id="L123">                .stream()</span>
+<span class="fc" id="L124">                .flatMap(set -&gt; set.stream())</span>
+<span class="fc" id="L125">                .filter(intf -&gt; intf.ipAddresses()</span>
+<span class="fc" id="L126">                        .stream()</span>
+<span class="fc" id="L127">                        .anyMatch(intfIp -&gt; intfIp.subnetAddress().contains(ip)))</span>
+<span class="fc" id="L128">                .findFirst();</span>
+
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        if (match.isPresent()) {</span>
+<span class="fc" id="L131">            return match.get();</span>
+        }
+
+<span class="fc" id="L134">        return null;</span>
+    }
+
+    @Override
+    public Set&lt;Interface&gt; getInterfacesByVlan(VlanId vlan) {
+<span class="fc" id="L139">        return interfaces.values()</span>
+<span class="fc" id="L140">                .stream()</span>
+<span class="fc" id="L141">                .flatMap(set -&gt; set.stream())</span>
+<span class="fc" id="L142">                .filter(intf -&gt; intf.vlan().equals(vlan))</span>
+<span class="fc" id="L143">                .collect(collectingAndThen(toSet(), ImmutableSet::copyOf));</span>
+    }
+
+    private void updateInterfaces(InterfaceConfig intfConfig) {
+        try {
+<span class="fc" id="L148">            interfaces.put(intfConfig.subject(), intfConfig.getInterfaces());</span>
+<span class="nc" id="L149">        } catch (ConfigException e) {</span>
+<span class="nc" id="L150">            log.error(&quot;Error in interface config&quot;, e);</span>
+<span class="fc" id="L151">        }</span>
+<span class="fc" id="L152">    }</span>
+
+    private void removeInterfaces(ConnectPoint port) {
+<span class="fc" id="L155">        interfaces.remove(port);</span>
+<span class="fc" id="L156">    }</span>
+
+    @Override
+    public void add(Interface intf) {
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (interfaces.containsKey(intf.connectPoint())) {</span>
+<span class="nc" id="L161">            boolean conflict = interfaces.get(intf.connectPoint()).stream()</span>
+<span class="nc" id="L162">                    .filter(i -&gt; i.connectPoint().equals(intf.connectPoint()))</span>
+<span class="nc" id="L163">                    .filter(i -&gt; i.mac().equals(intf.mac()))</span>
+<span class="nc" id="L164">                    .filter(i -&gt; i.vlan().equals(intf.vlan()))</span>
+<span class="nc" id="L165">                    .findAny().isPresent();</span>
+
+<span class="nc bnc" id="L167" title="All 2 branches missed.">            if (conflict) {</span>
+<span class="nc" id="L168">                log.error(&quot;Can't add interface because it conflicts with existing config&quot;);</span>
+<span class="nc" id="L169">                return;</span>
+            }
+        }
+
+<span class="nc" id="L173">        InterfaceConfig config =</span>
+<span class="nc" id="L174">                configService.addConfig(intf.connectPoint(), CONFIG_CLASS);</span>
+
+<span class="nc" id="L176">        config.addInterface(intf);</span>
+
+<span class="nc" id="L178">        configService.applyConfig(intf.connectPoint(), CONFIG_CLASS, config.node());</span>
+<span class="nc" id="L179">    }</span>
+
+    @Override
+    public void remove(ConnectPoint connectPoint, VlanId vlanId) {
+<span class="nc" id="L183">        Optional&lt;Interface&gt; intf = interfaces.get(connectPoint).stream()</span>
+<span class="nc" id="L184">                .filter(i -&gt; i.vlan().equals(vlanId))</span>
+<span class="nc" id="L185">                .findAny();</span>
+
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        if (!intf.isPresent()) {</span>
+<span class="nc" id="L188">            log.error(&quot;Can't find interface {}/{} to remove&quot;, connectPoint, vlanId);</span>
+<span class="nc" id="L189">            return;</span>
+        }
+
+<span class="nc" id="L192">        InterfaceConfig config = configService.addConfig(intf.get().connectPoint(), CONFIG_CLASS);</span>
+<span class="nc" id="L193">        config.removeInterface(intf.get());</span>
+
+        try {
+<span class="nc bnc" id="L196" title="All 2 branches missed.">            if (config.getInterfaces().isEmpty()) {</span>
+<span class="nc" id="L197">                configService.removeConfig(connectPoint, CONFIG_CLASS);</span>
+            } else {
+<span class="nc" id="L199">                configService.applyConfig(intf.get().connectPoint(), CONFIG_CLASS, config.node());</span>
+            }
+<span class="nc" id="L201">        } catch (ConfigException e) {</span>
+<span class="nc" id="L202">            log.error(&quot;Error reading interfaces JSON&quot;, e);</span>
+<span class="nc" id="L203">        }</span>
+<span class="nc" id="L204">    }</span>
+
+    /**
+     * Listener for network config events.
+     */
+<span class="fc" id="L209">    private class InternalConfigListener implements NetworkConfigListener {</span>
+
+        @Override
+        public void event(NetworkConfigEvent event) {
+<span class="pc bpc" id="L213" title="1 of 3 branches missed.">            switch (event.type()) {</span>
+            case CONFIG_ADDED:
+            case CONFIG_UPDATED:
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">                if (event.configClass() == InterfaceConfig.class) {</span>
+<span class="fc" id="L217">                    InterfaceConfig config =</span>
+<span class="fc" id="L218">                            configService.getConfig((ConnectPoint) event.subject(), InterfaceConfig.class);</span>
+<span class="fc" id="L219">                    updateInterfaces(config);</span>
+<span class="fc" id="L220">                }</span>
+                break;
+            case CONFIG_REMOVED:
+<span class="pc bpc" id="L223" title="1 of 2 branches missed.">                if (event.configClass() == InterfaceConfig.class) {</span>
+<span class="fc" id="L224">                    removeInterfaces((ConnectPoint) event.subject());</span>
+                }
+                break;
+            case CONFIG_REGISTERED:
+            case CONFIG_UNREGISTERED:
+            default:
+                break;
+            }
+<span class="fc" id="L232">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

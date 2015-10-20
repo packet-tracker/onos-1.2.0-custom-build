@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultTopologyProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.topology.impl</a> &gt; <span class="el_source">DefaultTopologyProvider.java</span></div><h1>DefaultTopologyProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.topology.impl;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.util.concurrent.Executors.newFixedThreadPool;
+import static org.onlab.util.Tools.get;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.core.CoreService.CORE_PROVIDER_ID;
+import static org.onosproject.net.device.DeviceEvent.Type.DEVICE_ADDED;
+import static org.onosproject.net.device.DeviceEvent.Type.DEVICE_AVAILABILITY_CHANGED;
+import static org.onosproject.net.device.DeviceEvent.Type.DEVICE_REMOVED;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collections;
+import java.util.Dictionary;
+import java.util.List;
+import java.util.Timer;
+import java.util.concurrent.ExecutorService;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.AbstractAccumulator;
+import org.onlab.util.Accumulator;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.event.Event;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.link.LinkEvent;
+import org.onosproject.net.link.LinkListener;
+import org.onosproject.net.link.LinkService;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.topology.DefaultGraphDescription;
+import org.onosproject.net.topology.GraphDescription;
+import org.onosproject.net.topology.TopologyProvider;
+import org.onosproject.net.topology.TopologyProviderRegistry;
+import org.onosproject.net.topology.TopologyProviderService;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+import com.google.common.collect.ImmutableList;
+
+/**
+ * Default implementation of a network topology provider that feeds off
+ * device and link subsystem events to trigger assembly and computation of
+ * new topology snapshots.
+ */
+@Component(immediate = true)
+@Service
+public class DefaultTopologyProvider extends AbstractProvider
+        implements TopologyProvider {
+
+    private static final int MAX_THREADS = 8;
+    private static final int DEFAULT_MAX_EVENTS = 1000;
+    private static final int DEFAULT_MAX_IDLE_MS = 10;
+    private static final int DEFAULT_MAX_BATCH_MS = 50;
+
+    // FIXME: Replace with a system-wide timer instance;
+    // TODO: Convert to use HashedWheelTimer or produce a variant of that; then decide which we want to adopt
+<span class="fc" id="L80">    private static final Timer TIMER = new Timer(&quot;onos-topo-event-batching&quot;);</span>
+
+<span class="fc" id="L82">    @Property(name = &quot;maxEvents&quot;, intValue = DEFAULT_MAX_EVENTS,</span>
+            label = &quot;Maximum number of events to accumulate&quot;)
+    private int maxEvents = DEFAULT_MAX_EVENTS;
+
+<span class="fc" id="L86">    @Property(name = &quot;maxIdleMs&quot;, intValue = DEFAULT_MAX_IDLE_MS,</span>
+            label = &quot;Maximum number of millis between events&quot;)
+    private int maxIdleMs = DEFAULT_MAX_IDLE_MS;
+
+<span class="fc" id="L90">    @Property(name = &quot;maxBatchMs&quot;, intValue = DEFAULT_MAX_BATCH_MS,</span>
+            label = &quot;Maximum number of millis for whole batch&quot;)
+    private int maxBatchMs = DEFAULT_MAX_BATCH_MS;
+
+<span class="fc" id="L94">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyProviderRegistry providerRegistry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkService linkService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+<span class="fc" id="L108">    private volatile boolean isStarted = false;</span>
+
+    private TopologyProviderService providerService;
+<span class="fc" id="L111">    private final DeviceListener deviceListener = new InternalDeviceListener();</span>
+<span class="fc" id="L112">    private final LinkListener linkListener = new InternalLinkListener();</span>
+
+    private Accumulator&lt;Event&gt; accumulator;
+    private ExecutorService executor;
+
+    /**
+     * Creates a provider with the supplier identifier.
+     */
+    public DefaultTopologyProvider() {
+<span class="fc" id="L121">        super(CORE_PROVIDER_ID);</span>
+<span class="fc" id="L122">    }</span>
+
+    @Activate
+    public synchronized void activate(ComponentContext context) {
+<span class="fc" id="L126">        cfgService.registerProperties(DefaultTopologyProvider.class);</span>
+<span class="fc" id="L127">        executor = newFixedThreadPool(MAX_THREADS, groupedThreads(&quot;onos/topo&quot;, &quot;build-%d&quot;));</span>
+<span class="fc" id="L128">        accumulator = new TopologyChangeAccumulator();</span>
+<span class="fc" id="L129">        logConfig(&quot;Configured&quot;);</span>
+
+<span class="fc" id="L131">        modified(context);</span>
+
+<span class="fc" id="L133">        providerService = providerRegistry.register(this);</span>
+<span class="fc" id="L134">        deviceService.addListener(deviceListener);</span>
+<span class="fc" id="L135">        linkService.addListener(linkListener);</span>
+
+<span class="fc" id="L137">        isStarted = true;</span>
+<span class="fc" id="L138">        triggerRecompute();</span>
+<span class="fc" id="L139">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L140">    }</span>
+
+    @Deactivate
+    public synchronized void deactivate(ComponentContext context) {
+<span class="fc" id="L144">        cfgService.unregisterProperties(DefaultTopologyProvider.class, false);</span>
+<span class="fc" id="L145">        isStarted = false;</span>
+
+<span class="fc" id="L147">        deviceService.removeListener(deviceListener);</span>
+<span class="fc" id="L148">        linkService.removeListener(linkListener);</span>
+<span class="fc" id="L149">        providerRegistry.unregister(this);</span>
+<span class="fc" id="L150">        providerService = null;</span>
+
+<span class="fc" id="L152">        executor.shutdownNow();</span>
+<span class="fc" id="L153">        executor = null;</span>
+
+<span class="fc" id="L155">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L156">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">        if (context == null) {</span>
+<span class="fc" id="L161">            accumulator = new TopologyChangeAccumulator();</span>
+<span class="fc" id="L162">            logConfig(&quot;Reconfigured&quot;);</span>
+<span class="fc" id="L163">            return;</span>
+        }
+
+<span class="nc" id="L166">        Dictionary&lt;?, ?&gt; properties = context.getProperties();</span>
+        int newMaxEvents, newMaxBatchMs, newMaxIdleMs;
+        try {
+<span class="nc" id="L169">            String s = get(properties, &quot;maxEvents&quot;);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            newMaxEvents = isNullOrEmpty(s) ? maxEvents : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L172">            s = get(properties, &quot;maxBatchMs&quot;);</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">            newMaxBatchMs = isNullOrEmpty(s) ? maxBatchMs : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L175">            s = get(properties, &quot;maxIdleMs&quot;);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            newMaxIdleMs = isNullOrEmpty(s) ? maxIdleMs : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L178">        } catch (NumberFormatException | ClassCastException e) {</span>
+<span class="nc" id="L179">            newMaxEvents = DEFAULT_MAX_EVENTS;</span>
+<span class="nc" id="L180">            newMaxBatchMs = DEFAULT_MAX_BATCH_MS;</span>
+<span class="nc" id="L181">            newMaxIdleMs = DEFAULT_MAX_IDLE_MS;</span>
+<span class="nc" id="L182">        }</span>
+
+<span class="nc bnc" id="L184" title="All 6 branches missed.">        if (newMaxEvents != maxEvents || newMaxBatchMs != maxBatchMs || newMaxIdleMs != maxIdleMs) {</span>
+<span class="nc" id="L185">            maxEvents = newMaxEvents;</span>
+<span class="nc" id="L186">            maxBatchMs = newMaxBatchMs;</span>
+<span class="nc" id="L187">            maxIdleMs = newMaxIdleMs;</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            accumulator = maxEvents &gt; 1 ? new TopologyChangeAccumulator() : null;</span>
+<span class="nc" id="L189">            logConfig(&quot;Reconfigured&quot;);</span>
+        }
+<span class="nc" id="L191">    }</span>
+
+    private void logConfig(String prefix) {
+<span class="fc" id="L194">        log.info(&quot;{} with maxEvents = {}; maxBatchMs = {}; maxIdleMs = {}; accumulator={}&quot;,</span>
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">                 prefix, maxEvents, maxBatchMs, maxIdleMs, accumulator != null);</span>
+<span class="fc" id="L196">    }</span>
+
+
+    @Override
+    public void triggerRecompute() {
+<span class="fc" id="L201">        triggerTopologyBuild(Collections.&lt;Event&gt;emptyList());</span>
+<span class="fc" id="L202">    }</span>
+
+    /**
+     * Triggers assembly of topology data citing the specified events as the
+     * reason.
+     *
+     * @param reasons events which triggered the topology change
+     */
+    private synchronized void triggerTopologyBuild(List&lt;Event&gt; reasons) {
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">        if (executor != null) {</span>
+<span class="fc" id="L212">            executor.execute(new TopologyBuilderTask(reasons));</span>
+        }
+<span class="fc" id="L214">    }</span>
+
+    // Builds the topology using the latest device and link information
+    // and citing the specified events as reasons for the change.
+    private void buildTopology(List&lt;Event&gt; reasons) {
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">        if (isStarted) {</span>
+<span class="fc" id="L220">            GraphDescription desc =</span>
+<span class="fc" id="L221">                    new DefaultGraphDescription(System.nanoTime(),</span>
+<span class="fc" id="L222">                                                System.currentTimeMillis(),</span>
+<span class="fc" id="L223">                                                deviceService.getAvailableDevices(),</span>
+<span class="fc" id="L224">                                                linkService.getActiveLinks());</span>
+<span class="fc" id="L225">            providerService.topologyChanged(desc, reasons);</span>
+        }
+<span class="fc" id="L227">    }</span>
+
+    private void processEvent(Event event) {
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">        if (accumulator != null) {</span>
+<span class="fc" id="L231">            accumulator.add(event);</span>
+        } else {
+<span class="nc" id="L233">            triggerTopologyBuild(ImmutableList.of(event));</span>
+        }
+<span class="fc" id="L235">    }</span>
+
+    // Callback for device events
+<span class="fc" id="L238">    private class InternalDeviceListener implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+<span class="fc" id="L241">            DeviceEvent.Type type = event.type();</span>
+<span class="pc bpc" id="L242" title="5 of 6 branches missed.">            if (type == DEVICE_ADDED || type == DEVICE_REMOVED ||</span>
+                    type == DEVICE_AVAILABILITY_CHANGED) {
+<span class="fc" id="L244">                processEvent(event);</span>
+            }
+<span class="fc" id="L246">        }</span>
+    }
+
+    // Callback for link events
+<span class="fc" id="L250">    private class InternalLinkListener implements LinkListener {</span>
+        @Override
+        public void event(LinkEvent event) {
+<span class="fc" id="L253">            processEvent(event);</span>
+<span class="fc" id="L254">        }</span>
+    }
+
+    // Event accumulator for paced triggering of topology assembly.
+    private class TopologyChangeAccumulator extends AbstractAccumulator&lt;Event&gt; {
+<span class="fc" id="L259">        TopologyChangeAccumulator() {</span>
+<span class="fc" id="L260">            super(TIMER, maxEvents, maxBatchMs, maxIdleMs);</span>
+<span class="fc" id="L261">        }</span>
+
+        @Override
+        public void processItems(List&lt;Event&gt; items) {
+<span class="fc" id="L265">            triggerTopologyBuild(items);</span>
+<span class="fc" id="L266">        }</span>
+    }
+
+    // Task for building topology data in a separate thread.
+    private class TopologyBuilderTask implements Runnable {
+        private final List&lt;Event&gt; reasons;
+
+<span class="fc" id="L273">        public TopologyBuilderTask(List&lt;Event&gt; reasons) {</span>
+<span class="fc" id="L274">            this.reasons = reasons;</span>
+<span class="fc" id="L275">        }</span>
+
+        @Override
+        public void run() {
+            try {
+<span class="fc" id="L280">                buildTopology(reasons);</span>
+<span class="nc" id="L281">            } catch (Exception e) {</span>
+<span class="nc" id="L282">                log.warn(&quot;Unable to compute topology&quot;, e);</span>
+<span class="fc" id="L283">            }</span>
+<span class="fc" id="L284">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

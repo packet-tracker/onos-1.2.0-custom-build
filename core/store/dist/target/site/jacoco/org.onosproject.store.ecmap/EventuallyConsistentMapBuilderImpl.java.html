@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EventuallyConsistentMapBuilderImpl.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.ecmap</a> &gt; <span class="el_source">EventuallyConsistentMapBuilderImpl.java</span></div><h1>EventuallyConsistentMapBuilderImpl.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.ecmap;
+
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.store.Timestamp;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapBuilder;
+
+import java.util.Collection;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Eventually consistent map builder.
+ */
+public class EventuallyConsistentMapBuilderImpl&lt;K, V&gt;
+        implements EventuallyConsistentMapBuilder&lt;K, V&gt; {
+    private final ClusterService clusterService;
+    private final ClusterCommunicationService clusterCommunicator;
+
+    private String name;
+    private KryoNamespace.Builder serializerBuilder;
+    private ExecutorService eventExecutor;
+    private ExecutorService communicationExecutor;
+    private ScheduledExecutorService backgroundExecutor;
+    private BiFunction&lt;K, V, Timestamp&gt; timestampProvider;
+    private BiFunction&lt;K, V, Collection&lt;NodeId&gt;&gt; peerUpdateFunction;
+<span class="fc" id="L50">    private boolean tombstonesDisabled = false;</span>
+<span class="fc" id="L51">    private long antiEntropyPeriod = 5;</span>
+<span class="fc" id="L52">    private TimeUnit antiEntropyTimeUnit = TimeUnit.SECONDS;</span>
+<span class="fc" id="L53">    private boolean convergeFaster = false;</span>
+<span class="fc" id="L54">    private boolean persistent = false;</span>
+
+    /**
+     * Creates a new eventually consistent map builder.
+     *
+     * @param clusterService cluster service
+     * @param clusterCommunicator cluster communication service
+     */
+    public EventuallyConsistentMapBuilderImpl(ClusterService clusterService,
+<span class="fc" id="L63">                                              ClusterCommunicationService clusterCommunicator) {</span>
+<span class="fc" id="L64">        this.clusterService = checkNotNull(clusterService);</span>
+<span class="fc" id="L65">        this.clusterCommunicator = checkNotNull(clusterCommunicator);</span>
+<span class="fc" id="L66">    }</span>
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withName(String name) {
+<span class="fc" id="L70">        this.name = checkNotNull(name);</span>
+<span class="fc" id="L71">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withSerializer(
+            KryoNamespace.Builder serializerBuilder) {
+<span class="fc" id="L77">        this.serializerBuilder = checkNotNull(serializerBuilder);</span>
+<span class="fc" id="L78">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withTimestampProvider(
+            BiFunction&lt;K, V, Timestamp&gt; timestampProvider) {
+<span class="fc" id="L84">        this.timestampProvider = checkNotNull(timestampProvider);</span>
+<span class="fc" id="L85">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withEventExecutor(ExecutorService executor) {
+<span class="nc" id="L90">        this.eventExecutor = checkNotNull(executor);</span>
+<span class="nc" id="L91">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withCommunicationExecutor(
+            ExecutorService executor) {
+<span class="fc" id="L97">        communicationExecutor = checkNotNull(executor);</span>
+<span class="fc" id="L98">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withBackgroundExecutor(ScheduledExecutorService executor) {
+<span class="nc" id="L103">        this.backgroundExecutor = checkNotNull(executor);</span>
+<span class="nc" id="L104">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withPeerUpdateFunction(
+            BiFunction&lt;K, V, Collection&lt;NodeId&gt;&gt; peerUpdateFunction) {
+<span class="nc" id="L110">        this.peerUpdateFunction = checkNotNull(peerUpdateFunction);</span>
+<span class="nc" id="L111">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withTombstonesDisabled() {
+<span class="fc" id="L116">        tombstonesDisabled = true;</span>
+<span class="fc" id="L117">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withAntiEntropyPeriod(long period, TimeUnit unit) {
+<span class="pc bpc" id="L122" title="1 of 2 branches missed.">        checkArgument(period &gt; 0, &quot;anti-entropy period must be greater than 0&quot;);</span>
+<span class="fc" id="L123">        antiEntropyPeriod = period;</span>
+<span class="fc" id="L124">        antiEntropyTimeUnit = checkNotNull(unit);</span>
+<span class="fc" id="L125">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withFasterConvergence() {
+<span class="nc" id="L130">        convergeFaster = true;</span>
+<span class="nc" id="L131">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMapBuilder&lt;K, V&gt; withPersistence() {
+<span class="nc" id="L136">        persistent = true;</span>
+<span class="nc" id="L137">        return this;</span>
+    }
+
+    @Override
+    public EventuallyConsistentMap&lt;K, V&gt; build() {
+<span class="fc" id="L142">        checkNotNull(name, &quot;name is a mandatory parameter&quot;);</span>
+<span class="fc" id="L143">        checkNotNull(serializerBuilder, &quot;serializerBuilder is a mandatory parameter&quot;);</span>
+<span class="fc" id="L144">        checkNotNull(timestampProvider, &quot;timestampProvider is a mandatory parameter&quot;);</span>
+
+<span class="fc" id="L146">        return new EventuallyConsistentMapImpl&lt;&gt;(name,</span>
+                                                 clusterService,
+                                                 clusterCommunicator,
+                                                 serializerBuilder,
+                                                 timestampProvider,
+                                                 peerUpdateFunction,
+                                                 eventExecutor,
+                                                 communicationExecutor,
+                                                 backgroundExecutor,
+                                                 tombstonesDisabled,
+                                                 antiEntropyPeriod,
+                                                 antiEntropyTimeUnit,
+                                                 convergeFaster,
+                                                 persistent);
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

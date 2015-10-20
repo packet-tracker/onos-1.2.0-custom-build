@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepFecObjectIPv4AdjacencyVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepFecObjectIPv4AdjacencyVer1.java</span></div><h1>PcepFecObjectIPv4AdjacencyVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepFecObjectIPv4Adjacency;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP fec Object IPv4 Adjacency object.
+ */
+public class PcepFecObjectIPv4AdjacencyVer1 implements PcepFecObjectIPv4Adjacency {
+
+    /*
+     * ref : draft-zhao-pce-pcep-extension-for-pce-controller-01 , section : 7.5
+     *
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                    Local IPv4 address                         |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                    Remote IPv4 address                        |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                      FEC Object-Type is 3 IPv4 Adjacency
+     */
+<span class="nc" id="L47">    protected static final Logger log = LoggerFactory.getLogger(PcepFecObjectIPv4AdjacencyVer1.class);</span>
+
+    public static final byte FEC_OBJ_TYPE = 3;
+    public static final byte FEC_OBJ_CLASS = 36; //to be defined
+    public static final byte FEC_OBJECT_VERSION = 1;
+    public static final short FEC_OBJ_MINIMUM_LENGTH = 12;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+
+<span class="nc" id="L55">    static final PcepObjectHeader DEFAULT_FEC_OBJECT_HEADER = new PcepObjectHeader(FEC_OBJ_CLASS, FEC_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, FEC_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader fecObjHeader;
+    private int localIPv4Address;
+    private int remoteIPv4Address;
+
+    /**
+     * Constructor to initialize parameters for PCEP fec object .
+     *
+     * @param fecObjHeader FEC Object header
+     * @param localIPv4Address Local IPv4 Address
+     * @param remoteIPv4Address Remote IPv4 Address
+     */
+<span class="nc" id="L69">    public PcepFecObjectIPv4AdjacencyVer1(PcepObjectHeader fecObjHeader, int localIPv4Address, int remoteIPv4Address) {</span>
+<span class="nc" id="L70">        this.fecObjHeader = fecObjHeader;</span>
+<span class="nc" id="L71">        this.localIPv4Address = localIPv4Address;</span>
+<span class="nc" id="L72">        this.remoteIPv4Address = remoteIPv4Address;</span>
+<span class="nc" id="L73">    }</span>
+
+    /**
+     * Sets Object header.
+     *
+     * @param obj Pcep fec Object Header
+     */
+    public void setFecIpv4ObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L81">        this.fecObjHeader = obj;</span>
+<span class="nc" id="L82">    }</span>
+
+    @Override
+    public int getLocalIPv4Address() {
+<span class="nc" id="L86">        return this.localIPv4Address;</span>
+    }
+
+    @Override
+    public void seLocalIPv4Address(int value) {
+<span class="nc" id="L91">        this.localIPv4Address = value;</span>
+<span class="nc" id="L92">    }</span>
+
+    @Override
+    public int getRemoteIPv4Address() {
+<span class="nc" id="L96">        return this.remoteIPv4Address;</span>
+    }
+
+    @Override
+    public void seRemoteIPv4Address(int value) {
+<span class="nc" id="L101">        this.remoteIPv4Address = value;</span>
+<span class="nc" id="L102">    }</span>
+
+    /**
+     * Reads from channel buffer and Returns object of PcepFecObjectIPv4Adjacency.
+     *
+     * @param cb of channel buffer.
+     * @return object of PcepFecObjectIPv4Adjacency
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepFecObjectIPv4Adjacency read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader fecObjHeader;
+        int localIPv4Address;
+        int remoteIPv4Address;
+
+<span class="nc" id="L117">        fecObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only FEC IPv4 Adjacency Object buffer.
+<span class="nc" id="L120">        ChannelBuffer tempCb = cb.readBytes(fecObjHeader.getObjLen() - MINIMUM_COMMON_HEADER_LENGTH);</span>
+<span class="nc" id="L121">        localIPv4Address = tempCb.readInt();</span>
+<span class="nc" id="L122">        remoteIPv4Address = tempCb.readInt();</span>
+
+<span class="nc" id="L124">        return new PcepFecObjectIPv4AdjacencyVer1(fecObjHeader, localIPv4Address, remoteIPv4Address);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L130">        int objStartIndex = cb.writerIndex();</span>
+
+        //Write common header
+<span class="nc" id="L133">        int objLenIndex = fecObjHeader.write(cb);</span>
+<span class="nc" id="L134">        cb.writeInt(localIPv4Address);</span>
+<span class="nc" id="L135">        cb.writeInt(remoteIPv4Address);</span>
+
+        //Now write FEC IPv4 Adjacency Object Length
+<span class="nc" id="L138">        cb.setShort(objLenIndex, (short) (cb.writerIndex() - objStartIndex));</span>
+<span class="nc" id="L139">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Builder class for PCEP fec object IPv4 Adjacency.
+     */
+<span class="nc" id="L145">    public static class Builder implements PcepFecObjectIPv4Adjacency.Builder {</span>
+<span class="nc" id="L146">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L147">        private boolean bIsLocalIPv4Addressset = false;</span>
+<span class="nc" id="L148">        private boolean bIsRemoteIPv4Addressset = false;</span>
+
+        private PcepObjectHeader fecObjHeader;
+        int localIPv4Address;
+        int remoteIPv4Address;
+
+<span class="nc" id="L154">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L157">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepFecObjectIPv4Adjacency build() throws PcepParseException {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            PcepObjectHeader fecObjHeader = this.bIsHeaderSet ? this.fecObjHeader : DEFAULT_FEC_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if (!this.bIsLocalIPv4Addressset) {</span>
+<span class="nc" id="L165">                throw new PcepParseException(</span>
+                        &quot;Local IPv4 Address not set while building PcepFecObjectIPv4Adjacency object.&quot;);
+            }
+
+<span class="nc bnc" id="L169" title="All 2 branches missed.">            if (!this.bIsRemoteIPv4Addressset) {</span>
+<span class="nc" id="L170">                throw new PcepParseException(</span>
+                        &quot; Remote IPv4 Address not set while building PcepFecObjectIPv4Adjacency object.&quot;);
+            }
+
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L175">                fecObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L179">                fecObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L181">            return new PcepFecObjectIPv4AdjacencyVer1(fecObjHeader, this.localIPv4Address, this.remoteIPv4Address);</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L186">            this.bPFlag = value;</span>
+<span class="nc" id="L187">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L188">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L193">            this.bIFlag = value;</span>
+<span class="nc" id="L194">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L195">            return this;</span>
+        }
+
+        @Override
+        public PcepObjectHeader getFecIpv4AdjacencyObjHeader() {
+<span class="nc" id="L200">            return this.fecObjHeader;</span>
+        }
+
+        @Override
+        public Builder setFecIpv4AdjacencyObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L205">            this.fecObjHeader = obj;</span>
+<span class="nc" id="L206">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L207">            return this;</span>
+        }
+
+        @Override
+        public int getLocalIPv4Address() {
+<span class="nc" id="L212">            return this.localIPv4Address;</span>
+        }
+
+        @Override
+        public Builder seLocalIPv4Address(int value) {
+<span class="nc" id="L217">            this.localIPv4Address = value;</span>
+<span class="nc" id="L218">            this.bIsLocalIPv4Addressset = true;</span>
+<span class="nc" id="L219">            return this;</span>
+        }
+
+        @Override
+        public int getRemoteIPv4Address() {
+<span class="nc" id="L224">            return this.remoteIPv4Address;</span>
+        }
+
+        @Override
+        public Builder seRemoteIPv4Address(int value) {
+<span class="nc" id="L229">            this.remoteIPv4Address = value;</span>
+<span class="nc" id="L230">            this.bIsRemoteIPv4Addressset = true;</span>
+<span class="nc" id="L231">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L238">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public int getType() {
+<span class="nc" id="L243">        return FEC_OBJ_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L248">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L249">                .add(&quot;fecObjHeader&quot;, fecObjHeader)</span>
+<span class="nc" id="L250">                .add(&quot;localIPv4Address&quot;, localIPv4Address)</span>
+<span class="nc" id="L251">                .add(&quot;remoteIPv4Address&quot;, remoteIPv4Address).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

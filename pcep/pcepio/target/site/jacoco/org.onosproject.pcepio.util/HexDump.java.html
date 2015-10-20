@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>HexDump.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.util</a> &gt; <span class="el_source">HexDump.java</span></div><h1>HexDump.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.util;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Provides Hex Dump for debugging.
+ */
+public final class HexDump {
+<span class="nc" id="L26">    protected static final Logger log = LoggerFactory.getLogger(HexDump.class);</span>
+
+<span class="nc" id="L28">    private HexDump() {</span>
+<span class="nc" id="L29">    }</span>
+
+    public static void pcepHexDump(ChannelBuffer buff) {
+
+<span class="nc" id="L33">        log.debug(&quot;==================== HEX DUMP ======================&quot;);</span>
+        try {
+            byte[] yTemp;
+<span class="nc" id="L36">            yTemp = buff.array();</span>
+
+<span class="nc" id="L38">            int iStartIndex = buff.readerIndex();</span>
+<span class="nc" id="L39">            int iEndIndex = buff.writerIndex();</span>
+            do {
+<span class="nc" id="L41">                StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L42" title="All 4 branches missed.">                for (int k = 0; (k &lt; 16) &amp;&amp; (iStartIndex &lt; iEndIndex); ++k) {</span>
+<span class="nc bnc" id="L43" title="All 2 branches missed.">                    if (0 == k % 4) {</span>
+<span class="nc" id="L44">                        sb.append(String.format(&quot; &quot;)); //blank after 4 bytes</span>
+                    }
+<span class="nc" id="L46">                    sb.append(String.format(&quot;%02X &quot;, yTemp[iStartIndex++]));</span>
+                }
+<span class="nc" id="L48">                log.debug(sb.toString());</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">            } while (iStartIndex &lt; iEndIndex);</span>
+<span class="nc" id="L50">        } catch (Exception e) {</span>
+<span class="nc" id="L51">            log.error(&quot;[HexDump] Invalid buffer: &quot; + e.toString());</span>
+<span class="nc" id="L52">        }</span>
+
+<span class="nc" id="L54">        log.debug(&quot;===================================================&quot;);</span>
+<span class="nc" id="L55">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>CorsaPipeline.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.pipeline</a> &gt; <span class="el_source">CorsaPipeline.java</span></div><h1>CorsaPipeline.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.pipeline;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+import org.onlab.packet.Ethernet;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.slf4j.Logger;
+
+/**
+ * Driver for Corsa TTP.
+ *
+ */
+<span class="nc" id="L35">public class CorsaPipeline extends OVSCorsaPipeline {</span>
+
+<span class="nc" id="L37">    private final Logger log = getLogger(getClass());</span>
+
+    @Override
+    protected void processVlanMplsTable(boolean install) {
+<span class="nc" id="L41">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+        TrafficTreatment.Builder treatment = DefaultTrafficTreatment
+<span class="nc" id="L43">                .builder();</span>
+<span class="nc" id="L44">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+        FlowRule rule;
+        // corsa uses non-OF-standard way to match on presence of VLAN tags
+<span class="nc" id="L47">        selector.matchEthType(Ethernet.TYPE_VLAN);</span>
+<span class="nc" id="L48">        treatment.transition(VLAN_TABLE);</span>
+
+<span class="nc" id="L50">        rule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L51">                .forDevice(deviceId)</span>
+<span class="nc" id="L52">                .withSelector(selector.build())</span>
+<span class="nc" id="L53">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L54">                .withPriority(CONTROLLER_PRIORITY)</span>
+<span class="nc" id="L55">                .fromApp(appId)</span>
+<span class="nc" id="L56">                .makePermanent()</span>
+<span class="nc" id="L57">                .forTable(VLAN_MPLS_TABLE).build();</span>
+
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        ops = install ? ops.add(rule) : ops.remove(rule);</span>
+
+<span class="nc" id="L61">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L64">                log.info(&quot;Provisioned vlan/mpls table&quot;);</span>
+<span class="nc" id="L65">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L69">                log.info(</span>
+                        &quot;Failed to provision vlan/mpls table&quot;);
+<span class="nc" id="L71">            }</span>
+        }));
+
+<span class="nc" id="L74">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

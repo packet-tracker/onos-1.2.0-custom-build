@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ApplicationArchive.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.common.app</a> &gt; <span class="el_source">ApplicationArchive.java</span></div><h1>ApplicationArchive.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.common.app;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.io.ByteStreams;
+import com.google.common.io.Files;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.HierarchicalConfiguration;
+import org.apache.commons.configuration.XMLConfiguration;
+import org.onlab.util.Tools;
+import org.onosproject.app.ApplicationDescription;
+import org.onosproject.app.ApplicationEvent;
+import org.onosproject.app.ApplicationException;
+import org.onosproject.app.ApplicationStoreDelegate;
+import org.onosproject.app.DefaultApplicationDescription;
+import org.onosproject.core.ApplicationRole;
+import org.onosproject.core.Version;
+import org.onosproject.security.AppPermission;
+import org.onosproject.security.Permission;
+import org.onosproject.store.AbstractStore;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.file.NoSuchFileException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.io.ByteStreams.toByteArray;
+import static com.google.common.io.Files.createParentDirs;
+import static com.google.common.io.Files.write;
+
+/**
+ * Facility for reading application archive stream and managing application
+ * directory structure.
+ */
+<span class="fc" id="L65">public class ApplicationArchive</span>
+        extends AbstractStore&lt;ApplicationEvent, ApplicationStoreDelegate&gt; {
+
+<span class="fc" id="L68">    private static Logger log = LoggerFactory.getLogger(ApplicationArchive.class);</span>
+
+    // Magic strings to search for at the beginning of the archive stream
+    private static final String XML_MAGIC = &quot;&lt;?xml &quot;;
+
+    // Magic strings to search for and how deep to search it into the archive stream
+    private static final String APP_MAGIC = &quot;&lt;app &quot;;
+    private static final int APP_MAGIC_DEPTH = 1024;
+
+    private static final String NAME = &quot;[@name]&quot;;
+    private static final String ORIGIN = &quot;[@origin]&quot;;
+    private static final String VERSION = &quot;[@version]&quot;;
+    private static final String FEATURES_REPO = &quot;[@featuresRepo]&quot;;
+    private static final String FEATURES = &quot;[@features]&quot;;
+    private static final String DESCRIPTION = &quot;description&quot;;
+
+    private static final String ROLE = &quot;security.role&quot;;
+    private static final String APP_PERMISSIONS = &quot;security.permissions.app-perm&quot;;
+    private static final String NET_PERMISSIONS = &quot;security.permissions.net-perm&quot;;
+    private static final String JAVA_PERMISSIONS = &quot;security.permissions.java-perm&quot;;
+
+    private static final String OAR = &quot;.oar&quot;;
+    private static final String APP_XML = &quot;app.xml&quot;;
+    private static final String M2_PREFIX = &quot;m2&quot;;
+
+    private static final String ROOT = &quot;../&quot;;
+    private static final String M2_ROOT = &quot;system/&quot;;
+    private static final String APPS_ROOT = &quot;apps/&quot;;
+
+<span class="fc" id="L97">    private File root = new File(ROOT);</span>
+<span class="fc" id="L98">    private File appsDir = new File(root, APPS_ROOT);</span>
+<span class="fc" id="L99">    private File m2Dir = new File(M2_ROOT);</span>
+
+    /**
+     * Sets the root directory where apps directory is contained.
+     *
+     * @param root top-level directory path
+     */
+    protected void setRootPath(String root) {
+<span class="fc" id="L107">        this.root = new File(root);</span>
+<span class="fc" id="L108">        this.appsDir = new File(this.root, APPS_ROOT);</span>
+<span class="fc" id="L109">        this.m2Dir = new File(M2_ROOT);</span>
+<span class="fc" id="L110">    }</span>
+
+    /**
+     * Returns the root directory where apps directory is contained.
+     *
+     * @return top-level directory path
+     */
+    public String getRootPath() {
+<span class="nc" id="L118">        return root.getPath();</span>
+    }
+
+    /**
+     * Returns the set of installed application names.
+     *
+     * @return installed application names
+     */
+    public Set&lt;String&gt; getApplicationNames() {
+<span class="fc" id="L127">        ImmutableSet.Builder&lt;String&gt; names = ImmutableSet.builder();</span>
+<span class="fc" id="L128">        File[] files = appsDir.listFiles(File::isDirectory);</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        if (files != null) {</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">            for (File file : files) {</span>
+<span class="fc" id="L131">                names.add(file.getName());</span>
+            }
+        }
+<span class="fc" id="L134">        return names.build();</span>
+    }
+
+    /**
+     * Returns the timestamp in millis since start of epoch, of when the
+     * specified application was last modified or changed state.
+     *
+     * @param appName application name
+     * @return number of millis since start of epoch
+     */
+    public long getUpdateTime(String appName) {
+<span class="nc" id="L145">        return appFile(appName, APP_XML).lastModified();</span>
+    }
+
+    /**
+     * Loads the application descriptor from the specified application archive
+     * stream and saves the stream in the appropriate application archive
+     * directory.
+     *
+     * @param appName application name
+     * @return application descriptor
+     * @throws org.onosproject.app.ApplicationException if unable to read application description
+     */
+    public ApplicationDescription getApplicationDescription(String appName) {
+        try {
+<span class="fc" id="L159">            XMLConfiguration cfg = new XMLConfiguration();</span>
+<span class="fc" id="L160">            cfg.setAttributeSplittingDisabled(true);</span>
+<span class="fc" id="L161">            cfg.setDelimiterParsingDisabled(true);</span>
+<span class="fc" id="L162">            cfg.load(appFile(appName, APP_XML));</span>
+<span class="fc" id="L163">            return loadAppDescription(cfg);</span>
+<span class="fc" id="L164">        } catch (Exception e) {</span>
+<span class="fc" id="L165">            throw new ApplicationException(&quot;Unable to get app description&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Loads the application descriptor from the specified application archive
+     * stream and saves the stream in the appropriate application archive
+     * directory.
+     *
+     * @param stream application archive stream
+     * @return application descriptor
+     * @throws org.onosproject.app.ApplicationException if unable to read the
+     *                                                  archive stream or store
+     *                                                  the application archive
+     */
+    public synchronized ApplicationDescription saveApplication(InputStream stream) {
+<span class="pc" id="L181">        try (InputStream ais = stream) {</span>
+<span class="fc" id="L182">            byte[] cache = toByteArray(ais);</span>
+<span class="fc" id="L183">            InputStream bis = new ByteArrayInputStream(cache);</span>
+
+<span class="fc" id="L185">            boolean plainXml = isPlainXml(cache);</span>
+<span class="fc bfc" id="L186" title="All 2 branches covered.">            ApplicationDescription desc = plainXml ?</span>
+<span class="fc" id="L187">                    parsePlainAppDescription(bis) : parseZippedAppDescription(bis);</span>
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">            checkState(!appFile(desc.name(), APP_XML).exists(),</span>
+<span class="fc" id="L189">                       &quot;Application %s already installed&quot;, desc.name());</span>
+
+<span class="fc bfc" id="L191" title="All 2 branches covered.">            if (plainXml) {</span>
+<span class="fc" id="L192">                expandPlainApplication(cache, desc);</span>
+            } else {
+<span class="fc" id="L194">                bis.reset();</span>
+<span class="fc" id="L195">                expandZippedApplication(bis, desc);</span>
+
+<span class="fc" id="L197">                bis.reset();</span>
+<span class="fc" id="L198">                saveApplication(bis, desc);</span>
+            }
+
+<span class="fc" id="L201">            installArtifacts(desc);</span>
+<span class="fc" id="L202">            return desc;</span>
+<span class="pc bpc" id="L203" title="6 of 8 branches missed.">        } catch (IOException e) {</span>
+<span class="nc" id="L204">            throw new ApplicationException(&quot;Unable to save application&quot;, e);</span>
+        }
+    }
+
+    // Indicates whether the stream encoded in the given bytes is plain XML.
+    private boolean isPlainXml(byte[] bytes) {
+<span class="pc bpc" id="L210" title="1 of 2 branches missed.">        return substring(bytes, XML_MAGIC.length()).equals(XML_MAGIC) ||</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">                substring(bytes, APP_MAGIC_DEPTH).contains(APP_MAGIC);</span>
+    }
+
+    // Returns the substring of maximum possible length from the specified bytes.
+    private String substring(byte[] bytes, int length) {
+<span class="fc" id="L216">        return new String(bytes, 0, Math.min(bytes.length, length), Charset.forName(&quot;UTF-8&quot;));</span>
+    }
+
+    /**
+     * Purges the application archive directory.
+     *
+     * @param appName application name
+     */
+    public synchronized void purgeApplication(String appName) {
+<span class="fc" id="L225">        File appDir = new File(appsDir, appName);</span>
+        try {
+<span class="fc" id="L227">            Tools.removeDirectory(appDir);</span>
+<span class="nc" id="L228">        } catch (IOException e) {</span>
+<span class="nc" id="L229">            throw new ApplicationException(&quot;Unable to purge application &quot; + appName, e);</span>
+<span class="fc" id="L230">        }</span>
+<span class="pc bpc" id="L231" title="1 of 2 branches missed.">        if (appDir.exists()) {</span>
+<span class="nc" id="L232">            throw new ApplicationException(&quot;Unable to purge application &quot; + appName);</span>
+        }
+<span class="fc" id="L234">    }</span>
+
+    /**
+     * Returns application archive stream for the specified application. This
+     * will be either the application ZIP file or the application XML file.
+     *
+     * @param appName application name
+     * @return application archive stream
+     */
+    public synchronized InputStream getApplicationInputStream(String appName) {
+        try {
+<span class="fc" id="L245">            File appFile = appFile(appName, appName + OAR);</span>
+<span class="fc bfc" id="L246" title="All 2 branches covered.">            return new FileInputStream(appFile.exists() ? appFile : appFile(appName, APP_XML));</span>
+<span class="fc" id="L247">        } catch (FileNotFoundException e) {</span>
+<span class="fc" id="L248">            throw new ApplicationException(&quot;Application &quot; + appName + &quot; not found&quot;);</span>
+        }
+    }
+
+    // Scans the specified ZIP stream for app.xml entry and parses it producing
+    // an application descriptor.
+    private ApplicationDescription parseZippedAppDescription(InputStream stream)
+            throws IOException {
+<span class="pc" id="L256">        try (ZipInputStream zis = new ZipInputStream(stream)) {</span>
+            ZipEntry entry;
+<span class="pc bpc" id="L258" title="1 of 2 branches missed.">            while ((entry = zis.getNextEntry()) != null) {</span>
+<span class="fc bfc" id="L259" title="All 2 branches covered.">                if (entry.getName().equals(APP_XML)) {</span>
+<span class="fc" id="L260">                    byte[] data = ByteStreams.toByteArray(zis);</span>
+<span class="fc" id="L261">                    return parsePlainAppDescription(new ByteArrayInputStream(data));</span>
+                }
+<span class="fc" id="L263">                zis.closeEntry();</span>
+            }
+<span class="pc bpc" id="L265" title="10 of 12 branches missed.">        }</span>
+<span class="nc" id="L266">        throw new IOException(&quot;Unable to locate &quot; + APP_XML);</span>
+    }
+
+    // Scans the specified XML stream and parses it producing an application descriptor.
+    private ApplicationDescription parsePlainAppDescription(InputStream stream)
+            throws IOException {
+<span class="fc" id="L272">        XMLConfiguration cfg = new XMLConfiguration();</span>
+<span class="fc" id="L273">        cfg.setAttributeSplittingDisabled(true);</span>
+<span class="fc" id="L274">        cfg.setDelimiterParsingDisabled(true);</span>
+        try {
+<span class="fc" id="L276">            cfg.load(stream);</span>
+<span class="fc" id="L277">            return loadAppDescription(cfg);</span>
+<span class="nc" id="L278">        } catch (ConfigurationException e) {</span>
+<span class="nc" id="L279">            throw new IOException(&quot;Unable to parse &quot; + APP_XML, e);</span>
+        }
+    }
+
+    private ApplicationDescription loadAppDescription(XMLConfiguration cfg) {
+<span class="fc" id="L284">        String name = cfg.getString(NAME);</span>
+<span class="fc" id="L285">        Version version = Version.version(cfg.getString(VERSION));</span>
+<span class="fc" id="L286">        String desc = cfg.getString(DESCRIPTION);</span>
+<span class="fc" id="L287">        String origin = cfg.getString(ORIGIN);</span>
+<span class="fc" id="L288">        ApplicationRole role = getRole(cfg.getString(ROLE));</span>
+<span class="fc" id="L289">        Set&lt;Permission&gt; perms = getPermissions(cfg);</span>
+<span class="fc" id="L290">        String featRepo = cfg.getString(FEATURES_REPO);</span>
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">        URI featuresRepo = featRepo != null ? URI.create(featRepo) : null;</span>
+<span class="fc" id="L292">        List&lt;String&gt; features = ImmutableList.copyOf(cfg.getString(FEATURES).split(&quot;,&quot;));</span>
+
+<span class="fc" id="L294">        return new DefaultApplicationDescription(name, version, desc, origin, role,</span>
+                                                 perms, featuresRepo, features);
+    }
+
+    // Expands the specified ZIP stream into app-specific directory.
+    private void expandZippedApplication(InputStream stream, ApplicationDescription desc)
+            throws IOException {
+<span class="fc" id="L301">        ZipInputStream zis = new ZipInputStream(stream);</span>
+        ZipEntry entry;
+<span class="fc" id="L303">        File appDir = new File(appsDir, desc.name());</span>
+<span class="fc bfc" id="L304" title="All 2 branches covered.">        while ((entry = zis.getNextEntry()) != null) {</span>
+<span class="pc bpc" id="L305" title="1 of 2 branches missed.">            if (!entry.isDirectory()) {</span>
+<span class="fc" id="L306">                byte[] data = ByteStreams.toByteArray(zis);</span>
+<span class="fc" id="L307">                zis.closeEntry();</span>
+<span class="fc" id="L308">                File file = new File(appDir, entry.getName());</span>
+<span class="fc" id="L309">                createParentDirs(file);</span>
+<span class="fc" id="L310">                write(data, file);</span>
+<span class="fc" id="L311">            }</span>
+        }
+<span class="fc" id="L313">        zis.close();</span>
+<span class="fc" id="L314">    }</span>
+
+    // Saves the specified XML stream into app-specific directory.
+    private void expandPlainApplication(byte[] stream, ApplicationDescription desc)
+            throws IOException {
+<span class="fc" id="L319">        File file = appFile(desc.name(), APP_XML);</span>
+<span class="pc bpc" id="L320" title="1 of 2 branches missed.">        checkState(!file.getParentFile().exists(), &quot;Application already installed&quot;);</span>
+<span class="fc" id="L321">        createParentDirs(file);</span>
+<span class="fc" id="L322">        write(stream, file);</span>
+<span class="fc" id="L323">    }</span>
+
+
+    // Saves the specified ZIP stream into a file under app-specific directory.
+    private void saveApplication(InputStream stream, ApplicationDescription desc)
+            throws IOException {
+<span class="fc" id="L329">        Files.write(toByteArray(stream), appFile(desc.name(), desc.name() + OAR));</span>
+<span class="fc" id="L330">    }</span>
+
+    // Installs application artifacts into M2 repository.
+    private void installArtifacts(ApplicationDescription desc) throws IOException {
+        try {
+<span class="nc" id="L335">            Tools.copyDirectory(appFile(desc.name(), M2_PREFIX), m2Dir);</span>
+<span class="fc" id="L336">        } catch (NoSuchFileException e) {</span>
+<span class="fc" id="L337">            log.debug(&quot;Application {} has no M2 artifacts&quot;, desc.name());</span>
+<span class="nc" id="L338">        }</span>
+<span class="fc" id="L339">    }</span>
+
+    /**
+     * Marks the app as active by creating token file in the app directory.
+     *
+     * @param appName application name
+     * @return true if file was created
+     */
+    protected boolean setActive(String appName) {
+        try {
+<span class="pc bpc" id="L349" title="2 of 4 branches missed.">            return appFile(appName, &quot;active&quot;).createNewFile() &amp;&amp; updateTime(appName);</span>
+<span class="fc" id="L350">        } catch (IOException e) {</span>
+<span class="fc" id="L351">            throw new ApplicationException(&quot;Unable to mark app as active&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Clears the app as active by deleting token file in the app directory.
+     *
+     * @param appName application name
+     * @return true if file was deleted
+     */
+    protected boolean clearActive(String appName) {
+<span class="pc bpc" id="L362" title="1 of 4 branches missed.">        return appFile(appName, &quot;active&quot;).delete() &amp;&amp; updateTime(appName);</span>
+    }
+
+    /**
+     * Updates the time-stamp of the app descriptor file.
+     *
+     * @param appName application name
+     * @return true if the app descriptor was updated
+     */
+    protected boolean updateTime(String appName) {
+<span class="fc" id="L372">        return appFile(appName, APP_XML).setLastModified(System.currentTimeMillis());</span>
+    }
+
+    /**
+     * Indicates whether the app was marked as active by checking for token file.
+     *
+     * @param appName application name
+     * @return true if the app is marked as active
+     */
+    protected boolean isActive(String appName) {
+<span class="fc" id="L382">        return appFile(appName, &quot;active&quot;).exists();</span>
+    }
+
+
+    // Returns the name of the file located under the specified app directory.
+    private File appFile(String appName, String fileName) {
+<span class="fc" id="L388">        return new File(new File(appsDir, appName), fileName);</span>
+    }
+
+    // Returns the set of Permissions specified in the app.xml file
+    private ImmutableSet&lt;Permission&gt; getPermissions(XMLConfiguration cfg) {
+<span class="fc" id="L393">        List&lt;Permission&gt; permissionList = new ArrayList();</span>
+
+<span class="fc bfc" id="L395" title="All 2 branches covered.">        for (Object o : cfg.getList(APP_PERMISSIONS)) {</span>
+<span class="fc" id="L396">            String name = (String) o;</span>
+<span class="fc" id="L397">            permissionList.add(new Permission(AppPermission.class.getName(), name));</span>
+<span class="fc" id="L398">        }</span>
+<span class="pc bpc" id="L399" title="1 of 2 branches missed.">        for (Object o : cfg.getList(NET_PERMISSIONS)) {</span>
+            //TODO: TO BE FLESHED OUT WHEN NETWORK PERMISSIONS ARE SUPPORTED
+<span class="nc" id="L401">            break;</span>
+        }
+
+<span class="fc" id="L404">        List&lt;HierarchicalConfiguration&gt; fields =</span>
+<span class="fc" id="L405">                cfg.configurationsAt(JAVA_PERMISSIONS);</span>
+<span class="pc bpc" id="L406" title="1 of 2 branches missed.">        for (HierarchicalConfiguration sub : fields) {</span>
+<span class="nc" id="L407">            String classname = sub.getString(&quot;classname&quot;);</span>
+<span class="nc" id="L408">            String name = sub.getString(&quot;name&quot;);</span>
+<span class="nc" id="L409">            String actions = sub.getString(&quot;actions&quot;);</span>
+
+<span class="nc bnc" id="L411" title="All 4 branches missed.">            if (classname != null &amp;&amp; name != null) {</span>
+<span class="nc" id="L412">                permissionList.add(new Permission(classname, name, actions));</span>
+            }
+<span class="nc" id="L414">        }</span>
+<span class="fc" id="L415">        return ImmutableSet.copyOf(permissionList);</span>
+    }
+
+    //
+    // Returns application role type
+    public ApplicationRole getRole(String value) {
+<span class="pc bpc" id="L421" title="1 of 2 branches missed.">        if (value == null) {</span>
+<span class="nc" id="L422">            return ApplicationRole.UNSPECIFIED;</span>
+        } else {
+            try {
+<span class="fc" id="L425">                return ApplicationRole.valueOf(value.toUpperCase(Locale.ENGLISH));</span>
+<span class="nc" id="L426">            } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L427">                log.debug(&quot;Unknown role value: %s&quot;, value);</span>
+<span class="nc" id="L428">                return ApplicationRole.UNSPECIFIED;</span>
+            }
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

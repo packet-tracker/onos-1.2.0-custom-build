@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>CriterionCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">CriterionCodec.java</span></div><h1>CriterionCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * Criterion codec.
+ */
+<span class="fc" id="L29">public final class CriterionCodec extends JsonCodec&lt;Criterion&gt; {</span>
+
+<span class="fc" id="L31">    protected static final Logger log =</span>
+<span class="fc" id="L32">            LoggerFactory.getLogger(CriterionCodec.class);</span>
+
+    protected static final String TYPE = &quot;type&quot;;
+    protected static final String ETH_TYPE = &quot;ethType&quot;;
+    protected static final String MAC = &quot;mac&quot;;
+    protected static final String PORT = &quot;port&quot;;
+    protected static final String METADATA = &quot;metadata&quot;;
+
+    protected static final String VLAN_ID = &quot;vlanId&quot;;
+    protected static final String PRIORITY = &quot;priority&quot;;
+    protected static final String IP_DSCP = &quot;ipDscp&quot;;
+    protected static final String IP_ECN = &quot;ipEcn&quot;;
+    protected static final String PROTOCOL = &quot;protocol&quot;;
+    protected static final String IP = &quot;ip&quot;;
+    protected static final String TCP_PORT = &quot;tcpPort&quot;;
+    protected static final String UDP_PORT = &quot;udpPort&quot;;
+    protected static final String SCTP_PORT = &quot;sctpPort&quot;;
+    protected static final String ICMP_TYPE = &quot;icmpType&quot;;
+    protected static final String ICMP_CODE = &quot;icmpCode&quot;;
+    protected static final String FLOW_LABEL = &quot;flowLabel&quot;;
+    protected static final String ICMPV6_TYPE = &quot;icmpv6Type&quot;;
+    protected static final String ICMPV6_CODE = &quot;icmpv6Code&quot;;
+    protected static final String TARGET_ADDRESS = &quot;targetAddress&quot;;
+    protected static final String LABEL = &quot;label&quot;;
+    protected static final String EXT_HDR_FLAGS = &quot;exthdrFlags&quot;;
+    protected static final String LAMBDA = &quot;lambda&quot;;
+    protected static final String GRID_TYPE = &quot;gridType&quot;;
+    protected static final String CHANNEL_SPACING = &quot;channelSpacing&quot;;
+    protected static final String SPACING_MULIPLIER = &quot;spacingMultiplier&quot;;
+    protected static final String SLOT_GRANULARITY = &quot;slotGranularity&quot;;
+    protected static final String OCH_SIGNAL_ID = &quot;ochSignalId&quot;;
+    protected static final String TUNNEL_ID = &quot;tunnelId&quot;;
+    protected static final String OCH_SIGNAL_TYPE = &quot;ochSignalType&quot;;
+    protected static final String ODU_SIGNAL_ID = &quot;oduSignalId&quot;;
+    protected static final String TRIBUTARY_PORT_NUMBER = &quot;tributaryPortNumber&quot;;
+    protected static final String TRIBUTARY_SLOT_LEN = &quot;tributarySlotLen&quot;;
+    protected static final String TRIBUTARY_SLOT_BITMAP = &quot;tributarySlotBitmap&quot;;
+    protected static final String ODU_SIGNAL_TYPE = &quot;oduSignalType&quot;;
+
+    @Override
+    public ObjectNode encode(Criterion criterion, CodecContext context) {
+<span class="fc" id="L73">        EncodeCriterionCodecHelper encoder = new EncodeCriterionCodecHelper(criterion, context);</span>
+<span class="fc" id="L74">        return encoder.encode();</span>
+    }
+
+    @Override
+    public Criterion decode(ObjectNode json, CodecContext context) {
+<span class="fc" id="L79">        DecodeCriterionCodecHelper decoder = new DecodeCriterionCodecHelper(json);</span>
+<span class="fc" id="L80">        return decoder.decode();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpNeighborsListCommand.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.cli</a> &gt; <span class="el_source">BgpNeighborsListCommand.java</span></div><h1>BgpNeighborsListCommand.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.cli;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.karaf.shell.commands.Command;
+import org.apache.karaf.shell.commands.Option;
+import org.onosproject.cli.AbstractShellCommand;
+import org.onosproject.routing.bgp.BgpInfoService;
+import org.onosproject.routing.bgp.BgpSession;
+
+import java.util.Collection;
+
+/**
+ * Command to show the BGP neighbors.
+ */
+@Command(scope = &quot;onos&quot;, name = &quot;bgp-neighbors&quot;,
+         description = &quot;Lists the BGP neighbors&quot;)
+<span class="nc" id="L35">public class BgpNeighborsListCommand extends AbstractShellCommand {</span>
+    @Option(name = &quot;-n&quot;, aliases = &quot;--neighbor&quot;,
+            description = &quot;BGP neighbor to display information about&quot;,
+            required = false, multiValued = false)
+    private String bgpNeighbor;
+
+    private static final String FORMAT_NEIGHBOR_LINE1 =
+        &quot;BGP neighbor is %s, remote AS %d, local AS %d&quot;;
+    private static final String FORMAT_NEIGHBOR_LINE2 =
+        &quot;  Remote router ID %s, IP %s, BGP version %d, Hold time %d&quot;;
+    private static final String FORMAT_NEIGHBOR_LINE3 =
+        &quot;  Remote AFI/SAFI IPv4 Unicast %s Multicast %s, IPv6 Unicast %s Multicast %s&quot;;
+    private static final String FORMAT_NEIGHBOR_LINE4 =
+        &quot;  Local  router ID %s, IP %s, BGP version %d, Hold time %d&quot;;
+    private static final String FORMAT_NEIGHBOR_LINE5 =
+        &quot;  Local  AFI/SAFI IPv4 Unicast %s Multicast %s, IPv6 Unicast %s Multicast %s&quot;;
+    private static final String FORMAT_NEIGHBOR_LINE6 =
+        &quot;  4 Octet AS Capability: %s %s&quot;;
+
+    @Override
+    protected void execute() {
+<span class="nc" id="L56">        BgpInfoService service = AbstractShellCommand.get(BgpInfoService.class);</span>
+<span class="nc" id="L57">        Collection&lt;BgpSession&gt; bgpSessions = service.getBgpSessions();</span>
+
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        if (bgpNeighbor != null) {</span>
+            // Print a single neighbor (if found)
+<span class="nc" id="L61">            BgpSession foundBgpSession = null;</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">            for (BgpSession bgpSession : bgpSessions) {</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">                if (bgpSession.remoteInfo().bgpId().toString().equals(bgpNeighbor)) {</span>
+<span class="nc" id="L64">                    foundBgpSession = bgpSession;</span>
+<span class="nc" id="L65">                    break;</span>
+                }
+<span class="nc" id="L67">            }</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">            if (foundBgpSession != null) {</span>
+<span class="nc" id="L69">                printNeighbor(foundBgpSession);</span>
+            } else {
+<span class="nc" id="L71">                print(&quot;BGP neighbor %s not found&quot;, bgpNeighbor);</span>
+            }
+<span class="nc" id="L73">            return;</span>
+        }
+
+        // Print all neighbors
+<span class="nc" id="L77">        printNeighbors(bgpSessions);</span>
+<span class="nc" id="L78">    }</span>
+
+    /**
+     * Prints all BGP neighbors.
+     *
+     * @param bgpSessions the BGP sessions for the neighbors to print
+     */
+    private void printNeighbors(Collection&lt;BgpSession&gt; bgpSessions) {
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (outputJson()) {</span>
+<span class="nc" id="L87">            print(&quot;%s&quot;, json(bgpSessions));</span>
+        } else {
+<span class="nc bnc" id="L89" title="All 2 branches missed.">            for (BgpSession bgpSession : bgpSessions) {</span>
+<span class="nc" id="L90">                printNeighbor(bgpSession);</span>
+<span class="nc" id="L91">            }</span>
+        }
+<span class="nc" id="L93">    }</span>
+
+    /**
+     * Prints a BGP neighbor.
+     *
+     * @param bgpSession the BGP session for the neighbor to print
+     */
+    private void printNeighbor(BgpSession bgpSession) {
+<span class="nc" id="L101">        print(FORMAT_NEIGHBOR_LINE1,</span>
+<span class="nc" id="L102">              bgpSession.remoteInfo().bgpId().toString(),</span>
+<span class="nc" id="L103">              bgpSession.remoteInfo().asNumber(),</span>
+<span class="nc" id="L104">              bgpSession.localInfo().asNumber());</span>
+<span class="nc" id="L105">        print(FORMAT_NEIGHBOR_LINE2,</span>
+<span class="nc" id="L106">              bgpSession.remoteInfo().bgpId().toString(),</span>
+<span class="nc" id="L107">              bgpSession.remoteInfo().address().toString(),</span>
+<span class="nc" id="L108">              bgpSession.remoteInfo().bgpVersion(),</span>
+<span class="nc" id="L109">              bgpSession.remoteInfo().holdtime());</span>
+<span class="nc" id="L110">        print(FORMAT_NEIGHBOR_LINE3,</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">              bgpSession.remoteInfo().ipv4Unicast() ? &quot;YES&quot; : &quot;NO&quot;,</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">              bgpSession.remoteInfo().ipv4Multicast() ? &quot;YES&quot; : &quot;NO&quot;,</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">              bgpSession.remoteInfo().ipv6Unicast() ? &quot;YES&quot; : &quot;NO&quot;,</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">              bgpSession.remoteInfo().ipv6Multicast() ? &quot;YES&quot; : &quot;NO&quot;);</span>
+<span class="nc" id="L115">        print(FORMAT_NEIGHBOR_LINE4,</span>
+<span class="nc" id="L116">              bgpSession.localInfo().bgpId().toString(),</span>
+<span class="nc" id="L117">              bgpSession.localInfo().address().toString(),</span>
+<span class="nc" id="L118">              bgpSession.localInfo().bgpVersion(),</span>
+<span class="nc" id="L119">              bgpSession.localInfo().holdtime());</span>
+<span class="nc" id="L120">        print(FORMAT_NEIGHBOR_LINE5,</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">              bgpSession.localInfo().ipv4Unicast() ? &quot;YES&quot; : &quot;NO&quot;,</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">              bgpSession.localInfo().ipv4Multicast() ? &quot;YES&quot; : &quot;NO&quot;,</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">              bgpSession.localInfo().ipv6Unicast() ? &quot;YES&quot; : &quot;NO&quot;,</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">              bgpSession.localInfo().ipv6Multicast() ? &quot;YES&quot; : &quot;NO&quot;);</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (bgpSession.localInfo().as4OctetCapability() ||</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">            bgpSession.remoteInfo().as4OctetCapability()) {</span>
+<span class="nc" id="L127">            print(FORMAT_NEIGHBOR_LINE6,</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                  bgpSession.localInfo().as4OctetCapability() ? &quot;Advertised&quot; : &quot;&quot;,</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">                  bgpSession.remoteInfo().as4OctetCapability() ? &quot;Received&quot; : &quot;&quot;);</span>
+        }
+<span class="nc" id="L131">    }</span>
+
+    /**
+     * Produces a JSON array of BGP neighbors.
+     *
+     * @param bgpSessions the BGP sessions with the data
+     * @return JSON array with the neighbors
+     */
+    private JsonNode json(Collection&lt;BgpSession&gt; bgpSessions) {
+<span class="nc" id="L140">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L141">        ArrayNode result = mapper.createArrayNode();</span>
+
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        for (BgpSession bgpSession : bgpSessions) {</span>
+<span class="nc" id="L144">            result.add(json(mapper, bgpSession));</span>
+<span class="nc" id="L145">        }</span>
+<span class="nc" id="L146">        return result;</span>
+    }
+
+    /**
+     * Produces JSON object for a BGP neighbor.
+     *
+     * @param mapper the JSON object mapper to use
+     * @param bgpSession the BGP session with the data
+     * @return JSON object for the route
+     */
+    private ObjectNode json(ObjectMapper mapper, BgpSession bgpSession) {
+<span class="nc" id="L157">        ObjectNode result = mapper.createObjectNode();</span>
+
+<span class="nc" id="L159">        result.put(&quot;remoteAddress&quot;, bgpSession.remoteInfo().address().toString());</span>
+<span class="nc" id="L160">        result.put(&quot;remoteBgpVersion&quot;, bgpSession.remoteInfo().bgpVersion());</span>
+<span class="nc" id="L161">        result.put(&quot;remoteAs&quot;, bgpSession.remoteInfo().asNumber());</span>
+<span class="nc" id="L162">        result.put(&quot;remoteAs4&quot;, bgpSession.remoteInfo().as4Number());</span>
+<span class="nc" id="L163">        result.put(&quot;remoteHoldtime&quot;, bgpSession.remoteInfo().holdtime());</span>
+<span class="nc" id="L164">        result.put(&quot;remoteBgpId&quot;, bgpSession.remoteInfo().bgpId().toString());</span>
+<span class="nc" id="L165">        result.put(&quot;remoteIpv4Unicast&quot;, bgpSession.remoteInfo().ipv4Unicast());</span>
+<span class="nc" id="L166">        result.put(&quot;remoteIpv4Multicast&quot;, bgpSession.remoteInfo().ipv4Multicast());</span>
+<span class="nc" id="L167">        result.put(&quot;remoteIpv6Unicast&quot;, bgpSession.remoteInfo().ipv6Unicast());</span>
+<span class="nc" id="L168">        result.put(&quot;remoteIpv6Multicast&quot;, bgpSession.remoteInfo().ipv6Multicast());</span>
+        //
+<span class="nc" id="L170">        result.put(&quot;localAddress&quot;, bgpSession.localInfo().address().toString());</span>
+<span class="nc" id="L171">        result.put(&quot;localBgpVersion&quot;, bgpSession.localInfo().bgpVersion());</span>
+<span class="nc" id="L172">        result.put(&quot;localAs&quot;, bgpSession.localInfo().asNumber());</span>
+<span class="nc" id="L173">        result.put(&quot;localAs4&quot;, bgpSession.localInfo().as4Number());</span>
+<span class="nc" id="L174">        result.put(&quot;localHoldtime&quot;, bgpSession.localInfo().holdtime());</span>
+<span class="nc" id="L175">        result.put(&quot;localBgpId&quot;, bgpSession.localInfo().bgpId().toString());</span>
+<span class="nc" id="L176">        result.put(&quot;localIpv4Unicast&quot;, bgpSession.localInfo().ipv4Unicast());</span>
+<span class="nc" id="L177">        result.put(&quot;localIpv4Multicast&quot;, bgpSession.localInfo().ipv4Multicast());</span>
+<span class="nc" id="L178">        result.put(&quot;localIpv6Unicast&quot;, bgpSession.localInfo().ipv6Unicast());</span>
+<span class="nc" id="L179">        result.put(&quot;localIpv6Multicast&quot;, bgpSession.localInfo().ipv6Multicast());</span>
+
+<span class="nc" id="L181">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

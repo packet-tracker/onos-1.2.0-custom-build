@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedTopologyStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.topology.impl</a> &gt; <span class="el_source">DistributedTopologyStore.java</span></div><h1>DistributedTopologyStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.topology.impl;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static org.onlab.util.Tools.isNullOrEmpty;
+import static org.onosproject.net.topology.TopologyEvent.Type.TOPOLOGY_CHANGED;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.common.DefaultTopology;
+import org.onosproject.event.Event;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.DisjointPath;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.topology.ClusterId;
+import org.onosproject.net.topology.DefaultGraphDescription;
+import org.onosproject.net.topology.GraphDescription;
+import org.onosproject.net.topology.LinkWeight;
+import org.onosproject.net.topology.Topology;
+import org.onosproject.net.topology.TopologyCluster;
+import org.onosproject.net.topology.TopologyEvent;
+import org.onosproject.net.topology.TopologyGraph;
+import org.onosproject.net.topology.TopologyStore;
+import org.onosproject.net.topology.TopologyStoreDelegate;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.LogicalClockService;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+/**
+ * Manages inventory of topology snapshots using trivial in-memory
+ * structures implementation.
+ * &lt;p&gt;
+ * Note: This component is not distributed per-se. It runs on every
+ * instance and feeds off of other distributed stores.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L74">public class DistributedTopologyStore</span>
+        extends AbstractStore&lt;TopologyEvent, TopologyStoreDelegate&gt;
+        implements TopologyStore {
+
+<span class="nc" id="L78">    private final Logger log = getLogger(getClass());</span>
+<span class="nc" id="L79">    private volatile DefaultTopology current =</span>
+            new DefaultTopology(ProviderId.NONE,
+<span class="nc" id="L81">                                new DefaultGraphDescription(0L, System.currentTimeMillis(),</span>
+<span class="nc" id="L82">                                                            Collections.&lt;Device&gt;emptyList(),</span>
+<span class="nc" id="L83">                                                            Collections.&lt;Link&gt;emptyList()));</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LogicalClockService clockService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    // Cluster root to broadcast points bindings to allow convergence to
+    // a shared broadcast tree; node that is the master of the cluster root
+    // is the primary.
+    private EventuallyConsistentMap&lt;DeviceId, Set&lt;ConnectPoint&gt;&gt; broadcastPoints;
+
+<span class="nc" id="L99">    private EventuallyConsistentMapListener&lt;DeviceId, Set&lt;ConnectPoint&gt;&gt; listener =</span>
+            new InternalBroadcastPointListener();
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L104">        KryoNamespace.Builder hostSerializer = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L105">                .register(KryoNamespaces.API);</span>
+
+<span class="nc" id="L107">        broadcastPoints = storageService.&lt;DeviceId, Set&lt;ConnectPoint&gt;&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L108">                .withName(&quot;onos-broadcast-trees&quot;)</span>
+<span class="nc" id="L109">                .withSerializer(hostSerializer)</span>
+<span class="nc" id="L110">                .withTimestampProvider((k, v) -&gt; clockService.getTimestamp())</span>
+<span class="nc" id="L111">                .build();</span>
+<span class="nc" id="L112">        broadcastPoints.addListener(listener);</span>
+<span class="nc" id="L113">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L114">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L118">        broadcastPoints.removeListener(listener);</span>
+<span class="nc" id="L119">        broadcastPoints.destroy();</span>
+<span class="nc" id="L120">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L121">    }</span>
+
+    @Override
+    public Topology currentTopology() {
+<span class="nc" id="L125">        return current;</span>
+    }
+
+    @Override
+    public boolean isLatest(Topology topology) {
+        // Topology is current only if it is the same as our current topology
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        return topology == current;</span>
+    }
+
+    @Override
+    public TopologyGraph getGraph(Topology topology) {
+<span class="nc" id="L136">        return defaultTopology(topology).getGraph();</span>
+    }
+
+    @Override
+    public Set&lt;TopologyCluster&gt; getClusters(Topology topology) {
+<span class="nc" id="L141">        return defaultTopology(topology).getClusters();</span>
+    }
+
+    @Override
+    public TopologyCluster getCluster(Topology topology, ClusterId clusterId) {
+<span class="nc" id="L146">        return defaultTopology(topology).getCluster(clusterId);</span>
+    }
+
+    @Override
+    public Set&lt;DeviceId&gt; getClusterDevices(Topology topology, TopologyCluster cluster) {
+<span class="nc" id="L151">        return defaultTopology(topology).getClusterDevices(cluster);</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getClusterLinks(Topology topology, TopologyCluster cluster) {
+<span class="nc" id="L156">        return defaultTopology(topology).getClusterLinks(cluster);</span>
+    }
+
+    @Override
+    public Set&lt;Path&gt; getPaths(Topology topology, DeviceId src, DeviceId dst) {
+<span class="nc" id="L161">        return defaultTopology(topology).getPaths(src, dst);</span>
+    }
+
+    @Override
+    public Set&lt;Path&gt; getPaths(Topology topology, DeviceId src, DeviceId dst,
+                              LinkWeight weight) {
+<span class="nc" id="L167">        return defaultTopology(topology).getPaths(src, dst, weight);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src, DeviceId dst) {
+<span class="nc" id="L172">        return defaultTopology(topology).getDisjointPaths(src, dst);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src, DeviceId dst,
+                                              LinkWeight weight) {
+<span class="nc" id="L178">        return defaultTopology(topology).getDisjointPaths(src, dst, weight);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src, DeviceId dst,
+                                              Map&lt;Link, Object&gt; riskProfile) {
+<span class="nc" id="L184">        return defaultTopology(topology).getDisjointPaths(src, dst, riskProfile);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src, DeviceId dst,
+                                              LinkWeight weight, Map&lt;Link, Object&gt; riskProfile) {
+<span class="nc" id="L190">        return defaultTopology(topology).getDisjointPaths(src, dst, weight, riskProfile);</span>
+    }
+
+    @Override
+    public boolean isInfrastructure(Topology topology, ConnectPoint connectPoint) {
+<span class="nc" id="L195">        return defaultTopology(topology).isInfrastructure(connectPoint);</span>
+    }
+
+    @Override
+    public boolean isBroadcastPoint(Topology topology, ConnectPoint connectPoint) {
+<span class="nc" id="L200">        return defaultTopology(topology).isBroadcastPoint(connectPoint);</span>
+    }
+
+    private boolean isBroadcastPoint(ConnectPoint connectPoint) {
+        // Any non-infrastructure, i.e. edge points are assumed to be OK.
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (!current.isInfrastructure(connectPoint)) {</span>
+<span class="nc" id="L206">            return true;</span>
+        }
+
+        // Find the cluster to which the device belongs.
+<span class="nc" id="L210">        TopologyCluster cluster = current.getCluster(connectPoint.deviceId());</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        checkArgument(cluster != null, &quot;No cluster found for device %s&quot;, connectPoint.deviceId());</span>
+
+        // If the broadcast set is null or empty, or if the point explicitly
+        // belongs to it, return true;
+<span class="nc" id="L215">        Set&lt;ConnectPoint&gt; points = broadcastPoints.get(cluster.root().deviceId());</span>
+<span class="nc bnc" id="L216" title="All 4 branches missed.">        return isNullOrEmpty(points) || points.contains(connectPoint);</span>
+    }
+
+    @Override
+    public TopologyEvent updateTopology(ProviderId providerId,
+                                        GraphDescription graphDescription,
+                                        List&lt;Event&gt; reasons) {
+        // First off, make sure that what we're given is indeed newer than
+        // what we already have.
+<span class="nc bnc" id="L225" title="All 4 branches missed.">        if (current != null &amp;&amp; graphDescription.timestamp() &lt; current.time()) {</span>
+<span class="nc" id="L226">            return null;</span>
+        }
+
+        // Have the default topology construct self from the description data.
+<span class="nc" id="L230">        DefaultTopology newTopology =</span>
+                new DefaultTopology(providerId, graphDescription, this::isBroadcastPoint);
+<span class="nc" id="L232">        updateBroadcastPoints(newTopology);</span>
+
+        // Promote the new topology to current and return a ready-to-send event.
+<span class="nc" id="L235">        synchronized (this) {</span>
+<span class="nc" id="L236">            current = newTopology;</span>
+<span class="nc" id="L237">            return new TopologyEvent(TOPOLOGY_CHANGED, current, reasons);</span>
+<span class="nc" id="L238">        }</span>
+    }
+
+    private void updateBroadcastPoints(DefaultTopology topology) {
+        // Remove any broadcast trees rooted by devices for which we are master.
+<span class="nc" id="L243">        Set&lt;DeviceId&gt; toRemove = broadcastPoints.keySet().stream()</span>
+<span class="nc" id="L244">                .filter(mastershipService::isLocalMaster)</span>
+<span class="nc" id="L245">                .collect(Collectors.toSet());</span>
+
+        // Update the broadcast trees rooted by devices for which we are master.
+<span class="nc" id="L248">        topology.getClusters().forEach(c -&gt; {</span>
+<span class="nc" id="L249">            toRemove.remove(c.root().deviceId());</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            if (mastershipService.isLocalMaster(c.root().deviceId())) {</span>
+<span class="nc" id="L251">                broadcastPoints.put(c.root().deviceId(),</span>
+<span class="nc" id="L252">                                    topology.broadcastPoints(c.id()));</span>
+            }
+<span class="nc" id="L254">        });</span>
+
+<span class="nc" id="L256">        toRemove.forEach(broadcastPoints::remove);</span>
+<span class="nc" id="L257">    }</span>
+
+    // Validates the specified topology and returns it as a default
+    private DefaultTopology defaultTopology(Topology topology) {
+<span class="nc" id="L261">        checkArgument(topology instanceof DefaultTopology,</span>
+<span class="nc" id="L262">                      &quot;Topology class %s not supported&quot;, topology.getClass());</span>
+<span class="nc" id="L263">        return (DefaultTopology) topology;</span>
+    }
+
+<span class="nc" id="L266">    private class InternalBroadcastPointListener</span>
+            implements EventuallyConsistentMapListener&lt;DeviceId, Set&lt;ConnectPoint&gt;&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;DeviceId, Set&lt;ConnectPoint&gt;&gt; event) {
+<span class="nc bnc" id="L270" title="All 2 branches missed.">            if (event.type() == EventuallyConsistentMapEvent.Type.PUT) {</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">                if (!event.value().isEmpty()) {</span>
+<span class="nc" id="L272">                    log.info(&quot;Cluster rooted at {} has {} broadcast-points; #{}&quot;,</span>
+<span class="nc" id="L273">                             event.key(), event.value().size(), event.value().hashCode());</span>
+                }
+            }
+<span class="nc" id="L276">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

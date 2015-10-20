@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TunnelStatsCollector.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcep-provider-tunnel</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.pcep.tunnel.impl</a> &gt; <span class="el_source">TunnelStatsCollector.java</span></div><h1>TunnelStatsCollector.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.provider.pcep.tunnel.impl;
+
+
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.jboss.netty.util.HashedWheelTimer;
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.util.Timer;
+import org.onosproject.pcep.api.PcepController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.TimeUnit;
+
+/*
+ * Sends Stats Request and collect the tunnel statistics with a time interval.
+ */
+public class TunnelStatsCollector implements TimerTask {
+<span class="nc" id="L36">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PcepController controller;
+
+    private int refreshInterval;
+<span class="nc" id="L42">    private final HashedWheelTimer timer = Timer.getTimer();</span>
+
+    private String pcepTunnelId;
+    private Timeout timeout;
+    private volatile boolean stopped;
+
+
+    /**
+     * Greate a tunnel status collector object.
+     *
+     * @param id              tunnel whose status data will be collected
+     * @param refreshInterval time interval for collecting statistic
+     */
+<span class="nc" id="L55">    public TunnelStatsCollector(String id, int refreshInterval) {</span>
+<span class="nc" id="L56">        this.pcepTunnelId = id;</span>
+<span class="nc" id="L57">        this.refreshInterval = refreshInterval;</span>
+<span class="nc" id="L58">    }</span>
+
+    @Override
+    public void run(Timeout timeout) throws Exception {
+<span class="nc bnc" id="L62" title="All 4 branches missed.">        if (stopped || timeout.isCancelled()) {</span>
+<span class="nc" id="L63">            return;</span>
+        }
+<span class="nc" id="L65">        log.trace(&quot;Collecting stats for {}&quot;, pcepTunnelId);</span>
+
+<span class="nc" id="L67">        sendTunnelStatistic();</span>
+<span class="nc bnc" id="L68" title="All 4 branches missed.">        if (!stopped &amp;&amp; !timeout.isCancelled()) {</span>
+<span class="nc" id="L69">            log.trace(&quot;Scheduling stats collection in {} seconds for {}&quot;,</span>
+<span class="nc" id="L70">                      this.refreshInterval, pcepTunnelId);</span>
+<span class="nc" id="L71">            timeout.getTimer().newTimeout(this, refreshInterval, TimeUnit.SECONDS);</span>
+        }
+
+<span class="nc" id="L74">    }</span>
+
+    private void sendTunnelStatistic() {
+<span class="nc" id="L77">        controller.getTunnelStatistics(pcepTunnelId);</span>
+
+<span class="nc" id="L79">    }</span>
+
+    synchronized void adjustPollInterval(int pollInterval) {
+<span class="nc" id="L82">        this.refreshInterval = pollInterval;</span>
+<span class="nc" id="L83">    }</span>
+
+    /**
+     * Starts the collector.
+     */
+    public synchronized void start() {
+<span class="nc" id="L89">        log.info(&quot;Starting Tunnel Stats collection thread for {}&quot;, pcepTunnelId);</span>
+<span class="nc" id="L90">        stopped = false;</span>
+<span class="nc" id="L91">        timeout = timer.newTimeout(this, 1, TimeUnit.SECONDS);</span>
+<span class="nc" id="L92">    }</span>
+
+    /**
+     * Stops the collector.
+     */
+    public synchronized void stop() {
+<span class="nc" id="L98">        log.info(&quot;Stopping Tunnel Stats collection thread for {}&quot;, pcepTunnelId);</span>
+<span class="nc" id="L99">        stopped = true;</span>
+<span class="nc" id="L100">        timeout.cancel();</span>
+<span class="nc" id="L101">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

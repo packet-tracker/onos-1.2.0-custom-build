@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowObjectiveCompositionTree.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flowobjective.impl.composition</a> &gt; <span class="el_source">FlowObjectiveCompositionTree.java</span></div><h1>FlowObjectiveCompositionTree.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flowobjective.impl.composition;
+
+import org.onosproject.net.flowobjective.FilteringObjective;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.NextObjective;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+/**
+ * Provides a policy tree to store all flow tables for each device.
+ *
+ * Note: This class uses in-memory structures and is not yet distributed.
+ */
+public class FlowObjectiveCompositionTree {
+
+    public FlowObjectiveCompositionManager.PolicyOperator operator;
+    public FlowObjectiveCompositionTree leftChild;
+    public FlowObjectiveCompositionTree rightChild;
+    public short applicationId;
+    protected FilterTable filterTable;
+    protected ForwardTable forwardTable;
+    protected NextTable nextTable;
+
+    protected int priorityMultiplier;
+    protected int priorityAddend;
+
+<span class="nc" id="L44">    public FlowObjectiveCompositionTree(short applicationId) {</span>
+<span class="nc" id="L45">        this.operator = FlowObjectiveCompositionManager.PolicyOperator.Application;</span>
+<span class="nc" id="L46">        this.leftChild = null;</span>
+<span class="nc" id="L47">        this.rightChild = null;</span>
+<span class="nc" id="L48">        this.applicationId = applicationId;</span>
+<span class="nc" id="L49">        this.filterTable = new FilterTable();</span>
+<span class="nc" id="L50">        this.forwardTable = new ForwardTable();</span>
+<span class="nc" id="L51">        this.nextTable = new NextTable();</span>
+<span class="nc" id="L52">        this.priorityMultiplier = 10;</span>
+<span class="nc" id="L53">        this.priorityAddend = 10;</span>
+<span class="nc" id="L54">    }</span>
+
+<span class="nc" id="L56">    public FlowObjectiveCompositionTree(Character ch) {</span>
+<span class="nc bnc" id="L57" title="All 4 branches missed.">        switch (ch) {</span>
+            case '+':
+<span class="nc" id="L59">                this.operator = FlowObjectiveCompositionManager.PolicyOperator.Parallel;</span>
+<span class="nc" id="L60">                break;</span>
+            case '&gt;':
+<span class="nc" id="L62">                this.operator = FlowObjectiveCompositionManager.PolicyOperator.Sequential;</span>
+<span class="nc" id="L63">                break;</span>
+            case '/':
+<span class="nc" id="L65">                this.operator = FlowObjectiveCompositionManager.PolicyOperator.Override;</span>
+<span class="nc" id="L66">                break;</span>
+            default:
+<span class="nc" id="L68">                this.operator = FlowObjectiveCompositionManager.PolicyOperator.Application;</span>
+                break;
+        }
+<span class="nc" id="L71">        this.leftChild = null;</span>
+<span class="nc" id="L72">        this.rightChild = null;</span>
+<span class="nc" id="L73">        this.applicationId = (short) -1;</span>
+<span class="nc" id="L74">        this.filterTable = new FilterTable();</span>
+<span class="nc" id="L75">        this.forwardTable = new ForwardTable();</span>
+<span class="nc" id="L76">        this.nextTable = new NextTable();</span>
+<span class="nc" id="L77">        this.priorityMultiplier = 10;</span>
+<span class="nc" id="L78">        this.priorityAddend = 10;</span>
+<span class="nc" id="L79">    }</span>
+
+    protected List&lt;FilteringObjective&gt; updateFilter(FilteringObjective filteringObjective) {
+<span class="nc bnc" id="L82" title="All 5 branches missed.">        switch (this.operator) {</span>
+            case Parallel:
+<span class="nc" id="L84">                return updateFilterParallel(filteringObjective);</span>
+            case Sequential:
+<span class="nc" id="L86">                return updateFilterSequential(filteringObjective);</span>
+            case Override:
+<span class="nc" id="L88">                return updateFilterOverride(filteringObjective);</span>
+            case Application:
+<span class="nc bnc" id="L90" title="All 2 branches missed.">                if (filteringObjective.appId().id() == this.applicationId) {</span>
+<span class="nc" id="L91">                    return this.filterTable.updateFilter(filteringObjective);</span>
+                } else {
+<span class="nc" id="L93">                    return new ArrayList&lt;&gt;();</span>
+                }
+            default:
+<span class="nc" id="L96">                    return new ArrayList&lt;&gt;();</span>
+        }
+    }
+
+    // Parallel composition: the filter set is the union of the children
+    protected List&lt;FilteringObjective&gt; updateFilterParallel(FilteringObjective filteringObjective) {
+<span class="nc" id="L102">        List&lt;FilteringObjective&gt; leftUpdates = this.leftChild.updateFilter(filteringObjective);</span>
+<span class="nc" id="L103">        List&lt;FilteringObjective&gt; rightUpdates = this.rightChild.updateFilter(filteringObjective);</span>
+
+<span class="nc" id="L105">        List&lt;FilteringObjective&gt; updates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L106">        updates.addAll(leftUpdates);</span>
+<span class="nc" id="L107">        updates.addAll(rightUpdates);</span>
+
+<span class="nc" id="L109">        return this.filterTable.updateFilter(updates);</span>
+    }
+
+    // Sequential composition: the filter set is the filter set of the left child
+    protected List&lt;FilteringObjective&gt; updateFilterSequential(FilteringObjective filteringObjective) {
+<span class="nc" id="L114">        List&lt;FilteringObjective&gt; leftUpdates = this.leftChild.updateFilter(filteringObjective);</span>
+<span class="nc" id="L115">        List&lt;FilteringObjective&gt; rightUpdates = this.rightChild.updateFilter(filteringObjective);</span>
+<span class="nc" id="L116">        return this.filterTable.updateFilter(leftUpdates);</span>
+    }
+
+    // Override composition: the filter set is the filter set of the left child
+    protected List&lt;FilteringObjective&gt; updateFilterOverride(FilteringObjective filteringObjective) {
+<span class="nc" id="L121">        List&lt;FilteringObjective&gt; leftUpdates = this.leftChild.updateFilter(filteringObjective);</span>
+<span class="nc" id="L122">        List&lt;FilteringObjective&gt; rightUpdates = this.rightChild.updateFilter(filteringObjective);</span>
+<span class="nc" id="L123">        return this.filterTable.updateFilter(leftUpdates);</span>
+    }
+
+    public List&lt;ForwardingObjective&gt; updateForward(ForwardingObjective forwardingObjective) {
+<span class="nc" id="L127">        return this.updateForwardNode(forwardingObjective).toForwardingObjectiveList();</span>
+    }
+
+    public ForwardUpdateTable updateForwardNode(ForwardingObjective forwardingObjective) {
+<span class="nc bnc" id="L131" title="All 3 branches missed.">        switch (this.operator) {</span>
+            case Parallel:
+            case Sequential:
+            case Override:
+<span class="nc" id="L135">                return updateForwardComposition(forwardingObjective);</span>
+            case Application:
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                if (forwardingObjective.appId().id() == this.applicationId) {</span>
+<span class="nc" id="L138">                    return this.forwardTable.updateForward(forwardingObjective);</span>
+                } else {
+<span class="nc" id="L140">                    return (new ForwardUpdateTable());</span>
+                }
+            default:
+<span class="nc" id="L143">                return (new ForwardUpdateTable());</span>
+        }
+    }
+
+    protected ForwardUpdateTable updateForwardComposition(ForwardingObjective forwardingObjective) {
+<span class="nc" id="L148">        ForwardUpdateTable leftUpdates = this.leftChild.updateForwardNode(forwardingObjective);</span>
+<span class="nc" id="L149">        ForwardUpdateTable rightUpdates = this.rightChild.updateForwardNode(forwardingObjective);</span>
+
+<span class="nc" id="L151">        List&lt;ForwardingObjective&gt; addUpdates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L152">        List&lt;ForwardingObjective&gt; removeUpdates = new ArrayList&lt;&gt;();</span>
+        // Handle ADD
+<span class="nc bnc" id="L154" title="All 4 branches missed.">        if (this.operator == FlowObjectiveCompositionManager.PolicyOperator.Parallel</span>
+                || this.operator == FlowObjectiveCompositionManager.PolicyOperator.Sequential) {
+<span class="nc bnc" id="L156" title="All 2 branches missed.">            for (ForwardingObjective fo1 : leftUpdates.addObjectives) {</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">                for (ForwardingObjective fo2 : this.rightChild.forwardTable.getForwardingObjectives()) {</span>
+<span class="nc" id="L158">                    ForwardingObjective composedFo = null;</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">                    if (this.operator == FlowObjectiveCompositionManager.PolicyOperator.Parallel) {</span>
+<span class="nc" id="L160">                        composedFo = FlowObjectiveCompositionUtil.composeParallel(fo1, fo2);</span>
+                    } else {
+<span class="nc" id="L162">                        composedFo = FlowObjectiveCompositionUtil.composeSequential(fo1, fo2, this.priorityMultiplier);</span>
+                    }
+<span class="nc bnc" id="L164" title="All 2 branches missed.">                    if (composedFo != null) {</span>
+<span class="nc" id="L165">                        addUpdates.add(composedFo);</span>
+<span class="nc" id="L166">                        this.leftChild.forwardTable.addGeneratedParentForwardingObjective(fo1, composedFo);</span>
+<span class="nc" id="L167">                        this.rightChild.forwardTable.addGeneratedParentForwardingObjective(fo2, composedFo);</span>
+                    }
+<span class="nc" id="L169">                }</span>
+<span class="nc" id="L170">            }</span>
+<span class="nc" id="L171">            Collection&lt;ForwardingObjective&gt; leftTableWithoutAdd = FlowObjectiveCompositionUtil</span>
+<span class="nc" id="L172">                    .minusForwardingObjectives(this.leftChild.forwardTable.getForwardingObjectives(),</span>
+                            leftUpdates.addObjectives);
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            for (ForwardingObjective fo1 : leftTableWithoutAdd) {</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                for (ForwardingObjective fo2 : rightUpdates.addObjectives) {</span>
+<span class="nc" id="L176">                    ForwardingObjective composedFo = null;</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">                    if (this.operator == FlowObjectiveCompositionManager.PolicyOperator.Parallel) {</span>
+<span class="nc" id="L178">                        composedFo = FlowObjectiveCompositionUtil.composeParallel(fo1, fo2);</span>
+                    } else {
+<span class="nc" id="L180">                        composedFo = FlowObjectiveCompositionUtil.composeSequential(fo1, fo2, this.priorityMultiplier);</span>
+                    }
+<span class="nc bnc" id="L182" title="All 2 branches missed.">                    if (composedFo != null) {</span>
+<span class="nc" id="L183">                        addUpdates.add(composedFo);</span>
+<span class="nc" id="L184">                        this.leftChild.forwardTable.addGeneratedParentForwardingObjective(fo1, composedFo);</span>
+<span class="nc" id="L185">                        this.rightChild.forwardTable.addGeneratedParentForwardingObjective(fo2, composedFo);</span>
+                    }
+<span class="nc" id="L187">                }</span>
+<span class="nc" id="L188">            }</span>
+<span class="nc" id="L189">        } else {</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">            for (ForwardingObjective fo : leftUpdates.addObjectives) {</span>
+<span class="nc" id="L191">                ForwardingObjective composedFo = FlowObjectiveCompositionUtil.composeOverride(fo, this.priorityAddend);</span>
+<span class="nc" id="L192">                addUpdates.add(composedFo);</span>
+<span class="nc" id="L193">                this.leftChild.forwardTable.addGeneratedParentForwardingObjective(fo, composedFo);</span>
+<span class="nc" id="L194">            }</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            for (ForwardingObjective fo : rightUpdates.addObjectives) {</span>
+<span class="nc" id="L196">                ForwardingObjective composedFo = FlowObjectiveCompositionUtil.composeOverride(fo, 0);</span>
+<span class="nc" id="L197">                addUpdates.add(composedFo);</span>
+<span class="nc" id="L198">                this.rightChild.forwardTable.addGeneratedParentForwardingObjective(fo, composedFo);</span>
+<span class="nc" id="L199">            }</span>
+        }
+
+        // Handle REMOVE
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        for (ForwardingObjective fo : leftUpdates.removeObjectives) {</span>
+<span class="nc" id="L204">            List&lt;ForwardingObjective&gt; fos = this.leftChild.forwardTable</span>
+<span class="nc" id="L205">                    .getGeneratedParentForwardingObjectiveForRemove(fo);</span>
+<span class="nc" id="L206">            removeUpdates.addAll(fos);</span>
+<span class="nc" id="L207">        }</span>
+<span class="nc" id="L208">        this.leftChild.forwardTable.deleteGeneratedParentForwardingObjective(leftUpdates.removeObjectives);</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">        for (ForwardingObjective fo : rightUpdates.removeObjectives) {</span>
+<span class="nc" id="L210">            List&lt;ForwardingObjective&gt; fos = this.rightChild.forwardTable</span>
+<span class="nc" id="L211">                    .getGeneratedParentForwardingObjectiveForRemove(fo);</span>
+<span class="nc" id="L212">            removeUpdates.addAll(fos);</span>
+<span class="nc" id="L213">        }</span>
+<span class="nc" id="L214">        this.rightChild.forwardTable.deleteGeneratedParentForwardingObjective(rightUpdates.removeObjectives);</span>
+
+<span class="nc" id="L216">        ForwardUpdateTable updates = new ForwardUpdateTable();</span>
+<span class="nc" id="L217">        updates.addUpdateTable(this.forwardTable.updateForward(addUpdates));</span>
+<span class="nc" id="L218">        updates.addUpdateTable(this.forwardTable.updateForward(removeUpdates));</span>
+<span class="nc" id="L219">        return updates;</span>
+    }
+
+    public List&lt;NextObjective&gt; updateNext(NextObjective nextObjective) {
+<span class="nc bnc" id="L223" title="All 3 branches missed.">        switch (this.operator) {</span>
+            case Parallel:
+            case Sequential:
+            case Override:
+<span class="nc" id="L227">                return updateNextComposition(nextObjective);</span>
+            case Application:
+<span class="nc bnc" id="L229" title="All 2 branches missed.">                if (nextObjective.appId().id() == this.applicationId) {</span>
+<span class="nc" id="L230">                    return this.nextTable.updateNext(nextObjective);</span>
+                } else {
+<span class="nc" id="L232">                    return new ArrayList&lt;&gt;();</span>
+                }
+            default:
+<span class="nc" id="L235">                return new ArrayList&lt;&gt;();</span>
+        }
+    }
+
+    // Next: the union of the children
+    protected List&lt;NextObjective&gt; updateNextComposition(NextObjective nextObjective) {
+<span class="nc" id="L241">        List&lt;NextObjective&gt; leftUpdates = this.leftChild.updateNext(nextObjective);</span>
+<span class="nc" id="L242">        List&lt;NextObjective&gt; rightUpdates = this.rightChild.updateNext(nextObjective);</span>
+
+<span class="nc" id="L244">        List&lt;NextObjective&gt; updates = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L245">        updates.addAll(leftUpdates);</span>
+<span class="nc" id="L246">        updates.addAll(rightUpdates);</span>
+
+<span class="nc" id="L248">        return this.nextTable.updateNext(updates);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L253">        String str = null;</span>
+<span class="nc bnc" id="L254" title="All 4 branches missed.">        switch (this.operator) {</span>
+            case Parallel:
+<span class="nc" id="L256">                str = &quot;(&quot; + this.leftChild + &quot;+&quot; + this.rightChild + &quot;)&quot;;</span>
+<span class="nc" id="L257">                break;</span>
+            case Sequential:
+<span class="nc" id="L259">                str = &quot;(&quot; + this.leftChild + &quot;&gt;&quot; + this.rightChild + &quot;)&quot;;</span>
+<span class="nc" id="L260">                break;</span>
+            case Override:
+<span class="nc" id="L262">                str = &quot;(&quot; + this.leftChild + &quot;/&quot; + this.rightChild + &quot;)&quot;;</span>
+<span class="nc" id="L263">                break;</span>
+            default:
+<span class="nc" id="L265">                str = &quot; &quot; + applicationId + &quot; &quot;;</span>
+                break;
+        }
+<span class="nc" id="L268">        return str;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

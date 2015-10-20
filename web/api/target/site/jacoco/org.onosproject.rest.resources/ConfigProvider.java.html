@@ -1,0 +1,611 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConfigProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">ConfigProvider.java</span></div><h1>ConfigProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+
+import org.onlab.packet.ChassisId;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+import org.onlab.util.Frequency;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.ChannelSpacing;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.GridType;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
+import org.onosproject.net.Link;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.OchPort;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.OduCltPort;
+import org.onosproject.net.OduSignalType;
+import org.onosproject.net.OmsPort;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.SparseAnnotations;
+import org.onosproject.net.device.DefaultDeviceDescription;
+import org.onosproject.net.device.DefaultPortDescription;
+import org.onosproject.net.device.DeviceDescription;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceProvider;
+import org.onosproject.net.device.DeviceProviderRegistry;
+import org.onosproject.net.device.DeviceProviderService;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.device.OchPortDescription;
+import org.onosproject.net.device.OduCltPortDescription;
+import org.onosproject.net.device.OmsPortDescription;
+import org.onosproject.net.device.PortDescription;
+import org.onosproject.net.host.DefaultHostDescription;
+import org.onosproject.net.host.HostProvider;
+import org.onosproject.net.host.HostProviderRegistry;
+import org.onosproject.net.host.HostProviderService;
+import org.onosproject.net.link.DefaultLinkDescription;
+import org.onosproject.net.link.LinkProvider;
+import org.onosproject.net.link.LinkProviderRegistry;
+import org.onosproject.net.link.LinkProviderService;
+import org.onosproject.net.provider.ProviderId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.net.DeviceId.deviceId;
+import static org.onosproject.net.PortNumber.portNumber;
+import static org.onosproject.net.device.DeviceEvent.Type.DEVICE_ADDED;
+import static org.onosproject.net.device.DeviceEvent.Type.DEVICE_AVAILABILITY_CHANGED;
+
+/**
+ * Provider of devices and links parsed from a JSON configuration structure.
+ */
+class ConfigProvider implements DeviceProvider, LinkProvider, HostProvider {
+
+<span class="nc" id="L96">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+<span class="nc" id="L98">    private static final ProviderId PID =</span>
+            new ProviderId(&quot;cfg&quot;, &quot;org.onosproject.rest&quot;, true);
+
+    private static final String UNKNOWN = &quot;unknown&quot;;
+
+<span class="nc" id="L103">    private static final Frequency CENTER = Frequency.ofTHz(193.1);</span>
+    // C-band has 4.4 THz (4,400 GHz) total bandwidth
+<span class="nc" id="L105">    private static final Frequency TOTAL = Frequency.ofTHz(4.4);</span>
+
+    private CountDownLatch deviceLatch;
+
+    private final JsonNode cfg;
+    private final DeviceService deviceService;
+
+    private final DeviceProviderRegistry deviceProviderRegistry;
+    private final LinkProviderRegistry linkProviderRegistry;
+    private final HostProviderRegistry hostProviderRegistry;
+
+    private DeviceProviderService deviceProviderService;
+    private LinkProviderService linkProviderService;
+    private HostProviderService hostProviderService;
+
+<span class="nc" id="L120">    private DeviceListener deviceEventCounter = new DeviceEventCounter();</span>
+<span class="nc" id="L121">    private List&lt;ConnectPoint&gt; connectPoints = Lists.newArrayList();</span>
+<span class="nc" id="L122">    private Map&lt;ConnectPoint, PortDescription&gt; descriptions = Maps.newHashMap();</span>
+
+    /**
+     * Creates a new configuration provider.
+     *
+     * @param cfg                    JSON configuration
+     * @param deviceService          device service
+     * @param deviceProviderRegistry device provider registry
+     * @param linkProviderRegistry   link provider registry
+     * @param hostProviderRegistry   host provider registry
+     */
+    ConfigProvider(JsonNode cfg,
+                   DeviceService deviceService,
+                   DeviceProviderRegistry deviceProviderRegistry,
+                   LinkProviderRegistry linkProviderRegistry,
+<span class="nc" id="L137">                   HostProviderRegistry hostProviderRegistry) {</span>
+<span class="nc" id="L138">        this.cfg = checkNotNull(cfg, &quot;Configuration cannot be null&quot;);</span>
+<span class="nc" id="L139">        this.deviceService = checkNotNull(deviceService, &quot;Device service cannot be null&quot;);</span>
+<span class="nc" id="L140">        this.deviceProviderRegistry = checkNotNull(deviceProviderRegistry, &quot;Device provider registry cannot be null&quot;);</span>
+<span class="nc" id="L141">        this.linkProviderRegistry = checkNotNull(linkProviderRegistry, &quot;Link provider registry cannot be null&quot;);</span>
+<span class="nc" id="L142">        this.hostProviderRegistry = checkNotNull(hostProviderRegistry, &quot;Host provider registry cannot be null&quot;);</span>
+<span class="nc" id="L143">    }</span>
+
+    /**
+     * Parses the given JSON and provides links as configured.
+     */
+    void parse() {
+        try {
+<span class="nc" id="L150">            register();</span>
+<span class="nc" id="L151">            parseDevices();</span>
+<span class="nc" id="L152">            parseLinks();</span>
+<span class="nc" id="L153">            parseHosts();</span>
+<span class="nc" id="L154">            addMissingPorts();</span>
+        } finally {
+<span class="nc" id="L156">            unregister();</span>
+<span class="nc" id="L157">        }</span>
+<span class="nc" id="L158">    }</span>
+
+    private void register() {
+<span class="nc" id="L161">        deviceProviderService = deviceProviderRegistry.register(this);</span>
+<span class="nc" id="L162">        linkProviderService = linkProviderRegistry.register(this);</span>
+<span class="nc" id="L163">        hostProviderService = hostProviderRegistry.register(this);</span>
+<span class="nc" id="L164">    }</span>
+
+    private void unregister() {
+<span class="nc" id="L167">        deviceProviderRegistry.unregister(this);</span>
+<span class="nc" id="L168">        linkProviderRegistry.unregister(this);</span>
+<span class="nc" id="L169">        hostProviderRegistry.unregister(this);</span>
+<span class="nc" id="L170">    }</span>
+
+    // Parses the given JSON and provides devices.
+    private void parseDevices() {
+        try {
+<span class="nc" id="L175">            JsonNode nodes = cfg.get(&quot;devices&quot;);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            if (nodes != null) {</span>
+<span class="nc" id="L177">                prepareForDeviceEvents(nodes.size());</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                for (JsonNode node : nodes) {</span>
+<span class="nc" id="L179">                    parseDevice(node);</span>
+
+                    // FIXME: hack to make sure device attributes take
+                    // This will be fixed when GossipDeviceStore uses ECM
+<span class="nc" id="L183">                    parseDevice(node);</span>
+<span class="nc" id="L184">                }</span>
+            }
+        } finally {
+<span class="nc" id="L187">            waitForDeviceEvents();</span>
+<span class="nc" id="L188">        }</span>
+<span class="nc" id="L189">    }</span>
+
+    // Parses the given node with device data and supplies the device.
+    private void parseDevice(JsonNode node) {
+<span class="nc" id="L193">        URI uri = URI.create(get(node, &quot;uri&quot;));</span>
+<span class="nc" id="L194">        Device.Type type = Device.Type.valueOf(get(node, &quot;type&quot;, &quot;SWITCH&quot;));</span>
+<span class="nc" id="L195">        String mfr = get(node, &quot;mfr&quot;, UNKNOWN);</span>
+<span class="nc" id="L196">        String hw = get(node, &quot;hw&quot;, UNKNOWN);</span>
+<span class="nc" id="L197">        String sw = get(node, &quot;sw&quot;, UNKNOWN);</span>
+<span class="nc" id="L198">        String serial = get(node, &quot;serial&quot;, UNKNOWN);</span>
+<span class="nc" id="L199">        ChassisId cid = new ChassisId(get(node, &quot;mac&quot;, &quot;000000000000&quot;));</span>
+<span class="nc" id="L200">        SparseAnnotations annotations = annotations(node.get(&quot;annotations&quot;));</span>
+
+<span class="nc" id="L202">        DeviceDescription desc =</span>
+                new DefaultDeviceDescription(uri, type, mfr, hw, sw, serial,
+                                             cid, annotations);
+<span class="nc" id="L205">        DeviceId deviceId = deviceId(uri);</span>
+<span class="nc" id="L206">        deviceProviderService.deviceConnected(deviceId, desc);</span>
+
+<span class="nc" id="L208">        JsonNode ports = node.get(&quot;ports&quot;);</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">        if (ports != null) {</span>
+<span class="nc" id="L210">            parsePorts(deviceId, ports);</span>
+        }
+<span class="nc" id="L212">    }</span>
+
+    // Parses the given node with list of device ports.
+    private void parsePorts(DeviceId deviceId, JsonNode nodes) {
+<span class="nc" id="L216">        List&lt;PortDescription&gt; ports = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        for (JsonNode node : nodes) {</span>
+<span class="nc" id="L218">            ports.add(parsePort(deviceId, node));</span>
+<span class="nc" id="L219">        }</span>
+<span class="nc" id="L220">        deviceProviderService.updatePorts(deviceId, ports);</span>
+<span class="nc" id="L221">    }</span>
+
+    // Parses the given node with port information.
+    private PortDescription parsePort(DeviceId deviceId, JsonNode node) {
+<span class="nc" id="L225">        Port.Type type = Port.Type.valueOf(node.path(&quot;type&quot;).asText(&quot;COPPER&quot;));</span>
+        // TL1-based ports have a name
+<span class="nc" id="L227">        PortNumber port = null;</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (node.has(&quot;name&quot;)) {</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">            for (Port p : deviceService.getPorts(deviceId)) {</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">                if (p.number().name().equals(node.get(&quot;name&quot;).asText())) {</span>
+<span class="nc" id="L231">                    port = p.number();</span>
+<span class="nc" id="L232">                    break;</span>
+                }
+<span class="nc" id="L234">            }</span>
+        } else {
+<span class="nc" id="L236">            port = portNumber(node.path(&quot;port&quot;).asLong(0));</span>
+        }
+
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if (port == null) {</span>
+<span class="nc" id="L240">            log.error(&quot;Cannot find port given in node {}&quot;, node);</span>
+<span class="nc" id="L241">            return null;</span>
+        }
+
+<span class="nc" id="L244">        String portName = Strings.emptyToNull(port.name());</span>
+<span class="nc" id="L245">        SparseAnnotations annotations  = null;</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">        if (portName != null) {</span>
+<span class="nc" id="L247">            annotations = DefaultAnnotations.builder()</span>
+<span class="nc" id="L248">                    .set(AnnotationKeys.PORT_NAME, portName).build();</span>
+        }
+<span class="nc bnc" id="L250" title="All 6 branches missed.">        switch (type) {</span>
+            case COPPER:
+<span class="nc" id="L252">                return new DefaultPortDescription(port, node.path(&quot;enabled&quot;).asBoolean(true),</span>
+<span class="nc" id="L253">                                                  type, node.path(&quot;speed&quot;).asLong(1_000),</span>
+                                                  annotations);
+            case FIBER:
+                // Currently, assume OMS when FIBER. Provide sane defaults.
+<span class="nc" id="L257">                annotations = annotations(node.get(&quot;annotations&quot;));</span>
+<span class="nc" id="L258">                return new OmsPortDescription(port, node.path(&quot;enabled&quot;).asBoolean(true),</span>
+<span class="nc" id="L259">                                              CENTER, CENTER.add(TOTAL),</span>
+<span class="nc" id="L260">                                              Frequency.ofGHz(100), annotations);</span>
+            case ODUCLT:
+<span class="nc" id="L262">                annotations = annotations(node.get(&quot;annotations&quot;));</span>
+<span class="nc" id="L263">                OduCltPort oduCltPort = (OduCltPort) deviceService.getPort(deviceId, port);</span>
+<span class="nc" id="L264">                return new OduCltPortDescription(port, node.path(&quot;enabled&quot;).asBoolean(true),</span>
+<span class="nc" id="L265">                        oduCltPort.signalType(), annotations);</span>
+            case OCH:
+<span class="nc" id="L267">                annotations = annotations(node.get(&quot;annotations&quot;));</span>
+<span class="nc" id="L268">                OchPort ochPort = (OchPort) deviceService.getPort(deviceId, port);</span>
+<span class="nc" id="L269">                return new OchPortDescription(port, node.path(&quot;enabled&quot;).asBoolean(true),</span>
+<span class="nc" id="L270">                        ochPort.signalType(), ochPort.isTunable(),</span>
+<span class="nc" id="L271">                        ochPort.lambda(), annotations);</span>
+            case OMS:
+<span class="nc" id="L273">                annotations = annotations(node.get(&quot;annotations&quot;));</span>
+<span class="nc" id="L274">                OmsPort omsPort = (OmsPort) deviceService.getPort(deviceId, port);</span>
+<span class="nc" id="L275">                return new OmsPortDescription(port, node.path(&quot;enabled&quot;).asBoolean(true),</span>
+<span class="nc" id="L276">                        omsPort.minFrequency(), omsPort.maxFrequency(), omsPort.grid(), annotations);</span>
+            default:
+<span class="nc" id="L278">                log.warn(&quot;{}: Unsupported Port Type&quot;);</span>
+        }
+<span class="nc" id="L280">        return new DefaultPortDescription(port, node.path(&quot;enabled&quot;).asBoolean(true),</span>
+<span class="nc" id="L281">                                          type, node.path(&quot;speed&quot;).asLong(1_000),</span>
+                                          annotations);
+    }
+
+    // Parses the given JSON and provides links as configured.
+    private void parseLinks() {
+<span class="nc" id="L287">        JsonNode nodes = cfg.get(&quot;links&quot;);</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        if (nodes != null) {</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">            for (JsonNode node : nodes) {</span>
+<span class="nc" id="L290">                parseLink(node, false);</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">                if (!node.has(&quot;halfplex&quot;)) {</span>
+<span class="nc" id="L292">                    parseLink(node, true);</span>
+                }
+<span class="nc" id="L294">            }</span>
+        }
+<span class="nc" id="L296">    }</span>
+
+    // Parses the given node with link data and supplies the link.
+    private void parseLink(JsonNode node, boolean reverse) {
+<span class="nc" id="L300">        ConnectPoint src = connectPoint(get(node, &quot;src&quot;));</span>
+<span class="nc" id="L301">        ConnectPoint dst = connectPoint(get(node, &quot;dst&quot;));</span>
+<span class="nc" id="L302">        Link.Type type = Link.Type.valueOf(get(node, &quot;type&quot;, &quot;DIRECT&quot;));</span>
+<span class="nc" id="L303">        SparseAnnotations annotations = annotations(node.get(&quot;annotations&quot;));</span>
+        // take annotations to update optical ports with correct attributes.
+<span class="nc" id="L305">        updatePorts(src, dst, annotations);</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        DefaultLinkDescription desc = reverse ?</span>
+                new DefaultLinkDescription(dst, src, type, annotations) :
+                new DefaultLinkDescription(src, dst, type, annotations);
+<span class="nc" id="L309">        linkProviderService.linkDetected(desc);</span>
+
+<span class="nc" id="L311">        connectPoints.add(src);</span>
+<span class="nc" id="L312">        connectPoints.add(dst);</span>
+<span class="nc" id="L313">    }</span>
+
+    private void updatePorts(ConnectPoint src, ConnectPoint dst, SparseAnnotations annotations) {
+<span class="nc" id="L316">        final String linkType = annotations.value(&quot;optical.type&quot;);</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        if (&quot;cross-connect&quot;.equals(linkType)) {</span>
+<span class="nc" id="L318">            String value = annotations.value(&quot;bandwidth&quot;).trim();</span>
+            try {
+<span class="nc" id="L320">                double bw = Double.parseDouble(value);</span>
+<span class="nc" id="L321">                updateOchPort(bw, src, dst);</span>
+<span class="nc" id="L322">            } catch (NumberFormatException e) {</span>
+<span class="nc" id="L323">                log.warn(&quot;Invalid bandwidth ({}), can't configure port(s)&quot;, value);</span>
+<span class="nc" id="L324">                return;</span>
+<span class="nc" id="L325">            }</span>
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        } else if (&quot;WDM&quot;.equals(linkType)) {</span>
+<span class="nc" id="L327">            String value = annotations.value(&quot;optical.waves&quot;).trim();</span>
+            try {
+<span class="nc" id="L329">                int numChls = Integer.parseInt(value);</span>
+<span class="nc" id="L330">                updateOMSPorts(numChls, src, dst);</span>
+<span class="nc" id="L331">            } catch (NumberFormatException e) {</span>
+<span class="nc" id="L332">                log.warn(&quot;Invalid channel ({}), can't configure port(s)&quot;, value);</span>
+<span class="nc" id="L333">                return;</span>
+<span class="nc" id="L334">            }</span>
+        }
+<span class="nc" id="L336">    }</span>
+
+    // uses 'bandwidth' annotation to determine the channel spacing.
+    private void updateOchPort(double bw, ConnectPoint srcCp, ConnectPoint dstCp) {
+<span class="nc" id="L340">        Device src = deviceService.getDevice(srcCp.deviceId());</span>
+<span class="nc" id="L341">        Device dst = deviceService.getDevice(dstCp.deviceId());</span>
+        // bandwidth in MHz (assuming Hz - linc is not clear if that or Mb).
+<span class="nc" id="L343">        Frequency spacing = Frequency.ofMHz(bw);</span>
+        // channel bandwidth is smaller than smallest standard channel spacing.
+<span class="nc" id="L345">        ChannelSpacing chsp = null;</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">        if (spacing.compareTo(ChannelSpacing.CHL_6P25GHZ.frequency()) &lt;= 0) {</span>
+<span class="nc" id="L347">            chsp = ChannelSpacing.CHL_6P25GHZ;</span>
+        }
+<span class="nc bnc" id="L349" title="All 2 branches missed.">        for (int i = 1; i &lt; ChannelSpacing.values().length; i++) {</span>
+<span class="nc" id="L350">            Frequency val = ChannelSpacing.values()[i].frequency();</span>
+            // pick the next highest or equal channel interval.
+<span class="nc bnc" id="L352" title="All 2 branches missed.">            if (val.isLessThan(spacing)) {</span>
+<span class="nc" id="L353">                chsp = ChannelSpacing.values()[i - 1];</span>
+<span class="nc" id="L354">                break;</span>
+            }
+        }
+<span class="nc bnc" id="L357" title="All 2 branches missed.">        if (chsp == null) {</span>
+<span class="nc" id="L358">            log.warn(&quot;Invalid channel spacing ({}), can't configure port(s)&quot;, spacing);</span>
+<span class="nc" id="L359">            return;</span>
+        }
+<span class="nc" id="L361">        OchSignal signal = new OchSignal(GridType.DWDM, chsp, 1, 1);</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        if (src.type() == Device.Type.ROADM) {</span>
+<span class="nc" id="L363">            PortDescription portDesc = new OchPortDescription(srcCp.port(), true,</span>
+                    OduSignalType.ODU4, true, signal);
+<span class="nc" id="L365">            descriptions.put(srcCp, portDesc);</span>
+<span class="nc" id="L366">            deviceProviderService.portStatusChanged(srcCp.deviceId(), portDesc);</span>
+        }
+<span class="nc bnc" id="L368" title="All 2 branches missed.">        if (dst.type() == Device.Type.ROADM) {</span>
+<span class="nc" id="L369">            PortDescription portDesc = new OchPortDescription(dstCp.port(), true,</span>
+                    OduSignalType.ODU4, true, signal);
+<span class="nc" id="L371">            descriptions.put(dstCp, portDesc);</span>
+<span class="nc" id="L372">            deviceProviderService.portStatusChanged(dstCp.deviceId(), portDesc);</span>
+        }
+<span class="nc" id="L374">    }</span>
+
+    private void updateOMSPorts(int numChls, ConnectPoint srcCp, ConnectPoint dstCp) {
+        // round down to largest slot that allows numChl channels to fit into C band range
+<span class="nc" id="L378">        ChannelSpacing chl = null;</span>
+<span class="nc" id="L379">        Frequency perChl = TOTAL.floorDivision(numChls);</span>
+<span class="nc bnc" id="L380" title="All 2 branches missed.">        for (int i = 0; i &lt; ChannelSpacing.values().length; i++) {</span>
+<span class="nc" id="L381">            Frequency val = ChannelSpacing.values()[i].frequency();</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">            if (val.isLessThan(perChl)) {</span>
+<span class="nc" id="L383">                chl = ChannelSpacing.values()[i];</span>
+<span class="nc" id="L384">                break;</span>
+            }
+        }
+<span class="nc bnc" id="L387" title="All 2 branches missed.">        if (chl == null) {</span>
+<span class="nc" id="L388">            chl = ChannelSpacing.CHL_6P25GHZ;</span>
+        }
+
+        // if true, there was less channels than can be tightly packed.
+<span class="nc" id="L392">        Frequency grid = chl.frequency();</span>
+        // say Linc's 1st slot starts at CENTER and goes up from there.
+<span class="nc" id="L394">        Frequency min = CENTER.add(grid);</span>
+<span class="nc" id="L395">        Frequency max = CENTER.add(grid.multiply(numChls));</span>
+
+<span class="nc" id="L397">        PortDescription srcPortDesc = new OmsPortDescription(srcCp.port(), true, min, max, grid);</span>
+<span class="nc" id="L398">        PortDescription dstPortDesc = new OmsPortDescription(dstCp.port(), true, min, max, grid);</span>
+<span class="nc" id="L399">        descriptions.put(srcCp, srcPortDesc);</span>
+<span class="nc" id="L400">        descriptions.put(dstCp, dstPortDesc);</span>
+<span class="nc" id="L401">        deviceProviderService.portStatusChanged(srcCp.deviceId(), srcPortDesc);</span>
+<span class="nc" id="L402">        deviceProviderService.portStatusChanged(dstCp.deviceId(), dstPortDesc);</span>
+<span class="nc" id="L403">    }</span>
+
+    // Parses the given JSON and provides hosts as configured.
+    private void parseHosts() {
+        try {
+<span class="nc" id="L408">            JsonNode nodes = cfg.get(&quot;hosts&quot;);</span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">            if (nodes != null) {</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">                for (JsonNode node : nodes) {</span>
+<span class="nc" id="L411">                    parseHost(node);</span>
+
+                    // FIXME: hack to make sure host attributes take
+                    // This will be fixed when GossipHostStore uses ECM
+<span class="nc" id="L415">                    parseHost(node);</span>
+<span class="nc" id="L416">                }</span>
+            }
+        } finally {
+<span class="nc" id="L419">            hostProviderRegistry.unregister(this);</span>
+<span class="nc" id="L420">        }</span>
+<span class="nc" id="L421">    }</span>
+
+    // Parses the given node with host data and supplies the host.
+    private void parseHost(JsonNode node) {
+<span class="nc" id="L425">        MacAddress mac = MacAddress.valueOf(get(node, &quot;mac&quot;));</span>
+<span class="nc" id="L426">        VlanId vlanId = VlanId.vlanId((short) node.get(&quot;vlan&quot;).asInt(VlanId.UNTAGGED));</span>
+<span class="nc" id="L427">        HostId hostId = HostId.hostId(mac, vlanId);</span>
+<span class="nc" id="L428">        SparseAnnotations annotations = annotations(node.get(&quot;annotations&quot;));</span>
+<span class="nc" id="L429">        HostLocation location = new HostLocation(connectPoint(get(node, &quot;location&quot;)), 0);</span>
+
+<span class="nc" id="L431">        String[] ipStrings = get(node, &quot;ip&quot;, &quot;&quot;).split(&quot;,&quot;);</span>
+<span class="nc" id="L432">        Set&lt;IpAddress&gt; ips = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L433" title="All 2 branches missed.">        for (String ip : ipStrings) {</span>
+<span class="nc" id="L434">            ips.add(IpAddress.valueOf(ip.trim()));</span>
+        }
+
+<span class="nc" id="L437">        DefaultHostDescription desc =</span>
+                new DefaultHostDescription(mac, vlanId, location, ips, annotations);
+<span class="nc" id="L439">        hostProviderService.hostDetected(hostId, desc);</span>
+
+<span class="nc" id="L441">        connectPoints.add(location);</span>
+<span class="nc" id="L442">    }</span>
+
+    // Adds any missing device ports for configured links and host locations.
+    private void addMissingPorts() {
+<span class="nc" id="L446">        deviceService.getDevices().forEach(this::addMissingPorts);</span>
+<span class="nc" id="L447">    }</span>
+
+    // Adds any missing device ports.
+    private void addMissingPorts(Device device) {
+        try {
+<span class="nc" id="L452">            List&lt;Port&gt; ports = deviceService.getPorts(device.id());</span>
+<span class="nc" id="L453">            Set&lt;ConnectPoint&gt; existing = ports.stream()</span>
+<span class="nc" id="L454">                    .map(p -&gt; new ConnectPoint(device.id(), p.number()))</span>
+<span class="nc" id="L455">                    .collect(Collectors.toSet());</span>
+<span class="nc" id="L456">            Set&lt;ConnectPoint&gt; missing = connectPoints.stream()</span>
+<span class="nc" id="L457">                    .filter(cp -&gt; cp.deviceId().equals(device.id()))</span>
+<span class="nc bnc" id="L458" title="All 2 branches missed.">                    .filter(cp -&gt; !existing.contains(cp))</span>
+<span class="nc" id="L459">                    .collect(Collectors.toSet());</span>
+
+<span class="nc bnc" id="L461" title="All 2 branches missed.">            if (!missing.isEmpty()) {</span>
+<span class="nc" id="L462">                List&lt;PortDescription&gt; newPorts = Stream.concat(</span>
+<span class="nc" id="L463">                        ports.stream().map(this::description),</span>
+<span class="nc" id="L464">                        missing.stream().map(this::description)</span>
+<span class="nc" id="L465">                ).collect(Collectors.toList());</span>
+<span class="nc" id="L466">                deviceProviderService.updatePorts(device.id(), newPorts);</span>
+            }
+<span class="nc" id="L468">        } catch (IllegalArgumentException e) {</span>
+<span class="nc" id="L469">            log.warn(&quot;Error pushing ports: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L470">        }</span>
+<span class="nc" id="L471">    }</span>
+
+    // Creates a port description from the specified port.
+    private PortDescription description(Port p) {
+<span class="nc bnc" id="L475" title="All 4 branches missed.">        switch (p.type()) {</span>
+            case OMS:
+<span class="nc" id="L477">                OmsPort op = (OmsPort) p;</span>
+<span class="nc" id="L478">                return new OmsPortDescription(</span>
+<span class="nc" id="L479">                        op.number(), op.isEnabled(), op.minFrequency(), op.maxFrequency(), op.grid());</span>
+            case OCH:
+<span class="nc" id="L481">                OchPort ochp = (OchPort) p;</span>
+<span class="nc" id="L482">                return new OchPortDescription(</span>
+<span class="nc" id="L483">                        ochp.number(), ochp.isEnabled(), ochp.signalType(), ochp.isTunable(), ochp.lambda());</span>
+            case ODUCLT:
+<span class="nc" id="L485">                OduCltPort odup = (OduCltPort) p;</span>
+<span class="nc" id="L486">                return new OduCltPortDescription(</span>
+<span class="nc" id="L487">                        odup.number(), odup.isEnabled(), odup.signalType());</span>
+            default:
+<span class="nc" id="L489">                return new DefaultPortDescription(p.number(), p.isEnabled(), p.type(), p.portSpeed());</span>
+        }
+    }
+
+    // Creates a port description from the specified connection point if none created earlier.
+    private PortDescription description(ConnectPoint cp) {
+<span class="nc" id="L495">        PortDescription saved = descriptions.get(cp);</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">        if (saved != null) {</span>
+<span class="nc" id="L497">            return saved;</span>
+        }
+<span class="nc" id="L499">        Port p = deviceService.getPort(cp.deviceId(), cp.port());</span>
+<span class="nc bnc" id="L500" title="All 2 branches missed.">        if (p == null) {</span>
+<span class="nc" id="L501">            return new DefaultPortDescription(cp.port(), true);</span>
+        }
+<span class="nc" id="L503">        return description(p);</span>
+    }
+
+    // Produces set of annotations from the given JSON node.
+    private SparseAnnotations annotations(JsonNode node) {
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if (node == null) {</span>
+<span class="nc" id="L509">            return DefaultAnnotations.EMPTY;</span>
+        }
+
+<span class="nc" id="L512">        DefaultAnnotations.Builder builder = DefaultAnnotations.builder();</span>
+<span class="nc" id="L513">        Iterator&lt;String&gt; it = node.fieldNames();</span>
+<span class="nc bnc" id="L514" title="All 2 branches missed.">        while (it.hasNext()) {</span>
+<span class="nc" id="L515">            String k = it.next();</span>
+<span class="nc" id="L516">            builder.set(k, node.get(k).asText());</span>
+<span class="nc" id="L517">        }</span>
+<span class="nc" id="L518">        return builder.build();</span>
+    }
+
+    // Produces a connection point from the specified uri/port text.
+    private ConnectPoint connectPoint(String text) {
+<span class="nc" id="L523">        int i = text.lastIndexOf(&quot;/&quot;);</span>
+<span class="nc" id="L524">        String portName = text.substring(i + 1);</span>
+<span class="nc" id="L525">        DeviceId deviceId = deviceId(text.substring(0, i));</span>
+
+<span class="nc bnc" id="L527" title="All 2 branches missed.">        for (Port port : deviceService.getPorts(deviceId)) {</span>
+<span class="nc" id="L528">            PortNumber pn = port.number();</span>
+<span class="nc bnc" id="L529" title="All 2 branches missed.">            if (pn.name().equals(portName)) {</span>
+<span class="nc" id="L530">                return new ConnectPoint(deviceId, pn);</span>
+            }
+<span class="nc" id="L532">        }</span>
+
+        long portNum;
+        try {
+<span class="nc" id="L536">            portNum = Long.parseLong(portName);</span>
+<span class="nc" id="L537">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L538">            portNum = 0;</span>
+<span class="nc" id="L539">        }</span>
+
+<span class="nc" id="L541">        return new ConnectPoint(deviceId, portNumber(portNum, portName));</span>
+    }
+
+    // Returns string form of the named property in the given JSON object.
+    private String get(JsonNode node, String name) {
+<span class="nc" id="L546">        return node.path(name).asText();</span>
+    }
+
+    // Returns string form of the named property in the given JSON object.
+    private String get(JsonNode node, String name, String defaultValue) {
+<span class="nc" id="L551">        return node.path(name).asText(defaultValue);</span>
+    }
+
+    @Override
+    public void roleChanged(DeviceId device, MastershipRole newRole) {
+<span class="nc" id="L556">        deviceProviderService.receivedRoleReply(device, newRole, newRole);</span>
+<span class="nc" id="L557">    }</span>
+
+    @Override
+    public void triggerProbe(DeviceId deviceId) {
+<span class="nc" id="L561">    }</span>
+
+    @Override
+    public void triggerProbe(Host host) {
+<span class="nc" id="L565">    }</span>
+
+    @Override
+    public ProviderId id() {
+<span class="nc" id="L569">        return PID;</span>
+    }
+
+    @Override
+    public boolean isReachable(DeviceId device) {
+<span class="nc" id="L574">        return true;</span>
+    }
+
+    /**
+     * Prepares to count device added/available/removed events.
+     *
+     * @param count number of events to count
+     */
+    protected void prepareForDeviceEvents(int count) {
+<span class="nc" id="L583">        deviceLatch = new CountDownLatch(count);</span>
+<span class="nc" id="L584">        deviceService.addListener(deviceEventCounter);</span>
+<span class="nc" id="L585">    }</span>
+
+    /**
+     * Waits for all expected device added/available/removed events.
+     */
+    protected void waitForDeviceEvents() {
+        try {
+<span class="nc" id="L592">            deviceLatch.await(2, TimeUnit.SECONDS);</span>
+<span class="nc" id="L593">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L594">            log.warn(&quot;Device events did not arrive in time&quot;);</span>
+<span class="nc" id="L595">        }</span>
+<span class="nc" id="L596">        deviceService.removeListener(deviceEventCounter);</span>
+<span class="nc" id="L597">    }</span>
+
+    // Counts down number of device added/available/removed events.
+<span class="nc" id="L600">    private class DeviceEventCounter implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+<span class="nc" id="L603">            DeviceEvent.Type type = event.type();</span>
+<span class="nc bnc" id="L604" title="All 4 branches missed.">            if (type == DEVICE_ADDED || type == DEVICE_AVAILABILITY_CHANGED) {</span>
+<span class="nc" id="L605">                deviceLatch.countDown();</span>
+            }
+<span class="nc" id="L607">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

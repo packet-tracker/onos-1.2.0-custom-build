@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TELinkAttributesTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">TELinkAttributesTlv.java</span></div><h1>TELinkAttributesTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.ListIterator;
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides TELinkAttributesTlv.
+ */
+public class TELinkAttributesTlv implements PcepValueType {
+
+    /*
+     * Reference :PCEP Extension for Transporting TE Data draft-dhodylee-pce-pcep-te-data-extn-02
+     *  0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |           Type=[TBD27]        |             Length            |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     //              Link Attributes Sub-TLVs (variable)            //
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L49">    protected static final Logger log = LoggerFactory.getLogger(TELinkAttributesTlv.class);</span>
+
+    public static final short TYPE = 1897; //TODD:change this TBD27
+    public short hLength;
+
+    public static final int TLV_HEADER_LENGTH = 4;
+
+    // LinkDescriptors Sub-TLVs (variable)
+    private LinkedList&lt;PcepValueType&gt; llLinkAttributesSubTLVs;
+
+    /**
+     * Constructor to initialize Link Attributes Sub TLVs.
+     *
+     * @param llLinkAttributesSubTLVs linked list of PcepValueType
+     */
+<span class="fc" id="L64">    public TELinkAttributesTlv(LinkedList&lt;PcepValueType&gt; llLinkAttributesSubTLVs) {</span>
+<span class="fc" id="L65">        this.llLinkAttributesSubTLVs = llLinkAttributesSubTLVs;</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * Returns object of TE Link Attributes TLV.
+     *
+     * @param llLinkAttributesSubTLVs linked list of Link Attribute of Sub TLV
+     * @return object of TELinkAttributesTlv
+     */
+    public static TELinkAttributesTlv of(final LinkedList&lt;PcepValueType&gt; llLinkAttributesSubTLVs) {
+<span class="fc" id="L75">        return new TELinkAttributesTlv(llLinkAttributesSubTLVs);</span>
+    }
+
+    /**
+     * Returns linked list of Link Attribute of Sub TLV.
+     *
+     * @return llLinkAttributesSubTLVs linked list of Link Attribute of Sub TLV
+     */
+    public LinkedList&lt;PcepValueType&gt; getllLinkAttributesSubTLVs() {
+<span class="nc" id="L84">        return llLinkAttributesSubTLVs;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L89">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L94">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L99">        return hLength;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L104">        return Objects.hash(llLinkAttributesSubTLVs.hashCode());</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L110">            return true;</span>
+        }
+        /*
+         * Here we have a list of Tlv so to compare each sub tlv between the object
+         * we have to take a list iterator so one by one we can get each sub tlv object
+         * and can compare them.
+         * it may be possible that the size of 2 lists is not equal so we have to first check
+         * the size, if both are same then we should check for the subtlv objects otherwise
+         * we should return false.
+         */
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (obj instanceof TELinkAttributesTlv) {</span>
+<span class="fc" id="L121">            int countObjSubTlv = 0;</span>
+<span class="fc" id="L122">            int countOtherSubTlv = 0;</span>
+<span class="fc" id="L123">            boolean isCommonSubTlv = true;</span>
+<span class="fc" id="L124">            TELinkAttributesTlv other = (TELinkAttributesTlv) obj;</span>
+<span class="fc" id="L125">            Iterator&lt;PcepValueType&gt; objListIterator = ((TELinkAttributesTlv) obj).llLinkAttributesSubTLVs.iterator();</span>
+<span class="fc" id="L126">            countObjSubTlv = ((TELinkAttributesTlv) obj).llLinkAttributesSubTLVs.size();</span>
+<span class="fc" id="L127">            countOtherSubTlv = other.llLinkAttributesSubTLVs.size();</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">            if (countObjSubTlv != countOtherSubTlv) {</span>
+<span class="nc" id="L129">                return false;</span>
+            } else {
+<span class="fc bfc" id="L131" title="All 4 branches covered.">                while (objListIterator.hasNext() &amp;&amp; isCommonSubTlv) {</span>
+<span class="fc" id="L132">                    PcepValueType subTlv = objListIterator.next();</span>
+<span class="fc" id="L133">                    isCommonSubTlv = Objects.equals(llLinkAttributesSubTLVs.contains(subTlv),</span>
+<span class="fc" id="L134">                            other.llLinkAttributesSubTLVs.contains(subTlv));</span>
+<span class="fc" id="L135">                }</span>
+<span class="fc" id="L136">                return isCommonSubTlv;</span>
+            }
+        }
+<span class="fc" id="L139">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L144">        int tlvStartIndex = c.writerIndex();</span>
+<span class="fc" id="L145">        c.writeShort(TYPE);</span>
+<span class="fc" id="L146">        int tlvLenIndex = c.writerIndex();</span>
+<span class="fc" id="L147">        hLength = 0;</span>
+<span class="fc" id="L148">        c.writeShort(hLength);</span>
+
+<span class="fc" id="L150">        ListIterator&lt;PcepValueType&gt; listIterator = llLinkAttributesSubTLVs.listIterator();</span>
+
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L153">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L156">                log.debug(&quot;TLV is null from subTlv list&quot;);</span>
+<span class="nc" id="L157">                continue;</span>
+            }
+<span class="fc" id="L159">            tlv.write(c);</span>
+
+            // need to take care of padding
+<span class="fc" id="L162">            int pad = tlv.getLength() % 4;</span>
+
+<span class="fc bfc" id="L164" title="All 2 branches covered.">            if (0 != pad) {</span>
+<span class="fc" id="L165">                pad = 4 - pad;</span>
+<span class="fc bfc" id="L166" title="All 2 branches covered.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="fc" id="L167">                    c.writeByte((byte) 0);</span>
+                }
+            }
+<span class="fc" id="L170">        }</span>
+
+<span class="fc" id="L172">        hLength = (short) (c.writerIndex() - tlvStartIndex);</span>
+<span class="fc" id="L173">        c.setShort(tlvLenIndex, (hLength - TLV_HEADER_LENGTH));</span>
+
+<span class="fc" id="L175">        return c.writerIndex() - tlvStartIndex;</span>
+    }
+
+    /**
+     * Reads channel buffer and returns object of TE Link Attributes TLV.
+     *
+     * @param c input channel buffer
+     * @param hLength length
+     * @return object of TELinkAttributesTlv
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public static PcepValueType read(ChannelBuffer c, short hLength) throws PcepParseException {
+
+        // Node Descriptor Sub-TLVs (variable)
+<span class="fc" id="L189">        LinkedList&lt;PcepValueType&gt; llLinkAttributesSubTLVs = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L191">        ChannelBuffer tempCb = c.readBytes(hLength);</span>
+
+<span class="fc bfc" id="L193" title="All 2 branches covered.">        while (TLV_HEADER_LENGTH &lt;= tempCb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+<span class="fc" id="L196">            short hType = tempCb.readShort();</span>
+<span class="fc" id="L197">            int iValue = 0;</span>
+<span class="fc" id="L198">            short length = tempCb.readShort();</span>
+<span class="pc bpc" id="L199" title="5 of 17 branches missed.">            switch (hType) {</span>
+
+            case IPv4TERouterIdOfLocalNodeTlv.TYPE:
+<span class="nc" id="L202">                iValue = tempCb.readInt();</span>
+<span class="nc" id="L203">                tlv = new IPv4TERouterIdOfLocalNodeTlv(iValue);</span>
+<span class="nc" id="L204">                break;</span>
+            case IPv6TERouterIdofLocalNodeTlv.TYPE:
+<span class="nc" id="L206">                byte[] ipv6LValue = new byte[IPv6TERouterIdofLocalNodeTlv.VALUE_LENGTH];</span>
+<span class="nc" id="L207">                tempCb.readBytes(ipv6LValue, 0, IPv6TERouterIdofLocalNodeTlv.VALUE_LENGTH);</span>
+<span class="nc" id="L208">                tlv = new IPv6TERouterIdofLocalNodeTlv(ipv6LValue);</span>
+<span class="nc" id="L209">                break;</span>
+            case IPv4TERouterIdOfRemoteNodeTlv.TYPE:
+<span class="fc" id="L211">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L212">                tlv = new IPv4TERouterIdOfRemoteNodeTlv(iValue);</span>
+<span class="fc" id="L213">                break;</span>
+            case IPv6TERouterIdofRemoteNodeTlv.TYPE:
+<span class="nc" id="L215">                byte[] ipv6RValue = new byte[IPv6TERouterIdofRemoteNodeTlv.VALUE_LENGTH];</span>
+<span class="nc" id="L216">                tempCb.readBytes(ipv6RValue, 0, IPv6TERouterIdofRemoteNodeTlv.VALUE_LENGTH);</span>
+<span class="nc" id="L217">                tlv = new IPv6TERouterIdofRemoteNodeTlv(ipv6RValue);</span>
+<span class="nc" id="L218">                break;</span>
+            case LinkLocalRemoteIdentifiersTlv.TYPE:
+<span class="nc" id="L220">                tlv = LinkLocalRemoteIdentifiersTlv.read(tempCb);</span>
+<span class="nc" id="L221">                break;</span>
+            case AdministrativeGroupTlv.TYPE:
+<span class="fc" id="L223">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L224">                tlv = new AdministrativeGroupTlv(iValue);</span>
+<span class="fc" id="L225">                break;</span>
+            case MaximumLinkBandwidthTlv.TYPE:
+<span class="fc" id="L227">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L228">                tlv = new MaximumLinkBandwidthTlv(iValue);</span>
+<span class="fc" id="L229">                break;</span>
+            case MaximumReservableLinkBandwidthTlv.TYPE:
+<span class="fc" id="L231">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L232">                tlv = new MaximumReservableLinkBandwidthTlv(iValue);</span>
+<span class="fc" id="L233">                break;</span>
+            case UnreservedBandwidthTlv.TYPE:
+<span class="fc" id="L235">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L236">                tlv = new UnreservedBandwidthTlv(iValue);</span>
+<span class="fc" id="L237">                break;</span>
+            case TEDefaultMetricTlv.TYPE:
+<span class="fc" id="L239">                iValue = tempCb.readInt();</span>
+<span class="fc" id="L240">                tlv = new TEDefaultMetricTlv(iValue);</span>
+<span class="fc" id="L241">                break;</span>
+            case LinkProtectionTypeTlv.TYPE:
+<span class="fc" id="L243">                tlv = LinkProtectionTypeTlv.read(tempCb);</span>
+<span class="fc" id="L244">                break;</span>
+            case MPLSProtocolMaskTlv.TYPE:
+<span class="fc" id="L246">                byte cValue = tempCb.readByte();</span>
+<span class="fc" id="L247">                tlv = new MPLSProtocolMaskTlv(cValue);</span>
+<span class="fc" id="L248">                break;</span>
+            case IGPMetricTlv.TYPE:
+<span class="fc" id="L250">                tlv = IGPMetricTlv.read(tempCb, length);</span>
+<span class="fc" id="L251">                break;</span>
+            case SharedRiskLinkGroupTlv.TYPE:
+<span class="fc" id="L253">                tlv = SharedRiskLinkGroupTlv.read(tempCb, length);</span>
+<span class="fc" id="L254">                break;</span>
+            case OpaqueLinkAttributeTlv.TYPE:
+<span class="fc" id="L256">                tlv = OpaqueLinkAttributeTlv.read(tempCb, length);</span>
+<span class="fc" id="L257">                break;</span>
+            case LinkNameTlv.TYPE:
+<span class="fc" id="L259">                tlv = LinkNameTlv.read(tempCb, length);</span>
+<span class="fc" id="L260">                break;</span>
+            default:
+<span class="nc" id="L262">                throw new PcepParseException(&quot;Unsupported Sub TLV type :&quot; + hType);</span>
+            }
+
+            // Check for the padding
+<span class="fc" id="L266">            int pad = length % 4;</span>
+<span class="fc bfc" id="L267" title="All 2 branches covered.">            if (0 &lt; pad) {</span>
+<span class="fc" id="L268">                pad = 4 - pad;</span>
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">                if (pad &lt;= tempCb.readableBytes()) {</span>
+<span class="fc" id="L270">                    tempCb.skipBytes(pad);</span>
+                }
+            }
+<span class="fc" id="L273">            llLinkAttributesSubTLVs.add(tlv);</span>
+<span class="fc" id="L274">        }</span>
+
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">        if (0 &lt; tempCb.readableBytes()) {</span>
+
+<span class="nc" id="L278">            throw new PcepParseException(&quot;Sub Tlv parsing error. Extra bytes received.&quot;);</span>
+        }
+
+<span class="fc" id="L281">        return new TELinkAttributesTlv(llLinkAttributesSubTLVs);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L286">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L287">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L288">                .add(&quot;Length&quot;, hLength)</span>
+<span class="fc" id="L289">                .add(&quot;LinkAttributesSubTLVs&quot;, llLinkAttributesSubTLVs)</span>
+<span class="fc" id="L290">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

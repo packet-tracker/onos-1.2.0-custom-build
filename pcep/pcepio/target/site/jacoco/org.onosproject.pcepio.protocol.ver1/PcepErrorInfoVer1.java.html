@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepErrorInfoVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepErrorInfoVer1.java</span></div><h1>PcepErrorInfoVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepError;
+import org.onosproject.pcepio.protocol.PcepErrorInfo;
+import org.onosproject.pcepio.protocol.PcepErrorObject;
+import org.onosproject.pcepio.protocol.PcepRPObject;
+import org.onosproject.pcepio.protocol.PcepTEObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Error Info.
+ * Reference :PCEP Extension for Transporting TE Data draft-dhodylee-pce-pcep-te-data-extn-02.
+ */
+public class PcepErrorInfoVer1 implements PcepErrorInfo {
+
+<span class="fc" id="L40">    protected static final Logger log = LoggerFactory.getLogger(PcepErrorInfoVer1.class);</span>
+    //Error list is optional
+    private LinkedList&lt;PcepError&gt; errList;
+
+    /**
+     * Constructor to add PCEP error object to the list.
+     *
+     * @param llRPObjList list of PCEP RP object
+     * @param llTEObjList list of PCEP TE object
+     * @param llErrObjList list of PCEP error object
+     */
+    public PcepErrorInfoVer1(LinkedList&lt;PcepRPObject&gt; llRPObjList, LinkedList&lt;PcepTEObject&gt; llTEObjList,
+<span class="fc" id="L52">            LinkedList&lt;PcepErrorObject&gt; llErrObjList) {</span>
+<span class="fc" id="L53">        this.errList = new LinkedList&lt;&gt;();</span>
+<span class="pc bpc" id="L54" title="1 of 4 branches missed.">        if ((llErrObjList != null) &amp;&amp; (!llErrObjList.isEmpty())) {</span>
+<span class="fc" id="L55">            this.errList.add(new PcepErrorVer1(llRPObjList, llTEObjList, llErrObjList));</span>
+        }
+<span class="fc" id="L57">    }</span>
+
+    /**
+     * Constructor to initialize error info.
+     *
+     * @param errll linked list or pcep error
+     */
+<span class="nc" id="L64">    public PcepErrorInfoVer1(LinkedList&lt;PcepError&gt; errll) {</span>
+<span class="nc" id="L65">        this.errList = errll;</span>
+<span class="nc" id="L66">    }</span>
+
+    @Override
+    public boolean isErrorInfoPresent() {
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        return !this.errList.isEmpty();</span>
+    }
+
+    @Override
+    public void read(ChannelBuffer cb) throws PcepParseException {
+        PcepObjectHeader tempObjHeader;
+
+<span class="fc bfc" id="L77" title="All 2 branches covered.">        while (0 &lt; cb.readableBytes()) {</span>
+<span class="fc" id="L78">            cb.markReaderIndex();</span>
+<span class="fc" id="L79">            tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L80">            cb.resetReaderIndex();</span>
+<span class="fc" id="L81">            byte yObjClass = tempObjHeader.getObjClass();</span>
+<span class="pc bpc" id="L82" title="3 of 6 branches missed.">            if ((yObjClass != PcepRPObjectVer1.RP_OBJ_CLASS) &amp;&amp; (yObjClass != PcepTEObjectVer1.TE_OBJ_CLASS)</span>
+                    &amp;&amp; (yObjClass != PcepErrorObjectVer1.ERROR_OBJ_CLASS)) {
+<span class="nc" id="L84">                throw new PcepParseException(&quot;Unknown Object is present in PCEP-ERROR. Object Class: &quot; + yObjClass);</span>
+            }
+
+<span class="fc" id="L87">            this.errList.add(PcepErrorVer1.read(cb));</span>
+<span class="fc" id="L88">        }</span>
+<span class="fc" id="L89">    }</span>
+
+    @Override
+    public void write(ChannelBuffer cb) throws PcepParseException {
+        //write &lt;error&gt;
+<span class="fc" id="L94">        ListIterator&lt;PcepError&gt; listIterator = errList.listIterator();</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L96">            PcepError pcepError = listIterator.next();</span>
+
+            //RP Object list is optional
+<span class="fc" id="L99">            LinkedList&lt;PcepRPObject&gt; llRPObjList = pcepError.getRPObjList();</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">            if (llRPObjList != null) {</span>
+<span class="fc" id="L101">                ListIterator&lt;PcepRPObject&gt; rpListIterator = llRPObjList.listIterator();</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">                while (rpListIterator.hasNext()) {</span>
+<span class="fc" id="L103">                    rpListIterator.next().write(cb);</span>
+                }
+            }
+
+            //TE Object list is optional
+<span class="fc" id="L108">            LinkedList&lt;PcepTEObject&gt; llTEObjList = pcepError.getTEObjList();</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            if (llTEObjList != null) {</span>
+<span class="fc" id="L110">                ListIterator&lt;PcepTEObject&gt; teListIterator = llTEObjList.listIterator();</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">                while (teListIterator.hasNext()) {</span>
+<span class="fc" id="L112">                    teListIterator.next().write(cb);</span>
+                }
+            }
+
+            // &lt;error-obj-list&gt; is mandatory
+<span class="fc" id="L117">            boolean bIsErrorObjListFound = false;</span>
+
+<span class="fc" id="L119">            LinkedList&lt;PcepErrorObject&gt; llErrObjList = pcepError.getErrorObjList();</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">            if (llErrObjList != null) {</span>
+<span class="fc" id="L121">                ListIterator&lt;PcepErrorObject&gt; errObjListIterator = llErrObjList.listIterator();</span>
+<span class="fc bfc" id="L122" title="All 2 branches covered.">                while (errObjListIterator.hasNext()) {</span>
+<span class="fc" id="L123">                    errObjListIterator.next().write(cb);</span>
+<span class="fc" id="L124">                    bIsErrorObjListFound = true;</span>
+                }
+            }
+
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">            if (!bIsErrorObjListFound) {</span>
+<span class="nc" id="L129">                throw new PcepParseException(&quot;&lt;error-obj-list&gt; is mandatory.&quot;);</span>
+            }
+<span class="fc" id="L131">        }</span>
+<span class="fc" id="L132">    }</span>
+
+    @Override
+    public LinkedList&lt;Integer&gt; getErrorType() {
+<span class="nc" id="L136">        LinkedList&lt;Integer&gt; errorType = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L137">        ListIterator&lt;PcepError&gt; listIterator = errList.listIterator();</span>
+        PcepErrorObject errObj;
+        int error;
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L141">            PcepError pcepError = listIterator.next();</span>
+<span class="nc" id="L142">            LinkedList&lt;PcepErrorObject&gt; llErrObjList = pcepError.getErrorObjList();</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            if (llErrObjList != null) {</span>
+<span class="nc" id="L144">                ListIterator&lt;PcepErrorObject&gt; errObjListIterator = llErrObjList.listIterator();</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">                while (errObjListIterator.hasNext()) {</span>
+<span class="nc" id="L146">                    errObj = errObjListIterator.next();</span>
+<span class="nc" id="L147">                    error = errObj.getErrorType();</span>
+<span class="nc" id="L148">                    errorType.add(error);</span>
+                }
+            }
+<span class="nc" id="L151">        }</span>
+<span class="nc" id="L152">        return errorType;</span>
+    }
+
+    @Override
+    public LinkedList&lt;Integer&gt; getErrorValue() {
+<span class="nc" id="L157">        LinkedList&lt;Integer&gt; errorValue = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L158">        ListIterator&lt;PcepError&gt; listIterator = errList.listIterator();</span>
+        PcepErrorObject errObj;
+        int error;
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L162">            PcepError pcepError = listIterator.next();</span>
+<span class="nc" id="L163">            LinkedList&lt;PcepErrorObject&gt; llErrObjList = pcepError.getErrorObjList();</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if (llErrObjList != null) {</span>
+<span class="nc" id="L165">                ListIterator&lt;PcepErrorObject&gt; errObjListIterator = llErrObjList.listIterator();</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                while (errObjListIterator.hasNext()) {</span>
+<span class="nc" id="L167">                    errObj = errObjListIterator.next();</span>
+<span class="nc" id="L168">                    error = errObj.getErrorValue();</span>
+<span class="nc" id="L169">                    errorValue.add(error);</span>
+                }
+            }
+<span class="nc" id="L172">        }</span>
+<span class="nc" id="L173">        return errorValue;</span>
+    }
+
+    /**
+     * Builder class for PCEP error info.
+     */
+<span class="nc" id="L179">    public static class Builder implements PcepErrorInfo.Builder {</span>
+        private LinkedList&lt;PcepError&gt; errll;
+
+        @Override
+        public PcepErrorInfo build() {
+<span class="nc" id="L184">            return new PcepErrorInfoVer1(errll);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepError&gt; getPcepErrorList() {
+<span class="nc" id="L189">            return this.errll;</span>
+        }
+
+        @Override
+        public Builder setPcepErrorList(LinkedList&lt;PcepError&gt; errll) {
+<span class="nc" id="L194">            this.errll = errll;</span>
+<span class="nc" id="L195">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L201">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L202">                .add(&quot;ErrorList&quot;, errList).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

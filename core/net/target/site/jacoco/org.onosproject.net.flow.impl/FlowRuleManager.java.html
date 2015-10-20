@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowRuleManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.impl</a> &gt; <span class="el_source">FlowRuleManager.java</span></div><h1>FlowRuleManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.impl;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.Tools;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.net.provider.AbstractListenerProviderRegistry;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.core.IdGenerator;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.CompletedBatchOperation;
+import org.onosproject.net.flow.DefaultFlowEntry;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleBatchEntry;
+import org.onosproject.net.flow.FlowRuleBatchEvent;
+import org.onosproject.net.flow.FlowRuleBatchOperation;
+import org.onosproject.net.flow.FlowRuleBatchRequest;
+import org.onosproject.net.flow.FlowRuleEvent;
+import org.onosproject.net.flow.FlowRuleListener;
+import org.onosproject.net.flow.FlowRuleOperation;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.FlowRuleProvider;
+import org.onosproject.net.flow.FlowRuleProviderRegistry;
+import org.onosproject.net.flow.FlowRuleProviderService;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.FlowRuleStore;
+import org.onosproject.net.flow.FlowRuleStoreDelegate;
+import org.onosproject.net.flow.TableStatisticsEntry;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.Dictionary;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.net.flow.FlowRuleEvent.Type.RULE_ADD_REQUESTED;
+import static org.onosproject.net.flow.FlowRuleEvent.Type.RULE_REMOVE_REQUESTED;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+
+/**
+ * Provides implementation of the flow NB &amp;amp; SB APIs.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="fc" id="L92">public class FlowRuleManager</span>
+        extends AbstractListenerProviderRegistry&lt;FlowRuleEvent, FlowRuleListener,
+                                                 FlowRuleProvider, FlowRuleProviderService&gt;
+        implements FlowRuleService, FlowRuleProviderRegistry {
+
+    public static final String FLOW_RULE_NULL = &quot;FlowRule cannot be null&quot;;
+    private static final boolean ALLOW_EXTRANEOUS_RULES = false;
+
+<span class="fc" id="L100">    @Property(name = &quot;allowExtraneousRules&quot;, boolValue = ALLOW_EXTRANEOUS_RULES,</span>
+            label = &quot;Allow flow rules in switch not installed by ONOS&quot;)
+    private boolean allowExtraneousRules = ALLOW_EXTRANEOUS_RULES;
+
+<span class="fc" id="L104">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L106">    private final FlowRuleStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+<span class="fc" id="L108">    protected ExecutorService deviceInstallers =</span>
+<span class="fc" id="L109">            Executors.newFixedThreadPool(32, groupedThreads(&quot;onos/flowservice&quot;, &quot;device-installer-%d&quot;));</span>
+
+<span class="fc" id="L111">    protected ExecutorService operationsService =</span>
+<span class="fc" id="L112">            Executors.newFixedThreadPool(32, groupedThreads(&quot;onos/flowservice&quot;, &quot;operations-%d&quot;));</span>
+
+    private IdGenerator idGenerator;
+
+<span class="fc" id="L116">    private Map&lt;Long, FlowOperationsProcessor&gt; pendingFlowOperations</span>
+            = new ConcurrentHashMap&lt;&gt;();
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="fc" id="L133">        cfgService.registerProperties(getClass());</span>
+<span class="fc" id="L134">        idGenerator = coreService.getIdGenerator(FLOW_OP_TOPIC);</span>
+
+<span class="fc" id="L136">        modified(context);</span>
+
+<span class="fc" id="L138">        store.setDelegate(delegate);</span>
+<span class="fc" id="L139">        eventDispatcher.addSink(FlowRuleEvent.class, listenerRegistry);</span>
+<span class="fc" id="L140">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L141">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L145">        cfgService.unregisterProperties(getClass(), false);</span>
+<span class="fc" id="L146">        deviceInstallers.shutdownNow();</span>
+<span class="fc" id="L147">        operationsService.shutdownNow();</span>
+<span class="fc" id="L148">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L149">        eventDispatcher.removeSink(FlowRuleEvent.class);</span>
+<span class="fc" id="L150">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L151">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">        if (context == null) {</span>
+<span class="fc" id="L156">            return;</span>
+        }
+
+<span class="nc" id="L159">        Dictionary&lt;?, ?&gt; properties = context.getProperties();</span>
+
+<span class="nc" id="L161">        String s = Tools.get(properties, &quot;allowExtraneousRules&quot;);</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        allowExtraneousRules = Strings.isNullOrEmpty(s) ? ALLOW_EXTRANEOUS_RULES : Boolean.valueOf(s);</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if (allowExtraneousRules) {</span>
+<span class="nc" id="L165">            log.info(&quot;Allowing flow rules not installed by ONOS&quot;);</span>
+        }
+<span class="nc" id="L167">    }</span>
+
+    @Override
+    public int getFlowRuleCount() {
+<span class="nc" id="L171">        checkPermission(FLOWRULE_READ);</span>
+<span class="nc" id="L172">        return store.getFlowRuleCount();</span>
+    }
+
+    @Override
+    public Iterable&lt;FlowEntry&gt; getFlowEntries(DeviceId deviceId) {
+<span class="fc" id="L177">        checkPermission(FLOWRULE_READ);</span>
+<span class="fc" id="L178">        return store.getFlowEntries(deviceId);</span>
+    }
+
+    @Override
+    public void applyFlowRules(FlowRule... flowRules) {
+<span class="fc" id="L183">        checkPermission(FLOWRULE_WRITE);</span>
+
+<span class="fc" id="L185">        FlowRuleOperations.Builder builder = FlowRuleOperations.builder();</span>
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        for (int i = 0; i &lt; flowRules.length; i++) {</span>
+<span class="fc" id="L187">            builder.add(flowRules[i]);</span>
+        }
+<span class="fc" id="L189">        apply(builder.build());</span>
+<span class="fc" id="L190">    }</span>
+
+    @Override
+    public void removeFlowRules(FlowRule... flowRules) {
+<span class="fc" id="L194">        checkPermission(FLOWRULE_WRITE);</span>
+
+<span class="fc" id="L196">        FlowRuleOperations.Builder builder = FlowRuleOperations.builder();</span>
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        for (int i = 0; i &lt; flowRules.length; i++) {</span>
+<span class="fc" id="L198">            builder.remove(flowRules[i]);</span>
+        }
+<span class="fc" id="L200">        apply(builder.build());</span>
+<span class="fc" id="L201">    }</span>
+
+    @Override
+    public void removeFlowRulesById(ApplicationId id) {
+<span class="fc" id="L205">        checkPermission(FLOWRULE_WRITE);</span>
+<span class="fc" id="L206">        removeFlowRules(Iterables.toArray(getFlowRulesById(id), FlowRule.class));</span>
+<span class="fc" id="L207">    }</span>
+
+    @Override
+    public Iterable&lt;FlowRule&gt; getFlowRulesById(ApplicationId id) {
+<span class="fc" id="L211">        checkPermission(FLOWRULE_READ);</span>
+
+<span class="fc" id="L213">        Set&lt;FlowRule&gt; flowEntries = Sets.newHashSet();</span>
+<span class="fc bfc" id="L214" title="All 2 branches covered.">        for (Device d : deviceService.getDevices()) {</span>
+<span class="fc bfc" id="L215" title="All 2 branches covered.">            for (FlowEntry flowEntry : store.getFlowEntries(d.id())) {</span>
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">                if (flowEntry.appId() == id.id()) {</span>
+<span class="fc" id="L217">                    flowEntries.add(flowEntry);</span>
+                }
+<span class="fc" id="L219">            }</span>
+<span class="fc" id="L220">        }</span>
+<span class="fc" id="L221">        return flowEntries;</span>
+    }
+
+    @Override
+    public Iterable&lt;FlowRule&gt; getFlowRulesByGroupId(ApplicationId appId, short groupId) {
+<span class="nc" id="L226">        checkPermission(FLOWRULE_READ);</span>
+
+<span class="nc" id="L228">        Set&lt;FlowRule&gt; matches = Sets.newHashSet();</span>
+<span class="nc" id="L229">        long toLookUp = ((long) appId.id() &lt;&lt; 16) | groupId;</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        for (Device d : deviceService.getDevices()) {</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">            for (FlowEntry flowEntry : store.getFlowEntries(d.id())) {</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">                if ((flowEntry.id().value() &gt;&gt;&gt; 32) == toLookUp) {</span>
+<span class="nc" id="L233">                    matches.add(flowEntry);</span>
+                }
+<span class="nc" id="L235">            }</span>
+<span class="nc" id="L236">        }</span>
+<span class="nc" id="L237">        return matches;</span>
+    }
+
+    @Override
+    public void apply(FlowRuleOperations ops) {
+<span class="fc" id="L242">        checkPermission(FLOWRULE_WRITE);</span>
+<span class="fc" id="L243">        operationsService.submit(new FlowOperationsProcessor(ops));</span>
+<span class="fc" id="L244">    }</span>
+
+    @Override
+    protected FlowRuleProviderService createProviderService(
+            FlowRuleProvider provider) {
+<span class="fc" id="L249">        return new InternalFlowRuleProviderService(provider);</span>
+    }
+
+    private class InternalFlowRuleProviderService
+            extends AbstractProviderService&lt;FlowRuleProvider&gt;
+            implements FlowRuleProviderService {
+
+<span class="fc" id="L256">        final Map&lt;FlowEntry, Long&gt; lastSeen = Maps.newConcurrentMap();</span>
+
+<span class="fc" id="L258">        protected InternalFlowRuleProviderService(FlowRuleProvider provider) {</span>
+<span class="fc" id="L259">            super(provider);</span>
+<span class="fc" id="L260">        }</span>
+
+        @Override
+        public void flowRemoved(FlowEntry flowEntry) {
+<span class="fc" id="L264">            checkNotNull(flowEntry, FLOW_RULE_NULL);</span>
+<span class="fc" id="L265">            checkValidity();</span>
+<span class="fc" id="L266">            lastSeen.remove(flowEntry);</span>
+<span class="fc" id="L267">            FlowEntry stored = store.getFlowEntry(flowEntry);</span>
+<span class="fc bfc" id="L268" title="All 2 branches covered.">            if (stored == null) {</span>
+<span class="fc" id="L269">                log.debug(&quot;Rule already evicted from store: {}&quot;, flowEntry);</span>
+<span class="fc" id="L270">                return;</span>
+            }
+<span class="fc" id="L272">            Device device = deviceService.getDevice(flowEntry.deviceId());</span>
+<span class="fc" id="L273">            FlowRuleProvider frp = getProvider(device.providerId());</span>
+<span class="fc" id="L274">            FlowRuleEvent event = null;</span>
+<span class="pc bpc" id="L275" title="1 of 3 branches missed.">            switch (stored.state()) {</span>
+                case ADDED:
+                case PENDING_ADD:
+<span class="fc" id="L278">                    frp.applyFlowRule(stored);</span>
+<span class="fc" id="L279">                    break;</span>
+                case PENDING_REMOVE:
+                case REMOVED:
+<span class="fc" id="L282">                    event = store.removeFlowRule(stored);</span>
+<span class="fc" id="L283">                    break;</span>
+                default:
+                    break;
+
+            }
+<span class="fc bfc" id="L288" title="All 2 branches covered.">            if (event != null) {</span>
+<span class="fc" id="L289">                log.debug(&quot;Flow {} removed&quot;, flowEntry);</span>
+<span class="fc" id="L290">                post(event);</span>
+            }
+<span class="fc" id="L292">        }</span>
+
+
+        private void flowMissing(FlowEntry flowRule) {
+<span class="fc" id="L296">            checkNotNull(flowRule, FLOW_RULE_NULL);</span>
+<span class="fc" id="L297">            checkValidity();</span>
+<span class="fc" id="L298">            Device device = deviceService.getDevice(flowRule.deviceId());</span>
+<span class="fc" id="L299">            FlowRuleProvider frp = getProvider(device.providerId());</span>
+<span class="fc" id="L300">            FlowRuleEvent event = null;</span>
+<span class="pc bpc" id="L301" title="1 of 3 branches missed.">            switch (flowRule.state()) {</span>
+                case PENDING_REMOVE:
+                case REMOVED:
+<span class="fc" id="L304">                    event = store.removeFlowRule(flowRule);</span>
+<span class="fc" id="L305">                    frp.removeFlowRule(flowRule);</span>
+<span class="fc" id="L306">                    break;</span>
+                case ADDED:
+                case PENDING_ADD:
+                    try {
+<span class="fc" id="L310">                        frp.applyFlowRule(flowRule);</span>
+<span class="nc" id="L311">                    } catch (UnsupportedOperationException e) {</span>
+<span class="nc" id="L312">                        log.warn(e.getMessage());</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">                        if (flowRule instanceof DefaultFlowEntry) {</span>
+<span class="nc" id="L314">                            ((DefaultFlowEntry) flowRule).setState(FlowEntry.FlowEntryState.FAILED);</span>
+                        }
+<span class="fc" id="L316">                    }</span>
+<span class="nc" id="L317">                    break;</span>
+                default:
+<span class="nc" id="L319">                    log.debug(&quot;Flow {} has not been installed.&quot;, flowRule);</span>
+            }
+
+<span class="fc bfc" id="L322" title="All 2 branches covered.">            if (event != null) {</span>
+<span class="fc" id="L323">                log.debug(&quot;Flow {} removed&quot;, flowRule);</span>
+<span class="fc" id="L324">                post(event);</span>
+            }
+
+<span class="fc" id="L327">        }</span>
+
+
+        private void extraneousFlow(FlowRule flowRule) {
+<span class="fc" id="L331">            checkNotNull(flowRule, FLOW_RULE_NULL);</span>
+<span class="fc" id="L332">            checkValidity();</span>
+<span class="fc" id="L333">            FlowRuleProvider frp = getProvider(flowRule.deviceId());</span>
+<span class="fc" id="L334">            frp.removeFlowRule(flowRule);</span>
+<span class="fc" id="L335">            log.debug(&quot;Flow {} is on switch but not in store.&quot;, flowRule);</span>
+<span class="fc" id="L336">        }</span>
+
+
+        private void flowAdded(FlowEntry flowEntry) {
+<span class="fc" id="L340">            checkNotNull(flowEntry, FLOW_RULE_NULL);</span>
+<span class="fc" id="L341">            checkValidity();</span>
+
+<span class="pc bpc" id="L343" title="1 of 2 branches missed.">            if (checkRuleLiveness(flowEntry, store.getFlowEntry(flowEntry))) {</span>
+
+<span class="fc" id="L345">                FlowRuleEvent event = store.addOrUpdateFlowRule(flowEntry);</span>
+<span class="pc bpc" id="L346" title="1 of 2 branches missed.">                if (event == null) {</span>
+<span class="nc" id="L347">                    log.debug(&quot;No flow store event generated.&quot;);</span>
+                } else {
+<span class="fc" id="L349">                    log.trace(&quot;Flow {} {}&quot;, flowEntry, event.type());</span>
+<span class="fc" id="L350">                    post(event);</span>
+                }
+<span class="fc" id="L352">            } else {</span>
+<span class="nc" id="L353">                log.debug(&quot;Removing flow rules....&quot;);</span>
+<span class="nc" id="L354">                removeFlowRules(flowEntry);</span>
+            }
+
+<span class="fc" id="L357">        }</span>
+
+        private boolean checkRuleLiveness(FlowEntry swRule, FlowEntry storedRule) {
+<span class="pc bpc" id="L360" title="1 of 2 branches missed.">            if (storedRule == null) {</span>
+<span class="nc" id="L361">                return false;</span>
+            }
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">            if (storedRule.isPermanent()) {</span>
+<span class="nc" id="L364">                return true;</span>
+            }
+
+<span class="fc" id="L367">            final long timeout = storedRule.timeout() * 1000;</span>
+<span class="fc" id="L368">            final long currentTime = System.currentTimeMillis();</span>
+<span class="pc bpc" id="L369" title="1 of 2 branches missed.">            if (storedRule.packets() != swRule.packets()) {</span>
+<span class="nc" id="L370">                lastSeen.put(storedRule, currentTime);</span>
+<span class="nc" id="L371">                return true;</span>
+            }
+<span class="fc bfc" id="L373" title="All 2 branches covered.">            if (!lastSeen.containsKey(storedRule)) {</span>
+                // checking for the first time
+<span class="fc" id="L375">                lastSeen.put(storedRule, storedRule.lastSeen());</span>
+                // Use following if lastSeen attr. was removed.
+                //lastSeen.put(storedRule, currentTime);
+            }
+<span class="fc" id="L379">            Long last = lastSeen.get(storedRule);</span>
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">            if (last == null) {</span>
+                // concurrently removed? let the liveness check fail
+<span class="nc" id="L382">                return false;</span>
+            }
+
+<span class="pc bpc" id="L385" title="1 of 2 branches missed.">            if ((currentTime - last) &lt;= timeout) {</span>
+<span class="fc" id="L386">                return true;</span>
+            }
+<span class="nc" id="L388">            return false;</span>
+        }
+
+        @Override
+        public void pushFlowMetrics(DeviceId deviceId, Iterable&lt;FlowEntry&gt; flowEntries) {
+<span class="fc" id="L393">            pushFlowMetricsInternal(deviceId, flowEntries, true);</span>
+<span class="fc" id="L394">        }</span>
+
+        @Override
+        public void pushFlowMetricsWithoutFlowMissing(DeviceId deviceId, Iterable&lt;FlowEntry&gt; flowEntries) {
+<span class="nc" id="L398">            pushFlowMetricsInternal(deviceId, flowEntries, false);</span>
+<span class="nc" id="L399">        }</span>
+
+        private void pushFlowMetricsInternal(DeviceId deviceId, Iterable&lt;FlowEntry&gt; flowEntries,
+                                             boolean useMissingFlow) {
+<span class="fc" id="L403">            Map&lt;FlowEntry, FlowEntry&gt; storedRules = Maps.newHashMap();</span>
+<span class="fc" id="L404">            store.getFlowEntries(deviceId).forEach(f -&gt; storedRules.put(f, f));</span>
+
+<span class="fc bfc" id="L406" title="All 2 branches covered.">            for (FlowEntry rule : flowEntries) {</span>
+                try {
+<span class="fc" id="L408">                    FlowEntry storedRule = storedRules.remove(rule);</span>
+<span class="fc bfc" id="L409" title="All 2 branches covered.">                    if (storedRule != null) {</span>
+<span class="pc bpc" id="L410" title="1 of 2 branches missed.">                        if (storedRule.exactMatch(rule)) {</span>
+                            // we both have the rule, let's update some info then.
+<span class="fc" id="L412">                            flowAdded(rule);</span>
+                        } else {
+                            // the two rules are not an exact match - remove the
+                            // switch's rule and install our rule
+<span class="nc" id="L416">                            extraneousFlow(rule);</span>
+<span class="nc" id="L417">                            flowMissing(storedRule);</span>
+                        }
+                    } else {
+                        // the device has a rule the store does not have
+<span class="pc bpc" id="L421" title="1 of 2 branches missed.">                        if (!allowExtraneousRules) {</span>
+<span class="fc" id="L422">                            extraneousFlow(rule);</span>
+                        }
+                    }
+<span class="nc" id="L425">                } catch (Exception e) {</span>
+<span class="nc" id="L426">                    log.debug(&quot;Can't process added or extra rule {}&quot;, e.getMessage());</span>
+<span class="nc" id="L427">                    continue;</span>
+<span class="fc" id="L428">                }</span>
+<span class="fc" id="L429">            }</span>
+
+            // DO NOT reinstall
+<span class="pc bpc" id="L432" title="1 of 2 branches missed.">            if (useMissingFlow) {</span>
+<span class="fc bfc" id="L433" title="All 2 branches covered.">                for (FlowEntry rule : storedRules.keySet()) {</span>
+                    try {
+                        // there are rules in the store that aren't on the switch
+<span class="fc" id="L436">                        log.debug(&quot;Adding rule in store, but not on switch {}&quot;, rule);</span>
+<span class="fc" id="L437">                        flowMissing(rule);</span>
+<span class="nc" id="L438">                    } catch (Exception e) {</span>
+<span class="nc" id="L439">                        log.debug(&quot;Can't add missing flow rule {}&quot;, e.getMessage());</span>
+<span class="nc" id="L440">                        continue;</span>
+<span class="fc" id="L441">                    }</span>
+<span class="fc" id="L442">                }</span>
+            }
+<span class="fc" id="L444">        }</span>
+
+        @Override
+        public void batchOperationCompleted(long batchId, CompletedBatchOperation operation) {
+<span class="nc" id="L448">            store.batchOperationComplete(FlowRuleBatchEvent.completed(</span>
+<span class="nc" id="L449">                    new FlowRuleBatchRequest(batchId, Collections.emptySet()),</span>
+                    operation
+            ));
+<span class="nc" id="L452">        }</span>
+
+        @Override
+        public void pushTableStatistics(DeviceId deviceId,
+                                          List&lt;TableStatisticsEntry&gt; tableStats) {
+<span class="nc" id="L457">            store.updateTableStatistics(deviceId, tableStats);</span>
+<span class="nc" id="L458">        }</span>
+    }
+
+    // Store delegate to re-post events emitted from the store.
+<span class="fc" id="L462">    private class InternalStoreDelegate implements FlowRuleStoreDelegate {</span>
+
+
+        // TODO: Right now we only dispatch events at individual flowEntry level.
+        // It may be more efficient for also dispatch events as a batch.
+        @Override
+        public void notify(FlowRuleBatchEvent event) {
+<span class="fc" id="L469">            final FlowRuleBatchRequest request = event.subject();</span>
+<span class="pc bpc" id="L470" title="1 of 3 branches missed.">            switch (event.type()) {</span>
+            case BATCH_OPERATION_REQUESTED:
+                // Request has been forwarded to MASTER Node, and was
+<span class="fc" id="L473">                request.ops().stream().forEach(</span>
+                        op -&gt; {
+<span class="pc bpc" id="L475" title="2 of 4 branches missed.">                            switch (op.operator()) {</span>
+
+                                case ADD:
+<span class="fc" id="L478">                                    post(new FlowRuleEvent(RULE_ADD_REQUESTED,</span>
+<span class="fc" id="L479">                                                           op.target()));</span>
+<span class="fc" id="L480">                                    break;</span>
+                                case REMOVE:
+<span class="fc" id="L482">                                    post(new FlowRuleEvent(RULE_REMOVE_REQUESTED,</span>
+<span class="fc" id="L483">                                                           op.target()));</span>
+<span class="fc" id="L484">                                    break;</span>
+                                case MODIFY:
+                                    //TODO: do something here when the time comes.
+<span class="nc" id="L487">                                    break;</span>
+                                default:
+<span class="nc" id="L489">                                    log.warn(&quot;Unknown flow operation operator: {}&quot;, op.operator());</span>
+                            }
+<span class="fc" id="L491">                        }</span>
+                );
+
+<span class="fc" id="L494">                DeviceId deviceId = event.deviceId();</span>
+
+<span class="fc" id="L496">                FlowRuleBatchOperation batchOperation =</span>
+<span class="fc" id="L497">                        request.asBatchOperation(deviceId);</span>
+
+<span class="fc" id="L499">                FlowRuleProvider flowRuleProvider = getProvider(deviceId);</span>
+<span class="pc bpc" id="L500" title="1 of 2 branches missed.">                if (flowRuleProvider != null) {</span>
+<span class="fc" id="L501">                    flowRuleProvider.executeBatch(batchOperation);</span>
+                }
+
+                break;
+
+            case BATCH_OPERATION_COMPLETED:
+
+<span class="fc" id="L508">                FlowOperationsProcessor fops = pendingFlowOperations.remove(</span>
+<span class="fc" id="L509">                        event.subject().batchId());</span>
+<span class="pc bpc" id="L510" title="1 of 2 branches missed.">                if (event.result().isSuccess()) {</span>
+<span class="pc bpc" id="L511" title="1 of 2 branches missed.">                    if (fops != null) {</span>
+<span class="fc" id="L512">                        fops.satisfy(event.deviceId());</span>
+                    }
+                } else {
+<span class="nc" id="L515">                    fops.fail(event.deviceId(), event.result().failedItems());</span>
+                }
+
+<span class="nc" id="L518">                break;</span>
+
+            default:
+                break;
+            }
+<span class="fc" id="L523">        }</span>
+    }
+
+    private class FlowOperationsProcessor implements Runnable {
+
+        private final List&lt;Set&lt;FlowRuleOperation&gt;&gt; stages;
+        private final FlowRuleOperationsContext context;
+        private final FlowRuleOperations fops;
+<span class="fc" id="L531">        private final AtomicBoolean hasFailed = new AtomicBoolean(false);</span>
+
+        private Set&lt;DeviceId&gt; pendingDevices;
+
+<span class="fc" id="L535">        public FlowOperationsProcessor(FlowRuleOperations ops) {</span>
+<span class="fc" id="L536">            this.stages = Lists.newArrayList(ops.stages());</span>
+<span class="fc" id="L537">            this.context = ops.callback();</span>
+<span class="fc" id="L538">            this.fops = ops;</span>
+<span class="fc" id="L539">            pendingDevices = Sets.newConcurrentHashSet();</span>
+<span class="fc" id="L540">        }</span>
+
+        @Override
+        public void run() {
+<span class="fc bfc" id="L544" title="All 2 branches covered.">            if (stages.size() &gt; 0) {</span>
+<span class="fc" id="L545">                process(stages.remove(0));</span>
+<span class="pc bpc" id="L546" title="2 of 4 branches missed.">            } else if (!hasFailed.get() &amp;&amp; context != null) {</span>
+<span class="nc" id="L547">                context.onSuccess(fops);</span>
+            }
+<span class="fc" id="L549">        }</span>
+
+        private void process(Set&lt;FlowRuleOperation&gt; ops) {
+            Multimap&lt;DeviceId, FlowRuleBatchEntry&gt; perDeviceBatches =
+<span class="fc" id="L553">                    ArrayListMultimap.create();</span>
+
+            FlowRuleBatchEntry fbe;
+<span class="fc bfc" id="L556" title="All 2 branches covered.">            for (FlowRuleOperation flowRuleOperation : ops) {</span>
+<span class="pc bpc" id="L557" title="2 of 4 branches missed.">                switch (flowRuleOperation.type()) {</span>
+                    // FIXME: Brian needs imagination when creating class names.
+                    case ADD:
+<span class="fc" id="L560">                        fbe = new FlowRuleBatchEntry(</span>
+<span class="fc" id="L561">                                FlowRuleBatchEntry.FlowRuleOperation.ADD, flowRuleOperation.rule());</span>
+<span class="fc" id="L562">                        break;</span>
+                    case MODIFY:
+<span class="nc" id="L564">                        fbe = new FlowRuleBatchEntry(</span>
+<span class="nc" id="L565">                                FlowRuleBatchEntry.FlowRuleOperation.MODIFY, flowRuleOperation.rule());</span>
+<span class="nc" id="L566">                        break;</span>
+                    case REMOVE:
+<span class="fc" id="L568">                        fbe = new FlowRuleBatchEntry(</span>
+<span class="fc" id="L569">                                FlowRuleBatchEntry.FlowRuleOperation.REMOVE, flowRuleOperation.rule());</span>
+<span class="fc" id="L570">                        break;</span>
+                    default:
+<span class="nc" id="L572">                        throw new UnsupportedOperationException(&quot;Unknown flow rule type &quot; + flowRuleOperation.type());</span>
+                }
+<span class="fc" id="L574">                pendingDevices.add(flowRuleOperation.rule().deviceId());</span>
+<span class="fc" id="L575">                perDeviceBatches.put(flowRuleOperation.rule().deviceId(), fbe);</span>
+<span class="fc" id="L576">            }</span>
+
+
+<span class="fc bfc" id="L579" title="All 2 branches covered.">            for (DeviceId deviceId : perDeviceBatches.keySet()) {</span>
+<span class="fc" id="L580">                long id = idGenerator.getNewId();</span>
+<span class="fc" id="L581">                final FlowRuleBatchOperation b = new FlowRuleBatchOperation(perDeviceBatches.get(deviceId),</span>
+                                               deviceId, id);
+<span class="fc" id="L583">                pendingFlowOperations.put(id, this);</span>
+<span class="fc" id="L584">                deviceInstallers.submit(() -&gt; store.storeBatch(b));</span>
+<span class="fc" id="L585">            }</span>
+<span class="fc" id="L586">        }</span>
+
+        public void satisfy(DeviceId devId) {
+<span class="fc" id="L589">            pendingDevices.remove(devId);</span>
+<span class="pc bpc" id="L590" title="1 of 2 branches missed.">            if (pendingDevices.isEmpty()) {</span>
+<span class="fc" id="L591">                operationsService.submit(this);</span>
+            }
+<span class="fc" id="L593">        }</span>
+
+
+
+        public void fail(DeviceId devId, Set&lt;? extends FlowRule&gt; failures) {
+<span class="nc" id="L598">            hasFailed.set(true);</span>
+<span class="nc" id="L599">            pendingDevices.remove(devId);</span>
+<span class="nc bnc" id="L600" title="All 2 branches missed.">            if (pendingDevices.isEmpty()) {</span>
+<span class="nc" id="L601">                operationsService.submit(this);</span>
+            }
+
+<span class="nc bnc" id="L604" title="All 2 branches missed.">            if (context != null) {</span>
+                final FlowRuleOperations.Builder failedOpsBuilder =
+<span class="nc" id="L606">                    FlowRuleOperations.builder();</span>
+<span class="nc" id="L607">                failures.stream().forEach(failedOpsBuilder::add);</span>
+
+<span class="nc" id="L609">                context.onError(failedOpsBuilder.build());</span>
+            }
+<span class="nc" id="L611">        }</span>
+
+    }
+
+    @Override
+    public Iterable&lt;TableStatisticsEntry&gt; getFlowTableStatistics(DeviceId deviceId) {
+<span class="nc" id="L617">        checkPermission(FLOWRULE_READ);</span>
+<span class="nc" id="L618">        return store.getTableStatistics(deviceId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepFecObjectIPv6Ver1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepFecObjectIPv6Ver1.java</span></div><h1>PcepFecObjectIPv6Ver1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepFecObjectIPv6;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Fec Object IPv6 object.
+ */
+public class PcepFecObjectIPv6Ver1 implements PcepFecObjectIPv6 {
+
+    /*
+     * ref : draft-zhao-pce-pcep-extension-for-pce-controller-01 , section : 7.5
+     *
+        0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                                                               |
+       //                     IPv6 Node ID (16 bytes)                  //
+       |                                                               |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                       FEC Object-Type is 2 IPv6 Node ID
+     */
+<span class="nc" id="L47">    protected static final Logger log = LoggerFactory.getLogger(PcepFecObjectIPv6Ver1.class);</span>
+
+    public static final byte FEC_OBJ_TYPE = 2;
+    public static final byte FEC_OBJ_CLASS = 63; //to be defined
+    public static final byte FEC_OBJECT_VERSION = 1;
+    public static final short FEC_OBJ_MINIMUM_LENGTH = 20;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+    public static final int IPV6_ADDRESS_LENGTH = 16;
+
+<span class="nc" id="L56">    static final PcepObjectHeader DEFAULT_FEC_OBJECT_HEADER = new PcepObjectHeader(FEC_OBJ_CLASS, FEC_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, FEC_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader fecObjHeader;
+<span class="nc" id="L60">    private byte[] nodeID = new byte[IPV6_ADDRESS_LENGTH];</span>
+
+    /**
+     * Constructor to initialize parameters for PCEP fec object.
+     *
+     * @param fecObjHeader Fec object header
+     * @param nodeID node ID
+     */
+<span class="nc" id="L68">    public PcepFecObjectIPv6Ver1(PcepObjectHeader fecObjHeader, byte[] nodeID) {</span>
+<span class="nc" id="L69">        this.fecObjHeader = fecObjHeader;</span>
+<span class="nc" id="L70">        this.nodeID = nodeID;</span>
+<span class="nc" id="L71">    }</span>
+
+    /**
+     * Sets the Object header.
+     *
+     * @param obj object header
+     */
+    public void setFecIpv6ObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L79">        this.fecObjHeader = obj;</span>
+<span class="nc" id="L80">    }</span>
+
+    @Override
+    public void setNodeID(byte[] nodeID) {
+<span class="nc" id="L84">        this.nodeID = nodeID;</span>
+<span class="nc" id="L85">    }</span>
+
+    /**
+     * Returns object header.
+     *
+     * @return fec Object Header
+     */
+    public PcepObjectHeader getFecIpv6ObjHeader() {
+<span class="nc" id="L93">        return this.fecObjHeader;</span>
+    }
+
+    @Override
+    public byte[] getNodeID() {
+<span class="nc" id="L98">        return this.nodeID;</span>
+    }
+
+    /**
+     * reads the channel buffer and returns object of PcepFecObjectIPv6.
+     *
+     * @param cb of channel buffer.
+     * @return object of PcepFecObjectIPv6
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepFecObjectIPv6 read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader fecObjHeader;
+<span class="nc" id="L111">        byte[] nodeID = new byte[IPV6_ADDRESS_LENGTH];</span>
+<span class="nc" id="L112">        fecObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="nc" id="L113">        cb.readBytes(nodeID, 0, IPV6_ADDRESS_LENGTH);</span>
+<span class="nc" id="L114">        return new PcepFecObjectIPv6Ver1(fecObjHeader, nodeID);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L120">        int objStartIndex = cb.writerIndex();</span>
+
+        //write common header
+<span class="nc" id="L123">        int objLenIndex = fecObjHeader.write(cb);</span>
+<span class="nc" id="L124">        cb.writeBytes(nodeID);</span>
+
+        //now write FEC IPv4 Object Length
+<span class="nc" id="L127">        cb.setShort(objLenIndex, (short) (cb.writerIndex() - objStartIndex));</span>
+<span class="nc" id="L128">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Builder class for PCEP fec object IPv6.
+     */
+<span class="nc" id="L134">    public static class Builder implements PcepFecObjectIPv6.Builder {</span>
+<span class="nc" id="L135">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L136">        private boolean bIsNodeIdset = false;</span>
+
+        private PcepObjectHeader fecObjHeader;
+<span class="nc" id="L139">        private byte[] nodeID = new byte[IPV6_ADDRESS_LENGTH];</span>
+
+<span class="nc" id="L141">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L144">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepFecObjectIPv6 build() throws PcepParseException {
+<span class="nc bnc" id="L149" title="All 2 branches missed.">            PcepObjectHeader fecObjHeader = this.bIsHeaderSet ? this.fecObjHeader : DEFAULT_FEC_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            if (!this.bIsNodeIdset) {</span>
+<span class="nc" id="L152">                throw new PcepParseException(&quot; NodeID not set while building PcepFecObjectIPv6 object.&quot;);</span>
+            }
+<span class="nc bnc" id="L154" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L155">                fecObjHeader.setPFlag(bPFlag);</span>
+            }
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L158">                fecObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L160">            return new PcepFecObjectIPv6Ver1(fecObjHeader, this.nodeID);</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L165">            this.bPFlag = value;</span>
+<span class="nc" id="L166">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L167">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L172">            this.bIFlag = value;</span>
+<span class="nc" id="L173">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L174">            return this;</span>
+        }
+
+        @Override
+        public PcepObjectHeader getFecIpv6ObjHeader() {
+<span class="nc" id="L179">            return this.fecObjHeader;</span>
+        }
+
+        @Override
+        public Builder setFecIpv6ObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L184">            this.fecObjHeader = obj;</span>
+<span class="nc" id="L185">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L186">            return this;</span>
+        }
+
+        @Override
+        public byte[] getNodeID() {
+<span class="nc" id="L191">            return this.nodeID;</span>
+        }
+
+        @Override
+        public Builder setNodeID(byte[] value) {
+<span class="nc" id="L196">            this.nodeID = value;</span>
+<span class="nc" id="L197">            this.bIsNodeIdset = true;</span>
+<span class="nc" id="L198">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L205">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public int getType() {
+<span class="nc" id="L210">        return FEC_OBJ_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L215">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L216">                .add(&quot;fecObjHeader&quot;, fecObjHeader)</span>
+<span class="nc" id="L217">                .add(&quot;NodeID: &quot;, nodeID)</span>
+<span class="nc" id="L218">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

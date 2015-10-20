@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TunnelEndPointFormatter.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.tunnel</a> &gt; <span class="el_source">TunnelEndPointFormatter.java</span></div><h1>TunnelEndPointFormatter.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.tunnel;
+
+
+import com.google.common.annotations.Beta;
+import org.onosproject.ui.table.CellFormatter;
+import org.onosproject.ui.table.cell.AbstractCellFormatter;
+
+/**
+ * Formats a optical tunnel endpoint as &quot;(type)/(element-id)/(port)&quot;.
+ * Formats a ip tunnel endpoint as &quot;ip&quot;.
+ */
+@Beta
+public final class TunnelEndPointFormatter extends AbstractCellFormatter {
+    //non-instantiable
+<span class="nc" id="L30">    private TunnelEndPointFormatter() {</span>
+<span class="nc" id="L31">    }</span>
+
+    @Override
+    protected String nonNullFormat(Object value) {
+
+<span class="nc bnc" id="L36" title="All 2 branches missed.">        if (value instanceof DefaultOpticalTunnelEndPoint) {</span>
+<span class="nc" id="L37">            DefaultOpticalTunnelEndPoint cp = (DefaultOpticalTunnelEndPoint) value;</span>
+<span class="nc" id="L38">            return cp.type() + &quot;/&quot; + cp.elementId().get() + &quot;/&quot; + cp.portNumber().get();</span>
+<span class="nc bnc" id="L39" title="All 2 branches missed.">        } else if (value instanceof IpTunnelEndPoint) {</span>
+<span class="nc" id="L40">            IpTunnelEndPoint cp = (IpTunnelEndPoint) value;</span>
+<span class="nc" id="L41">            return cp.ip().toString();</span>
+        }
+<span class="nc" id="L43">        return &quot;&quot;;</span>
+    }
+
+    /**
+     * An instance of this class.
+     */
+<span class="nc" id="L49">    public static final CellFormatter INSTANCE = new TunnelEndPointFormatter();</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

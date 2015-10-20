@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepOpenObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepOpenObjectVer1.java</span></div><h1>PcepOpenObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepOpenObject;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.GmplsCapabilityTlv;
+import org.onosproject.pcepio.types.PceccCapabilityTlv;
+import org.onosproject.pcepio.types.PcepLabelDbVerTlv;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.onosproject.pcepio.types.StatefulLspDbVerTlv;
+import org.onosproject.pcepio.types.StatefulPceCapabilityTlv;
+import org.onosproject.pcepio.types.TedCapabilityTlv;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP open object.
+ */
+public class PcepOpenObjectVer1 implements PcepOpenObject {
+
+    /*
+     message format.
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Ver |   Flags |   Keepalive   |  DeadTimer    |      SID      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    //                       Optional TLVs                         //
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                     The OPEN Object format
+     */
+<span class="fc" id="L61">    protected static final Logger log = LoggerFactory.getLogger(PcepOpenObjectVer1.class);</span>
+
+<span class="fc" id="L63">    public static final PcepType MSG_TYPE = PcepType.OPEN;</span>
+    public static final byte OPEN_OBJECT_VERSION = 1;
+    public static final byte OPEN_OBJ_TYPE = 1;
+    public static final byte OPEN_OBJ_CLASS = 1;
+    public static final byte DEFAULT_KEEPALIVE_TIME = 30;
+    public static final byte DEFAULT_DEAD_TIME = 120;
+    public static final short OPEN_OBJ_MINIMUM_LENGTH = 8;
+    public static final int DEFAULT_GMPLS_CAPABILITY_TLV_IVALUE = 0X0;
+    public static final int DEFAULT_STATEFUL_PCE_CAPABILITY_TLV_IVALUE = 0xf;
+    public static final int DEFAULT_PCECC_CAPABILITY_TLV_IVALUE = 0x7;
+    public static final int DEFAULT_PCEP_LABEL_DB_VER_TLV_IVALUE = 0X0;
+
+<span class="fc" id="L75">    public static final PcepObjectHeader DEFAULT_OPEN_HEADER = new PcepObjectHeader(OPEN_OBJ_CLASS, OPEN_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, OPEN_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader openObjHeader;
+    private byte keepAliveTime;
+    private byte deadTime;
+    private byte sessionId;
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L87">    public PcepOpenObjectVer1() {</span>
+<span class="nc" id="L88">        this.openObjHeader = null;</span>
+<span class="nc" id="L89">        this.keepAliveTime = 0;</span>
+<span class="nc" id="L90">        this.deadTime = 0;</span>
+<span class="nc" id="L91">        this.sessionId = 0;</span>
+<span class="nc" id="L92">        this.llOptionalTlv = null;</span>
+<span class="nc" id="L93">    }</span>
+
+    /**
+     * Constructor to initialize all member variables.
+     *
+     * @param openObjHeader Open Object Header
+     * @param keepAliveTime Keepalive timer value
+     * @param deadTime      Dead timer value
+     * @param sessionID     session id
+     * @param llOptionalTlv Optional TLV
+     */
+    public PcepOpenObjectVer1(PcepObjectHeader openObjHeader, byte keepAliveTime, byte deadTime, byte sessionID,
+<span class="fc" id="L105">            LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+<span class="fc" id="L106">        this.openObjHeader = openObjHeader;</span>
+<span class="fc" id="L107">        this.keepAliveTime = keepAliveTime;</span>
+<span class="fc" id="L108">        this.deadTime = deadTime;</span>
+<span class="fc" id="L109">        this.sessionId = sessionID;</span>
+<span class="fc" id="L110">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L111">    }</span>
+
+    @Override
+    public PcepObjectHeader getOpenObjHeader() {
+<span class="nc" id="L115">        return this.openObjHeader;</span>
+    }
+
+    @Override
+    public void setOpenObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L120">        this.openObjHeader = obj;</span>
+<span class="nc" id="L121">    }</span>
+
+    @Override
+    public byte getKeepAliveTime() {
+<span class="nc" id="L125">        return this.keepAliveTime;</span>
+    }
+
+    @Override
+    public void setKeepAliveTime(byte value) {
+<span class="nc" id="L130">        this.keepAliveTime = value;</span>
+<span class="nc" id="L131">    }</span>
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L135">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public byte getDeadTime() {
+<span class="nc" id="L140">        return this.deadTime;</span>
+    }
+
+    @Override
+    public void setDeadTime(byte value) {
+<span class="nc" id="L145">        this.deadTime = value;</span>
+<span class="nc" id="L146">    }</span>
+
+    @Override
+    public byte getSessionId() {
+<span class="nc" id="L150">        return this.sessionId;</span>
+    }
+
+    @Override
+    public void setSessionId(byte value) {
+<span class="nc" id="L155">        this.sessionId = value;</span>
+<span class="nc" id="L156">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L160">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L165">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L166">    }</span>
+
+    /**
+     * Reads from channel buffer and returns object of PcepOpenObject.
+     *
+     * @param cb of type channel buffer
+     * @return object of PcepOpenObject
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    public static PcepOpenObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader openObjHeader;
+        byte version;
+        byte keepAliveTime;
+        byte deadTime;
+        byte sessionID;
+        LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="fc" id="L184">        openObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L185">        version = cb.readByte();</span>
+<span class="fc" id="L186">        version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">        if (version != OPEN_OBJECT_VERSION) {</span>
+<span class="nc" id="L188">            throw new PcepParseException(&quot;Wrong version: Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+        }
+        /* Keepalive */
+<span class="fc" id="L191">        keepAliveTime = cb.readByte();</span>
+
+        /* DeadTimer */
+<span class="fc" id="L194">        deadTime = cb.readByte();</span>
+
+        /* SID */
+<span class="fc" id="L197">        sessionID = cb.readByte();</span>
+
+        // Optional TLV
+<span class="fc" id="L200">        llOptionalTlv = parseOptionalTlv(cb);</span>
+
+<span class="fc" id="L202">        return new PcepOpenObjectVer1(openObjHeader, keepAliveTime, deadTime, sessionID, llOptionalTlv);</span>
+    }
+
+    /**
+     * Returns linkedlist of optional tlvs.
+     *
+     * @param cb of type channel buffer
+     * @return llOptionalTlv Optional TLV
+     * @throws PcepParseException if mandatory fields are missing
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+        LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+<span class="fc" id="L216">        llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L218" title="All 2 branches covered.">        while (4 &lt;= cb.readableBytes()) {</span>
+            PcepValueType tlv;
+<span class="fc" id="L220">            short hType = cb.readShort();</span>
+<span class="fc" id="L221">            short hLength = cb.readShort();</span>
+
+<span class="pc bpc" id="L223" title="2 of 7 branches missed.">            switch (hType) {</span>
+            case GmplsCapabilityTlv.TYPE:
+<span class="fc" id="L225">                log.debug(&quot;GmplsCapabilityTlv&quot;);</span>
+<span class="pc bpc" id="L226" title="1 of 2 branches missed.">                if (GmplsCapabilityTlv.LENGTH != hLength) {</span>
+<span class="nc" id="L227">                    throw new PcepParseException(&quot;Invalid length received for Gmpls_Capability_Tlv.&quot;);</span>
+                }
+<span class="fc" id="L229">                int iValue = cb.readInt();</span>
+<span class="fc" id="L230">                tlv = new GmplsCapabilityTlv(iValue);</span>
+<span class="fc" id="L231">                break;</span>
+            case StatefulPceCapabilityTlv.TYPE:
+<span class="fc" id="L233">                log.debug(&quot;StatefulPceCapabilityTlv&quot;);</span>
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">                if (StatefulPceCapabilityTlv.LENGTH != hLength) {</span>
+<span class="nc" id="L235">                    throw new PcepParseException(&quot;Invalid length received for StatefulPceCapabilityTlv.&quot;);</span>
+                }
+<span class="fc" id="L237">                tlv = StatefulPceCapabilityTlv.read(cb);</span>
+<span class="fc" id="L238">                break;</span>
+            case PceccCapabilityTlv.TYPE:
+<span class="fc" id="L240">                log.debug(&quot;PceccCapabilityTlv&quot;);</span>
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">                if (PceccCapabilityTlv.LENGTH != hLength) {</span>
+<span class="nc" id="L242">                    throw new PcepParseException(&quot;Invalid length for PceccCapabilityTlv.&quot;);</span>
+                }
+<span class="fc" id="L244">                iValue = cb.readInt();</span>
+<span class="fc" id="L245">                tlv = new PceccCapabilityTlv(iValue);</span>
+<span class="fc" id="L246">                break;</span>
+            case StatefulLspDbVerTlv.TYPE:
+<span class="fc" id="L248">                log.debug(&quot;StatefulLspDbVerTlv&quot;);</span>
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">                if (StatefulLspDbVerTlv.LENGTH != hLength) {</span>
+<span class="nc" id="L250">                    throw new PcepParseException(&quot;Invalid length received for StatefulLspDbVerTlv.&quot;);</span>
+                }
+<span class="fc" id="L252">                long lValue = cb.readLong();</span>
+<span class="fc" id="L253">                tlv = new StatefulLspDbVerTlv(lValue);</span>
+<span class="fc" id="L254">                break;</span>
+            case TedCapabilityTlv.TYPE:
+<span class="fc" id="L256">                log.debug(&quot;TedCapabilityTlv&quot;);</span>
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">                if (TedCapabilityTlv.LENGTH != hLength) {</span>
+<span class="nc" id="L258">                    throw new PcepParseException(&quot;Invalid length received for TedCapabilityTlv.&quot;);</span>
+                }
+<span class="fc" id="L260">                iValue = cb.readInt();</span>
+<span class="fc" id="L261">                tlv = new TedCapabilityTlv(iValue);</span>
+<span class="fc" id="L262">                break;</span>
+            case PcepLabelDbVerTlv.TYPE:
+<span class="nc" id="L264">                log.debug(&quot;PcepLabelDbVerTlv&quot;);</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                if (PcepLabelDbVerTlv.LENGTH != hLength) {</span>
+<span class="nc" id="L266">                    throw new PcepParseException(&quot;Invalid length received for PcepLabelDbVerTlv.&quot;);</span>
+                }
+<span class="nc" id="L268">                lValue = cb.readLong();</span>
+<span class="nc" id="L269">                tlv = new PcepLabelDbVerTlv(lValue);</span>
+<span class="nc" id="L270">                break;</span>
+            default:
+<span class="nc" id="L272">                log.debug(&quot;Unsupported TLV: &quot; + hType);</span>
+<span class="nc" id="L273">                cb.skipBytes(hLength);</span>
+<span class="nc" id="L274">                continue;</span>
+            }
+
+<span class="fc" id="L277">            llOptionalTlv.add(tlv);</span>
+<span class="fc" id="L278">        }</span>
+
+<span class="pc bpc" id="L280" title="1 of 2 branches missed.">        if (0 &lt; cb.readableBytes()) {</span>
+<span class="nc" id="L281">            throw new PcepParseException(&quot;Optional Tlv parsing error. Extra bytes received.&quot;);</span>
+        }
+
+<span class="fc" id="L284">        return llOptionalTlv;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L290">        int objStartIndex = cb.writerIndex();</span>
+
+        //write common header
+<span class="fc" id="L293">        int objLenIndex = openObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L295" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L296">            throw new PcepParseException(&quot;Unable to write Open object header.&quot;);</span>
+        }
+
+<span class="fc" id="L299">        cb.writeByte((byte) (OPEN_OBJECT_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+<span class="fc" id="L300">        cb.writeByte(this.keepAliveTime);</span>
+<span class="fc" id="L301">        cb.writeByte(this.deadTime);</span>
+<span class="fc" id="L302">        cb.writeByte(this.sessionId);</span>
+
+        //Pack optional TLV
+<span class="fc" id="L305">        packOptionalTlv(cb);</span>
+
+        //now write OPEN Object Length
+<span class="fc" id="L308">        int length = cb.writerIndex() - objStartIndex;</span>
+<span class="fc" id="L309">        cb.setShort(objLenIndex, (short) length);</span>
+        //will be helpful during print().
+<span class="fc" id="L311">        this.openObjHeader.setObjLen((short) length);</span>
+
+<span class="fc" id="L313">        return length;</span>
+    }
+
+    /**
+     * Returns writer index.
+     *
+     * @param cb of type channel buffer.
+     * @return writer index
+     */
+    protected int packOptionalTlv(ChannelBuffer cb) {
+<span class="fc" id="L323">        int startIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L325">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = this.llOptionalTlv;</span>
+<span class="fc" id="L326">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+<span class="fc bfc" id="L327" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L328">            PcepValueType tlv = listIterator.next();</span>
+<span class="pc bpc" id="L329" title="1 of 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L330">                log.debug(&quot;TLV is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L331">                continue;</span>
+            }
+
+<span class="fc" id="L334">            tlv.write(cb);</span>
+
+            // need to take care of padding
+<span class="fc" id="L337">            int pad = tlv.getLength() % 4;</span>
+
+<span class="pc bpc" id="L339" title="1 of 2 branches missed.">            if (0 != pad) {</span>
+<span class="nc" id="L340">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="nc" id="L342">                    cb.writeByte((byte) 0);</span>
+                }
+            }
+<span class="fc" id="L345">        }</span>
+<span class="fc" id="L346">        return cb.writerIndex() - startIndex;</span>
+    }
+
+    /**
+     * Builder class for PCPE open object.
+     */
+<span class="nc" id="L352">    public static class Builder implements PcepOpenObject.Builder {</span>
+        // Pcep open message fields
+<span class="nc" id="L354">        private boolean bIsHeaderSet = false;</span>
+        private PcepObjectHeader openObjHeader;
+<span class="nc" id="L356">        private boolean bIsKeepAliveTimeSet = false;</span>
+        private byte keepAliveTime;
+<span class="nc" id="L358">        private boolean bIsDeadTimeSet = false;</span>
+        private byte deadTime;
+<span class="nc" id="L360">        private boolean bIsSessionIDSet = false;</span>
+        private byte sessionID;
+<span class="nc" id="L362">        private boolean bIsOptionalTlvSet = false;</span>
+<span class="nc" id="L363">        private LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L365">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L368">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepOpenObject build() throws PcepParseException {
+<span class="nc bnc" id="L373" title="All 2 branches missed.">            PcepObjectHeader openObjHeader = this.bIsHeaderSet ? this.openObjHeader : DEFAULT_OPEN_HEADER;</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">            byte keepAliveTime = this.bIsKeepAliveTimeSet ? this.keepAliveTime : DEFAULT_KEEPALIVE_TIME;</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            byte deadTime = this.bIsDeadTimeSet ? this.deadTime : DEFAULT_DEAD_TIME;</span>
+
+<span class="nc bnc" id="L377" title="All 2 branches missed.">            if (!this.bIsSessionIDSet) {</span>
+<span class="nc" id="L378">                throw new PcepParseException(&quot;SessionID is not set (mandatory)&quot;);</span>
+            }
+<span class="nc bnc" id="L380" title="All 2 branches missed.">            if (!this.bIsOptionalTlvSet) {</span>
+                //Add tlv to list
+                //Add GmplsCapabilityTlv
+                PcepValueType tlv;
+<span class="nc" id="L384">                int iValue = DEFAULT_GMPLS_CAPABILITY_TLV_IVALUE;</span>
+<span class="nc" id="L385">                tlv = new GmplsCapabilityTlv(iValue);</span>
+<span class="nc" id="L386">                this.llOptionalTlv.add(tlv);</span>
+
+                //Add StatefulPceCapabilityTlv
+<span class="nc" id="L389">                iValue = DEFAULT_STATEFUL_PCE_CAPABILITY_TLV_IVALUE;</span>
+<span class="nc" id="L390">                tlv = new StatefulPceCapabilityTlv(iValue);</span>
+<span class="nc" id="L391">                this.llOptionalTlv.add(tlv);</span>
+
+            }
+
+<span class="nc bnc" id="L395" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L396">                openObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L400">                openObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L403">            return new PcepOpenObjectVer1(openObjHeader, keepAliveTime, deadTime, this.sessionID, this.llOptionalTlv);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getOpenObjHeader() {
+<span class="nc" id="L408">            return this.openObjHeader;</span>
+        }
+
+        @Override
+        public Builder setOpenObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L413">            this.openObjHeader = obj;</span>
+<span class="nc" id="L414">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L415">            return this;</span>
+        }
+
+        @Override
+        public byte getKeepAliveTime() {
+<span class="nc" id="L420">            return this.keepAliveTime;</span>
+        }
+
+        @Override
+        public Builder setKeepAliveTime(byte value) {
+<span class="nc" id="L425">            this.keepAliveTime = value;</span>
+<span class="nc" id="L426">            this.bIsKeepAliveTimeSet = true;</span>
+<span class="nc" id="L427">            return this;</span>
+        }
+
+        @Override
+        public byte getDeadTime() {
+<span class="nc" id="L432">            return this.deadTime;</span>
+        }
+
+        @Override
+        public Builder setDeadTime(byte value) {
+<span class="nc" id="L437">            this.deadTime = value;</span>
+<span class="nc" id="L438">            this.bIsDeadTimeSet = true;</span>
+<span class="nc" id="L439">            return this;</span>
+        }
+
+        @Override
+        public byte getSessionId() {
+<span class="nc" id="L444">            return this.sessionID;</span>
+        }
+
+        @Override
+        public Builder setSessionId(byte value) {
+<span class="nc" id="L449">            this.sessionID = value;</span>
+<span class="nc" id="L450">            this.bIsSessionIDSet = true;</span>
+<span class="nc" id="L451">            return this;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L456">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L457">            this.bIsOptionalTlvSet = true;</span>
+<span class="nc" id="L458">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L463">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L468">            this.bPFlag = value;</span>
+<span class="nc" id="L469">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L470">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L475">            this.bIFlag = value;</span>
+<span class="nc" id="L476">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L477">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L483">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L484">                .add(&quot;ObjectHeader&quot;, openObjHeader)</span>
+<span class="nc" id="L485">                .add(&quot;Keepalive&quot;, keepAliveTime)</span>
+<span class="nc" id="L486">                .add(&quot;DeadTimer&quot;, deadTime)</span>
+<span class="nc" id="L487">                .add(&quot;SessionId&quot;, sessionId)</span>
+<span class="nc" id="L488">                .add(&quot;OptionalTlv&quot;, llOptionalTlv)</span>
+<span class="nc" id="L489">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

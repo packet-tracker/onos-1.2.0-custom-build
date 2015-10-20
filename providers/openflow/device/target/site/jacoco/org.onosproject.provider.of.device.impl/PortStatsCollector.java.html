@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PortStatsCollector.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-device</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.device.impl</a> &gt; <span class="el_source">PortStatsCollector.java</span></div><h1>PortStatsCollector.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.provider.of.device.impl;
+
+import org.jboss.netty.util.HashedWheelTimer;
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.util.Timer;
+import org.onosproject.openflow.controller.OpenFlowSwitch;
+import org.onosproject.openflow.controller.RoleState;
+import org.projectfloodlight.openflow.protocol.OFPortStatsRequest;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.slf4j.Logger;
+
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/*
+ * Sends Group Stats Request and collect the group statistics with a time interval.
+ */
+public class PortStatsCollector implements TimerTask {
+
+    // TODO: Refactoring is required using ScheduledExecutorService
+
+<span class="fc" id="L41">    private final HashedWheelTimer timer = Timer.getTimer();</span>
+    private final OpenFlowSwitch sw;
+<span class="fc" id="L43">    private final Logger log = getLogger(getClass());</span>
+    private int refreshInterval;
+<span class="fc" id="L45">    private final AtomicLong xidAtomic = new AtomicLong(1);</span>
+
+    private Timeout timeout;
+    private volatile boolean stopped;
+
+    /**
+     * Creates a GroupStatsCollector object.
+     *
+     * @param sw Open Flow switch
+     * @param interval time interval for collecting group statistic
+     */
+<span class="fc" id="L56">    public PortStatsCollector(OpenFlowSwitch sw, int interval) {</span>
+<span class="fc" id="L57">        this.sw = sw;</span>
+<span class="fc" id="L58">        this.refreshInterval = interval;</span>
+<span class="fc" id="L59">    }</span>
+
+    @Override
+    public void run(Timeout to) throws Exception {
+<span class="nc bnc" id="L63" title="All 4 branches missed.">        if (stopped || timeout.isCancelled()) {</span>
+<span class="nc" id="L64">            return;</span>
+        }
+<span class="nc" id="L66">        log.trace(&quot;Collecting stats for {}&quot;, sw.getStringId());</span>
+
+<span class="nc" id="L68">        sendPortStatistic();</span>
+
+<span class="nc bnc" id="L70" title="All 4 branches missed.">        if (!stopped &amp;&amp; !timeout.isCancelled()) {</span>
+<span class="nc" id="L71">            log.trace(&quot;Scheduling stats collection in {} seconds for {}&quot;,</span>
+<span class="nc" id="L72">                    this.refreshInterval, this.sw.getStringId());</span>
+<span class="nc" id="L73">            timeout.getTimer().newTimeout(this, refreshInterval, TimeUnit.SECONDS);</span>
+        }
+<span class="nc" id="L75">    }</span>
+
+    synchronized void adjustPollInterval(int pollInterval) {
+<span class="nc" id="L78">        this.refreshInterval = pollInterval;</span>
+        // task.cancel();
+        // task = new InternalTimerTask();
+        // timer.scheduleAtFixedRate(task, pollInterval * SECONDS, pollInterval * 1000);
+<span class="nc" id="L82">    }</span>
+
+    private void sendPortStatistic() {
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (sw.getRole() != RoleState.MASTER) {</span>
+<span class="nc" id="L86">            return;</span>
+        }
+<span class="nc" id="L88">        Long statsXid = xidAtomic.getAndIncrement();</span>
+<span class="nc" id="L89">        OFPortStatsRequest statsRequest = sw.factory().buildPortStatsRequest()</span>
+<span class="nc" id="L90">                .setPortNo(OFPort.ANY)</span>
+<span class="nc" id="L91">                .setXid(statsXid)</span>
+<span class="nc" id="L92">                .build();</span>
+<span class="nc" id="L93">        sw.sendMsg(statsRequest);</span>
+<span class="nc" id="L94">    }</span>
+
+    /**
+     * Starts the collector.
+     */
+    public synchronized void start() {
+<span class="fc" id="L100">        log.info(&quot;Starting Port Stats collection thread for {}&quot;, sw.getStringId());</span>
+<span class="fc" id="L101">        stopped = false;</span>
+<span class="fc" id="L102">        timeout = timer.newTimeout(this, 1, TimeUnit.SECONDS);</span>
+<span class="fc" id="L103">    }</span>
+
+    /**
+     * Stops the collector.
+     */
+    public synchronized void stop() {
+<span class="fc" id="L109">        log.info(&quot;Stopping Port Stats collection thread for {}&quot;, sw.getStringId());</span>
+<span class="fc" id="L110">        stopped = true;</span>
+<span class="fc" id="L111">        timeout.cancel();</span>
+<span class="fc" id="L112">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

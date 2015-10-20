@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GmplsCapabilityTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">GmplsCapabilityTlv.java</span></div><h1>GmplsCapabilityTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides GMPLS Capability Tlv.
+ */
+public class GmplsCapabilityTlv implements PcepValueType {
+
+    /*
+     * GMPLS-CAPABILITY TLV format
+     * reference :draft-ietf-pce-gmpls-pcep-extensions -2.1.1
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |               Type=14       |             Length              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             Flags                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+<span class="fc" id="L44">    protected static final Logger log = LoggerFactory.getLogger(GmplsCapabilityTlv.class);</span>
+
+    public static final short TYPE = 14;
+    public static final short LENGTH = 4;
+
+    private final int rawValue;
+
+    /**
+     * Constructor to initialize raw value.
+     *
+     * @param rawValue of Gmpls-Capability-Tlv
+     */
+<span class="fc" id="L56">    public GmplsCapabilityTlv(int rawValue) {</span>
+<span class="fc" id="L57">        this.rawValue = rawValue;</span>
+<span class="fc" id="L58">    }</span>
+
+    /**
+     * Returns newly created GmplsCapabilityTlv object.
+     *
+     * @param raw Flags value
+     * @return object of Gmpls-Capability-Tlv
+     */
+    public static GmplsCapabilityTlv of(final int raw) {
+<span class="fc" id="L67">        return new GmplsCapabilityTlv(raw);</span>
+    }
+
+    /**
+     * Returns value of Flags.
+     *
+     * @return rawValue Flags
+     */
+    public int getInt() {
+<span class="nc" id="L76">        return rawValue;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L81">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L86">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L91">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L96">        return Objects.hash(rawValue);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L102">            return true;</span>
+        }
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if (obj instanceof GmplsCapabilityTlv) {</span>
+<span class="fc" id="L105">            GmplsCapabilityTlv other = (GmplsCapabilityTlv) obj;</span>
+<span class="fc" id="L106">            return Objects.equals(rawValue, other.rawValue);</span>
+        }
+<span class="fc" id="L108">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L113">        int iLenStartIndex = c.writerIndex();</span>
+<span class="fc" id="L114">        c.writeShort(TYPE);</span>
+<span class="fc" id="L115">        c.writeShort(LENGTH);</span>
+<span class="fc" id="L116">        c.writeInt(rawValue);</span>
+<span class="fc" id="L117">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of Gmpls-Capability-Tlv.
+     *
+     * @param c input channel buffer
+     * @return object of Gmpls-Capability-Tlv
+     */
+    public static GmplsCapabilityTlv read(ChannelBuffer c) {
+<span class="nc" id="L127">        return GmplsCapabilityTlv.of(c.readInt());</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L132">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L133">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L134">                .add(&quot;Length&quot;, LENGTH)</span>
+<span class="fc" id="L135">                .add(&quot;Value&quot;, rawValue)</span>
+<span class="fc" id="L136">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

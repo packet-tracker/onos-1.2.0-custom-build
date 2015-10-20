@@ -1,0 +1,634 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpenFlowControllerImpl.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-ctl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.openflow.controller.impl</a> &gt; <span class="el_source">OpenFlowControllerImpl.java</span></div><h1>OpenFlowControllerImpl.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.openflow.controller.impl;
+
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.net.driver.DefaultDriverProviderService;
+import org.onosproject.net.driver.DriverService;
+import org.onosproject.openflow.controller.DefaultOpenFlowPacketContext;
+import org.onosproject.openflow.controller.Dpid;
+import org.onosproject.openflow.controller.OpenFlowController;
+import org.onosproject.openflow.controller.OpenFlowEventListener;
+import org.onosproject.openflow.controller.OpenFlowPacketContext;
+import org.onosproject.openflow.controller.OpenFlowSwitch;
+import org.onosproject.openflow.controller.OpenFlowSwitchListener;
+import org.onosproject.openflow.controller.PacketListener;
+import org.onosproject.openflow.controller.RoleState;
+import org.onosproject.openflow.controller.driver.OpenFlowAgent;
+import org.osgi.service.component.ComponentContext;
+import org.projectfloodlight.openflow.protocol.OFCalientFlowStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFCalientFlowStatsReply;
+import org.projectfloodlight.openflow.protocol.OFCircuitPortStatus;
+import org.projectfloodlight.openflow.protocol.OFExperimenter;
+import org.projectfloodlight.openflow.protocol.OFFactories;
+import org.projectfloodlight.openflow.protocol.OFFlowStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFFlowStatsReply;
+import org.projectfloodlight.openflow.protocol.OFTableStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFTableStatsReply;
+import org.projectfloodlight.openflow.protocol.OFGroupDescStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFGroupDescStatsReply;
+import org.projectfloodlight.openflow.protocol.OFGroupStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFGroupStatsReply;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPortDesc;
+import org.projectfloodlight.openflow.protocol.OFPortStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFPortStatsReply;
+import org.projectfloodlight.openflow.protocol.OFPortStatus;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsReplyFlags;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static org.onlab.util.Tools.groupedThreads;
+
+@Component(immediate = true)
+@Service
+<span class="nc" id="L85">public class OpenFlowControllerImpl implements OpenFlowController {</span>
+    private static final String DEFAULT_OFPORT = &quot;6633,6653&quot;;
+    private static final int DEFAULT_WORKER_THREADS = 16;
+
+<span class="nc" id="L89">    private static final Logger log =</span>
+<span class="nc" id="L90">            LoggerFactory.getLogger(OpenFlowControllerImpl.class);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DriverService driverService;
+
+    // References exists merely for sequencing purpose to assure drivers are loaded
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DefaultDriverProviderService defaultDriverProviderService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+<span class="nc" id="L102">    @Property(name = &quot;openflowPorts&quot;, value = DEFAULT_OFPORT,</span>
+            label = &quot;Port numbers (comma separated) used by OpenFlow protocol; default is 6633,6653&quot;)
+    private String openflowPorts = DEFAULT_OFPORT;
+
+<span class="nc" id="L106">    @Property(name = &quot;workerThreads&quot;, intValue = DEFAULT_WORKER_THREADS,</span>
+            label = &quot;Number of controller worker threads; default is 16&quot;)
+    private int workerThreads = DEFAULT_WORKER_THREADS;
+
+<span class="nc" id="L110">    private final ExecutorService executorMsgs =</span>
+<span class="nc" id="L111">        Executors.newFixedThreadPool(32, groupedThreads(&quot;onos/of&quot;, &quot;event-stats-%d&quot;));</span>
+
+<span class="nc" id="L113">    private final ExecutorService executorBarrier =</span>
+<span class="nc" id="L114">        Executors.newFixedThreadPool(4, groupedThreads(&quot;onos/of&quot;, &quot;event-barrier-%d&quot;));</span>
+
+<span class="nc" id="L116">    protected ConcurrentHashMap&lt;Dpid, OpenFlowSwitch&gt; connectedSwitches =</span>
+            new ConcurrentHashMap&lt;&gt;();
+<span class="nc" id="L118">    protected ConcurrentHashMap&lt;Dpid, OpenFlowSwitch&gt; activeMasterSwitches =</span>
+            new ConcurrentHashMap&lt;&gt;();
+<span class="nc" id="L120">    protected ConcurrentHashMap&lt;Dpid, OpenFlowSwitch&gt; activeEqualSwitches =</span>
+            new ConcurrentHashMap&lt;&gt;();
+
+<span class="nc" id="L123">    protected OpenFlowSwitchAgent agent = new OpenFlowSwitchAgent();</span>
+<span class="nc" id="L124">    protected Set&lt;OpenFlowSwitchListener&gt; ofSwitchListener = new CopyOnWriteArraySet&lt;&gt;();</span>
+
+<span class="nc" id="L126">    protected Multimap&lt;Integer, PacketListener&gt; ofPacketListener =</span>
+<span class="nc" id="L127">            ArrayListMultimap.create();</span>
+
+<span class="nc" id="L129">    protected Set&lt;OpenFlowEventListener&gt; ofEventListener = new CopyOnWriteArraySet&lt;&gt;();</span>
+
+<span class="nc" id="L131">    protected Multimap&lt;Dpid, OFFlowStatsEntry&gt; fullFlowStats =</span>
+<span class="nc" id="L132">            ArrayListMultimap.create();</span>
+
+<span class="nc" id="L134">    protected Multimap&lt;Dpid, OFTableStatsEntry&gt; fullTableStats =</span>
+<span class="nc" id="L135">            ArrayListMultimap.create();</span>
+
+<span class="nc" id="L137">    protected Multimap&lt;Dpid, OFGroupStatsEntry&gt; fullGroupStats =</span>
+<span class="nc" id="L138">            ArrayListMultimap.create();</span>
+
+<span class="nc" id="L140">    protected Multimap&lt;Dpid, OFGroupDescStatsEntry&gt; fullGroupDescStats =</span>
+<span class="nc" id="L141">            ArrayListMultimap.create();</span>
+
+<span class="nc" id="L143">    protected Multimap&lt;Dpid, OFPortStatsEntry&gt; fullPortStats =</span>
+<span class="nc" id="L144">            ArrayListMultimap.create();</span>
+
+<span class="nc" id="L146">    private final Controller ctrl = new Controller();</span>
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="nc" id="L150">        cfgService.registerProperties(getClass());</span>
+<span class="nc" id="L151">        ctrl.setConfigParams(context.getProperties());</span>
+<span class="nc" id="L152">        ctrl.start(agent, driverService);</span>
+<span class="nc" id="L153">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L157">        cfgService.unregisterProperties(getClass(), false);</span>
+<span class="nc" id="L158">        ctrl.stop();</span>
+<span class="nc" id="L159">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="nc" id="L163">        ctrl.stop();</span>
+<span class="nc" id="L164">        ctrl.setConfigParams(context.getProperties());</span>
+<span class="nc" id="L165">        ctrl.start(agent, driverService);</span>
+<span class="nc" id="L166">    }</span>
+
+    @Override
+    public Iterable&lt;OpenFlowSwitch&gt; getSwitches() {
+<span class="nc" id="L170">        return connectedSwitches.values();</span>
+    }
+
+    @Override
+    public Iterable&lt;OpenFlowSwitch&gt; getMasterSwitches() {
+<span class="nc" id="L175">        return activeMasterSwitches.values();</span>
+    }
+
+    @Override
+    public Iterable&lt;OpenFlowSwitch&gt; getEqualSwitches() {
+<span class="nc" id="L180">        return activeEqualSwitches.values();</span>
+    }
+
+    @Override
+    public OpenFlowSwitch getSwitch(Dpid dpid) {
+<span class="nc" id="L185">        return connectedSwitches.get(dpid);</span>
+    }
+
+    @Override
+    public OpenFlowSwitch getMasterSwitch(Dpid dpid) {
+<span class="nc" id="L190">        return activeMasterSwitches.get(dpid);</span>
+    }
+
+    @Override
+    public OpenFlowSwitch getEqualSwitch(Dpid dpid) {
+<span class="nc" id="L195">        return activeEqualSwitches.get(dpid);</span>
+    }
+
+    @Override
+    public void addListener(OpenFlowSwitchListener listener) {
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if (!ofSwitchListener.contains(listener)) {</span>
+<span class="nc" id="L201">            this.ofSwitchListener.add(listener);</span>
+        }
+<span class="nc" id="L203">    }</span>
+
+    @Override
+    public void removeListener(OpenFlowSwitchListener listener) {
+<span class="nc" id="L207">        this.ofSwitchListener.remove(listener);</span>
+<span class="nc" id="L208">    }</span>
+
+    @Override
+    public void addPacketListener(int priority, PacketListener listener) {
+<span class="nc" id="L212">        ofPacketListener.put(priority, listener);</span>
+<span class="nc" id="L213">    }</span>
+
+    @Override
+    public void removePacketListener(PacketListener listener) {
+<span class="nc" id="L217">        ofPacketListener.values().remove(listener);</span>
+<span class="nc" id="L218">    }</span>
+
+    @Override
+    public void addEventListener(OpenFlowEventListener listener) {
+<span class="nc" id="L222">        ofEventListener.add(listener);</span>
+<span class="nc" id="L223">    }</span>
+
+    @Override
+    public void removeEventListener(OpenFlowEventListener listener) {
+<span class="nc" id="L227">        ofEventListener.remove(listener);</span>
+<span class="nc" id="L228">    }</span>
+
+    @Override
+    public void write(Dpid dpid, OFMessage msg) {
+<span class="nc" id="L232">        this.getSwitch(dpid).sendMsg(msg);</span>
+<span class="nc" id="L233">    }</span>
+
+    @Override
+    public void processPacket(Dpid dpid, OFMessage msg) {
+        Collection&lt;OFFlowStatsEntry&gt; flowStats;
+        Collection&lt;OFTableStatsEntry&gt; tableStats;
+        Collection&lt;OFGroupStatsEntry&gt; groupStats;
+        Collection&lt;OFGroupDescStatsEntry&gt; groupDescStats;
+        Collection&lt;OFPortStatsEntry&gt; portStats;
+
+<span class="nc bnc" id="L243" title="All 8 branches missed.">        switch (msg.getType()) {</span>
+        case PORT_STATUS:
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L246">                l.portChanged(dpid, (OFPortStatus) msg);</span>
+<span class="nc" id="L247">            }</span>
+<span class="nc" id="L248">            break;</span>
+        case FEATURES_REPLY:
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L251">                l.switchChanged(dpid);</span>
+<span class="nc" id="L252">            }</span>
+<span class="nc" id="L253">            break;</span>
+        case PACKET_IN:
+<span class="nc" id="L255">            OpenFlowPacketContext pktCtx = DefaultOpenFlowPacketContext</span>
+<span class="nc" id="L256">            .packetContextFromPacketIn(this.getSwitch(dpid),</span>
+                    (OFPacketIn) msg);
+<span class="nc bnc" id="L258" title="All 2 branches missed.">            for (PacketListener p : ofPacketListener.values()) {</span>
+<span class="nc" id="L259">                p.handlePacket(pktCtx);</span>
+<span class="nc" id="L260">            }</span>
+<span class="nc" id="L261">            break;</span>
+        // TODO: Consider using separate threadpool for sensitive messages.
+        //    ie. Back to back error could cause us to starve.
+        case FLOW_REMOVED:
+        case ERROR:
+<span class="nc" id="L266">            executorMsgs.submit(new OFMessageHandler(dpid, msg));</span>
+<span class="nc" id="L267">            break;</span>
+        case STATS_REPLY:
+<span class="nc" id="L269">            OFStatsReply reply = (OFStatsReply) msg;</span>
+<span class="nc bnc" id="L270" title="All 9 branches missed.">            switch (reply.getStatsType()) {</span>
+                case PORT_DESC:
+<span class="nc bnc" id="L272" title="All 2 branches missed.">                    for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L273">                        l.switchChanged(dpid);</span>
+<span class="nc" id="L274">                    }</span>
+<span class="nc" id="L275">                    break;</span>
+                case FLOW:
+<span class="nc" id="L277">                    flowStats = publishFlowStats(dpid, (OFFlowStatsReply) reply);</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">                    if (flowStats != null) {</span>
+<span class="nc" id="L279">                        OFFlowStatsReply.Builder rep =</span>
+<span class="nc" id="L280">                                OFFactories.getFactory(msg.getVersion()).buildFlowStatsReply();</span>
+<span class="nc" id="L281">                        rep.setEntries(Lists.newLinkedList(flowStats));</span>
+<span class="nc" id="L282">                        rep.setXid(reply.getXid());</span>
+<span class="nc" id="L283">                        executorMsgs.submit(new OFMessageHandler(dpid, rep.build()));</span>
+<span class="nc" id="L284">                    }</span>
+                    break;
+                case TABLE:
+<span class="nc" id="L287">                    tableStats = publishTableStats(dpid, (OFTableStatsReply) reply);</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">                    if (tableStats != null) {</span>
+<span class="nc" id="L289">                        OFTableStatsReply.Builder rep =</span>
+<span class="nc" id="L290">                                OFFactories.getFactory(msg.getVersion()).buildTableStatsReply();</span>
+<span class="nc" id="L291">                        rep.setEntries(Lists.newLinkedList(tableStats));</span>
+<span class="nc" id="L292">                        executorMsgs.submit(new OFMessageHandler(dpid, rep.build()));</span>
+<span class="nc" id="L293">                    }</span>
+                    break;
+                case GROUP:
+<span class="nc" id="L296">                    groupStats = publishGroupStats(dpid, (OFGroupStatsReply) reply);</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">                    if (groupStats != null) {</span>
+<span class="nc" id="L298">                        OFGroupStatsReply.Builder rep =</span>
+<span class="nc" id="L299">                                OFFactories.getFactory(msg.getVersion()).buildGroupStatsReply();</span>
+<span class="nc" id="L300">                        rep.setEntries(Lists.newLinkedList(groupStats));</span>
+<span class="nc" id="L301">                        rep.setXid(reply.getXid());</span>
+<span class="nc" id="L302">                        executorMsgs.submit(new OFMessageHandler(dpid, rep.build()));</span>
+<span class="nc" id="L303">                    }</span>
+                    break;
+                case GROUP_DESC:
+<span class="nc" id="L306">                    groupDescStats = publishGroupDescStats(dpid,</span>
+                            (OFGroupDescStatsReply) reply);
+<span class="nc bnc" id="L308" title="All 2 branches missed.">                    if (groupDescStats != null) {</span>
+<span class="nc" id="L309">                        OFGroupDescStatsReply.Builder rep =</span>
+<span class="nc" id="L310">                                OFFactories.getFactory(msg.getVersion()).buildGroupDescStatsReply();</span>
+<span class="nc" id="L311">                        rep.setEntries(Lists.newLinkedList(groupDescStats));</span>
+<span class="nc" id="L312">                        rep.setXid(reply.getXid());</span>
+<span class="nc" id="L313">                        executorMsgs.submit(new OFMessageHandler(dpid, rep.build()));</span>
+<span class="nc" id="L314">                    }</span>
+                    break;
+                case PORT:
+<span class="nc" id="L317">                    executorMsgs.submit(new OFMessageHandler(dpid, reply));</span>
+<span class="nc" id="L318">                    break;</span>
+                case METER:
+<span class="nc" id="L320">                    executorMsgs.submit(new OFMessageHandler(dpid, reply));</span>
+<span class="nc" id="L321">                    break;</span>
+                case EXPERIMENTER:
+<span class="nc bnc" id="L323" title="All 2 branches missed.">                    if (reply instanceof OFCalientFlowStatsReply) {</span>
+                        // Convert Calient flow statistics to regular flow stats
+                        // TODO: parse remaining fields such as power levels etc. when we have proper monitoring API
+<span class="nc" id="L326">                        OFFlowStatsReply.Builder fsr = getSwitch(dpid).factory().buildFlowStatsReply();</span>
+<span class="nc" id="L327">                        List&lt;OFFlowStatsEntry&gt; entries = new LinkedList&lt;&gt;();</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">                        for (OFCalientFlowStatsEntry entry : ((OFCalientFlowStatsReply) msg).getEntries()) {</span>
+
+                            // Single instruction, i.e., output to port
+<span class="nc" id="L331">                            OFActionOutput action = OFFactories</span>
+<span class="nc" id="L332">                                    .getFactory(msg.getVersion())</span>
+<span class="nc" id="L333">                                    .actions()</span>
+<span class="nc" id="L334">                                    .buildOutput()</span>
+<span class="nc" id="L335">                                    .setPort(entry.getOutPort())</span>
+<span class="nc" id="L336">                                    .build();</span>
+<span class="nc" id="L337">                            OFInstruction instruction = OFFactories</span>
+<span class="nc" id="L338">                                    .getFactory(msg.getVersion())</span>
+<span class="nc" id="L339">                                    .instructions()</span>
+<span class="nc" id="L340">                                    .applyActions(Collections.singletonList(action));</span>
+<span class="nc" id="L341">                            OFFlowStatsEntry fs = getSwitch(dpid).factory().buildFlowStatsEntry()</span>
+<span class="nc" id="L342">                                    .setMatch(entry.getMatch())</span>
+<span class="nc" id="L343">                                    .setTableId(entry.getTableId())</span>
+<span class="nc" id="L344">                                    .setDurationSec(entry.getDurationSec())</span>
+<span class="nc" id="L345">                                    .setDurationNsec(entry.getDurationNsec())</span>
+<span class="nc" id="L346">                                    .setPriority(entry.getPriority())</span>
+<span class="nc" id="L347">                                    .setIdleTimeout(entry.getIdleTimeout())</span>
+<span class="nc" id="L348">                                    .setHardTimeout(entry.getHardTimeout())</span>
+<span class="nc" id="L349">                                    .setFlags(entry.getFlags())</span>
+<span class="nc" id="L350">                                    .setCookie(entry.getCookie())</span>
+<span class="nc" id="L351">                                    .setInstructions(Collections.singletonList(instruction))</span>
+<span class="nc" id="L352">                                    .build();</span>
+<span class="nc" id="L353">                            entries.add(fs);</span>
+<span class="nc" id="L354">                        }</span>
+<span class="nc" id="L355">                        fsr.setEntries(entries);</span>
+
+<span class="nc" id="L357">                        flowStats = publishFlowStats(dpid, fsr.build());</span>
+<span class="nc bnc" id="L358" title="All 2 branches missed.">                        if (flowStats != null) {</span>
+<span class="nc" id="L359">                            OFFlowStatsReply.Builder rep =</span>
+<span class="nc" id="L360">                                    OFFactories.getFactory(msg.getVersion()).buildFlowStatsReply();</span>
+<span class="nc" id="L361">                            rep.setEntries(Lists.newLinkedList(flowStats));</span>
+<span class="nc" id="L362">                            executorMsgs.submit(new OFMessageHandler(dpid, rep.build()));</span>
+                        }
+<span class="nc" id="L364">                    } else {</span>
+<span class="nc" id="L365">                        executorMsgs.submit(new OFMessageHandler(dpid, reply));</span>
+                    }
+<span class="nc" id="L367">                    break;</span>
+                default:
+<span class="nc" id="L369">                    log.warn(&quot;Discarding unknown stats reply type {}&quot;, reply.getStatsType());</span>
+<span class="nc" id="L370">                    break;</span>
+            }
+            break;
+        case BARRIER_REPLY:
+<span class="nc" id="L374">            executorBarrier.submit(new OFMessageHandler(dpid, msg));</span>
+<span class="nc" id="L375">            break;</span>
+        case EXPERIMENTER:
+<span class="nc" id="L377">            long experimenter = ((OFExperimenter) msg).getExperimenter();</span>
+<span class="nc bnc" id="L378" title="All 2 branches missed.">            if (experimenter == 0x748771) {</span>
+                // LINC-OE port stats
+<span class="nc" id="L380">                OFCircuitPortStatus circuitPortStatus = (OFCircuitPortStatus) msg;</span>
+<span class="nc" id="L381">                OFPortStatus.Builder portStatus = this.getSwitch(dpid).factory().buildPortStatus();</span>
+<span class="nc" id="L382">                OFPortDesc.Builder portDesc = this.getSwitch(dpid).factory().buildPortDesc();</span>
+<span class="nc" id="L383">                portDesc.setPortNo(circuitPortStatus.getPortNo())</span>
+<span class="nc" id="L384">                        .setHwAddr(circuitPortStatus.getHwAddr())</span>
+<span class="nc" id="L385">                        .setName(circuitPortStatus.getName())</span>
+<span class="nc" id="L386">                        .setConfig(circuitPortStatus.getConfig())</span>
+<span class="nc" id="L387">                        .setState(circuitPortStatus.getState());</span>
+<span class="nc" id="L388">                portStatus.setReason(circuitPortStatus.getReason()).setDesc(portDesc.build());</span>
+<span class="nc bnc" id="L389" title="All 2 branches missed.">                for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L390">                    l.portChanged(dpid, portStatus.build());</span>
+<span class="nc" id="L391">                }</span>
+<span class="nc" id="L392">            } else {</span>
+<span class="nc" id="L393">                log.warn(&quot;Handling experimenter type {} not yet implemented&quot;,</span>
+<span class="nc" id="L394">                        ((OFExperimenter) msg).getExperimenter(), msg);</span>
+            }
+<span class="nc" id="L396">            break;</span>
+        default:
+<span class="nc" id="L398">            log.warn(&quot;Handling message type {} not yet implemented {}&quot;,</span>
+<span class="nc" id="L399">                    msg.getType(), msg);</span>
+        }
+<span class="nc" id="L401">    }</span>
+
+    private synchronized Collection&lt;OFFlowStatsEntry&gt; publishFlowStats(Dpid dpid,
+                                                                       OFFlowStatsReply reply) {
+        //TODO: Get rid of synchronized
+<span class="nc" id="L406">        fullFlowStats.putAll(dpid, reply.getEntries());</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        if (!reply.getFlags().contains(OFStatsReplyFlags.REPLY_MORE)) {</span>
+<span class="nc" id="L408">            return fullFlowStats.removeAll(dpid);</span>
+        }
+<span class="nc" id="L410">        return null;</span>
+    }
+
+    private synchronized Collection&lt;OFTableStatsEntry&gt; publishTableStats(Dpid dpid,
+                                                                       OFTableStatsReply reply) {
+        //TODO: Get rid of synchronized
+<span class="nc" id="L416">        fullTableStats.putAll(dpid, reply.getEntries());</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">        if (!reply.getFlags().contains(OFStatsReplyFlags.REPLY_MORE)) {</span>
+<span class="nc" id="L418">            return fullTableStats.removeAll(dpid);</span>
+        }
+<span class="nc" id="L420">        return null;</span>
+    }
+
+    private synchronized Collection&lt;OFGroupStatsEntry&gt; publishGroupStats(Dpid dpid,
+                                                                      OFGroupStatsReply reply) {
+        //TODO: Get rid of synchronized
+<span class="nc" id="L426">        fullGroupStats.putAll(dpid, reply.getEntries());</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">        if (!reply.getFlags().contains(OFStatsReplyFlags.REPLY_MORE)) {</span>
+<span class="nc" id="L428">            return fullGroupStats.removeAll(dpid);</span>
+        }
+<span class="nc" id="L430">        return null;</span>
+    }
+
+    private synchronized Collection&lt;OFGroupDescStatsEntry&gt; publishGroupDescStats(Dpid dpid,
+                                                                  OFGroupDescStatsReply reply) {
+        //TODO: Get rid of synchronized
+<span class="nc" id="L436">        fullGroupDescStats.putAll(dpid, reply.getEntries());</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (!reply.getFlags().contains(OFStatsReplyFlags.REPLY_MORE)) {</span>
+<span class="nc" id="L438">            return fullGroupDescStats.removeAll(dpid);</span>
+        }
+<span class="nc" id="L440">        return null;</span>
+    }
+
+    private synchronized Collection&lt;OFPortStatsEntry&gt; publishPortStats(Dpid dpid,
+                                                                 OFPortStatsReply reply) {
+<span class="nc" id="L445">        fullPortStats.putAll(dpid, reply.getEntries());</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">        if (!reply.getFlags().contains(OFStatsReplyFlags.REPLY_MORE)) {</span>
+<span class="nc" id="L447">            return fullPortStats.removeAll(dpid);</span>
+        }
+<span class="nc" id="L449">        return null;</span>
+    }
+
+    @Override
+    public void setRole(Dpid dpid, RoleState role) {
+<span class="nc" id="L454">        final OpenFlowSwitch sw = getSwitch(dpid);</span>
+<span class="nc bnc" id="L455" title="All 2 branches missed.">        if (sw == null) {</span>
+<span class="nc" id="L456">            log.debug(&quot;Switch not connected. Ignoring setRole({}, {})&quot;, dpid, role);</span>
+<span class="nc" id="L457">            return;</span>
+        }
+<span class="nc" id="L459">        sw.setRole(role);</span>
+<span class="nc" id="L460">    }</span>
+
+    /**
+     * Implementation of an OpenFlow Agent which is responsible for
+     * keeping track of connected switches and the state in which
+     * they are.
+     */
+<span class="nc" id="L467">    public class OpenFlowSwitchAgent implements OpenFlowAgent {</span>
+
+<span class="nc" id="L469">        private final Logger log = LoggerFactory.getLogger(OpenFlowSwitchAgent.class);</span>
+<span class="nc" id="L470">        private final Lock switchLock = new ReentrantLock();</span>
+
+        @Override
+        public boolean addConnectedSwitch(Dpid dpid, OpenFlowSwitch sw) {
+
+<span class="nc bnc" id="L475" title="All 2 branches missed.">            if (connectedSwitches.get(dpid) != null) {</span>
+<span class="nc" id="L476">                log.error(&quot;Trying to add connectedSwitch but found a previous &quot;</span>
+                        + &quot;value for dpid: {}&quot;, dpid);
+<span class="nc" id="L478">                return false;</span>
+            } else {
+<span class="nc" id="L480">                log.info(&quot;Added switch {}&quot;, dpid);</span>
+<span class="nc" id="L481">                connectedSwitches.put(dpid, sw);</span>
+<span class="nc bnc" id="L482" title="All 2 branches missed.">                for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L483">                    l.switchAdded(dpid);</span>
+<span class="nc" id="L484">                }</span>
+<span class="nc" id="L485">                return true;</span>
+            }
+        }
+
+        @Override
+        public boolean validActivation(Dpid dpid) {
+<span class="nc bnc" id="L491" title="All 2 branches missed.">            if (connectedSwitches.get(dpid) == null) {</span>
+<span class="nc" id="L492">                log.error(&quot;Trying to activate switch but is not in &quot;</span>
+                        + &quot;connected switches: dpid {}. Aborting ..&quot;,
+                        dpid);
+<span class="nc" id="L495">                return false;</span>
+            }
+<span class="nc bnc" id="L497" title="All 2 branches missed.">            if (activeMasterSwitches.get(dpid) != null ||</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">                    activeEqualSwitches.get(dpid) != null) {</span>
+<span class="nc" id="L499">                log.error(&quot;Trying to activate switch but it is already &quot;</span>
+                        + &quot;activated: dpid {}. Found in activeMaster: {} &quot;
+                        + &quot;Found in activeEqual: {}. Aborting ..&quot;, new Object[]{
+                                dpid,
+<span class="nc bnc" id="L503" title="All 2 branches missed.">                                (activeMasterSwitches.get(dpid) == null) ? 'N' : 'Y',</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">                                        (activeEqualSwitches.get(dpid) == null) ? 'N' : 'Y'});</span>
+<span class="nc" id="L505">                return false;</span>
+            }
+<span class="nc" id="L507">            return true;</span>
+        }
+
+
+        @Override
+        public boolean addActivatedMasterSwitch(Dpid dpid, OpenFlowSwitch sw) {
+<span class="nc" id="L513">            switchLock.lock();</span>
+            try {
+<span class="nc bnc" id="L515" title="All 2 branches missed.">                if (!validActivation(dpid)) {</span>
+<span class="nc" id="L516">                    return false;</span>
+                }
+<span class="nc" id="L518">                activeMasterSwitches.put(dpid, sw);</span>
+<span class="nc" id="L519">                return true;</span>
+            } finally {
+<span class="nc" id="L521">                switchLock.unlock();</span>
+            }
+        }
+
+        @Override
+        public boolean addActivatedEqualSwitch(Dpid dpid, OpenFlowSwitch sw) {
+<span class="nc" id="L527">            switchLock.lock();</span>
+            try {
+<span class="nc bnc" id="L529" title="All 2 branches missed.">                if (!validActivation(dpid)) {</span>
+<span class="nc" id="L530">                    return false;</span>
+                }
+<span class="nc" id="L532">                activeEqualSwitches.put(dpid, sw);</span>
+<span class="nc" id="L533">                log.info(&quot;Added Activated EQUAL Switch {}&quot;, dpid);</span>
+<span class="nc" id="L534">                return true;</span>
+            } finally {
+<span class="nc" id="L536">                switchLock.unlock();</span>
+            }
+        }
+
+        @Override
+        public void transitionToMasterSwitch(Dpid dpid) {
+<span class="nc" id="L542">            switchLock.lock();</span>
+            try {
+<span class="nc bnc" id="L544" title="All 2 branches missed.">                if (activeMasterSwitches.containsKey(dpid)) {</span>
+<span class="nc" id="L545">                    return;</span>
+                }
+<span class="nc" id="L547">                OpenFlowSwitch sw = activeEqualSwitches.remove(dpid);</span>
+<span class="nc bnc" id="L548" title="All 2 branches missed.">                if (sw == null) {</span>
+<span class="nc" id="L549">                    sw = getSwitch(dpid);</span>
+<span class="nc bnc" id="L550" title="All 2 branches missed.">                    if (sw == null) {</span>
+<span class="nc" id="L551">                        log.error(&quot;Transition to master called on sw {}, but switch &quot;</span>
+                                + &quot;was not found in controller-cache&quot;, dpid);
+<span class="nc" id="L553">                        return;</span>
+                    }
+                }
+<span class="nc" id="L556">                log.info(&quot;Transitioned switch {} to MASTER&quot;, dpid);</span>
+<span class="nc" id="L557">                activeMasterSwitches.put(dpid, sw);</span>
+            } finally {
+<span class="nc" id="L559">                switchLock.unlock();</span>
+<span class="nc" id="L560">            }</span>
+<span class="nc" id="L561">        }</span>
+
+
+        @Override
+        public void transitionToEqualSwitch(Dpid dpid) {
+<span class="nc" id="L566">            switchLock.lock();</span>
+            try {
+<span class="nc bnc" id="L568" title="All 2 branches missed.">                if (activeEqualSwitches.containsKey(dpid)) {</span>
+<span class="nc" id="L569">                    return;</span>
+                }
+<span class="nc" id="L571">                OpenFlowSwitch sw = activeMasterSwitches.remove(dpid);</span>
+<span class="nc bnc" id="L572" title="All 2 branches missed.">                if (sw == null) {</span>
+<span class="nc" id="L573">                    sw = getSwitch(dpid);</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">                    if (sw == null) {</span>
+<span class="nc" id="L575">                        log.error(&quot;Transition to equal called on sw {}, but switch &quot;</span>
+                                + &quot;was not found in controller-cache&quot;, dpid);
+<span class="nc" id="L577">                        return;</span>
+                    }
+                }
+<span class="nc" id="L580">                log.info(&quot;Transitioned switch {} to EQUAL&quot;, dpid);</span>
+<span class="nc" id="L581">                activeEqualSwitches.put(dpid, sw);</span>
+            } finally {
+<span class="nc" id="L583">                switchLock.unlock();</span>
+<span class="nc" id="L584">            }</span>
+
+<span class="nc" id="L586">        }</span>
+
+        @Override
+        public void removeConnectedSwitch(Dpid dpid) {
+<span class="nc" id="L590">            connectedSwitches.remove(dpid);</span>
+<span class="nc" id="L591">            OpenFlowSwitch sw = activeMasterSwitches.remove(dpid);</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">            if (sw == null) {</span>
+<span class="nc" id="L593">                log.debug(&quot;sw was null for {}&quot;, dpid);</span>
+<span class="nc" id="L594">                sw = activeEqualSwitches.remove(dpid);</span>
+            }
+<span class="nc bnc" id="L596" title="All 2 branches missed.">            for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L597">                l.switchRemoved(dpid);</span>
+<span class="nc" id="L598">            }</span>
+<span class="nc" id="L599">        }</span>
+
+        @Override
+        public void processMessage(Dpid dpid, OFMessage m) {
+<span class="nc" id="L603">            processPacket(dpid, m);</span>
+<span class="nc" id="L604">        }</span>
+
+        @Override
+        public void returnRoleReply(Dpid dpid, RoleState requested, RoleState response) {
+<span class="nc bnc" id="L608" title="All 2 branches missed.">            for (OpenFlowSwitchListener l : ofSwitchListener) {</span>
+<span class="nc" id="L609">                l.receivedRoleReply(dpid, requested, response);</span>
+<span class="nc" id="L610">            }</span>
+<span class="nc" id="L611">        }</span>
+    }
+
+    private final class OFMessageHandler implements Runnable {
+
+        private final OFMessage msg;
+        private final Dpid dpid;
+
+<span class="nc" id="L619">        public OFMessageHandler(Dpid dpid, OFMessage msg) {</span>
+<span class="nc" id="L620">            this.msg = msg;</span>
+<span class="nc" id="L621">            this.dpid = dpid;</span>
+<span class="nc" id="L622">        }</span>
+
+        @Override
+        public void run() {
+<span class="nc bnc" id="L626" title="All 2 branches missed.">            for (OpenFlowEventListener listener : ofEventListener) {</span>
+<span class="nc" id="L627">                listener.handleMessage(dpid, msg);</span>
+<span class="nc" id="L628">            }</span>
+<span class="nc" id="L629">        }</span>
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

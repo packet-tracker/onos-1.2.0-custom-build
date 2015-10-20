@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>StatefulIPv4LspIdentidiersTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">StatefulIPv4LspIdentidiersTlv.java</span></div><h1>StatefulIPv4LspIdentidiersTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides StatefulIPv4LspIdentidiersTlv.
+ */
+public class StatefulIPv4LspIdentidiersTlv implements PcepValueType {
+
+    /*             IPV4-LSP-IDENTIFIERS TLV format
+     *
+     * Reference :PCEP Extensions for Stateful PCE draft-ietf-pce-stateful-pce-10
+     *
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |           Type=18             |           Length=16           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                   IPv4 Tunnel Sender Address                  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |             LSP ID            |           Tunnel ID           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                        Extended Tunnel ID                     |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |               IPv4 Tunnel Endpoint Address                    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+     */
+<span class="fc" id="L53">    protected static final Logger log = LoggerFactory.getLogger(StatefulIPv4LspIdentidiersTlv.class);</span>
+
+    public static final short TYPE = 18;
+    public static final short LENGTH = 16;
+    public static final int VALUE_LENGTH = 16;
+    private final int ipv4IngressAddress;
+    private final short lspId;
+    private final short tunnelId;
+    private final int extendedTunnelId;
+    private final int ipv4EgressAddress;
+
+    /**
+     * Constructor to initialize member variables.
+     *
+     * @param ipv4IngressAddress ingress ipv4 address
+     * @param lspId lsp id
+     * @param tunnelId tunnel id
+     * @param extendedTunnelId extended tunnel id
+     * @param ipv4EgressAddress egress ipv4 address
+     */
+    public StatefulIPv4LspIdentidiersTlv(int ipv4IngressAddress, short lspId, short tunnelId, int extendedTunnelId,
+<span class="fc" id="L74">            int ipv4EgressAddress) {</span>
+
+<span class="fc" id="L76">        this.ipv4IngressAddress = ipv4IngressAddress;</span>
+<span class="fc" id="L77">        this.lspId = lspId;</span>
+<span class="fc" id="L78">        this.tunnelId = tunnelId;</span>
+<span class="fc" id="L79">        this.extendedTunnelId = extendedTunnelId;</span>
+<span class="fc" id="L80">        this.ipv4EgressAddress = ipv4EgressAddress;</span>
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * Creates object of StatefulIPv4LspIdentidiersTlv.
+     *
+     * @param ipv4IngressAddress ingress ipv4 address
+     * @param lspId lsp id
+     * @param tunnelId tunnel id
+     * @param extendedTunnelId extended tunnel id
+     * @param ipv4EgressAddress egress ipv4 address
+     * @return object of StatefulIPv4LspIdentidiersTlv
+     */
+    public static StatefulIPv4LspIdentidiersTlv of(int ipv4IngressAddress, short lspId, short tunnelId,
+            int extendedTunnelId, int ipv4EgressAddress) {
+<span class="fc" id="L95">        return new StatefulIPv4LspIdentidiersTlv(ipv4IngressAddress, lspId, tunnelId, extendedTunnelId,</span>
+                ipv4EgressAddress);
+    }
+
+    /**
+     * Returns tunnel id.
+     *
+     * @return tunnelId
+     */
+    public short getTunnelId() {
+<span class="nc" id="L105">        return this.tunnelId;</span>
+    }
+
+    /**
+     * Returns extendedTunnelId.
+     *
+     * @return extendedTunnelId
+     */
+    public int getextendedTunnelId() {
+<span class="nc" id="L114">        return this.extendedTunnelId;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L119">        return PcepVersion.PCEP_1;</span>
+    }
+
+    /**
+     * Returns ipv4IngressAddress.
+     *
+     * @return ipv4IngressAddress
+     */
+    public int getIpv4IngressAddress() {
+<span class="nc" id="L128">        return ipv4IngressAddress;</span>
+    }
+
+    /**
+     * Returns ipv4EgressAddress.
+     *
+     * @return ipv4EgressAddress
+     */
+    public int getIpv4EgressAddress() {
+<span class="nc" id="L137">        return ipv4EgressAddress;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L142">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L147">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L152">        return Objects.hash(ipv4IngressAddress, lspId, tunnelId, extendedTunnelId, ipv4EgressAddress);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L158">            return true;</span>
+        }
+<span class="fc bfc" id="L160" title="All 2 branches covered.">        if (obj instanceof StatefulIPv4LspIdentidiersTlv) {</span>
+<span class="fc" id="L161">            StatefulIPv4LspIdentidiersTlv other = (StatefulIPv4LspIdentidiersTlv) obj;</span>
+<span class="fc bfc" id="L162" title="All 2 branches covered.">            return Objects.equals(this.ipv4IngressAddress, other.ipv4IngressAddress)</span>
+<span class="pc bpc" id="L163" title="2 of 4 branches missed.">                    &amp;&amp; Objects.equals(this.lspId, other.lspId) &amp;&amp; Objects.equals(this.tunnelId, other.tunnelId)</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.extendedTunnelId, other.extendedTunnelId)</span>
+<span class="pc bpc" id="L165" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.ipv4EgressAddress, other.ipv4EgressAddress);</span>
+        }
+<span class="fc" id="L167">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L172">        int iLenStartIndex = c.writerIndex();</span>
+<span class="fc" id="L173">        c.writeShort(TYPE);</span>
+<span class="fc" id="L174">        c.writeShort(LENGTH);</span>
+<span class="fc" id="L175">        c.writeInt(ipv4IngressAddress);</span>
+<span class="fc" id="L176">        c.writeShort(lspId);</span>
+<span class="fc" id="L177">        c.writeShort(tunnelId);</span>
+<span class="fc" id="L178">        c.writeInt(extendedTunnelId);</span>
+<span class="fc" id="L179">        c.writeInt(ipv4EgressAddress);</span>
+
+<span class="fc" id="L181">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of StatefulIPv4LspIdentidiersTlv.
+     *
+     * @param c of type channel buffer
+     * @return object of StatefulIPv4LspIdentidiersTlv
+     */
+    public static PcepValueType read(ChannelBuffer c) {
+<span class="fc" id="L191">        int ipv4IngressAddress = c.readInt();</span>
+<span class="fc" id="L192">        short lspId = c.readShort();</span>
+<span class="fc" id="L193">        short tunnelId = c.readShort();</span>
+<span class="fc" id="L194">        int extendedTunnelId = c.readInt();</span>
+<span class="fc" id="L195">        int ipv4EgressAddress = c.readInt();</span>
+<span class="fc" id="L196">        return new StatefulIPv4LspIdentidiersTlv(ipv4IngressAddress, lspId, tunnelId, extendedTunnelId,</span>
+                ipv4EgressAddress);
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L202">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L203">                .add(&quot;Type:&quot;, TYPE)</span>
+<span class="fc" id="L204">                .add(&quot;Length:&quot;, LENGTH)</span>
+<span class="fc" id="L205">                .add(&quot;Ipv4IngressAddress:&quot;, ipv4IngressAddress)</span>
+<span class="fc" id="L206">                .add(&quot;LspId:&quot;, lspId).add(&quot;TunnelId:&quot;, tunnelId)</span>
+<span class="fc" id="L207">                .add(&quot;ExtendedTunnelId:&quot;, extendedTunnelId)</span>
+<span class="fc" id="L208">                .add(&quot;Ipv4EgressAddress:&quot;, ipv4EgressAddress).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

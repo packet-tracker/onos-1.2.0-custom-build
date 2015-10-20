@@ -1,0 +1,679 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EventuallyConsistentMapImpl.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.ecmap</a> &gt; <span class="el_source">EventuallyConsistentMapImpl.java</span></div><h1>EventuallyConsistentMapImpl.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.ecmap;
+
+import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import org.apache.commons.lang3.tuple.Pair;
+import org.onlab.util.AbstractAccumulator;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.SlidingWindowCounter;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.store.Timestamp;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.impl.LogicalTimestamp;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.WallClockTimestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.Timer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static org.onlab.util.BoundedThreadPool.newFixedThreadPool;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.REMOVE;
+
+/**
+ * Distributed Map implementation which uses optimistic replication and gossip
+ * based techniques to provide an eventually consistent data store.
+ */
+public class EventuallyConsistentMapImpl&lt;K, V&gt;
+        implements EventuallyConsistentMap&lt;K, V&gt; {
+
+<span class="fc" id="L76">    private static final Logger log = LoggerFactory.getLogger(EventuallyConsistentMapImpl.class);</span>
+
+    private final Map&lt;K, MapValue&lt;V&gt;&gt; items;
+
+    private final ClusterService clusterService;
+    private final ClusterCommunicationService clusterCommunicator;
+    private final KryoSerializer serializer;
+    private final NodeId localNodeId;
+
+    private final BiFunction&lt;K, V, Timestamp&gt; timestampProvider;
+
+    private final MessageSubject updateMessageSubject;
+    private final MessageSubject antiEntropyAdvertisementSubject;
+
+<span class="fc" id="L90">    private final Set&lt;EventuallyConsistentMapListener&lt;K, V&gt;&gt; listeners</span>
+<span class="fc" id="L91">            = Sets.newCopyOnWriteArraySet();</span>
+
+    private final ExecutorService executor;
+    private final ScheduledExecutorService backgroundExecutor;
+    private final BiFunction&lt;K, V, Collection&lt;NodeId&gt;&gt; peerUpdateFunction;
+
+    private final ExecutorService communicationExecutor;
+    private final Map&lt;NodeId, EventAccumulator&gt; senderPending;
+
+    private final String mapName;
+
+<span class="fc" id="L102">    private volatile boolean destroyed = false;</span>
+    private static final String ERROR_DESTROYED = &quot; map is already destroyed&quot;;
+    private final String destroyedMessage;
+
+    private static final String ERROR_NULL_KEY = &quot;Key cannot be null&quot;;
+    private static final String ERROR_NULL_VALUE = &quot;Null values are not allowed&quot;;
+
+<span class="fc" id="L109">    private final long initialDelaySec = 5;</span>
+    private final boolean lightweightAntiEntropy;
+    private final boolean tombstonesDisabled;
+
+    private static final int WINDOW_SIZE = 5;
+    private static final int HIGH_LOAD_THRESHOLD = 0;
+    private static final int LOAD_WINDOW = 2;
+<span class="fc" id="L116">    private SlidingWindowCounter counter = new SlidingWindowCounter(WINDOW_SIZE);</span>
+
+    private final boolean persistent;
+    private final PersistentStore&lt;K, V&gt; persistentStore;
+
+    /**
+     * Creates a new eventually consistent map shared amongst multiple instances.
+     * &lt;p&gt;
+     * See {@link org.onosproject.store.service.EventuallyConsistentMapBuilder}
+     * for more description of the parameters expected by the map.
+     * &lt;/p&gt;
+     *
+     * @param mapName               a String identifier for the map.
+     * @param clusterService        the cluster service
+     * @param clusterCommunicator   the cluster communications service
+     * @param serializerBuilder     a Kryo namespace builder that can serialize
+     *                              both K and V
+     * @param timestampProvider     provider of timestamps for K and V
+     * @param peerUpdateFunction    function that provides a set of nodes to immediately
+     *                              update to when there writes to the map
+     * @param eventExecutor         executor to use for processing incoming
+     *                              events from peers
+     * @param communicationExecutor executor to use for sending events to peers
+     * @param backgroundExecutor    executor to use for background anti-entropy
+     *                              tasks
+     * @param tombstonesDisabled    true if this map should not maintain
+     *                              tombstones
+     * @param antiEntropyPeriod     period that the anti-entropy task should run
+     * @param antiEntropyTimeUnit   time unit for anti-entropy period
+     * @param convergeFaster        make anti-entropy try to converge faster
+     * @param persistent            persist data to disk
+     */
+    EventuallyConsistentMapImpl(String mapName,
+                                ClusterService clusterService,
+                                ClusterCommunicationService clusterCommunicator,
+                                KryoNamespace.Builder serializerBuilder,
+                                BiFunction&lt;K, V, Timestamp&gt; timestampProvider,
+                                BiFunction&lt;K, V, Collection&lt;NodeId&gt;&gt; peerUpdateFunction,
+                                ExecutorService eventExecutor,
+                                ExecutorService communicationExecutor,
+                                ScheduledExecutorService backgroundExecutor,
+                                boolean tombstonesDisabled,
+                                long antiEntropyPeriod,
+                                TimeUnit antiEntropyTimeUnit,
+                                boolean convergeFaster,
+<span class="fc" id="L161">                                boolean persistent) {</span>
+<span class="fc" id="L162">        this.mapName = mapName;</span>
+<span class="fc" id="L163">        items = Maps.newConcurrentMap();</span>
+<span class="fc" id="L164">        senderPending = Maps.newConcurrentMap();</span>
+<span class="fc" id="L165">        destroyedMessage = mapName + ERROR_DESTROYED;</span>
+
+<span class="fc" id="L167">        this.clusterService = clusterService;</span>
+<span class="fc" id="L168">        this.clusterCommunicator = clusterCommunicator;</span>
+<span class="fc" id="L169">        this.localNodeId = clusterService.getLocalNode().id();</span>
+
+<span class="fc" id="L171">        this.serializer = createSerializer(serializerBuilder);</span>
+
+<span class="fc" id="L173">        this.timestampProvider = timestampProvider;</span>
+
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">        if (peerUpdateFunction != null) {</span>
+<span class="nc" id="L176">            this.peerUpdateFunction = peerUpdateFunction;</span>
+        } else {
+<span class="fc" id="L178">            this.peerUpdateFunction = (key, value) -&gt; clusterService.getNodes().stream()</span>
+<span class="fc" id="L179">                    .map(ControllerNode::id)</span>
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">                    .filter(nodeId -&gt; !nodeId.equals(localNodeId))</span>
+<span class="fc" id="L181">                    .collect(Collectors.toList());</span>
+        }
+
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        if (eventExecutor != null) {</span>
+<span class="nc" id="L185">            this.executor = eventExecutor;</span>
+        } else {
+            // should be a normal executor; it's used for receiving messages
+<span class="fc" id="L188">            this.executor =</span>
+<span class="fc" id="L189">                    Executors.newFixedThreadPool(8, groupedThreads(&quot;onos/ecm&quot;, mapName + &quot;-fg-%d&quot;));</span>
+        }
+
+<span class="fc bfc" id="L192" title="All 2 branches covered.">        if (communicationExecutor != null) {</span>
+<span class="fc" id="L193">            this.communicationExecutor = communicationExecutor;</span>
+        } else {
+            // sending executor; should be capped
+            //TODO this probably doesn't need to be bounded anymore
+<span class="fc" id="L197">            this.communicationExecutor =</span>
+<span class="fc" id="L198">                    newFixedThreadPool(8, groupedThreads(&quot;onos/ecm&quot;, mapName + &quot;-publish-%d&quot;));</span>
+        }
+
+<span class="fc" id="L201">        this.persistent = persistent;</span>
+
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (this.persistent) {</span>
+<span class="nc" id="L204">            String dataDirectory = System.getProperty(&quot;karaf.data&quot;, &quot;./data&quot;);</span>
+<span class="nc" id="L205">            String filename = dataDirectory + &quot;/&quot; + &quot;mapdb-ecm-&quot; + mapName;</span>
+
+<span class="nc" id="L207">            ExecutorService dbExecutor =</span>
+<span class="nc" id="L208">                    newFixedThreadPool(1, groupedThreads(&quot;onos/ecm&quot;, mapName + &quot;-dbwriter&quot;));</span>
+
+<span class="nc" id="L210">            persistentStore = new MapDbPersistentStore&lt;&gt;(filename, dbExecutor, serializer);</span>
+<span class="nc" id="L211">            persistentStore.readInto(items);</span>
+<span class="nc" id="L212">        } else {</span>
+<span class="fc" id="L213">            this.persistentStore = null;</span>
+        }
+
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">        if (backgroundExecutor != null) {</span>
+<span class="nc" id="L217">            this.backgroundExecutor = backgroundExecutor;</span>
+        } else {
+<span class="fc" id="L219">            this.backgroundExecutor =</span>
+<span class="fc" id="L220">                    newSingleThreadScheduledExecutor(groupedThreads(&quot;onos/ecm&quot;, mapName + &quot;-bg-%d&quot;));</span>
+        }
+
+        // start anti-entropy thread
+<span class="fc" id="L224">        this.backgroundExecutor.scheduleAtFixedRate(this::sendAdvertisement,</span>
+                                                    initialDelaySec, antiEntropyPeriod,
+                                                    antiEntropyTimeUnit);
+
+<span class="fc" id="L228">        updateMessageSubject = new MessageSubject(&quot;ecm-&quot; + mapName + &quot;-update&quot;);</span>
+<span class="fc" id="L229">        clusterCommunicator.addSubscriber(updateMessageSubject,</span>
+                                          serializer::decode,
+                                          this::processUpdates,
+                                          this.executor);
+
+<span class="fc" id="L234">        antiEntropyAdvertisementSubject = new MessageSubject(&quot;ecm-&quot; + mapName + &quot;-anti-entropy&quot;);</span>
+<span class="fc" id="L235">        clusterCommunicator.addSubscriber(antiEntropyAdvertisementSubject,</span>
+                                          serializer::decode,
+                                          this::handleAntiEntropyAdvertisement,
+                                          this.backgroundExecutor);
+
+<span class="fc" id="L240">        this.tombstonesDisabled = tombstonesDisabled;</span>
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">        this.lightweightAntiEntropy = !convergeFaster;</span>
+<span class="fc" id="L242">    }</span>
+
+    private KryoSerializer createSerializer(KryoNamespace.Builder builder) {
+<span class="fc" id="L245">        return new KryoSerializer() {</span>
+            @Override
+            protected void setupKryoPool() {
+                // Add the map's internal helper classes to the user-supplied serializer
+<span class="fc" id="L249">                serializerPool = builder</span>
+<span class="fc" id="L250">                        .register(KryoNamespaces.BASIC)</span>
+<span class="fc" id="L251">                        .nextId(KryoNamespaces.BEGIN_USER_CUSTOM_ID)</span>
+<span class="fc" id="L252">                        .register(LogicalTimestamp.class)</span>
+<span class="fc" id="L253">                        .register(WallClockTimestamp.class)</span>
+<span class="fc" id="L254">                        .register(AntiEntropyAdvertisement.class)</span>
+<span class="fc" id="L255">                        .register(UpdateEntry.class)</span>
+<span class="fc" id="L256">                        .register(MapValue.class)</span>
+<span class="fc" id="L257">                        .register(MapValue.Digest.class)</span>
+<span class="fc" id="L258">                        .build();</span>
+<span class="fc" id="L259">            }</span>
+        };
+    }
+
+    @Override
+    public int size() {
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+        // TODO: Maintain a separate counter for tracking live elements in map.
+<span class="fc" id="L267">        return Maps.filterValues(items, MapValue::isAlive).size();</span>
+    }
+
+    @Override
+    public boolean isEmpty() {
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc bfc" id="L273" title="All 2 branches covered.">        return size() == 0;</span>
+    }
+
+    @Override
+    public boolean containsKey(K key) {
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L279">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="fc bfc" id="L280" title="All 2 branches covered.">        return get(key) != null;</span>
+    }
+
+    @Override
+    public boolean containsValue(V value) {
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L286">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="fc" id="L287">        return items.values()</span>
+<span class="fc" id="L288">                    .stream()</span>
+<span class="fc" id="L289">                    .filter(MapValue::isAlive)</span>
+<span class="fc" id="L290">                    .anyMatch(v -&gt; value.equals(v.get()));</span>
+    }
+
+    @Override
+    public V get(K key) {
+<span class="fc bfc" id="L295" title="All 2 branches covered.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L296">        checkNotNull(key, ERROR_NULL_KEY);</span>
+
+<span class="fc" id="L298">        MapValue&lt;V&gt; value = items.get(key);</span>
+<span class="fc bfc" id="L299" title="All 4 branches covered.">        return (value == null || value.isTombstone()) ? null : value.get();</span>
+    }
+
+    @Override
+    public void put(K key, V value) {
+<span class="fc bfc" id="L304" title="All 2 branches covered.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L305">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="fc" id="L306">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+
+<span class="fc" id="L308">        MapValue&lt;V&gt; newValue = new MapValue&lt;&gt;(value, timestampProvider.apply(key, value));</span>
+<span class="fc bfc" id="L309" title="All 2 branches covered.">        if (putInternal(key, newValue)) {</span>
+<span class="fc" id="L310">            notifyPeers(new UpdateEntry&lt;&gt;(key, newValue), peerUpdateFunction.apply(key, value));</span>
+<span class="fc" id="L311">            notifyListeners(new EventuallyConsistentMapEvent&lt;&gt;(mapName, PUT, key, value));</span>
+        }
+<span class="fc" id="L313">    }</span>
+
+    @Override
+    public V remove(K key) {
+<span class="pc bpc" id="L317" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L318">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="fc" id="L319">        return removeAndNotify(key, null);</span>
+    }
+
+    @Override
+    public void remove(K key, V value) {
+<span class="nc bnc" id="L324" title="All 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="nc" id="L325">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L326">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L327">        removeAndNotify(key, value);</span>
+<span class="nc" id="L328">    }</span>
+
+    private V removeAndNotify(K key, V value) {
+<span class="fc" id="L331">        Timestamp timestamp = timestampProvider.apply(key, value);</span>
+<span class="pc bpc" id="L332" title="2 of 4 branches missed.">        Optional&lt;MapValue&lt;V&gt;&gt; tombstone = tombstonesDisabled || timestamp == null</span>
+<span class="pc" id="L333">                ? Optional.empty() : Optional.of(MapValue.tombstone(timestamp));</span>
+<span class="fc" id="L334">        MapValue&lt;V&gt; previousValue = removeInternal(key, Optional.ofNullable(value), tombstone);</span>
+<span class="fc bfc" id="L335" title="All 2 branches covered.">        if (previousValue != null) {</span>
+<span class="fc" id="L336">            notifyPeers(new UpdateEntry&lt;&gt;(key, tombstone.orElse(null)),</span>
+<span class="fc" id="L337">                        peerUpdateFunction.apply(key, previousValue.get()));</span>
+<span class="fc bfc" id="L338" title="All 2 branches covered.">            if (previousValue.isAlive()) {</span>
+<span class="fc" id="L339">                notifyListeners(new EventuallyConsistentMapEvent&lt;&gt;(mapName, REMOVE, key, previousValue.get()));</span>
+            }
+        }
+<span class="fc bfc" id="L342" title="All 2 branches covered.">        return previousValue != null ? previousValue.get() : null;</span>
+    }
+
+    private MapValue&lt;V&gt; removeInternal(K key, Optional&lt;V&gt; value, Optional&lt;MapValue&lt;V&gt;&gt; tombstone) {
+<span class="pc bpc" id="L346" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L347">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="fc" id="L348">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="fc" id="L349">        tombstone.ifPresent(v -&gt; checkState(v.isTombstone()));</span>
+
+<span class="fc" id="L351">        counter.incrementCount();</span>
+<span class="fc" id="L352">        AtomicBoolean updated = new AtomicBoolean(false);</span>
+<span class="fc" id="L353">        AtomicReference&lt;MapValue&lt;V&gt;&gt; previousValue = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L354">        items.compute(key, (k, existing) -&gt; {</span>
+<span class="fc" id="L355">            boolean valueMatches = true;</span>
+<span class="pc bpc" id="L356" title="5 of 6 branches missed.">            if (value.isPresent() &amp;&amp; existing != null &amp;&amp; existing.isAlive()) {</span>
+<span class="nc" id="L357">                valueMatches = Objects.equals(value.get(), existing.get());</span>
+            }
+<span class="pc bpc" id="L359" title="1 of 2 branches missed.">            if (existing == null) {</span>
+<span class="nc" id="L360">                log.trace(&quot;ECMap Remove: Existing value for key {} is already null&quot;, k);</span>
+            }
+<span class="pc bpc" id="L362" title="1 of 2 branches missed.">            if (valueMatches) {</span>
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">                if (existing == null) {</span>
+<span class="nc" id="L364">                    updated.set(tombstone.isPresent());</span>
+                } else {
+<span class="pc bpc" id="L366" title="1 of 4 branches missed.">                    updated.set(!tombstone.isPresent() || tombstone.get().isNewerThan(existing));</span>
+                }
+            }
+<span class="fc bfc" id="L369" title="All 2 branches covered.">            if (updated.get()) {</span>
+<span class="fc" id="L370">                previousValue.set(existing);</span>
+<span class="fc" id="L371">                return tombstone.orElse(null);</span>
+            } else {
+<span class="fc" id="L373">                return existing;</span>
+            }
+        });
+<span class="fc bfc" id="L376" title="All 2 branches covered.">        if (updated.get()) {</span>
+<span class="pc bpc" id="L377" title="1 of 2 branches missed.">            if (persistent) {</span>
+<span class="nc bnc" id="L378" title="All 2 branches missed.">                if (tombstone.isPresent()) {</span>
+<span class="nc" id="L379">                    persistentStore.update(key, tombstone.get());</span>
+                } else {
+<span class="nc" id="L381">                    persistentStore.remove(key);</span>
+                }
+            }
+        }
+<span class="fc" id="L385">        return previousValue.get();</span>
+    }
+
+    @Override
+    public V compute(K key, BiFunction&lt;K, V, V&gt; recomputeFunction) {
+<span class="pc bpc" id="L390" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L391">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="fc" id="L392">        checkNotNull(recomputeFunction, &quot;Recompute function cannot be null&quot;);</span>
+
+<span class="fc" id="L394">        AtomicBoolean updated = new AtomicBoolean(false);</span>
+<span class="fc" id="L395">        AtomicReference&lt;MapValue&lt;V&gt;&gt; previousValue = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L396">        MapValue&lt;V&gt; computedValue = items.compute(key, (k, mv) -&gt; {</span>
+<span class="fc" id="L397">            previousValue.set(mv);</span>
+<span class="fc bfc" id="L398" title="All 2 branches covered.">            V newRawValue = recomputeFunction.apply(key, mv == null ? null : mv.get());</span>
+<span class="fc" id="L399">            MapValue&lt;V&gt; newValue = new MapValue&lt;&gt;(newRawValue, timestampProvider.apply(key, newRawValue));</span>
+<span class="fc bfc" id="L400" title="All 4 branches covered.">            if (mv == null || newValue.isNewerThan(mv)) {</span>
+<span class="fc" id="L401">                updated.set(true);</span>
+<span class="fc" id="L402">                return newValue;</span>
+            } else {
+<span class="fc" id="L404">                return mv;</span>
+            }
+        });
+<span class="fc bfc" id="L407" title="All 2 branches covered.">        if (updated.get()) {</span>
+<span class="fc" id="L408">            notifyPeers(new UpdateEntry&lt;&gt;(key, computedValue), peerUpdateFunction.apply(key, computedValue.get()));</span>
+<span class="fc bfc" id="L409" title="All 2 branches covered.">            EventuallyConsistentMapEvent.Type updateType = computedValue.isTombstone() ? REMOVE : PUT;</span>
+<span class="fc bfc" id="L410" title="All 2 branches covered.">            V value = computedValue.isTombstone()</span>
+<span class="pc bpc" id="L411" title="1 of 2 branches missed.">                    ? previousValue.get() == null ? null : previousValue.get().get()</span>
+<span class="fc" id="L412">                    : computedValue.get();</span>
+<span class="fc bfc" id="L413" title="All 2 branches covered.">            if (value != null) {</span>
+<span class="fc" id="L414">                notifyListeners(new EventuallyConsistentMapEvent&lt;&gt;(mapName, updateType, key, value));</span>
+            }
+        }
+<span class="fc" id="L417">        return computedValue.get();</span>
+    }
+
+    @Override
+    public void putAll(Map&lt;? extends K, ? extends V&gt; m) {
+<span class="pc bpc" id="L422" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L423">        m.forEach(this::put);</span>
+<span class="fc" id="L424">    }</span>
+
+    @Override
+    public void clear() {
+<span class="pc bpc" id="L428" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L429">        Maps.filterValues(items, MapValue::isAlive)</span>
+<span class="fc" id="L430">            .forEach((k, v) -&gt; remove(k));</span>
+<span class="fc" id="L431">    }</span>
+
+    @Override
+    public Set&lt;K&gt; keySet() {
+<span class="pc bpc" id="L435" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L436">        return Maps.filterValues(items, MapValue::isAlive)</span>
+<span class="fc" id="L437">                   .keySet();</span>
+    }
+
+    @Override
+    public Collection&lt;V&gt; values() {
+<span class="pc bpc" id="L442" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L443">        return Collections2.transform(Maps.filterValues(items, MapValue::isAlive).values(), MapValue::get);</span>
+    }
+
+    @Override
+    public Set&lt;Map.Entry&lt;K, V&gt;&gt; entrySet() {
+<span class="pc bpc" id="L448" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L449">        return Maps.filterValues(items, MapValue::isAlive)</span>
+<span class="fc" id="L450">                   .entrySet()</span>
+<span class="fc" id="L451">                   .stream()</span>
+<span class="fc" id="L452">                   .map(e -&gt; Pair.of(e.getKey(), e.getValue().get()))</span>
+<span class="fc" id="L453">                   .collect(Collectors.toSet());</span>
+    }
+
+    /**
+     * Returns true if newValue was accepted i.e. map is updated.
+     * @param key key
+     * @param newValue proposed new value
+     * @return true if update happened; false if map already contains a more recent value for the key
+     */
+    private boolean putInternal(K key, MapValue&lt;V&gt; newValue) {
+<span class="pc bpc" id="L463" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+<span class="fc" id="L464">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="fc" id="L465">        checkNotNull(newValue, ERROR_NULL_VALUE);</span>
+<span class="fc" id="L466">        checkState(newValue.isAlive());</span>
+<span class="fc" id="L467">        counter.incrementCount();</span>
+<span class="fc" id="L468">        AtomicBoolean updated = new AtomicBoolean(false);</span>
+<span class="fc" id="L469">        items.compute(key, (k, existing) -&gt; {</span>
+<span class="fc bfc" id="L470" title="All 4 branches covered.">            if (existing == null || newValue.isNewerThan(existing)) {</span>
+<span class="fc" id="L471">                updated.set(true);</span>
+<span class="fc" id="L472">                return newValue;</span>
+            }
+<span class="fc" id="L474">            return existing;</span>
+        });
+<span class="pc bpc" id="L476" title="1 of 4 branches missed.">        if (updated.get() &amp;&amp; persistent) {</span>
+<span class="nc" id="L477">            persistentStore.update(key, newValue);</span>
+        }
+<span class="fc" id="L479">        return updated.get();</span>
+    }
+
+    @Override
+    public void addListener(EventuallyConsistentMapListener&lt;K, V&gt; listener) {
+<span class="pc bpc" id="L484" title="1 of 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+
+<span class="fc" id="L486">        listeners.add(checkNotNull(listener));</span>
+<span class="fc" id="L487">    }</span>
+
+    @Override
+    public void removeListener(EventuallyConsistentMapListener&lt;K, V&gt; listener) {
+<span class="nc bnc" id="L491" title="All 2 branches missed.">        checkState(!destroyed, destroyedMessage);</span>
+
+<span class="nc" id="L493">        listeners.remove(checkNotNull(listener));</span>
+<span class="nc" id="L494">    }</span>
+
+    @Override
+    public void destroy() {
+<span class="fc" id="L498">        destroyed = true;</span>
+
+<span class="fc" id="L500">        executor.shutdown();</span>
+<span class="fc" id="L501">        backgroundExecutor.shutdown();</span>
+<span class="fc" id="L502">        communicationExecutor.shutdown();</span>
+
+<span class="fc" id="L504">        listeners.clear();</span>
+
+<span class="fc" id="L506">        clusterCommunicator.removeSubscriber(updateMessageSubject);</span>
+<span class="fc" id="L507">        clusterCommunicator.removeSubscriber(antiEntropyAdvertisementSubject);</span>
+<span class="fc" id="L508">    }</span>
+
+    private void notifyListeners(EventuallyConsistentMapEvent&lt;K, V&gt; event) {
+<span class="fc" id="L511">        listeners.forEach(listener -&gt; listener.event(event));</span>
+<span class="fc" id="L512">    }</span>
+
+    private void notifyPeers(UpdateEntry&lt;K, V&gt; event, Collection&lt;NodeId&gt; peers) {
+<span class="fc" id="L515">        queueUpdate(event, peers);</span>
+<span class="fc" id="L516">    }</span>
+
+    private void queueUpdate(UpdateEntry&lt;K, V&gt; event, Collection&lt;NodeId&gt; peers) {
+<span class="pc bpc" id="L519" title="1 of 2 branches missed.">        if (peers == null) {</span>
+            // we have no friends :(
+<span class="nc" id="L521">            return;</span>
+        }
+<span class="fc" id="L523">        peers.forEach(node -&gt;</span>
+<span class="nc" id="L524">                        senderPending.computeIfAbsent(node, unusedKey -&gt; new EventAccumulator(node)).add(event)</span>
+        );
+<span class="fc" id="L526">    }</span>
+
+    private boolean underHighLoad() {
+<span class="nc bnc" id="L529" title="All 2 branches missed.">        return counter.get(LOAD_WINDOW) &gt; HIGH_LOAD_THRESHOLD;</span>
+    }
+
+    private void sendAdvertisement() {
+        try {
+<span class="nc bnc" id="L534" title="All 4 branches missed.">            if (underHighLoad() || destroyed) {</span>
+<span class="nc" id="L535">                return;</span>
+            }
+<span class="nc" id="L537">            pickRandomActivePeer().ifPresent(this::sendAdvertisementToPeer);</span>
+<span class="nc" id="L538">        } catch (Exception e) {</span>
+            // Catch all exceptions to avoid scheduled task being suppressed.
+<span class="nc" id="L540">            log.error(&quot;Exception thrown while sending advertisement&quot;, e);</span>
+<span class="nc" id="L541">        }</span>
+<span class="nc" id="L542">    }</span>
+
+    private Optional&lt;NodeId&gt; pickRandomActivePeer() {
+<span class="nc" id="L545">        List&lt;NodeId&gt; activePeers = clusterService.getNodes()</span>
+<span class="nc" id="L546">                .stream()</span>
+<span class="nc" id="L547">                .map(ControllerNode::id)</span>
+<span class="nc bnc" id="L548" title="All 2 branches missed.">                .filter(id -&gt; !localNodeId.equals(id))</span>
+<span class="nc bnc" id="L549" title="All 2 branches missed.">                .filter(id -&gt; clusterService.getState(id) == ControllerNode.State.ACTIVE)</span>
+<span class="nc" id="L550">                .collect(Collectors.toList());</span>
+<span class="nc" id="L551">        Collections.shuffle(activePeers);</span>
+<span class="nc bnc" id="L552" title="All 2 branches missed.">        return activePeers.isEmpty() ? Optional.empty() : Optional.of(activePeers.get(0));</span>
+    }
+
+    private void sendAdvertisementToPeer(NodeId peer) {
+<span class="nc" id="L556">        clusterCommunicator.unicast(createAdvertisement(),</span>
+                antiEntropyAdvertisementSubject,
+                serializer::encode,
+                peer)
+<span class="nc" id="L560">                .whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L561" title="All 2 branches missed.">                    if (error != null) {</span>
+<span class="nc" id="L562">                        log.debug(&quot;Failed to send anti-entropy advertisement to {}&quot;, peer, error);</span>
+                    }
+<span class="nc" id="L564">                });</span>
+<span class="nc" id="L565">    }</span>
+
+    private AntiEntropyAdvertisement&lt;K&gt; createAdvertisement() {
+<span class="nc" id="L568">        return new AntiEntropyAdvertisement&lt;K&gt;(localNodeId,</span>
+<span class="nc" id="L569">                ImmutableMap.copyOf(Maps.transformValues(items, MapValue::digest)));</span>
+    }
+
+    private void handleAntiEntropyAdvertisement(AntiEntropyAdvertisement&lt;K&gt; ad) {
+<span class="nc bnc" id="L573" title="All 4 branches missed.">        if (destroyed || underHighLoad()) {</span>
+<span class="nc" id="L574">            return;</span>
+        }
+        try {
+<span class="nc bnc" id="L577" title="All 2 branches missed.">            if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L578">                log.trace(&quot;Received anti-entropy advertisement from {} for {} with {} entries in it&quot;,</span>
+<span class="nc" id="L579">                        mapName, ad.sender(), ad.digest().size());</span>
+            }
+<span class="nc" id="L581">            antiEntropyCheckLocalItems(ad).forEach(this::notifyListeners);</span>
+
+<span class="nc bnc" id="L583" title="All 2 branches missed.">            if (!lightweightAntiEntropy) {</span>
+                // if remote ad has any entries that the local copy is missing, actively sync
+                // TODO: Missing keys is not the way local copy can be behind.
+<span class="nc bnc" id="L586" title="All 2 branches missed.">                if (Sets.difference(ad.digest().keySet(), items.keySet()).size() &gt; 0) {</span>
+                    // TODO: Send ad for missing keys and for entries that are stale
+<span class="nc" id="L588">                    sendAdvertisementToPeer(ad.sender());</span>
+                }
+            }
+<span class="nc" id="L591">        } catch (Exception e) {</span>
+<span class="nc" id="L592">            log.warn(&quot;Error handling anti-entropy advertisement&quot;, e);</span>
+<span class="nc" id="L593">        }</span>
+<span class="nc" id="L594">    }</span>
+
+    /**
+     * Processes anti-entropy ad from peer by taking following actions:
+     * 1. If peer has an old entry, updates peer.
+     * 2. If peer indicates an entry is removed and has a more recent
+     * timestamp than the local entry, update local state.
+     */
+    private List&lt;EventuallyConsistentMapEvent&lt;K, V&gt;&gt; antiEntropyCheckLocalItems(
+            AntiEntropyAdvertisement&lt;K&gt; ad) {
+<span class="nc" id="L604">        final List&lt;EventuallyConsistentMapEvent&lt;K, V&gt;&gt; externalEvents = Lists.newLinkedList();</span>
+<span class="nc" id="L605">        final NodeId sender = ad.sender();</span>
+<span class="nc" id="L606">        items.forEach((key, localValue) -&gt; {</span>
+<span class="nc" id="L607">            MapValue.Digest remoteValueDigest = ad.digest().get(key);</span>
+<span class="nc bnc" id="L608" title="All 4 branches missed.">            if (remoteValueDigest == null || localValue.isNewerThan(remoteValueDigest.timestamp())) {</span>
+                // local value is more recent, push to sender
+<span class="nc" id="L610">                queueUpdate(new UpdateEntry&lt;&gt;(key, localValue), ImmutableList.of(sender));</span>
+            }
+<span class="nc bnc" id="L612" title="All 2 branches missed.">            if (remoteValueDigest != null</span>
+<span class="nc bnc" id="L613" title="All 2 branches missed.">                    &amp;&amp; remoteValueDigest.isNewerThan(localValue.digest())</span>
+<span class="nc bnc" id="L614" title="All 2 branches missed.">                    &amp;&amp; remoteValueDigest.isTombstone()) {</span>
+<span class="nc" id="L615">                MapValue&lt;V&gt; tombstone = MapValue.tombstone(remoteValueDigest.timestamp());</span>
+<span class="nc" id="L616">                MapValue&lt;V&gt; previousValue = removeInternal(key,</span>
+<span class="nc" id="L617">                                                           Optional.empty(),</span>
+<span class="nc" id="L618">                                                           Optional.of(tombstone));</span>
+<span class="nc bnc" id="L619" title="All 4 branches missed.">                if (previousValue != null &amp;&amp; previousValue.isAlive()) {</span>
+<span class="nc" id="L620">                    externalEvents.add(new EventuallyConsistentMapEvent&lt;&gt;(mapName, REMOVE, key, previousValue.get()));</span>
+                }
+            }
+<span class="nc" id="L623">        });</span>
+<span class="nc" id="L624">        return externalEvents;</span>
+    }
+
+    private void processUpdates(Collection&lt;UpdateEntry&lt;K, V&gt;&gt; updates) {
+<span class="pc bpc" id="L628" title="1 of 2 branches missed.">        if (destroyed) {</span>
+<span class="nc" id="L629">            return;</span>
+        }
+<span class="fc" id="L631">        updates.forEach(update -&gt; {</span>
+<span class="fc" id="L632">            final K key = update.key();</span>
+<span class="fc" id="L633">            final MapValue&lt;V&gt; value = update.value();</span>
+<span class="pc bpc" id="L634" title="1 of 4 branches missed.">            if (value == null || value.isTombstone()) {</span>
+<span class="fc" id="L635">                MapValue&lt;V&gt; previousValue = removeInternal(key, Optional.empty(), Optional.ofNullable(value));</span>
+<span class="pc bpc" id="L636" title="2 of 4 branches missed.">                if (previousValue != null &amp;&amp; previousValue.isAlive()) {</span>
+<span class="fc" id="L637">                    notifyListeners(new EventuallyConsistentMapEvent&lt;&gt;(mapName, REMOVE, key, previousValue.get()));</span>
+                }
+<span class="pc bpc" id="L639" title="1 of 2 branches missed.">            } else if (putInternal(key, value)) {</span>
+<span class="fc" id="L640">                notifyListeners(new EventuallyConsistentMapEvent&lt;&gt;(mapName, PUT, key, value.get()));</span>
+            }
+<span class="fc" id="L642">        });</span>
+<span class="fc" id="L643">    }</span>
+
+    // TODO pull this into the class if this gets pulled out...
+    private static final int DEFAULT_MAX_EVENTS = 1000;
+    private static final int DEFAULT_MAX_IDLE_MS = 10;
+    private static final int DEFAULT_MAX_BATCH_MS = 50;
+<span class="fc" id="L649">    private static final Timer TIMER = new Timer(&quot;onos-ecm-sender-events&quot;);</span>
+
+    private final class EventAccumulator extends AbstractAccumulator&lt;UpdateEntry&lt;K, V&gt;&gt; {
+
+        private final NodeId peer;
+
+<span class="nc" id="L655">        private EventAccumulator(NodeId peer) {</span>
+<span class="nc" id="L656">            super(TIMER, DEFAULT_MAX_EVENTS, DEFAULT_MAX_BATCH_MS, DEFAULT_MAX_IDLE_MS);</span>
+<span class="nc" id="L657">            this.peer = peer;</span>
+<span class="nc" id="L658">        }</span>
+
+        @Override
+        public void processItems(List&lt;UpdateEntry&lt;K, V&gt;&gt; items) {
+<span class="nc" id="L662">            Map&lt;K, UpdateEntry&lt;K, V&gt;&gt; map = Maps.newHashMap();</span>
+<span class="nc" id="L663">            items.forEach(item -&gt; map.compute(item.key(), (key, existing) -&gt;</span>
+<span class="nc bnc" id="L664" title="All 2 branches missed.">                    item.isNewerThan(existing) ? item : existing));</span>
+<span class="nc" id="L665">            communicationExecutor.submit(() -&gt; {</span>
+<span class="nc" id="L666">                clusterCommunicator.unicast(ImmutableList.copyOf(map.values()),</span>
+<span class="nc" id="L667">                                            updateMessageSubject,</span>
+<span class="nc" id="L668">                                            serializer::encode,</span>
+                                            peer)
+<span class="nc" id="L670">                                   .whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L671" title="All 2 branches missed.">                                       if (error != null) {</span>
+<span class="nc" id="L672">                                           log.debug(&quot;Failed to send to {}&quot;, peer, error);</span>
+                                       }
+<span class="nc" id="L674">                                   });</span>
+<span class="nc" id="L675">            });</span>
+<span class="nc" id="L676">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

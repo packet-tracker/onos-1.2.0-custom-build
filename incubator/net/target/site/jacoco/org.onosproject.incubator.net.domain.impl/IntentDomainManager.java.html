@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentDomainManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.domain.impl</a> &gt; <span class="el_source">IntentDomainManager.java</span></div><h1>IntentDomainManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.domain.impl;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.graph.AdjacencyListsGraph;
+import org.onlab.graph.Graph;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.incubator.net.domain.DomainEdge;
+import org.onosproject.incubator.net.domain.DomainVertex;
+import org.onosproject.incubator.net.domain.IntentDomain;
+import org.onosproject.incubator.net.domain.IntentDomainAdminService;
+import org.onosproject.incubator.net.domain.IntentDomainConfig;
+import org.onosproject.incubator.net.domain.IntentDomainId;
+import org.onosproject.incubator.net.domain.IntentDomainListener;
+import org.onosproject.incubator.net.domain.IntentDomainProvider;
+import org.onosproject.incubator.net.domain.IntentDomainService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
+
+/**
+ * Implementation of the intent domain service.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L61">public class IntentDomainManager</span>
+        implements IntentDomainService, IntentDomainAdminService {
+
+<span class="nc" id="L64">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService configService;
+
+<span class="nc" id="L72">    private NetworkConfigListener cfgListener = new InternalConfigListener();</span>
+
+<span class="nc" id="L74">    private final ConcurrentMap&lt;IntentDomainId, IntentDomain&gt; domains = Maps.newConcurrentMap();</span>
+
+<span class="nc" id="L76">    private final Multimap&lt;String, IntentDomainId&gt; appToDomain =</span>
+<span class="nc" id="L77">            Multimaps.synchronizedSetMultimap(HashMultimap.&lt;String, IntentDomainId&gt;create());</span>
+
+    private Graph&lt;DomainVertex, DomainEdge&gt; graph;
+
+    @Activate
+    protected void activate() {
+<span class="nc" id="L83">        configService.addListener(cfgListener);</span>
+<span class="nc" id="L84">        configService.getSubjects(IntentDomainId.class, IntentDomainConfig.class)</span>
+<span class="nc" id="L85">                     .forEach(this::processConfig);</span>
+<span class="nc" id="L86">        graph = buildGraph();</span>
+<span class="nc" id="L87">        log.debug(&quot;Graph: {}&quot;, graph);</span>
+<span class="nc" id="L88">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L89">    }</span>
+
+    private void processConfig(IntentDomainId intentDomainId) {
+<span class="nc" id="L92">        IntentDomainConfig cfg = configService.getConfig(intentDomainId,</span>
+                                                         IntentDomainConfig.class);
+
+<span class="nc" id="L95">        domains.put(intentDomainId, createDomain(intentDomainId, cfg));</span>
+<span class="nc" id="L96">        appToDomain.put(cfg.applicationName(), intentDomainId);</span>
+<span class="nc" id="L97">    }</span>
+
+    private IntentDomain createDomain(IntentDomainId id, IntentDomainConfig cfg) {
+<span class="nc" id="L100">        return new IntentDomain(id, cfg.domainName(), cfg.internalDevices(), cfg.edgePorts());</span>
+    }
+
+    private Graph&lt;DomainVertex, DomainEdge&gt; buildGraph() {
+<span class="nc" id="L104">        Set&lt;DomainVertex&gt; vertices = Sets.newHashSet();</span>
+<span class="nc" id="L105">        Set&lt;DomainEdge&gt; edges = Sets.newHashSet();</span>
+
+<span class="nc" id="L107">        Map&lt;DeviceId, DomainVertex&gt; deviceVertices = Maps.newHashMap();</span>
+<span class="nc" id="L108">        domains.forEach((id, domain) -&gt; {</span>
+<span class="nc" id="L109">            DomainVertex domainVertex = new DomainVertex(id);</span>
+
+            // Add vertex for domain
+<span class="nc" id="L112">            vertices.add(domainVertex);</span>
+
+            // Add vertices for connection devices
+<span class="nc" id="L115">            domain.edgePorts().stream()</span>
+<span class="nc" id="L116">                  .map(ConnectPoint::deviceId)</span>
+<span class="nc" id="L117">                  .collect(Collectors.toSet())</span>
+<span class="nc" id="L118">                    .forEach(did -&gt; deviceVertices.putIfAbsent(did, new DomainVertex(did)));</span>
+
+            // Add bi-directional edges between each domain and connection device
+<span class="nc" id="L121">            domain.edgePorts().forEach(cp -&gt; {</span>
+<span class="nc" id="L122">                DomainVertex deviceVertex = deviceVertices.get(cp.deviceId());</span>
+<span class="nc" id="L123">                edges.add(new DomainEdge(domainVertex, deviceVertex, cp));</span>
+<span class="nc" id="L124">                edges.add(new DomainEdge(deviceVertex, domainVertex, cp));</span>
+<span class="nc" id="L125">            });</span>
+<span class="nc" id="L126">        });</span>
+
+<span class="nc" id="L128">        vertices.addAll(deviceVertices.values());</span>
+        //FIXME verify graph integrity...
+<span class="nc" id="L130">        return new AdjacencyListsGraph&lt;&gt;(vertices, edges);</span>
+    }
+
+    @Deactivate
+    protected void deactivate() {
+<span class="nc" id="L135">        configService.removeListener(cfgListener);</span>
+<span class="nc" id="L136">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L137">    }</span>
+
+    @Override
+    public IntentDomain getDomain(IntentDomainId id) {
+<span class="nc" id="L141">        return domains.get(id);</span>
+    }
+
+    @Override
+    public Set&lt;IntentDomain&gt; getDomains() {
+<span class="nc" id="L146">        return ImmutableSet.copyOf(domains.values());</span>
+    }
+
+    @Override
+    public Set&lt;IntentDomain&gt; getDomains(DeviceId deviceId) {
+<span class="nc" id="L151">        return domains.values().stream()</span>
+<span class="nc" id="L152">                .filter(domain -&gt;</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">                                domain.internalDevices().contains(deviceId) ||</span>
+<span class="nc" id="L154">                                domain.edgePorts().stream()</span>
+<span class="nc" id="L155">                                        .map(ConnectPoint::deviceId)</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                                        .anyMatch(d -&gt; d.equals(deviceId)))</span>
+<span class="nc" id="L157">                .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public Graph&lt;DomainVertex, DomainEdge&gt; getDomainGraph() {
+<span class="nc" id="L162">        return graph;</span>
+    }
+
+    @Override
+    public void addListener(IntentDomainListener listener) {
+        //TODO slide in AbstractListenerManager
+<span class="nc" id="L168">    }</span>
+
+    @Override
+    public void removeListener(IntentDomainListener listener) {
+        //TODO slide in AbstractListenerManager
+<span class="nc" id="L173">    }</span>
+
+    @Override
+    public void registerApplication(ApplicationId applicationId, IntentDomainProvider provider) {
+<span class="nc" id="L177">        appToDomain.get(applicationId.name()).forEach(d -&gt; domains.get(d).setProvider(provider));</span>
+<span class="nc" id="L178">    }</span>
+
+    @Override
+    public void unregisterApplication(ApplicationId applicationId) {
+<span class="nc" id="L182">        appToDomain.get(applicationId.name()).forEach(d -&gt; domains.get(d).unsetProvider());</span>
+<span class="nc" id="L183">    }</span>
+
+<span class="nc" id="L185">    private class InternalConfigListener implements NetworkConfigListener {</span>
+        @Override
+        public void event(NetworkConfigEvent event) {
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            switch (event.type()) {</span>
+                case CONFIG_ADDED:
+                case CONFIG_UPDATED:
+<span class="nc" id="L191">                    processConfig((IntentDomainId) event.subject());</span>
+<span class="nc" id="L192">                    graph = buildGraph();</span>
+<span class="nc" id="L193">                    log.debug(&quot;Graph: {}&quot;, graph);</span>
+<span class="nc" id="L194">                    break;</span>
+
+                case CONFIG_REGISTERED:
+                case CONFIG_UNREGISTERED:
+                case CONFIG_REMOVED:
+                default:
+                    //TODO
+                    break;
+            }
+<span class="nc" id="L203">        }</span>
+
+        @Override
+        public boolean isRelevant(NetworkConfigEvent event) {
+<span class="nc" id="L207">            return event.configClass().equals(IntentDomainConfig.class);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpenflowPipelineFactory.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-ctl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.openflow.controller.impl</a> &gt; <span class="el_source">OpenflowPipelineFactory.java</span></div><h1>OpenflowPipelineFactory.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.openflow.controller.impl;
+
+import java.util.concurrent.ThreadPoolExecutor;
+
+import org.jboss.netty.channel.ChannelPipeline;
+import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.channel.Channels;
+import org.jboss.netty.handler.execution.ExecutionHandler;
+import org.jboss.netty.handler.timeout.IdleStateHandler;
+import org.jboss.netty.handler.timeout.ReadTimeoutHandler;
+import org.jboss.netty.util.ExternalResourceReleasable;
+import org.jboss.netty.util.HashedWheelTimer;
+import org.jboss.netty.util.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.SSLEngine;
+
+/**
+ * Creates a ChannelPipeline for a server-side openflow channel.
+ */
+public class OpenflowPipelineFactory
+    implements ChannelPipelineFactory, ExternalResourceReleasable {
+
+<span class="nc" id="L41">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private final SSLEngine sslEngine;
+    protected Controller controller;
+    protected ThreadPoolExecutor pipelineExecutor;
+    protected Timer timer;
+    protected IdleStateHandler idleHandler;
+    protected ReadTimeoutHandler readTimeoutHandler;
+
+    public OpenflowPipelineFactory(Controller controller,
+                                   ThreadPoolExecutor pipelineExecutor,
+                                   SSLEngine sslEngine) {
+<span class="nc" id="L53">        super();</span>
+<span class="nc" id="L54">        this.controller = controller;</span>
+<span class="nc" id="L55">        this.pipelineExecutor = pipelineExecutor;</span>
+<span class="nc" id="L56">        this.timer = new HashedWheelTimer();</span>
+<span class="nc" id="L57">        this.idleHandler = new IdleStateHandler(timer, 20, 25, 0);</span>
+<span class="nc" id="L58">        this.readTimeoutHandler = new ReadTimeoutHandler(timer, 30);</span>
+<span class="nc" id="L59">        this.sslEngine = sslEngine;</span>
+<span class="nc" id="L60">    }</span>
+
+    @Override
+    public ChannelPipeline getPipeline() throws Exception {
+<span class="nc" id="L64">        OFChannelHandler handler = new OFChannelHandler(controller);</span>
+
+<span class="nc" id="L66">        ChannelPipeline pipeline = Channels.pipeline();</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (sslEngine != null) {</span>
+<span class="nc" id="L68">            log.info(&quot;OpenFlow SSL enabled.&quot;);</span>
+<span class="nc" id="L69">            pipeline.addLast(&quot;ssl&quot;,</span>
+                             new org.jboss.netty.handler.ssl.SslHandler(sslEngine));
+        } else {
+<span class="nc" id="L72">            log.info(&quot;OpenFlow SSL disabled&quot;);</span>
+        }
+<span class="nc" id="L74">        pipeline.addLast(&quot;ofmessagedecoder&quot;, new OFMessageDecoder());</span>
+<span class="nc" id="L75">        pipeline.addLast(&quot;ofmessageencoder&quot;, new OFMessageEncoder());</span>
+<span class="nc" id="L76">        pipeline.addLast(&quot;idle&quot;, idleHandler);</span>
+<span class="nc" id="L77">        pipeline.addLast(&quot;timeout&quot;, readTimeoutHandler);</span>
+        // XXX S ONOS: was 15 increased it to fix Issue #296
+<span class="nc" id="L79">        pipeline.addLast(&quot;handshaketimeout&quot;,</span>
+                         new HandshakeTimeoutHandler(handler, timer, 60));
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (pipelineExecutor != null) {</span>
+<span class="nc" id="L82">            pipeline.addLast(&quot;pipelineExecutor&quot;,</span>
+                             new ExecutionHandler(pipelineExecutor));
+        }
+<span class="nc" id="L85">        pipeline.addLast(&quot;handler&quot;, handler);</span>
+<span class="nc" id="L86">        return pipeline;</span>
+    }
+
+    @Override
+    public void releaseExternalResources() {
+<span class="nc" id="L91">        timer.stop();</span>
+<span class="nc" id="L92">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

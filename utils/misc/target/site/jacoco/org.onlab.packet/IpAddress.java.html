@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IpAddress.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IpAddress.java</span></div><h1>IpAddress.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.net.InetAddress;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Objects;
+import com.google.common.net.InetAddresses;
+import com.google.common.primitives.UnsignedBytes;
+
+
+/**
+ * A class representing an IP address.
+ * This class is immutable.
+ */
+public class IpAddress implements Comparable&lt;IpAddress&gt; {
+    private static final int BIT_MASK = 0x000000ff;
+
+    // IP Versions
+<span class="pc" id="L36">    public enum Version { INET, INET6 };</span>
+
+    // lengths of address, in bytes
+    public static final int INET_BYTE_LENGTH = 4;
+    public static final int INET_BIT_LENGTH = INET_BYTE_LENGTH * Byte.SIZE;
+    public static final int INET6_BYTE_LENGTH = 16;
+    public static final int INET6_BIT_LENGTH = INET6_BYTE_LENGTH * Byte.SIZE;
+
+    private final Version version;
+    private final byte[] octets;
+
+    /**
+     * Constructor for given IP address version and address octets.
+     *
+     * @param version the IP address version
+     * @param value the IP address value stored in network byte order
+     * (i.e., the most significant byte first)
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+<span class="fc" id="L55">    protected IpAddress(Version version, byte[] value) {</span>
+<span class="fc" id="L56">        checkArguments(version, value, 0);</span>
+<span class="fc" id="L57">        this.version = version;</span>
+<span class="pc bpc" id="L58" title="1 of 3 branches missed.">        switch (version) {</span>
+        case INET:
+<span class="fc" id="L60">            this.octets = Arrays.copyOf(value, INET_BYTE_LENGTH);</span>
+<span class="fc" id="L61">            break;</span>
+        case INET6:
+<span class="fc" id="L63">            this.octets = Arrays.copyOf(value, INET6_BYTE_LENGTH);</span>
+<span class="fc" id="L64">            break;</span>
+        default:
+            // Should not be reached
+<span class="nc" id="L67">            this.octets = null;</span>
+            break;
+        }
+<span class="fc" id="L70">    }</span>
+
+    /**
+     * Returns the IP version of this address.
+     *
+     * @return the version
+     */
+    public Version version() {
+<span class="fc" id="L78">        return this.version;</span>
+    }
+
+    /**
+     * Tests whether the IP version of this address is IPv4.
+     *
+     * @return true if the IP version of this address is IPv4, otherwise false.
+     */
+    public boolean isIp4() {
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        return (version() == Ip4Address.VERSION);</span>
+    }
+
+    /**
+     * Tests whether the IP version of this address is IPv6.
+     *
+     * @return true if the IP version of this address is IPv6, otherwise false.
+     */
+    public boolean isIp6() {
+<span class="fc bfc" id="L96" title="All 2 branches covered.">        return (version() == Ip6Address.VERSION);</span>
+    }
+
+    /**
+     * Gets the {@link Ip4Address} view of the IP address.
+     *
+     * @return the {@link Ip4Address} view of the IP address if it is IPv4,
+     * otherwise null
+     */
+    public Ip4Address getIp4Address() {
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        if (!isIp4()) {</span>
+<span class="fc" id="L107">            return null;</span>
+        }
+
+        // Return this object itself if it is already instance of Ip4Address
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (this instanceof Ip4Address) {</span>
+<span class="fc" id="L112">            return (Ip4Address) this;</span>
+        }
+<span class="fc" id="L114">        return Ip4Address.valueOf(octets);</span>
+    }
+
+    /**
+     * Gets the {@link Ip6Address} view of the IP address.
+     *
+     * @return the {@link Ip6Address} view of the IP address if it is IPv6,
+     * otherwise null
+     */
+    public Ip6Address getIp6Address() {
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        if (!isIp6()) {</span>
+<span class="fc" id="L125">            return null;</span>
+        }
+
+        // Return this object itself if it is already instance of Ip6Address
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        if (this instanceof Ip6Address) {</span>
+<span class="fc" id="L130">            return (Ip6Address) this;</span>
+        }
+<span class="fc" id="L132">        return Ip6Address.valueOf(octets);</span>
+    }
+
+    /**
+     * Returns the IP address as a byte array.
+     *
+     * @return a byte array
+     */
+    public byte[] toOctets() {
+<span class="fc" id="L141">        return Arrays.copyOf(octets, octets.length);</span>
+    }
+
+    /**
+     * Computes the IP address byte length for a given IP version.
+     *
+     * @param version the IP version
+     * @return the IP address byte length for the IP version
+     * @throws IllegalArgumentException if the IP version is invalid
+     */
+    public static int byteLength(Version version) {
+<span class="pc bpc" id="L152" title="1 of 3 branches missed.">        switch (version) {</span>
+        case INET:
+<span class="fc" id="L154">            return INET_BYTE_LENGTH;</span>
+        case INET6:
+<span class="fc" id="L156">            return INET6_BYTE_LENGTH;</span>
+        default:
+<span class="nc" id="L158">            String msg = &quot;Invalid IP version &quot; + version;</span>
+<span class="nc" id="L159">            throw new IllegalArgumentException(msg);</span>
+        }
+    }
+
+    /**
+     * Converts an integer into an IPv4 address.
+     *
+     * @param value an integer representing an IPv4 address value
+     * @return an IP address
+     */
+    public static IpAddress valueOf(int value) {
+<span class="fc" id="L170">        byte[] bytes =</span>
+<span class="fc" id="L171">            ByteBuffer.allocate(INET_BYTE_LENGTH).putInt(value).array();</span>
+<span class="fc" id="L172">        return new IpAddress(Version.INET, bytes);</span>
+    }
+
+    /**
+     * Converts a byte array into an IP address.
+     *
+     * @param version the IP address version
+     * @param value the IP address value stored in network byte order
+     * (i.e., the most significant byte first)
+     * @return an IP address
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    public static IpAddress valueOf(Version version, byte[] value) {
+<span class="fc" id="L185">        return new IpAddress(version, value);</span>
+    }
+
+    /**
+     * Converts a byte array and a given offset from the beginning of the
+     * array into an IP address.
+     * &lt;p&gt;
+     * The IP address is stored in network byte order (i.e., the most
+     * significant byte first).
+     * &lt;/p&gt;
+     * @param version the IP address version
+     * @param value the value to use
+     * @param offset the offset in bytes from the beginning of the byte array
+     * @return an IP address
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    public static IpAddress valueOf(Version version, byte[] value,
+                                    int offset) {
+<span class="fc" id="L203">        checkArguments(version, value, offset);</span>
+<span class="fc" id="L204">        byte[] bc = Arrays.copyOfRange(value, offset, value.length);</span>
+<span class="fc" id="L205">        return IpAddress.valueOf(version, bc);</span>
+    }
+
+    /**
+     * Converts an InetAddress into an IP address.
+     *
+     * @param inetAddress the InetAddress value to use
+     * @return an IP address
+     * @throws IllegalArgumentException if the argument is invalid
+     */
+    public static IpAddress valueOf(InetAddress inetAddress) {
+<span class="fc" id="L216">        byte[] bytes = inetAddress.getAddress();</span>
+<span class="fc bfc" id="L217" title="All 2 branches covered.">        if (inetAddress instanceof Inet4Address) {</span>
+<span class="fc" id="L218">            return new IpAddress(Version.INET, bytes);</span>
+        }
+<span class="pc bpc" id="L220" title="1 of 2 branches missed.">        if (inetAddress instanceof Inet6Address) {</span>
+<span class="fc" id="L221">            return new IpAddress(Version.INET6, bytes);</span>
+        }
+        // Use the number of bytes as a hint
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (bytes.length == INET_BYTE_LENGTH) {</span>
+<span class="nc" id="L225">            return new IpAddress(Version.INET, bytes);</span>
+        }
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (bytes.length == INET6_BYTE_LENGTH) {</span>
+<span class="nc" id="L228">            return new IpAddress(Version.INET6, bytes);</span>
+        }
+<span class="nc" id="L230">        final String msg = &quot;Unrecognized IP version address string: &quot; +</span>
+<span class="nc" id="L231">            inetAddress.toString();</span>
+<span class="nc" id="L232">        throw new IllegalArgumentException(msg);</span>
+    }
+
+    /**
+     * Converts an IPv4 or IPv6 string literal (e.g., &quot;10.2.3.4&quot; or
+     * &quot;1111:2222::8888&quot;) into an IP address.
+     *
+     * @param value an IP address value in string form
+     * @return an IP address
+     * @throws IllegalArgumentException if the argument is invalid
+     */
+    public static IpAddress valueOf(String value) {
+<span class="fc" id="L244">        InetAddress inetAddress = null;</span>
+        try {
+<span class="fc" id="L246">            inetAddress = InetAddresses.forString(value);</span>
+<span class="fc" id="L247">        } catch (IllegalArgumentException e) {</span>
+<span class="fc" id="L248">            final String msg = &quot;Invalid IP address string: &quot; + value;</span>
+<span class="fc" id="L249">            throw new IllegalArgumentException(msg);</span>
+<span class="fc" id="L250">        }</span>
+<span class="fc" id="L251">        return valueOf(inetAddress);</span>
+    }
+
+    /**
+     * Creates an IP network mask prefix.
+     *
+     * @param version the IP address version
+     * @param prefixLength the length of the mask prefix. Must be in the
+     * interval [0, 32] for IPv4, or [0, 128] for IPv6
+     * @return a new IP address that contains a mask prefix of the
+     * specified length
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    public static IpAddress makeMaskPrefix(Version version, int prefixLength) {
+<span class="fc" id="L265">        byte[] mask = makeMaskPrefixArray(version, prefixLength);</span>
+<span class="fc" id="L266">        return new IpAddress(version, mask);</span>
+    }
+
+    /**
+     * Creates an IP address by masking it with a network mask of given
+     * mask length.
+     *
+     * @param address the address to mask
+     * @param prefixLength the length of the mask prefix. Must be in the
+     * interval [0, 32] for IPv4, or [0, 128] for IPv6
+     * @return a new IP address that is masked with a mask prefix of the
+     * specified length
+     * @throws IllegalArgumentException if the prefix length is invalid
+     */
+    public static IpAddress makeMaskedAddress(final IpAddress address,
+                                              int prefixLength) {
+<span class="fc bfc" id="L282" title="All 2 branches covered.">        if (address instanceof Ip4Address) {</span>
+<span class="fc" id="L283">            Ip4Address ip4a = (Ip4Address) address;</span>
+<span class="fc" id="L284">            return Ip4Address.makeMaskedAddress(ip4a, prefixLength);</span>
+<span class="fc bfc" id="L285" title="All 2 branches covered.">        } else if (address instanceof Ip6Address) {</span>
+<span class="fc" id="L286">            Ip6Address ip6a = (Ip6Address) address;</span>
+<span class="fc" id="L287">            return Ip6Address.makeMaskedAddress(ip6a, prefixLength);</span>
+        } else {
+<span class="fc" id="L289">            byte[] net = makeMaskedAddressArray(address, prefixLength);</span>
+<span class="fc" id="L290">            return IpAddress.valueOf(address.version(), net);</span>
+        }
+    }
+
+    /**
+     * Check if this IP address is zero.
+     *
+     * @return true if this address is zero
+     */
+    public boolean isZero() {
+<span class="fc bfc" id="L300" title="All 2 branches covered.">        for (byte b : octets) {</span>
+<span class="fc bfc" id="L301" title="All 2 branches covered.">            if (b != 0) {</span>
+<span class="fc" id="L302">                return false;</span>
+            }
+        }
+<span class="fc" id="L305">        return true;</span>
+    }
+
+    /**
+     * Check if this IP address is self-assigned.
+     *
+     * @return true if this address is self-assigned
+     */
+    public boolean isSelfAssigned() {
+<span class="pc bpc" id="L314" title="1 of 4 branches missed.">        return isIp4() &amp;&amp; octets[0] == (byte) 169;</span>
+    }
+
+    @Override
+    public int compareTo(IpAddress o) {
+        // Compare first the version
+<span class="pc bpc" id="L320" title="1 of 2 branches missed.">        if (this.version != o.version) {</span>
+<span class="nc" id="L321">            return this.version.compareTo(o.version);</span>
+        }
+
+        // Compare the bytes, one-by-one
+<span class="fc bfc" id="L325" title="All 2 branches covered.">        for (int i = 0; i &lt; this.octets.length; i++) {</span>
+<span class="fc bfc" id="L326" title="All 2 branches covered.">            if (this.octets[i] != o.octets[i]) {</span>
+<span class="fc" id="L327">                return UnsignedBytes.compare(this.octets[i], o.octets[i]);</span>
+            }
+        }
+<span class="fc" id="L330">        return 0;       // Equal</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L335">        return Objects.hash(version, Arrays.hashCode(octets));</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L340" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L341">            return true;</span>
+        }
+<span class="fc bfc" id="L343" title="All 4 branches covered.">        if ((obj == null) || (!(obj instanceof IpAddress))) {</span>
+<span class="fc" id="L344">            return false;</span>
+        }
+<span class="fc" id="L346">        IpAddress other = (IpAddress) obj;</span>
+<span class="pc bpc" id="L347" title="1 of 2 branches missed.">        return (version == other.version) &amp;&amp;</span>
+<span class="fc bfc" id="L348" title="All 2 branches covered.">            Arrays.equals(octets, other.octets);</span>
+    }
+
+    @Override
+    /*
+     * (non-Javadoc)
+     * The string representation of the IP address: &quot;x.x.x.x&quot; for IPv4
+     * addresses, or ':' separated string for IPv6 addresses.
+     *
+     * @see java.lang.Object#toString()
+     */
+    public String toString() {
+        // FIXME InetAddress is super slow
+<span class="fc bfc" id="L361" title="All 2 branches covered.">        switch (version) {</span>
+            case INET:
+<span class="fc" id="L363">                return String.format(&quot;%d.%d.%d.%d&quot;, octets[0] &amp; 0xff,</span>
+<span class="fc" id="L364">                        octets[1] &amp; 0xff,</span>
+<span class="fc" id="L365">                        octets[2] &amp; 0xff,</span>
+<span class="fc" id="L366">                        octets[3] &amp; 0xff);</span>
+            case INET6:
+            default:
+<span class="fc" id="L369">                return ipv6ToStringHelper();</span>
+        }
+    }
+
+    /**
+     * Generates an IP prefix.
+     *
+     * @return the IP prefix of the IP address
+     */
+    public IpPrefix toIpPrefix() {
+
+<span class="pc bpc" id="L380" title="1 of 2 branches missed.">        if (isIp4()) {</span>
+<span class="fc" id="L381">            return IpPrefix.valueOf(new IpAddress(Version.INET, octets),</span>
+                                    Ip4Address.BIT_LENGTH);
+        } else {
+<span class="nc" id="L384">            return IpPrefix.valueOf(new IpAddress(Version.INET6, octets),</span>
+                                    Ip6Address.BIT_LENGTH);
+        }
+    }
+
+    /**
+     * Gets the IP address name for the IP address version.
+     *
+     * @param version the IP address version
+     * @return the IP address name for the IP address version
+     */
+    private static String addressName(Version version) {
+<span class="pc bpc" id="L396" title="1 of 3 branches missed.">        switch (version) {</span>
+        case INET:
+<span class="fc" id="L398">            return &quot;IPv4&quot;;</span>
+        case INET6:
+<span class="fc" id="L400">            return &quot;IPv6&quot;;</span>
+        default:
+            break;
+        }
+<span class="nc" id="L404">        return &quot;UnknownIP(&quot; + version + &quot;)&quot;;</span>
+    }
+
+    /**
+     * Checks whether the arguments are valid.
+     *
+     * @param version the IP address version
+     * @param value the IP address value stored in a byte array
+     * @param offset the offset in bytes from the beginning of the byte
+     * array with the address
+     * @throws IllegalArgumentException if any of the arguments is invalid
+     */
+    static void checkArguments(Version version, byte[] value, int offset) {
+        // Check the offset and byte array length
+<span class="fc" id="L418">        int addrByteLength = byteLength(version);</span>
+<span class="pc bpc" id="L419" title="1 of 4 branches missed.">        if ((offset &lt; 0) || (offset + addrByteLength &gt; value.length)) {</span>
+            String msg;
+<span class="fc bfc" id="L421" title="All 2 branches covered.">            if (value.length &lt; addrByteLength) {</span>
+<span class="fc" id="L422">                msg = &quot;Invalid &quot; + addressName(version) +</span>
+                    &quot; address array: array length: &quot; + value.length +
+                    &quot;. Must be at least &quot; + addrByteLength;
+            } else {
+<span class="fc" id="L426">                msg = &quot;Invalid &quot; + addressName(version) +</span>
+                    &quot; address array: array offset: &quot; + offset +
+                    &quot;. Must be in the interval [0, &quot; +
+                    (value.length - addrByteLength) + &quot;]&quot;;
+            }
+<span class="fc" id="L431">            throw new IllegalArgumentException(msg);</span>
+        }
+<span class="fc" id="L433">    }</span>
+
+    /**
+     * Creates a byte array for IP network mask prefix.
+     *
+     * @param version the IP address version
+     * @param prefixLength the length of the mask prefix. Must be in the
+     * interval [0, 32] for IPv4, or [0, 128] for IPv6
+     * @return a byte array that contains a mask prefix of the
+     * specified length
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    static byte[] makeMaskPrefixArray(Version version, int prefixLength) {
+<span class="fc" id="L446">        int addrByteLength = byteLength(version);</span>
+<span class="fc" id="L447">        int addrBitLength = addrByteLength * Byte.SIZE;</span>
+
+        // Verify the prefix length
+<span class="fc bfc" id="L450" title="All 4 branches covered.">        if ((prefixLength &lt; 0) || (prefixLength &gt; addrBitLength)) {</span>
+<span class="fc" id="L451">            final String msg = &quot;Invalid IP prefix length: &quot; + prefixLength +</span>
+                &quot;. Must be in the interval [0, &quot; + addrBitLength + &quot;].&quot;;
+<span class="fc" id="L453">            throw new IllegalArgumentException(msg);</span>
+        }
+
+        // Number of bytes and extra bits that should be all 1s
+<span class="fc" id="L457">        int maskBytes = prefixLength / Byte.SIZE;</span>
+<span class="fc" id="L458">        int maskBits = prefixLength % Byte.SIZE;</span>
+<span class="fc" id="L459">        byte[] mask = new byte[addrByteLength];</span>
+
+        // Set the bytes and extra bits to 1s
+<span class="fc bfc" id="L462" title="All 2 branches covered.">        for (int i = 0; i &lt; maskBytes; i++) {</span>
+<span class="fc" id="L463">            mask[i] = (byte) 0xff;              // Set mask bytes to 1s</span>
+        }
+<span class="fc bfc" id="L465" title="All 2 branches covered.">        for (int i = maskBytes; i &lt; addrByteLength; i++) {</span>
+<span class="fc" id="L466">            mask[i] = 0;                        // Set remaining bytes to 0s</span>
+        }
+<span class="fc bfc" id="L468" title="All 2 branches covered.">        if (maskBits &gt; 0) {</span>
+<span class="fc" id="L469">            mask[maskBytes] = (byte) (0xff &lt;&lt; (Byte.SIZE - maskBits));</span>
+        }
+<span class="fc" id="L471">        return mask;</span>
+    }
+
+    /**
+     * Creates a byte array that represents an IP address masked with
+     * a network mask of given mask length.
+     *
+     * @param addr the address to mask
+     * @param prefixLength the length of the mask prefix. Must be in the
+     * interval [0, 32] for IPv4, or [0, 128] for IPv6
+     * @return a byte array that represents the IP address masked with
+     * a mask prefix of the specified length
+     * @throws IllegalArgumentException if the prefix length is invalid
+     */
+    static byte[] makeMaskedAddressArray(final IpAddress addr,
+                                         int prefixLength) {
+<span class="fc" id="L487">        byte[] mask = IpAddress.makeMaskPrefixArray(addr.version(),</span>
+                                                    prefixLength);
+<span class="fc" id="L489">        byte[] net = new byte[mask.length];</span>
+
+        // Mask each byte
+<span class="fc bfc" id="L492" title="All 2 branches covered.">        for (int i = 0; i &lt; net.length; i++) {</span>
+<span class="fc" id="L493">            net[i] = (byte) (addr.octets[i] &amp; mask[i]);</span>
+        }
+<span class="fc" id="L495">        return net;</span>
+    }
+
+    /**
+     * Creates a string based on the IPv6 recommendations for canonical representations found here:
+     * https://tools.ietf.org/html/rfc5952#section-1.
+     * @return A properly formatted IPv6 canonical representation.
+     */
+    private String ipv6ToStringHelper() {
+        //Populate a buffer with the string of the full address with leading zeros stripped
+<span class="fc" id="L505">        StringBuffer buff = new StringBuffer();</span>
+<span class="fc" id="L506">        buff.append(String.format(&quot;%x:%x:%x:%x:%x:%x:%x:%x&quot;,</span>
+<span class="fc" id="L507">                (((octets[0] &amp; BIT_MASK) &lt;&lt; 8) | (octets[1] &amp; BIT_MASK)),</span>
+<span class="fc" id="L508">                (((octets[2] &amp; BIT_MASK) &lt;&lt; 8) | (octets[3] &amp; BIT_MASK)),</span>
+<span class="fc" id="L509">                (((octets[4] &amp; BIT_MASK) &lt;&lt; 8) | (octets[5] &amp; BIT_MASK)),</span>
+<span class="fc" id="L510">                (((octets[6] &amp; BIT_MASK) &lt;&lt; 8) | (octets[7] &amp; BIT_MASK)),</span>
+<span class="fc" id="L511">                (((octets[8] &amp; BIT_MASK) &lt;&lt; 8) | (octets[9] &amp; BIT_MASK)),</span>
+<span class="fc" id="L512">                (((octets[10] &amp; BIT_MASK) &lt;&lt; 8) | (octets[11] &amp; BIT_MASK)),</span>
+<span class="fc" id="L513">                (((octets[12] &amp; BIT_MASK) &lt;&lt; 8) | (octets[13] &amp; BIT_MASK)),</span>
+<span class="fc" id="L514">                (((octets[14] &amp; BIT_MASK) &lt;&lt; 8) | (octets[15] &amp; BIT_MASK))));</span>
+        //Initialize variables for tracking longest zero subsequence, tiebreaking by first occurence
+        int longestSeqStart, longestSeqLen, currSeqStart, currSeqLen;
+<span class="fc" id="L517">        longestSeqStart = 0;</span>
+<span class="fc" id="L518">        longestSeqLen = 0;</span>
+<span class="fc" id="L519">        currSeqStart = 0;</span>
+<span class="fc" id="L520">        currSeqLen = 0;</span>
+
+<span class="fc bfc" id="L522" title="All 2 branches covered.">        for (int index = 0; index &lt; buff.length(); index++) {</span>
+<span class="fc bfc" id="L523" title="All 2 branches covered.">            if (buff.charAt(index) == ':') {</span>
+<span class="fc bfc" id="L524" title="All 4 branches covered.">                if (currSeqLen != 0 &amp;&amp; buff.charAt(index + 1) == '0') {</span>
+<span class="fc" id="L525">                    currSeqLen += 1;</span>
+                }
+<span class="fc bfc" id="L527" title="All 6 branches covered.">            } else if (buff.charAt(index) == '0' &amp;&amp; ((index == 0) || (buff.charAt(index - 1) == ':'))) {</span>
+<span class="fc bfc" id="L528" title="All 2 branches covered.">                if (currSeqLen == 0) {</span>
+<span class="fc" id="L529">                    currSeqStart = index;</span>
+                }
+<span class="fc" id="L531">                currSeqLen += 1;</span>
+            } else {
+<span class="fc bfc" id="L533" title="All 2 branches covered.">                 if (currSeqLen &gt; longestSeqLen) {</span>
+<span class="fc" id="L534">                     longestSeqStart = currSeqStart;</span>
+<span class="fc" id="L535">                     longestSeqLen = currSeqLen;</span>
+                }
+<span class="fc" id="L537">                currSeqLen = 0;</span>
+            }
+        }
+
+<span class="fc bfc" id="L541" title="All 2 branches covered.">        if (currSeqLen &gt; longestSeqLen) {</span>
+<span class="fc" id="L542">            longestSeqLen = currSeqLen;</span>
+<span class="fc" id="L543">            longestSeqStart = currSeqStart;</span>
+        }
+<span class="fc bfc" id="L545" title="All 2 branches covered.">        if (longestSeqLen &gt; 1) {</span>
+<span class="fc bfc" id="L546" title="All 2 branches covered.">            if (buff.length() == (longestSeqStart + longestSeqLen)) {</span>
+<span class="fc" id="L547">                buff.append(':');</span>
+            }
+
+<span class="fc" id="L550">            buff.delete(longestSeqStart, longestSeqStart + longestSeqLen);</span>
+
+<span class="fc bfc" id="L552" title="All 2 branches covered.">            if (longestSeqStart == 0) {</span>
+<span class="fc" id="L553">                buff.insert(0, ':');</span>
+            }
+        }
+
+<span class="fc" id="L557">    return buff.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

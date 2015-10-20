@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BaseOptions.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.ipv6</a> &gt; <span class="el_source">BaseOptions.java</span></div><h1>BaseOptions.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onlab.packet.ipv6;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Data;
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+import org.onlab.packet.IPv6;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+import static org.onlab.packet.PacketUtils.checkHeaderLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Base class for hop-by-hop options and destination options.
+ */
+<span class="fc" id="L35">public class BaseOptions extends BasePacket implements IExtensionHeader {</span>
+    public static final byte FIXED_HEADER_LENGTH = 2; // bytes
+    public static final byte FIXED_OPTIONS_LENGTH = 6; // bytes
+    public static final byte LENGTH_UNIT = 8; // bytes per unit
+
+    protected byte nextHeader;
+    protected byte headerExtLength;
+    protected byte[] options;
+    protected byte type;
+
+    @Override
+    public byte getNextHeader() {
+<span class="fc" id="L47">        return this.nextHeader;</span>
+    }
+
+    @Override
+    public BaseOptions setNextHeader(final byte nextHeader) {
+<span class="fc" id="L52">        this.nextHeader = nextHeader;</span>
+<span class="fc" id="L53">        return this;</span>
+    }
+
+    /**
+     * Gets the extension length of this header.
+     *
+     * @return header length
+     */
+    public byte getHeaderExtLength() {
+<span class="fc" id="L62">        return this.headerExtLength;</span>
+    }
+
+    /**
+     * Sets the extension length of this header.
+     *
+     * @param headerExtLength the header length to set
+     * @return this
+     */
+    public BaseOptions setHeaderExtLength(final byte headerExtLength) {
+<span class="fc" id="L72">        this.headerExtLength = headerExtLength;</span>
+<span class="fc" id="L73">        return this;</span>
+    }
+
+    /**
+     * Gets the options.
+     *
+     * @return the options
+     */
+    public byte[] getOptions() {
+<span class="fc" id="L82">        return this.options;</span>
+    }
+
+    /**
+     * Sets the options.
+     *
+     * @param options the options to set
+     * @return this
+     */
+    public BaseOptions setOptions(final byte[] options) {
+<span class="fc" id="L92">        this.options =</span>
+<span class="fc" id="L93">                Arrays.copyOfRange(options, 0, options.length);</span>
+<span class="fc" id="L94">        return this;</span>
+    }
+
+    /**
+     * Gets the type of this option.
+     *
+     * @return the type
+     */
+    protected byte getType() {
+<span class="fc" id="L103">        return this.type;</span>
+    }
+
+    /**
+     * Sets the type of this option.
+     * Must be either IPv6.PROTOCOL_HOPOPT or IPv6.PROTOCOL_DSTOPT
+     *
+     * @param type the type to set
+     * @return this
+     */
+    protected BaseOptions setType(final byte type) {
+<span class="fc" id="L114">        this.type = type;</span>
+<span class="fc" id="L115">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L120">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="fc" id="L122">            this.payload.setParent(this);</span>
+<span class="fc" id="L123">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="fc" id="L126">        int headerLength = FIXED_HEADER_LENGTH + options.length;</span>
+<span class="fc" id="L127">        int payloadLength = 0;</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L129">            payloadLength = payloadData.length;</span>
+        }
+
+<span class="fc" id="L132">        final byte[] data = new byte[headerLength + payloadLength];</span>
+<span class="fc" id="L133">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L135">        bb.put(this.nextHeader);</span>
+<span class="fc" id="L136">        bb.put(this.headerExtLength);</span>
+<span class="fc" id="L137">        bb.put(this.options, 0, options.length);</span>
+
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L140">            bb.put(payloadData);</span>
+        }
+
+<span class="pc bpc" id="L143" title="3 of 4 branches missed.">        if (this.parent != null &amp;&amp; this.parent instanceof IExtensionHeader) {</span>
+<span class="nc" id="L144">            ((IExtensionHeader) this.parent).setNextHeader(this.type);</span>
+        }
+<span class="fc" id="L146">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L151">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L152">        this.nextHeader = bb.get();</span>
+<span class="nc" id="L153">        this.headerExtLength = bb.get();</span>
+<span class="nc" id="L154">        int optionLength =</span>
+                FIXED_OPTIONS_LENGTH + LENGTH_UNIT * this.headerExtLength;
+<span class="nc" id="L156">        this.options = new byte[optionLength];</span>
+<span class="nc" id="L157">        bb.get(this.options, 0, optionLength);</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(this.nextHeader)) {</span>
+<span class="nc" id="L161">            deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(this.nextHeader);</span>
+        } else {
+<span class="nc" id="L163">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L166">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L167">                                                    bb.limit() - bb.position());</span>
+<span class="nc" id="L168">            this.payload.setParent(this);</span>
+<span class="nc" id="L169">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L170">            return this;</span>
+<span class="nc" id="L171">        }</span>
+
+<span class="nc" id="L173">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L183">        final int prime = 5807;</span>
+<span class="nc" id="L184">        int result = super.hashCode();</span>
+<span class="nc" id="L185">        result = prime * result + this.nextHeader;</span>
+<span class="nc" id="L186">        result = prime * result + this.headerExtLength;</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        for (byte b : this.options) {</span>
+<span class="nc" id="L188">            result = prime * result + b;</span>
+        }
+<span class="nc" id="L190">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L200" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L201">            return true;</span>
+        }
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L204">            return false;</span>
+        }
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        if (!(obj instanceof BaseOptions)) {</span>
+<span class="nc" id="L207">            return false;</span>
+        }
+<span class="fc" id="L209">        final BaseOptions other = (BaseOptions) obj;</span>
+<span class="pc bpc" id="L210" title="1 of 2 branches missed.">        if (this.nextHeader != other.nextHeader) {</span>
+<span class="nc" id="L211">            return false;</span>
+        }
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">        if (this.headerExtLength != other.headerExtLength) {</span>
+<span class="nc" id="L214">            return false;</span>
+        }
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">        if (!Arrays.equals(this.options, other.options)) {</span>
+<span class="nc" id="L217">            return false;</span>
+        }
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">        if (this.type != other.type) {</span>
+<span class="fc" id="L220">            return false;</span>
+        }
+<span class="nc" id="L222">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for IPv6 base options.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;BaseOptions&gt; deserializer() {
+<span class="fc" id="L231">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L232">            checkInput(data, offset, length, FIXED_HEADER_LENGTH);</span>
+
+<span class="fc" id="L234">            BaseOptions baseOptions = new BaseOptions();</span>
+
+<span class="fc" id="L236">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L237">            baseOptions.nextHeader = bb.get();</span>
+<span class="fc" id="L238">            baseOptions.headerExtLength = bb.get();</span>
+<span class="fc" id="L239">            int optionLength =</span>
+                    FIXED_OPTIONS_LENGTH + LENGTH_UNIT * baseOptions.headerExtLength;
+
+<span class="fc" id="L242">            checkHeaderLength(bb.remaining(), optionLength);</span>
+
+<span class="fc" id="L244">            baseOptions.options = new byte[optionLength];</span>
+<span class="fc" id="L245">            bb.get(baseOptions.options, 0, optionLength);</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L248" title="1 of 2 branches missed.">            if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(baseOptions.nextHeader)) {</span>
+<span class="fc" id="L249">                deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(baseOptions.nextHeader);</span>
+            } else {
+<span class="nc" id="L251">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L253">            baseOptions.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L254">                                               bb.limit() - bb.position());</span>
+<span class="fc" id="L255">            baseOptions.payload.setParent(baseOptions);</span>
+
+<span class="fc" id="L257">            return baseOptions;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

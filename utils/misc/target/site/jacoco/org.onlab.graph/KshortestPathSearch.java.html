@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>KshortestPathSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">KshortestPathSearch.java</span></div><h1>KshortestPathSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import java.util.ArrayList;
+//import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+//import java.util.Map;
+//import java.util.PriorityQueue;
+import java.util.Set;
+
+import static org.onlab.graph.GraphPathSearch.ALL_PATHS;
+
+/**
+ * K-shortest-path graph search algorithm capable of finding not just one,
+ * but K shortest paths with ascending order between the source and destinations.
+ */
+
+public class KshortestPathSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt; {
+
+    // Define class variables.
+    private Graph&lt;V, E&gt; immutableGraph;
+    private MutableGraph&lt;V, E&gt; mutableGraph;
+<span class="fc" id="L38">    private List&lt;List&lt;E&gt;&gt; pathResults = new ArrayList&lt;List&lt;E&gt;&gt;();</span>
+<span class="fc" id="L39">    private List&lt;List&lt;E&gt;&gt; pathCandidates = new ArrayList&lt;List&lt;E&gt;&gt;();</span>
+    private V source;
+    private V sink;
+<span class="fc" id="L42">    private int numK = 0;</span>
+<span class="fc" id="L43">    private EdgeWeight&lt;V, E&gt; weight =  null;</span>
+    // private PriorityQueue&lt;List&lt;E&gt;&gt; pathCandidates = new PriorityQueue&lt;List&lt;E&gt;&gt;();
+
+    // Initialize the graph.
+<span class="fc" id="L47">    public KshortestPathSearch(Graph&lt;V, E&gt; graph) {</span>
+<span class="fc" id="L48">        immutableGraph = graph;</span>
+<span class="fc" id="L49">        mutableGraph = new MutableAdjacencyListsGraph&lt;&gt;(graph.getVertexes(),</span>
+<span class="fc" id="L50">                graph.getEdges());</span>
+<span class="fc" id="L51">    }</span>
+
+    public List&lt;List&lt;E&gt;&gt; search(V src,
+            V dst,
+            EdgeWeight&lt;V, E&gt; wei,
+            int k) {
+
+<span class="fc" id="L58">        weight = wei;</span>
+<span class="fc" id="L59">        source = src;</span>
+<span class="fc" id="L60">        sink = dst;</span>
+<span class="fc" id="L61">        numK = k;</span>
+        // pathCandidates = new PriorityQueue&lt;List&lt;E&gt;&gt;();
+
+<span class="fc" id="L64">        pathResults.clear();</span>
+<span class="fc" id="L65">        pathCandidates.clear();</span>
+
+        // Double check the parameters
+<span class="fc" id="L68">        checkArguments(immutableGraph, src, dst, numK);</span>
+
+        // DefaultResult result = new DefaultResult(src, dst);
+
+<span class="fc" id="L72">        searchKShortestPaths();</span>
+
+<span class="fc" id="L74">        return pathResults;</span>
+    }
+
+    private void checkArguments(Graph&lt;V, E&gt; graph, V src, V dst, int k) {
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">            if (graph == null) {</span>
+<span class="nc" id="L79">                throw new NullPointerException(&quot;graph is null&quot;);</span>
+            }
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">            if (!graph.getVertexes().contains(src)) {</span>
+<span class="nc" id="L82">                throw new NullPointerException(&quot;source node does not exist&quot;);</span>
+            }
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">            if (!graph.getVertexes().contains(dst)) {</span>
+<span class="nc" id="L85">                throw new NullPointerException(&quot;target node does not exist&quot;);</span>
+            }
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">            if (k &lt;= 0) {</span>
+<span class="nc" id="L88">                throw new NullPointerException(&quot;K is negative or 0&quot;);</span>
+            }
+<span class="pc bpc" id="L90" title="1 of 2 branches missed.">            if (weight == null) {</span>
+<span class="nc" id="L91">                throw new NullPointerException(&quot;the cost matrix is null&quot;);</span>
+            }
+<span class="fc" id="L93">    }</span>
+
+    private void searchKShortestPaths() {
+            // Step 1: find the shortest path.
+<span class="fc" id="L97">            List&lt;E&gt; shortestPath = searchShortestPath(immutableGraph, source, sink);</span>
+            // no path exists, exit.
+<span class="fc bfc" id="L99" title="All 2 branches covered.">            if (shortestPath == null) {</span>
+<span class="fc" id="L100">                return;</span>
+            }
+
+            // Step 2: update the results.
+<span class="fc" id="L104">            pathResults.add(shortestPath);</span>
+            // pathCandidates.add(shortestPath);
+
+            // Step 3: find the other K-1 paths.
+<span class="fc bfc" id="L108" title="All 2 branches covered.">            while (/*pathCandidates.size() &gt; 0 &amp;&amp;*/pathResults.size() &lt; numK) {</span>
+                // 3.1 the spur node ranges from the first node to the last node in the previous k-shortest path.
+<span class="fc" id="L110">                List&lt;E&gt; lastPath = pathResults.get(pathResults.size() - 1);</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">                for (int i = 0; i &lt; lastPath.size(); i++) {</span>
+                    // 3.1.1 convert the graph into mutable.
+<span class="fc" id="L113">                    convertGraph();</span>
+                    // 3.1.2 transform the graph.
+<span class="fc" id="L115">                    List&lt;E&gt; rootPath = createSpurNode(lastPath, i);</span>
+<span class="fc" id="L116">                    transformGraph(rootPath);</span>
+                    // 3.1.3 find the deviation node.
+                    V devNode;
+<span class="fc" id="L119">                    devNode = getDevNode(rootPath);</span>
+                    List&lt;E&gt; spurPath;
+                    // 3.1.4 find the shortest path in the transformed graph.
+<span class="fc" id="L122">                    spurPath = searchShortestPath(mutableGraph, devNode, sink);</span>
+                    // 3.1.5 update the path candidates.
+<span class="fc bfc" id="L124" title="All 2 branches covered.">                    if (spurPath != null) {</span>
+                        // totalPath = rootPath + spurPath;
+<span class="fc" id="L126">                        rootPath.addAll(spurPath);</span>
+<span class="fc" id="L127">                        pathCandidates.add(rootPath);</span>
+                    }
+                }
+                // 3.2 if there is no spur path, exit.
+<span class="pc bpc" id="L131" title="1 of 2 branches missed.">                if (pathCandidates.size() == 0) {</span>
+<span class="nc" id="L132">                    break;</span>
+                }
+                 // 3.3 add the path into the results.
+<span class="fc" id="L135">                addPathResult();</span>
+<span class="fc" id="L136">            }</span>
+<span class="fc" id="L137">        }</span>
+
+    @SuppressWarnings({ &quot;rawtypes&quot;, &quot;unchecked&quot; })
+    private List&lt;E&gt; searchShortestPath(Graph&lt;V, E&gt; graph, V src, V dst) {
+        // Determine the shortest path from the source to the destination by using the Dijkstra algorithm.
+<span class="fc" id="L142">        DijkstraGraphSearch dijkstraAlg = new DijkstraGraphSearch();</span>
+<span class="fc" id="L143">        Set&lt;Path&gt; paths =  dijkstraAlg.search(graph, src, dst, weight, ALL_PATHS).paths();</span>
+<span class="fc" id="L144">        Iterator&lt;Path&gt; itr = paths.iterator();</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (!itr.hasNext()) {</span>
+<span class="fc" id="L146">            return null;</span>
+        }
+        // return the first shortest path only.
+<span class="fc" id="L149">        return (List&lt;E&gt;) itr.next().edges();</span>
+    }
+
+    private void convertGraph() {
+        // clear the mutableGraph first
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">        if (mutableGraph != null) {</span>
+<span class="fc" id="L155">            ((MutableAdjacencyListsGraph) mutableGraph).clear();</span>
+        }
+
+        // create a immutableGraph
+<span class="fc" id="L159">        Set&lt;E&gt; copyEa = immutableGraph.getEdges();</span>
+<span class="fc" id="L160">        Set&lt;V&gt; copyVa = immutableGraph.getVertexes();</span>
+<span class="fc bfc" id="L161" title="All 2 branches covered.">        for (V vertex : copyVa) {</span>
+<span class="fc" id="L162">            mutableGraph.addVertex(vertex);</span>
+<span class="fc" id="L163">            }</span>
+<span class="fc bfc" id="L164" title="All 2 branches covered.">        for (E edge : copyEa) {</span>
+<span class="fc" id="L165">            mutableGraph.addEdge(edge);</span>
+<span class="fc" id="L166">            }</span>
+<span class="fc" id="L167">    }</span>
+
+    private V getDevNode(List&lt;E&gt; path) {
+            V srcA;
+            V dstB;
+
+<span class="fc bfc" id="L173" title="All 2 branches covered.">            if (path.size() == 0) {</span>
+<span class="fc" id="L174">                return source;</span>
+            }
+
+<span class="fc" id="L177">            E temp1 = path.get(path.size() - 1);</span>
+<span class="fc" id="L178">            srcA = temp1.src();</span>
+<span class="fc" id="L179">            dstB = temp1.dst();</span>
+
+<span class="fc bfc" id="L181" title="All 2 branches covered.">            if (path.size() == 1) {</span>
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">                if (srcA.equals(source)) {</span>
+<span class="fc" id="L183">                    return dstB;</span>
+                } else {
+<span class="nc" id="L185">                    return srcA;</span>
+                }
+            } else {
+<span class="fc" id="L188">                E temp2 = path.get(path.size() - 2);</span>
+<span class="pc bpc" id="L189" title="2 of 4 branches missed.">                if (srcA.equals(temp2.src()) || srcA.equals(temp2.dst())) {</span>
+<span class="fc" id="L190">                    return dstB;</span>
+                } else {
+<span class="nc" id="L192">                    return srcA;</span>
+                }
+            }
+          }
+
+     private List&lt;E&gt; createSpurNode(List&lt;E&gt; path, int n) {
+<span class="fc" id="L198">            List&lt;E&gt; root = new ArrayList&lt;E&gt;();</span>
+
+<span class="fc bfc" id="L200" title="All 2 branches covered.">            for (int i = 0; i &lt; n; i++) {</span>
+<span class="fc" id="L201">                root.add(path.get(i));</span>
+            }
+<span class="fc" id="L203">            return root;</span>
+        }
+
+        private void transformGraph(List&lt;E&gt; rootPath) {
+            List&lt;E&gt; prePath;
+            //remove edges
+<span class="fc bfc" id="L209" title="All 2 branches covered.">            for (int i = 0; i &lt; pathResults.size(); i++) {</span>
+<span class="fc" id="L210">                prePath = pathResults.get(i);</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">                if (prePath.size() == 1) {</span>
+<span class="fc" id="L212">                    mutableGraph.removeEdge(prePath.get(0));</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">                } else if (comparePath(rootPath, prePath)) {</span>
+<span class="fc bfc" id="L214" title="All 2 branches covered.">                    for (int j = 0; j &lt;= rootPath.size(); j++) {</span>
+<span class="fc" id="L215">                        mutableGraph.removeEdge(prePath.get(j));</span>
+                    }
+                }
+            }
+<span class="fc bfc" id="L219" title="All 2 branches covered.">            for (int i = 0; i &lt; pathCandidates.size(); i++) {</span>
+<span class="fc" id="L220">                prePath = pathCandidates.get(i);</span>
+<span class="pc bpc" id="L221" title="1 of 2 branches missed.">                if (prePath.size() == 1) {</span>
+<span class="nc" id="L222">                    mutableGraph.removeEdge(prePath.get(0));</span>
+<span class="fc bfc" id="L223" title="All 2 branches covered.">                } else if (comparePath(rootPath, prePath)) {</span>
+<span class="fc bfc" id="L224" title="All 2 branches covered.">                    for (int j = 0; j &lt;= rootPath.size(); j++) {</span>
+<span class="fc" id="L225">                        mutableGraph.removeEdge(prePath.get(j));</span>
+                    }
+                }
+            }
+
+<span class="fc bfc" id="L230" title="All 2 branches covered.">            if (rootPath.size() == 0) {</span>
+<span class="fc" id="L231">                return;</span>
+            }
+
+            //remove nodes
+<span class="fc" id="L235">            List&lt;V&gt; nodes = new ArrayList&lt;V&gt;();</span>
+<span class="fc" id="L236">            nodes.add(source);</span>
+<span class="fc" id="L237">            V pre = source;</span>
+            V srcA;
+            V dstB;
+<span class="fc bfc" id="L240" title="All 2 branches covered.">            for (int i = 0; i &lt; rootPath.size() - 1; i++) {</span>
+<span class="fc" id="L241">                E temp = rootPath.get(i);</span>
+<span class="fc" id="L242">                srcA = temp.src();</span>
+<span class="fc" id="L243">                dstB = temp.dst();</span>
+
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">                if (srcA.equals(pre)) {</span>
+<span class="fc" id="L246">                    nodes.add(dstB);</span>
+<span class="fc" id="L247">                    pre = dstB;</span>
+                } else {
+<span class="nc" id="L249">                    nodes.add(srcA);</span>
+<span class="nc" id="L250">                    pre = srcA;</span>
+                }
+            }
+<span class="fc bfc" id="L253" title="All 2 branches covered.">            for (int i = 0; i &lt; nodes.size(); i++) {</span>
+<span class="fc" id="L254">                mutableGraph.removeVertex(nodes.get(i));</span>
+            }
+<span class="fc" id="L256">        }</span>
+
+        private boolean comparePath(List&lt;E&gt; path1, List&lt;E&gt; path2) {
+<span class="fc bfc" id="L259" title="All 2 branches covered.">            if (path1.size() &gt; path2.size()) {</span>
+<span class="fc" id="L260">                return false;</span>
+            }
+<span class="fc bfc" id="L262" title="All 2 branches covered.">            if (path1.size() == 0) {</span>
+<span class="fc" id="L263">                return true;</span>
+            }
+<span class="fc bfc" id="L265" title="All 2 branches covered.">            for (int i = 0; i &lt; path1.size(); i++) {</span>
+<span class="fc bfc" id="L266" title="All 2 branches covered.">                if (path1.get(i) != path2.get(i)) {</span>
+<span class="fc" id="L267">                    return false;</span>
+                }
+            }
+<span class="fc" id="L270">            return true;</span>
+        }
+
+        private void addPathResult() {
+            List&lt;E&gt; sp;
+<span class="fc" id="L275">            sp = pathCandidates.get(0);</span>
+<span class="fc bfc" id="L276" title="All 2 branches covered.">            for (int i = 1; i &lt; pathCandidates.size(); i++) {</span>
+<span class="fc bfc" id="L277" title="All 2 branches covered.">                if (sp.size() &gt; pathCandidates.get(i).size()) {</span>
+<span class="fc" id="L278">                    sp = pathCandidates.get(i);</span>
+                }
+            }
+<span class="fc" id="L281">            pathResults.add(sp);</span>
+            // Log.info(sp.toString());
+<span class="fc" id="L283">            pathCandidates.remove(sp);</span>
+<span class="fc" id="L284">        }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

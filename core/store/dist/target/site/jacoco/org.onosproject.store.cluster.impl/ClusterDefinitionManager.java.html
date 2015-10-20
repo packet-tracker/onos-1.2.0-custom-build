@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ClusterDefinitionManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.cluster.impl</a> &gt; <span class="el_source">ClusterDefinitionManager.java</span></div><h1>ClusterDefinitionManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.cluster.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.IpAddress;
+import org.onosproject.cluster.ClusterDefinitionService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.DefaultControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.store.consistent.impl.DatabaseDefinition;
+import org.onosproject.store.consistent.impl.DatabaseDefinitionStore;
+import org.slf4j.Logger;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static java.net.NetworkInterface.getNetworkInterfaces;
+import static java.util.Collections.list;
+import static org.onosproject.cluster.DefaultControllerNode.DEFAULT_PORT;
+import static org.onosproject.store.consistent.impl.DatabaseManager.PARTITION_DEFINITION_FILE;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Implementation of ClusterDefinitionService.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L53">public class ClusterDefinitionManager implements ClusterDefinitionService {</span>
+
+    public static final String CLUSTER_DEFINITION_FILE = &quot;../config/cluster.json&quot;;
+    private static final String ONOS_NIC = &quot;ONOS_NIC&quot;;
+<span class="nc" id="L57">    private static final Logger log = getLogger(ClusterDefinitionManager.class);</span>
+    private ControllerNode localNode;
+    private Set&lt;ControllerNode&gt; seedNodes;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L63">        File clusterDefinitionFile = new File(CLUSTER_DEFINITION_FILE);</span>
+<span class="nc" id="L64">        ClusterDefinitionStore clusterDefinitionStore =</span>
+<span class="nc" id="L65">                new ClusterDefinitionStore(clusterDefinitionFile.getPath());</span>
+
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (!clusterDefinitionFile.exists()) {</span>
+<span class="nc" id="L68">            createDefaultClusterDefinition(clusterDefinitionStore);</span>
+        }
+
+        try {
+<span class="nc" id="L72">            ClusterDefinition clusterDefinition = clusterDefinitionStore.read();</span>
+<span class="nc" id="L73">            establishSelfIdentity(clusterDefinition);</span>
+<span class="nc" id="L74">            seedNodes = ImmutableSet</span>
+<span class="nc" id="L75">                    .copyOf(clusterDefinition.getNodes())</span>
+<span class="nc" id="L76">                    .stream()</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">                    .filter(n -&gt; !localNode.id().equals(new NodeId(n.getId())))</span>
+<span class="nc" id="L78">                    .map(n -&gt; new DefaultControllerNode(new NodeId(n.getId()),</span>
+<span class="nc" id="L79">                                                        IpAddress.valueOf(n.getIp()),</span>
+<span class="nc" id="L80">                                                        n.getTcpPort()))</span>
+<span class="nc" id="L81">                    .collect(Collectors.toSet());</span>
+<span class="nc" id="L82">        } catch (IOException e) {</span>
+<span class="nc" id="L83">            throw new IllegalStateException(&quot;Failed to read cluster definition.&quot;, e);</span>
+<span class="nc" id="L84">        }</span>
+
+<span class="nc" id="L86">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L87">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L91">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L92">    }</span>
+
+    @Override
+    public ControllerNode localNode() {
+<span class="nc" id="L96">        return localNode;</span>
+    }
+
+    @Override
+    public Set&lt;ControllerNode&gt; seedNodes() {
+<span class="nc" id="L101">        return seedNodes;</span>
+    }
+
+    @Override
+    public void formCluster(Set&lt;ControllerNode&gt; nodes, String ipPrefix) {
+        try {
+<span class="nc" id="L107">            Set&lt;NodeInfo&gt; infos = Sets.newHashSet();</span>
+<span class="nc" id="L108">            nodes.forEach(n -&gt; infos.add(NodeInfo.from(n.id().toString(),</span>
+<span class="nc" id="L109">                                                       n.ip().toString(),</span>
+<span class="nc" id="L110">                                                       n.tcpPort())));</span>
+
+<span class="nc" id="L112">            ClusterDefinition cdef = ClusterDefinition.from(infos, ipPrefix);</span>
+<span class="nc" id="L113">            new ClusterDefinitionStore(CLUSTER_DEFINITION_FILE).write(cdef);</span>
+
+<span class="nc" id="L115">            DatabaseDefinition ddef = DatabaseDefinition.from(infos);</span>
+<span class="nc" id="L116">            new DatabaseDefinitionStore(PARTITION_DEFINITION_FILE).write(ddef);</span>
+<span class="nc" id="L117">        } catch (IOException e) {</span>
+<span class="nc" id="L118">            log.error(&quot;Unable to form cluster&quot;, e);</span>
+<span class="nc" id="L119">        }</span>
+<span class="nc" id="L120">    }</span>
+
+    private IpAddress findLocalIp(ClusterDefinition clusterDefinition) throws SocketException {
+        Enumeration&lt;NetworkInterface&gt; interfaces =
+<span class="nc" id="L124">                NetworkInterface.getNetworkInterfaces();</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        while (interfaces.hasMoreElements()) {</span>
+<span class="nc" id="L126">            NetworkInterface iface = interfaces.nextElement();</span>
+<span class="nc" id="L127">            Enumeration&lt;InetAddress&gt; inetAddresses = iface.getInetAddresses();</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">            while (inetAddresses.hasMoreElements()) {</span>
+<span class="nc" id="L129">                IpAddress ip = IpAddress.valueOf(inetAddresses.nextElement());</span>
+<span class="nc" id="L130">                if (clusterDefinition.getNodes().stream()</span>
+<span class="nc" id="L131">                        .map(NodeInfo::getIp)</span>
+<span class="nc" id="L132">                        .map(IpAddress::valueOf)</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                        .anyMatch(nodeIp -&gt; ip.equals(nodeIp))) {</span>
+<span class="nc" id="L134">                    return ip;</span>
+                }
+<span class="nc" id="L136">            }</span>
+<span class="nc" id="L137">        }</span>
+<span class="nc" id="L138">        throw new IllegalStateException(&quot;Unable to determine local ip&quot;);</span>
+    }
+
+    private void establishSelfIdentity(ClusterDefinition clusterDefinition) {
+        try {
+<span class="nc" id="L143">            IpAddress ip = findLocalIp(clusterDefinition);</span>
+<span class="nc" id="L144">            localNode = new DefaultControllerNode(new NodeId(ip.toString()), ip);</span>
+<span class="nc" id="L145">        } catch (SocketException e) {</span>
+<span class="nc" id="L146">            throw new IllegalStateException(&quot;Cannot determine local IP&quot;, e);</span>
+<span class="nc" id="L147">        }</span>
+<span class="nc" id="L148">    }</span>
+
+    private void createDefaultClusterDefinition(ClusterDefinitionStore store) {
+        // Assumes IPv4 is returned.
+<span class="nc" id="L152">        String ip = getSiteLocalAddress();</span>
+<span class="nc" id="L153">        String ipPrefix = ip.replaceFirst(&quot;\\.[0-9]*$&quot;, &quot;.*&quot;);</span>
+<span class="nc" id="L154">        NodeInfo node = NodeInfo.from(ip, ip, DEFAULT_PORT);</span>
+        try {
+<span class="nc" id="L156">            store.write(ClusterDefinition.from(ImmutableSet.of(node), ipPrefix));</span>
+<span class="nc" id="L157">        } catch (IOException e) {</span>
+<span class="nc" id="L158">            log.warn(&quot;Unable to write default cluster definition&quot;, e);</span>
+<span class="nc" id="L159">        }</span>
+<span class="nc" id="L160">    }</span>
+
+    /**
+     * Returns the address that matches the IP prefix given in ONOS_NIC
+     * environment variable if one was specified, or the first site local
+     * address if one can be found or the loopback address otherwise.
+     *
+     * @return site-local address in string form
+     */
+    public static String getSiteLocalAddress() {
+        try {
+<span class="nc" id="L171">            String ipPrefix = System.getenv(ONOS_NIC);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            for (NetworkInterface nif : list(getNetworkInterfaces())) {</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">                for (InetAddress address : list(nif.getInetAddresses())) {</span>
+<span class="nc" id="L174">                    IpAddress ip = IpAddress.valueOf(address);</span>
+<span class="nc bnc" id="L175" title="All 6 branches missed.">                    if (ipPrefix == null &amp;&amp; address.isSiteLocalAddress() ||</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">                            ipPrefix != null &amp;&amp; matchInterface(ip.toString(), ipPrefix)) {</span>
+<span class="nc" id="L177">                        return ip.toString();</span>
+                    }
+<span class="nc" id="L179">                }</span>
+<span class="nc" id="L180">            }</span>
+<span class="nc" id="L181">        } catch (SocketException e) {</span>
+<span class="nc" id="L182">            log.error(&quot;Unable to get network interfaces&quot;, e);</span>
+<span class="nc" id="L183">        }</span>
+
+<span class="nc" id="L185">        return IpAddress.valueOf(InetAddress.getLoopbackAddress()).toString();</span>
+    }
+
+    // Indicates whether the specified interface address matches the given prefix.
+    // FIXME: Add a facility to IpPrefix to make this more robust
+    private static boolean matchInterface(String ip, String ipPrefix) {
+<span class="nc" id="L191">        String s = ipPrefix.replaceAll(&quot;\\.\\*&quot;, &quot;&quot;);</span>
+<span class="nc" id="L192">        return ip.startsWith(s);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

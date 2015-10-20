@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AcceptorLoop.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio</a> &gt; <span class="el_source">AcceptorLoop.java</span></div><h1>AcceptorLoop.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio;
+
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.net.StandardSocketOptions;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.ServerSocketChannel;
+import java.util.Iterator;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Selector loop derivative tailored to acceptConnection inbound connections.
+ */
+public abstract class AcceptorLoop extends SelectorLoop {
+
+    private SocketAddress listenAddress;
+    private ServerSocketChannel socketChannel;
+
+    /**
+     * Creates an acceptor loop with the specified selection timeout and
+     * accepting connections on the the given address.
+     *
+     * @param selectTimeout selection timeout; specified in millis
+     * @param listenAddress socket address where to listen for connections
+     * @throws IOException if the backing selector cannot be opened
+     */
+    public AcceptorLoop(long selectTimeout, SocketAddress listenAddress)
+            throws IOException {
+<span class="fc" id="L45">        super(selectTimeout);</span>
+<span class="fc" id="L46">        this.listenAddress = checkNotNull(listenAddress, &quot;Address cannot be null&quot;);</span>
+<span class="fc" id="L47">    }</span>
+
+    /**
+     * Hook to accept an inbound connection on the specified socket channel.
+     *
+     * @param channel socketChannel where an accept operation awaits
+     * @throws IOException if the accept operation cannot be processed
+     */
+    protected abstract void acceptConnection(ServerSocketChannel channel) throws IOException;
+
+    /**
+     * Opens a new server socket channel configured in non-blocking mode and
+     * bound to the loop's listen address.
+     *
+     * @throws IOException if unable to open or configure the socket channel
+     */
+    protected synchronized void openChannel() throws IOException {
+<span class="fc" id="L64">        socketChannel = ServerSocketChannel.open();</span>
+<span class="fc" id="L65">        socketChannel.configureBlocking(false);</span>
+<span class="fc" id="L66">        socketChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);</span>
+<span class="fc" id="L67">        socketChannel.register(selector, SelectionKey.OP_ACCEPT);</span>
+<span class="fc" id="L68">        socketChannel.bind(listenAddress);</span>
+<span class="fc" id="L69">    }</span>
+
+    /**
+     * Closes the server socket channel.
+     *
+     * @throws IOException if unable to close the socketChannel
+     */
+    protected synchronized void closechannel() throws IOException {
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">        if (socketChannel != null) {</span>
+<span class="fc" id="L78">            socketChannel.close();</span>
+<span class="fc" id="L79">            socketChannel = null;</span>
+        }
+<span class="fc" id="L81">    }</span>
+
+    @Override
+    public void shutdown() {
+        try {
+<span class="fc" id="L86">            closechannel();</span>
+<span class="nc" id="L87">        } catch (IOException e) {</span>
+<span class="nc" id="L88">            log.warn(&quot;Unable to close the socketChannel&quot;, e);</span>
+<span class="fc" id="L89">        }</span>
+<span class="fc" id="L90">        super.shutdown();</span>
+<span class="fc" id="L91">    }</span>
+
+    @Override
+    protected void loop() throws IOException {
+<span class="fc" id="L95">        openChannel();</span>
+<span class="fc" id="L96">        notifyReady();</span>
+
+        // Keep looping until told otherwise.
+<span class="fc bfc" id="L99" title="All 2 branches covered.">        while (isRunning()) {</span>
+            // Attempt a selection; if no operations selected or if signalled
+            // to shutdown, spin through.
+<span class="fc" id="L102">            int count = selector.select(selectTimeout);</span>
+<span class="pc bpc" id="L103" title="3 of 4 branches missed.">            if (count == 0 || !isRunning()) {</span>
+<span class="nc" id="L104">                continue;</span>
+            }
+
+            // Iterate over all keys selected for an operation and process them.
+<span class="nc" id="L108">            Iterator&lt;SelectionKey&gt; keys = selector.selectedKeys().iterator();</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            while (keys.hasNext()) {</span>
+                // Fetch the key and remove it from the pending list.
+<span class="nc" id="L111">                SelectionKey key = keys.next();</span>
+<span class="nc" id="L112">                keys.remove();</span>
+
+                // If the key has a pending acceptConnection operation, process it.
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                if (key.isAcceptable()) {</span>
+<span class="nc" id="L116">                    acceptConnection((ServerSocketChannel) key.channel());</span>
+                }
+<span class="nc" id="L118">            }</span>
+<span class="nc" id="L119">        }</span>
+<span class="fc" id="L120">    }</span>
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

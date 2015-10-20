@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupedThreadFactory.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.util</a> &gt; <span class="el_source">GroupedThreadFactory.java</span></div><h1>GroupedThreadFactory.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.util;
+
+import org.apache.commons.lang3.concurrent.ConcurrentUtils;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadFactory;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Thread factory for creating threads that belong to the specified thread group.
+ */
+public final class GroupedThreadFactory implements ThreadFactory {
+
+    public static final String DELIMITER = &quot;/&quot;;
+
+    private final ThreadGroup group;
+
+    // Cache of created thread factories.
+<span class="fc" id="L35">    private static final ConcurrentHashMap&lt;String, GroupedThreadFactory&gt; FACTORIES =</span>
+            new ConcurrentHashMap&lt;&gt;();
+
+    /**
+     * Returns thread factory for producing threads associated with the specified
+     * group name. The group name-space is hierarchical, based on slash-delimited
+     * name segments, e.g. {@code onos/intent}.
+     *
+     * @param groupName group name
+     * @return thread factory
+     */
+    public static GroupedThreadFactory groupedThreadFactory(String groupName) {
+<span class="fc" id="L47">        GroupedThreadFactory factory = FACTORIES.get(groupName);</span>
+<span class="fc bfc" id="L48" title="All 2 branches covered.">        if (factory != null) {</span>
+<span class="fc" id="L49">            return factory;</span>
+        }
+
+        // Find the parent group or root the group hierarchy under default group.
+<span class="fc" id="L53">        int i = groupName.lastIndexOf(DELIMITER);</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        if (i &gt; 0) {</span>
+<span class="fc" id="L55">            String name = groupName.substring(0, i);</span>
+<span class="fc" id="L56">            ThreadGroup parentGroup = groupedThreadFactory(name).threadGroup();</span>
+<span class="fc" id="L57">            factory = new GroupedThreadFactory(new ThreadGroup(parentGroup, groupName));</span>
+<span class="fc" id="L58">        } else {</span>
+<span class="fc" id="L59">            factory = new GroupedThreadFactory(new ThreadGroup(groupName));</span>
+        }
+
+<span class="fc" id="L62">        return ConcurrentUtils.putIfAbsent(FACTORIES, groupName, factory);</span>
+    }
+
+    // Creates a new thread group
+<span class="fc" id="L66">    private GroupedThreadFactory(ThreadGroup group) {</span>
+<span class="fc" id="L67">        this.group = group;</span>
+<span class="fc" id="L68">    }</span>
+
+    /**
+     * Returns the thread group associated with the factory.
+     *
+     * @return thread group
+     */
+    public ThreadGroup threadGroup() {
+<span class="fc" id="L76">        return group;</span>
+    }
+
+    @Override
+    public Thread newThread(Runnable r) {
+<span class="fc" id="L81">        return new Thread(group, r);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L86">        return toStringHelper(this).add(&quot;group&quot;, group).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,35 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1445327253791
+Build-Jdk: 1.8.0_60
+Built-By: parallels
+Bundle-Description: ONOS BGP controller subsystem API
+Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
+Bundle-ManifestVersion: 2
+Bundle-Name: onos-bgp-api
+Bundle-SymbolicName: org.onosproject.onos-bgp-api
+Bundle-Version: 1.4.0.SNAPSHOT
+Created-By: Apache Maven Bundle Plugin
+Export-Package: org.onosproject.bgp.controller;uses:="org.jboss.netty.ch
+ annel,org.onlab.packet,org.onosproject.bgpio.protocol";version="1.4.0",
+ org.onosproject.bgpio.exceptions;version="1.4.0";uses:="org.jboss.netty
+ .buffer",org.onosproject.bgpio.protocol;version="1.4.0";uses:="org.jbos
+ s.netty.buffer,org.onosproject.bgpio.exceptions,org.onosproject.bgpio.p
+ rotocol.link_state,org.onosproject.bgpio.types",org.onosproject.bgpio.p
+ rotocol.link_state;version="1.4.0";uses:="org.jboss.netty.buffer,org.on
+ osproject.bgpio.exceptions,org.onosproject.bgpio.protocol,org.onosproje
+ ct.bgpio.types,org.slf4j",org.onosproject.bgpio.protocol.ver4;version="
+ 1.4.0";uses:="org.jboss.netty.buffer,org.onosproject.bgpio.exceptions,o
+ rg.onosproject.bgpio.protocol,org.onosproject.bgpio.types,org.slf4j",or
+ g.onosproject.bgpio.types;version="1.4.0";uses:="org.jboss.netty.buffer
+ ,org.onlab.packet,org.onosproject.bgpio.exceptions,org.onosproject.bgpi
+ o.protocol,org.slf4j",org.onosproject.bgpio.types.attr;version="1.4.0";
+ uses:="org.jboss.netty.buffer,org.onosproject.bgpio.exceptions,org.onos
+ project.bgpio.types,org.slf4j",org.onosproject.bgpio.util;version="1.4.
+ 0";uses:="org.jboss.netty.buffer,org.onlab.packet,org.onosproject.bgpio
+ .exceptions,org.slf4j",org.onosproject.bgp.controller;version="1.4.0"
+Import-Package: com.google.common.base;version="[18.0,19)",com.google.co
+ mmon.primitives;version="[18.0,19)",org.jboss.netty.buffer;version="[3.
+ 9,4)",org.jboss.netty.channel;version="[3.9,4)",org.onlab.packet;versio
+ n="[1.4,2)",org.slf4j;version="[1.7,2)"
+Require-Capability: osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
+Tool: Bnd-2.4.0.201411031534

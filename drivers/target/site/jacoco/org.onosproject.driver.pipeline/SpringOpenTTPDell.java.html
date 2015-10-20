@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SpringOpenTTPDell.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.pipeline</a> &gt; <span class="el_source">SpringOpenTTPDell.java</span></div><h1>SpringOpenTTPDell.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.pipeline;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.MacAddress;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.behaviour.NextGroup;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.EthCriterion;
+import org.onosproject.net.flow.criteria.EthTypeCriterion;
+import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onosproject.net.flow.criteria.MplsCriterion;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flowobjective.FilteringObjective;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.ObjectiveError;
+import org.onosproject.net.group.Group;
+import org.onosproject.net.group.GroupKey;
+
+/**
+ * Spring-open driver implementation for Dell hardware switches.
+ */
+public class SpringOpenTTPDell extends SpringOpenTTP {
+
+    /* Table IDs to be used for Dell Open Segment Routers*/
+    private static final int DELL_TABLE_VLAN = 17;
+    private static final int DELL_TABLE_TMAC = 18;
+    private static final int DELL_TABLE_IPV4_UNICAST = 30;
+    private static final int DELL_TABLE_MPLS = 25;
+    private static final int DELL_TABLE_ACL = 40;
+
+    //TODO: Store this info in the distributed store.
+<span class="nc" id="L57">    private MacAddress deviceTMac = null;</span>
+
+    public SpringOpenTTPDell() {
+<span class="nc" id="L60">        super();</span>
+<span class="nc" id="L61">        vlanTableId = DELL_TABLE_VLAN;</span>
+<span class="nc" id="L62">        tmacTableId = DELL_TABLE_TMAC;</span>
+<span class="nc" id="L63">        ipv4UnicastTableId = DELL_TABLE_IPV4_UNICAST;</span>
+<span class="nc" id="L64">        mplsTableId = DELL_TABLE_MPLS;</span>
+<span class="nc" id="L65">        aclTableId = DELL_TABLE_ACL;</span>
+<span class="nc" id="L66">    }</span>
+
+    @Override
+    protected void setTableMissEntries() {
+        // No need to set table-miss-entries in Dell switches
+<span class="nc" id="L71">        return;</span>
+    }
+
+    @Override
+    //Dell switches need ETH_DST based match condition in all IP table entries.
+    //So this method overrides the default spring-open behavior and adds
+    //ETH_DST match condition while pushing IP table flow rules
+    protected Collection&lt;FlowRule&gt; processSpecific(ForwardingObjective fwd) {
+<span class="nc" id="L79">        log.debug(&quot;Processing specific&quot;);</span>
+<span class="nc" id="L80">        TrafficSelector selector = fwd.selector();</span>
+<span class="nc" id="L81">        EthTypeCriterion ethType = (EthTypeCriterion) selector</span>
+<span class="nc" id="L82">                .getCriterion(Criterion.Type.ETH_TYPE);</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if ((ethType == null) ||</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">                (ethType.ethType().toShort() != Ethernet.TYPE_IPV4) &amp;&amp;</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">                (ethType.ethType().toShort() != Ethernet.MPLS_UNICAST)) {</span>
+<span class="nc" id="L86">            log.debug(&quot;processSpecific: Unsupported &quot;</span>
+                    + &quot;forwarding objective criteraia&quot;);
+<span class="nc" id="L88">            fail(fwd, ObjectiveError.UNSUPPORTED);</span>
+<span class="nc" id="L89">            return Collections.emptySet();</span>
+        }
+
+        TrafficSelector.Builder filteredSelectorBuilder =
+<span class="nc" id="L93">                DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L94">        int forTableId = -1;</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if (ethType.ethType().toShort() == Ethernet.TYPE_IPV4) {</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">            if (deviceTMac == null) {</span>
+<span class="nc" id="L97">                log.debug(&quot;processSpecific: ETH_DST filtering &quot;</span>
+                        + &quot;objective is not set which is required &quot;
+                        + &quot;before sending a IPv4 forwarding objective&quot;);
+                //TODO: Map the error to more appropriate error code.
+<span class="nc" id="L101">                fail(fwd, ObjectiveError.DEVICEMISSING);</span>
+<span class="nc" id="L102">                return Collections.emptySet();</span>
+            }
+<span class="nc" id="L104">            filteredSelectorBuilder = filteredSelectorBuilder</span>
+<span class="nc" id="L105">                .matchEthType(Ethernet.TYPE_IPV4)</span>
+<span class="nc" id="L106">                .matchEthDst(deviceTMac)</span>
+<span class="nc" id="L107">                .matchIPDst(((IPCriterion) selector</span>
+<span class="nc" id="L108">                        .getCriterion(Criterion.Type.IPV4_DST))</span>
+<span class="nc" id="L109">                        .ip());</span>
+<span class="nc" id="L110">            forTableId = ipv4UnicastTableId;</span>
+<span class="nc" id="L111">            log.debug(&quot;processing IPv4 specific forwarding objective&quot;);</span>
+        } else {
+<span class="nc" id="L113">            filteredSelectorBuilder = filteredSelectorBuilder</span>
+<span class="nc" id="L114">                .matchEthType(Ethernet.MPLS_UNICAST)</span>
+<span class="nc" id="L115">                .matchMplsLabel(((MplsCriterion)</span>
+<span class="nc" id="L116">                   selector.getCriterion(Criterion.Type.MPLS_LABEL)).label());</span>
+            //TODO: Add Match for BoS
+            //if (selector.getCriterion(Criterion.Type.MPLS_BOS) != null) {
+            //}
+<span class="nc" id="L120">            forTableId = mplsTableId;</span>
+<span class="nc" id="L121">            log.debug(&quot;processing MPLS specific forwarding objective&quot;);</span>
+        }
+
+        TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment
+<span class="nc" id="L125">                .builder();</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">        if (fwd.treatment() != null) {</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">            for (Instruction i : fwd.treatment().allInstructions()) {</span>
+<span class="nc" id="L128">                treatmentBuilder.add(i);</span>
+<span class="nc" id="L129">            }</span>
+        }
+
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (fwd.nextId() != null) {</span>
+<span class="nc" id="L133">            NextGroup next = flowObjectiveStore.getNextGroup(fwd.nextId());</span>
+
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            if (next != null) {</span>
+<span class="nc" id="L136">                GroupKey key = appKryo.deserialize(next.data());</span>
+
+<span class="nc" id="L138">                Group group = groupService.getGroup(deviceId, key);</span>
+
+<span class="nc bnc" id="L140" title="All 2 branches missed.">                if (group == null) {</span>
+<span class="nc" id="L141">                    log.warn(&quot;The group left!&quot;);</span>
+<span class="nc" id="L142">                    fail(fwd, ObjectiveError.GROUPMISSING);</span>
+<span class="nc" id="L143">                    return Collections.emptySet();</span>
+                }
+<span class="nc" id="L145">                treatmentBuilder.group(group.id());</span>
+<span class="nc" id="L146">                log.debug(&quot;Adding OUTGROUP action&quot;);</span>
+<span class="nc" id="L147">            } else {</span>
+<span class="nc" id="L148">                log.warn(&quot;processSpecific: No associated next objective object&quot;);</span>
+<span class="nc" id="L149">                fail(fwd, ObjectiveError.GROUPMISSING);</span>
+<span class="nc" id="L150">                return Collections.emptySet();</span>
+            }
+        }
+
+<span class="nc" id="L154">        TrafficSelector filteredSelector = filteredSelectorBuilder.build();</span>
+<span class="nc" id="L155">        TrafficTreatment treatment = treatmentBuilder.transition(aclTableId)</span>
+<span class="nc" id="L156">                .build();</span>
+
+<span class="nc" id="L158">        FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()</span>
+<span class="nc" id="L159">                .fromApp(fwd.appId()).withPriority(fwd.priority())</span>
+<span class="nc" id="L160">                .forDevice(deviceId).withSelector(filteredSelector)</span>
+<span class="nc" id="L161">                .withTreatment(treatment);</span>
+
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (fwd.permanent()) {</span>
+<span class="nc" id="L164">            ruleBuilder.makePermanent();</span>
+        } else {
+<span class="nc" id="L166">            ruleBuilder.makeTemporary(fwd.timeout());</span>
+        }
+
+<span class="nc" id="L169">        ruleBuilder.forTable(forTableId);</span>
+<span class="nc" id="L170">        return Collections.singletonList(ruleBuilder.build());</span>
+
+    }
+
+    @Override
+    //Dell switches need ETH_DST based match condition in all IP table entries.
+    //So while processing the ETH_DST based filtering objective, store
+    //the device MAC to be used locally to use it while pushing the IP rules.
+    protected List&lt;FlowRule&gt; processEthDstFilter(Criterion c,
+                                                 FilteringObjective filt,
+                                                 ApplicationId applicationId) {
+        // Store device termination Mac to be used in IP flow entries
+<span class="nc" id="L182">        EthCriterion e = (EthCriterion) c;</span>
+<span class="nc" id="L183">        deviceTMac = e.mac();</span>
+
+<span class="nc" id="L185">        log.debug(&quot;For now not adding any TMAC rules &quot;</span>
+                + &quot;into Dell switches as it is ignoring&quot;);
+
+<span class="nc" id="L188">        return Collections.emptyList();</span>
+    }
+
+    @Override
+    protected List&lt;FlowRule&gt; processVlanIdFilter(Criterion c,
+                                                 FilteringObjective filt,
+                                                 ApplicationId applicationId) {
+<span class="nc" id="L195">        log.debug(&quot;For now not adding any VLAN rules &quot;</span>
+                + &quot;into Dell switches as it is ignoring&quot;);
+
+<span class="nc" id="L198">        return Collections.emptyList();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

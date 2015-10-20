@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IPv4SubObject.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">IPv4SubObject.java</span></div><h1>IPv4SubObject.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @author b00295750
+ *
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides IPv4 Sub Object.
+ */
+public class IPv4SubObject implements PcepValueType {
+
+    /*Reference : RFC 4874:3.1.1
+     *  0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |L|    Type     |     Length    | IPv4 address (4 bytes)        |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | IPv4 address (continued)      | Prefix Length |      Resvd    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+<span class="fc" id="L46">    protected static final Logger log = LoggerFactory.getLogger(IPv4SubObject.class);</span>
+
+    public static final byte TYPE = 0x01;
+    public static final byte LENGTH = 8;
+    public static final byte VALUE_LENGTH = 6;
+    public static final byte OBJ_LENGTH = 8;
+    public static final byte LBIT = 0;
+    public static final int SHIFT_LBIT_POSITION = 7;
+    private int ipAddress;
+    private byte prefixLen;
+    private byte resvd;
+
+    /**
+     * Constructor to initialize ipv4 address.
+     *
+     * @param ipAddr ipv4 address
+     */
+<span class="nc" id="L63">    public IPv4SubObject(int ipAddr) {</span>
+<span class="nc" id="L64">        this.ipAddress = ipAddr;</span>
+<span class="nc" id="L65">    }</span>
+
+    /**
+     * constructor to initialize ipAddress, prefixLen and resvd.
+     *
+     * @param ipAddress ipv4 address
+     * @param prefixLen prefix length
+     * @param resvd reserved flags value
+     */
+<span class="fc" id="L74">    public IPv4SubObject(int ipAddress, byte prefixLen, byte resvd) {</span>
+<span class="fc" id="L75">        this.ipAddress = ipAddress;</span>
+<span class="fc" id="L76">        this.prefixLen = prefixLen;</span>
+<span class="fc" id="L77">        this.resvd = resvd;</span>
+<span class="fc" id="L78">    }</span>
+
+    /**
+     * Returns a new instance of IPv4SubObject.
+     *
+     * @param ipAddress ipv4 address
+     * @param prefixLen prefix length
+     * @param resvd reserved flags value
+     * @return object of IPv4SubObject
+     */
+    public static IPv4SubObject of(int ipAddress, byte prefixLen, byte resvd) {
+<span class="fc" id="L89">        return new IPv4SubObject(ipAddress, prefixLen, resvd);</span>
+    }
+
+    /**
+     * Returns prefixLen of IPv4 IP address.
+     *
+     * @return byte  value of rawValue
+     */
+    public byte getPrefixLen() {
+<span class="nc" id="L98">        return prefixLen;</span>
+    }
+
+    /**
+     * Returns value of IPv4 IP address.
+     *
+     * @return int value of ipv4 address
+     */
+    public int getIpAddress() {
+<span class="nc" id="L107">        return ipAddress;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L112">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L117">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="nc" id="L122">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L127">        return Objects.hash(ipAddress, prefixLen, resvd);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L133">            return true;</span>
+        }
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        if (obj instanceof IPv4SubObject) {</span>
+<span class="fc" id="L136">            IPv4SubObject other = (IPv4SubObject) obj;</span>
+<span class="pc bpc" id="L137" title="1 of 4 branches missed.">            return Objects.equals(this.ipAddress, other.ipAddress) &amp;&amp; Objects.equals(this.prefixLen, other.prefixLen)</span>
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.resvd, other.resvd);</span>
+        }
+<span class="fc" id="L140">        return false;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of IPv4SubObject.
+     *
+     * @param c type of channel buffer
+     * @return object of IPv4SubObject
+     */
+    public static PcepValueType read(ChannelBuffer c) {
+<span class="fc" id="L150">        int ipAddess = c.readInt();</span>
+<span class="fc" id="L151">        byte prefixLen = c.readByte();</span>
+<span class="fc" id="L152">        byte resvd = c.readByte();</span>
+<span class="fc" id="L153">        return new IPv4SubObject(ipAddess, prefixLen, resvd);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L158">        int iLenStartIndex = c.writerIndex();</span>
+<span class="fc" id="L159">        byte bValue = LBIT;</span>
+<span class="fc" id="L160">        bValue = (byte) (bValue &lt;&lt; SHIFT_LBIT_POSITION);</span>
+<span class="fc" id="L161">        bValue = (byte) (bValue | TYPE);</span>
+<span class="fc" id="L162">        c.writeByte(bValue);</span>
+<span class="fc" id="L163">        c.writeByte(OBJ_LENGTH);</span>
+<span class="fc" id="L164">        c.writeInt(ipAddress);</span>
+<span class="fc" id="L165">        c.writeByte(prefixLen);</span>
+<span class="fc" id="L166">        c.writeByte(resvd);</span>
+
+<span class="fc" id="L168">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L173">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L174">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L175">                .add(&quot;Length&quot;, LENGTH)</span>
+<span class="fc" id="L176">                .add(&quot;IPv4Address&quot;, ipAddress)</span>
+<span class="fc" id="L177">                .add(&quot;PrefixLength&quot;, prefixLen)</span>
+<span class="fc" id="L178">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

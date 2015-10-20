@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepNaiUnnumberedAdjacencyIpv4.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepNaiUnnumberedAdjacencyIpv4.java</span></div><h1>PcepNaiUnnumberedAdjacencyIpv4.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepNai;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Nai Unnumbered Adjacency Ipv4.
+ */
+public class PcepNaiUnnumberedAdjacencyIpv4 implements PcepNai {
+    /**
+     * draft-ietf-pce-segment-routing-03 section    5.3.2.
+     */
+    public static final byte ST_TYPE = 0x05;
+
+    private final int localNodeId;
+    private final int localInterfaceId;
+    private final int remoteNodeId;
+    private final int remoteInterfaceId;
+
+    /**
+     * Constructor to initialize all the member variables.
+     *
+     * @param localNodeId local node id
+     * @param localInterfaceId local interface id
+     * @param remoteNodeId remote node id
+     * @param remoteInterfaceId remote interface id
+     */
+    public PcepNaiUnnumberedAdjacencyIpv4(int localNodeId, int localInterfaceId, int remoteNodeId,
+<span class="fc" id="L48">            int remoteInterfaceId) {</span>
+<span class="fc" id="L49">        this.localNodeId = localNodeId;</span>
+<span class="fc" id="L50">        this.localInterfaceId = localInterfaceId;</span>
+<span class="fc" id="L51">        this.remoteNodeId = remoteNodeId;</span>
+<span class="fc" id="L52">        this.remoteInterfaceId = remoteInterfaceId;</span>
+<span class="fc" id="L53">    }</span>
+
+    /**
+     * Returns PCEP Nai Unnumbered Adjacency Ipv4 object.
+     *
+     * @param localNodeId local node id
+     * @param localInterfaceId local interface if
+     * @param remoteNodeId remote node id
+     * @param remoteInterfaceId remote interface id
+     * @return PCEP Nai Unnumbered Adjacency Ipv4 object
+     */
+    public static PcepNaiUnnumberedAdjacencyIpv4 of(int localNodeId, int localInterfaceId, int remoteNodeId,
+            int remoteInterfaceId) {
+<span class="fc" id="L66">        return new PcepNaiUnnumberedAdjacencyIpv4(localNodeId, localInterfaceId, remoteNodeId, remoteInterfaceId);</span>
+    }
+
+    @Override
+    public byte getType() {
+<span class="nc" id="L71">        return ST_TYPE;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer bb) {
+<span class="nc" id="L76">        int iLenStartIndex = bb.writerIndex();</span>
+<span class="nc" id="L77">        bb.writeInt(localNodeId);</span>
+<span class="nc" id="L78">        bb.writeInt(localInterfaceId);</span>
+<span class="nc" id="L79">        bb.writeInt(remoteNodeId);</span>
+<span class="nc" id="L80">        bb.writeInt(remoteInterfaceId);</span>
+<span class="nc" id="L81">        return bb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads from channel buffer and return object of PcepNAIUnnumberedAdjacencyIpv4.
+     *
+     * @param bb of type channel buffer
+     * @return object of PcepNAIUnnumberedAdjacencyIpv4
+     */
+    public static PcepNaiUnnumberedAdjacencyIpv4 read(ChannelBuffer bb) {
+        int localNodeId;
+        int localInterfaceId;
+        int remoteNodeId;
+        int remoteInterfaceId;
+<span class="nc" id="L95">        localNodeId = bb.readInt();</span>
+<span class="nc" id="L96">        localInterfaceId = bb.readInt();</span>
+<span class="nc" id="L97">        remoteNodeId = bb.readInt();</span>
+<span class="nc" id="L98">        remoteInterfaceId = bb.readInt();</span>
+<span class="nc" id="L99">        return new PcepNaiUnnumberedAdjacencyIpv4(localNodeId, localInterfaceId, remoteNodeId, remoteInterfaceId);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L104">        return Objects.hash(localNodeId, localInterfaceId, remoteNodeId, remoteInterfaceId);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L110">            return true;</span>
+        }
+<span class="fc bfc" id="L112" title="All 2 branches covered.">        if (obj instanceof PcepNaiUnnumberedAdjacencyIpv4) {</span>
+<span class="fc" id="L113">            PcepNaiUnnumberedAdjacencyIpv4 other = (PcepNaiUnnumberedAdjacencyIpv4) obj;</span>
+<span class="fc bfc" id="L114" title="All 2 branches covered.">            return Objects.equals(this.localNodeId, other.localNodeId)</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.localInterfaceId, other.localInterfaceId)</span>
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.remoteNodeId, other.remoteNodeId)</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.remoteInterfaceId, other.remoteInterfaceId);</span>
+        }
+<span class="fc" id="L119">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L124">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L125">                .add(&quot;localNodeId&quot;, localNodeId)</span>
+<span class="fc" id="L126">                .add(&quot;localInterfaceId&quot;, localInterfaceId)</span>
+<span class="fc" id="L127">                .add(&quot;remoteNodeId&quot;, remoteNodeId)</span>
+<span class="fc" id="L128">                .add(&quot;remoteInterfaceId&quot;, remoteInterfaceId)</span>
+<span class="fc" id="L129">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

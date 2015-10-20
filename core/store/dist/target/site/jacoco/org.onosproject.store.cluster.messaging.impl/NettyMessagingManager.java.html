@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NettyMessagingManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.cluster.messaging.impl</a> &gt; <span class="el_source">NettyMessagingManager.java</span></div><h1>NettyMessagingManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.cluster.messaging.impl;
+
+import com.google.common.base.Strings;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.netty.NettyMessaging;
+import org.onosproject.cluster.ClusterDefinitionService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.store.cluster.messaging.Endpoint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Netty based MessagingService.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L37">public class NettyMessagingManager extends NettyMessaging {</span>
+
+<span class="nc" id="L39">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final short MIN_KS_LENGTH = 6;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterDefinitionService clusterDefinitionService;
+
+    @Activate
+    public void activate() throws Exception {
+<span class="nc" id="L48">        ControllerNode localNode = clusterDefinitionService.localNode();</span>
+<span class="nc" id="L49">        getTLSParameters();</span>
+<span class="nc" id="L50">        super.start(new Endpoint(localNode.ip(), localNode.tcpPort()));</span>
+<span class="nc" id="L51">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L52">    }</span>
+
+    @Deactivate
+    public void deactivate() throws Exception {
+<span class="nc" id="L56">        super.stop();</span>
+<span class="nc" id="L57">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L58">    }</span>
+
+    private void getTLSParameters() {
+<span class="nc" id="L61">        String tempString = System.getProperty(&quot;enableNettyTLS&quot;);</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        enableNettyTLS = Strings.isNullOrEmpty(tempString) ? TLS_DISABLED : Boolean.parseBoolean(tempString);</span>
+<span class="nc" id="L63">        log.info(&quot;enableNettyTLS = {}&quot;, enableNettyTLS);</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        if (enableNettyTLS) {</span>
+<span class="nc" id="L65">            ksLocation = System.getProperty(&quot;javax.net.ssl.keyStore&quot;);</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">            if (Strings.isNullOrEmpty(ksLocation)) {</span>
+<span class="nc" id="L67">                enableNettyTLS = TLS_DISABLED;</span>
+<span class="nc" id="L68">                return;</span>
+            }
+<span class="nc" id="L70">            tsLocation = System.getProperty(&quot;javax.net.ssl.trustStore&quot;);</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">            if (Strings.isNullOrEmpty(tsLocation)) {</span>
+<span class="nc" id="L72">                enableNettyTLS = TLS_DISABLED;</span>
+<span class="nc" id="L73">                return;</span>
+            }
+<span class="nc" id="L75">            ksPwd = System.getProperty(&quot;javax.net.ssl.keyStorePassword&quot;).toCharArray();</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">            if (MIN_KS_LENGTH &gt; ksPwd.length) {</span>
+<span class="nc" id="L77">                enableNettyTLS = TLS_DISABLED;</span>
+<span class="nc" id="L78">                return;</span>
+            }
+<span class="nc" id="L80">            tsPwd = System.getProperty(&quot;javax.net.ssl.trustStorePassword&quot;).toCharArray();</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">            if (MIN_KS_LENGTH &gt; tsPwd.length) {</span>
+<span class="nc" id="L82">                enableNettyTLS = TLS_DISABLED;</span>
+<span class="nc" id="L83">                return;</span>
+            }
+        }
+<span class="nc" id="L86">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

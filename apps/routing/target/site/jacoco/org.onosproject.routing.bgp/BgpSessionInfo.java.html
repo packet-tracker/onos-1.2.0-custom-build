@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpSessionInfo.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpSessionInfo.java</span></div><h1>BgpSessionInfo.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.onlab.packet.Ip4Address;
+
+import java.net.SocketAddress;
+
+/**
+ * Class for keeping information about a BGP session.
+ *
+ * There are two instances per each BGP peer session: one to keep the local
+ * information about the BGP session, and another to keep information about
+ * the remote BGP peer.
+ */
+<span class="fc" id="L29">public class BgpSessionInfo {</span>
+    private SocketAddress address;              // IP addr/port
+    private Ip4Address ip4Address;              // IPv4 address
+    private int bgpVersion;                     // 1 octet
+    private long asNumber;                      // AS number: 2 octets
+    private long as4Number;                     // AS4 number: 4 octets
+    private long holdtime;                      // 2 octets
+    private Ip4Address bgpId;                   // 4 octets -&gt; IPv4 address
+    private boolean mpExtensions;               // Multiprotocol Extensions
+                                                // enabled: RFC 4760
+    private boolean ipv4Unicast;                // IPv4/UNICAST AFI/SAFI
+    private boolean ipv4Multicast;              // IPv4/MULTICAST AFI/SAFI
+    private boolean ipv6Unicast;                // IPv6/UNICAST AFI/SAFI
+    private boolean ipv6Multicast;              // IPv6/MULTICAST AFI/SAFI
+    private boolean as4OctetCapability;         // AS 4 octet path capability
+
+    /**
+     * Gets the BGP session address: local or remote.
+     *
+     * @return the BGP session address
+     */
+    public SocketAddress address() {
+<span class="fc" id="L51">        return this.address;</span>
+    }
+
+    /**
+     * Sets the BGP session address: local or remote.
+     *
+     * @param address the BGP session address to set
+     */
+    public void setAddress(SocketAddress address) {
+<span class="fc" id="L60">        this.address = address;</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * Gets the BGP session IPv4 address: local or remote.
+     *
+     * @return the BGP session IPv4 address
+     */
+    public Ip4Address ip4Address() {
+<span class="fc" id="L69">        return this.ip4Address;</span>
+    }
+
+    /**
+     * Sets the BGP session IPv4 address: local or remote.
+     *
+     * @param ip4Address the BGP session IPv4 address to set
+     */
+    public void setIp4Address(Ip4Address ip4Address) {
+<span class="fc" id="L78">        this.ip4Address = ip4Address;</span>
+<span class="fc" id="L79">    }</span>
+
+    /**
+     * Gets the BGP session BGP version: local or remote.
+     *
+     * @return the BGP session BGP version
+     */
+    public int bgpVersion() {
+<span class="fc" id="L87">        return this.bgpVersion;</span>
+    }
+
+    /**
+     * Sets the BGP session BGP version: local or remote.
+     *
+     * @param bgpVersion the BGP session BGP version to set
+     */
+    public void setBgpVersion(int bgpVersion) {
+<span class="fc" id="L96">        this.bgpVersion = bgpVersion;</span>
+<span class="fc" id="L97">    }</span>
+
+    /**
+     * Gets the BGP session AS number: local or remote.
+     *
+     * @return the BGP session AS number
+     */
+    public long asNumber() {
+<span class="fc" id="L105">        return this.asNumber;</span>
+    }
+
+    /**
+     * Sets the BGP session AS number: local or remote.
+     *
+     * @param asNumber the BGP session AS number to set
+     */
+    public void setAsNumber(long asNumber) {
+<span class="fc" id="L114">        this.asNumber = asNumber;</span>
+<span class="fc" id="L115">    }</span>
+
+    /**
+     * Gets the BGP session AS4 number: local or remote.
+     *
+     * @return the BGP session AS4 number
+     */
+    public long as4Number() {
+<span class="fc" id="L123">        return this.as4Number;</span>
+    }
+
+    /**
+     * Sets the BGP session AS4 number: local or remote.
+     *
+     * @param as4Number the BGP session AS4 number to set
+     */
+    public void setAs4Number(long as4Number) {
+<span class="fc" id="L132">        this.as4Number = as4Number;</span>
+<span class="fc" id="L133">    }</span>
+
+    /**
+     * Gets the BGP session holdtime: local or remote.
+     *
+     * @return the BGP session holdtime
+     */
+    public long holdtime() {
+<span class="fc" id="L141">        return this.holdtime;</span>
+    }
+
+    /**
+     * Sets the BGP session holdtime: local or remote.
+     *
+     * @param holdtime the BGP session holdtime to set
+     */
+    public void setHoldtime(long holdtime) {
+<span class="fc" id="L150">        this.holdtime = holdtime;</span>
+<span class="fc" id="L151">    }</span>
+
+    /**
+     * Gets the BGP session BGP Identifier as an IPv4 address: local or remote.
+     *
+     * @return the BGP session BGP Identifier as an IPv4 address
+     */
+    public Ip4Address bgpId() {
+<span class="fc" id="L159">        return this.bgpId;</span>
+    }
+
+    /**
+     * Sets the BGP session BGP Identifier as an IPv4 address: local or remote.
+     *
+     * @param bgpId the BGP session BGP Identifier to set
+     */
+    public void setBgpId(Ip4Address bgpId) {
+<span class="fc" id="L168">        this.bgpId = bgpId;</span>
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * Gets the BGP Multiprotocol Extensions: local or remote.
+     *
+     * @return true if the BGP Multiprotocol Extensions are enabled, otherwise
+     * false
+     */
+    public boolean mpExtensions() {
+<span class="fc" id="L178">        return this.mpExtensions;</span>
+    }
+
+    /**
+     * Gets the BGP session AFI/SAFI configuration for IPv4 unicast: local or
+     * remote.
+     *
+     * @return the BGP session AFI/SAFI configuration for IPv4 unicast
+     */
+    public boolean ipv4Unicast() {
+<span class="fc" id="L188">        return ipv4Unicast;</span>
+    }
+
+    /**
+     * Sets the BGP session AFI/SAFI configuration for IPv4 unicast: local or
+     * remote.
+     */
+    public void setIpv4Unicast() {
+<span class="fc" id="L196">        this.mpExtensions = true;</span>
+<span class="fc" id="L197">        this.ipv4Unicast = true;</span>
+<span class="fc" id="L198">    }</span>
+
+    /**
+     * Gets the BGP session AFI/SAFI configuration for IPv4 multicast: local or
+     * remote.
+     *
+     * @return the BGP session AFI/SAFI configuration for IPv4 multicast
+     */
+    public boolean ipv4Multicast() {
+<span class="fc" id="L207">        return ipv4Multicast;</span>
+    }
+
+    /**
+     * Sets the BGP session AFI/SAFI configuration for IPv4 multicast: local or
+     * remote.
+     */
+    public void setIpv4Multicast() {
+<span class="fc" id="L215">        this.mpExtensions = true;</span>
+<span class="fc" id="L216">        this.ipv4Multicast = true;</span>
+<span class="fc" id="L217">    }</span>
+
+    /**
+     * Gets the BGP session AFI/SAFI configuration for IPv6 unicast: local or
+     * remote.
+     *
+     * @return the BGP session AFI/SAFI configuration for IPv6 unicast
+     */
+    public boolean ipv6Unicast() {
+<span class="fc" id="L226">        return ipv6Unicast;</span>
+    }
+
+    /**
+     * Sets the BGP session AFI/SAFI configuration for IPv6 unicast: local or
+     * remote.
+     */
+    void setIpv6Unicast() {
+<span class="fc" id="L234">        this.mpExtensions = true;</span>
+<span class="fc" id="L235">        this.ipv6Unicast = true;</span>
+<span class="fc" id="L236">    }</span>
+
+    /**
+     * Gets the BGP session AFI/SAFI configuration for IPv6 multicast: local or
+     * remote.
+     *
+     * @return the BGP session AFI/SAFI configuration for IPv6 multicast
+     */
+    public boolean ipv6Multicast() {
+<span class="fc" id="L245">        return ipv6Multicast;</span>
+    }
+
+    /**
+     * Sets the BGP session AFI/SAFI configuration for IPv6 multicast: local or
+     * remote.
+     */
+    public void setIpv6Multicast() {
+<span class="fc" id="L253">        this.mpExtensions = true;</span>
+<span class="fc" id="L254">        this.ipv6Multicast = true;</span>
+<span class="fc" id="L255">    }</span>
+
+    /**
+     * Gets the BGP session 4 octet AS path capability: local or remote.
+     *
+     * @return true when the BGP session has 4 octet AS path capability
+     */
+    public boolean as4OctetCapability() {
+<span class="fc" id="L263">        return this.as4OctetCapability;</span>
+    }
+
+    /**
+     * Sets the BGP session 4 octet AS path capability.
+     */
+    public void setAs4OctetCapability() {
+<span class="fc" id="L270">        this.as4OctetCapability = true;</span>
+<span class="fc" id="L271">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

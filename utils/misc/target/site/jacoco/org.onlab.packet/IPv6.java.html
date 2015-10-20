@@ -1,0 +1,385 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IPv6.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IPv6.java</span></div><h1>IPv6.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import org.onlab.packet.ipv6.Authentication;
+import org.onlab.packet.ipv6.DestinationOptions;
+import org.onlab.packet.ipv6.EncapSecurityPayload;
+import org.onlab.packet.ipv6.Fragment;
+import org.onlab.packet.ipv6.HopByHopOptions;
+import org.onlab.packet.ipv6.IExtensionHeader;
+import org.onlab.packet.ipv6.Routing;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements IPv6 packet format. (RFC 2460)
+ */
+public class IPv6 extends BasePacket implements IExtensionHeader {
+    public static final byte FIXED_HEADER_LENGTH = 40; // bytes
+
+    public static final byte PROTOCOL_TCP = 0x6;
+    public static final byte PROTOCOL_UDP = 0x11;
+    public static final byte PROTOCOL_ICMP6 = 0x3A;
+    public static final byte PROTOCOL_HOPOPT = 0x00;
+    public static final byte PROTOCOL_ROUTING = 0x2B;
+    public static final byte PROTOCOL_FRAG = 0x2C;
+    public static final byte PROTOCOL_ESP = 0x32;
+    public static final byte PROTOCOL_AH = 0x33;
+    public static final byte PROTOCOL_DSTOPT = 0x3C;
+
+
+<span class="fc" id="L53">    public static final Map&lt;Byte, Deserializer&lt;? extends IPacket&gt;&gt; PROTOCOL_DESERIALIZER_MAP =</span>
+            new HashMap&lt;&gt;();
+
+    static {
+<span class="fc" id="L57">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_ICMP6, ICMP6.deserializer());</span>
+<span class="fc" id="L58">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_TCP, TCP.deserializer());</span>
+<span class="fc" id="L59">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_UDP, UDP.deserializer());</span>
+<span class="fc" id="L60">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_HOPOPT, HopByHopOptions.deserializer());</span>
+<span class="fc" id="L61">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_ROUTING, Routing.deserializer());</span>
+<span class="fc" id="L62">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_FRAG, Fragment.deserializer());</span>
+<span class="fc" id="L63">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_ESP, EncapSecurityPayload.deserializer());</span>
+<span class="fc" id="L64">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_AH, Authentication.deserializer());</span>
+<span class="fc" id="L65">        IPv6.PROTOCOL_DESERIALIZER_MAP.put(IPv6.PROTOCOL_DSTOPT, DestinationOptions.deserializer());</span>
+<span class="fc" id="L66">    }</span>
+
+    protected byte version;
+    protected byte trafficClass;
+    protected int flowLabel;
+    protected short payloadLength;
+    protected byte nextHeader;
+    protected byte hopLimit;
+<span class="fc" id="L74">    protected byte[] sourceAddress = new byte[Ip6Address.BYTE_LENGTH];</span>
+<span class="fc" id="L75">    protected byte[] destinationAddress = new byte[Ip6Address.BYTE_LENGTH];</span>
+
+    /**
+     * Default constructor that sets the version to 6.
+     */
+    public IPv6() {
+<span class="fc" id="L81">        super();</span>
+<span class="fc" id="L82">        this.version = 6;</span>
+<span class="fc" id="L83">    }</span>
+
+    /**
+     * Gets IP version.
+     *
+     * @return the IP version
+     */
+    public byte getVersion() {
+<span class="fc" id="L91">        return this.version;</span>
+    }
+
+    /**
+     * Sets IP version.
+     *
+     * @param version the IP version to set
+     * @return this
+     */
+    public IPv6 setVersion(final byte version) {
+<span class="fc" id="L101">        this.version = version;</span>
+<span class="fc" id="L102">        return this;</span>
+    }
+
+    /**
+     * Gets traffic class.
+     *
+     * @return the traffic class
+     */
+    public byte getTrafficClass() {
+<span class="fc" id="L111">        return this.trafficClass;</span>
+    }
+
+    /**
+     * Sets traffic class.
+     *
+     * @param trafficClass the traffic class to set
+     * @return this
+     */
+    public IPv6 setTrafficClass(final byte trafficClass) {
+<span class="fc" id="L121">        this.trafficClass = trafficClass;</span>
+<span class="fc" id="L122">        return this;</span>
+    }
+
+    /**
+     * Gets flow label.
+     *
+     * @return the flow label
+     */
+    public int getFlowLabel() {
+<span class="fc" id="L131">        return this.flowLabel;</span>
+    }
+
+    /**
+     * Sets flow label.
+     *
+     * @param flowLabel the flow label to set
+     * @return this
+     */
+    public IPv6 setFlowLabel(final int flowLabel) {
+<span class="fc" id="L141">        this.flowLabel = flowLabel;</span>
+<span class="fc" id="L142">        return this;</span>
+    }
+
+    @Override
+    public byte getNextHeader() {
+<span class="fc" id="L147">        return this.nextHeader;</span>
+    }
+
+    @Override
+    public IPv6 setNextHeader(final byte nextHeader) {
+<span class="fc" id="L152">        this.nextHeader = nextHeader;</span>
+<span class="fc" id="L153">        return this;</span>
+    }
+
+    /**
+     * Gets hop limit.
+     *
+     * @return the hop limit
+     */
+    public byte getHopLimit() {
+<span class="fc" id="L162">        return this.hopLimit;</span>
+    }
+
+    /**
+     * Sets hop limit.
+     *
+     * @param hopLimit the hop limit to set
+     * @return this
+     */
+    public IPv6 setHopLimit(final byte hopLimit) {
+<span class="fc" id="L172">        this.hopLimit = hopLimit;</span>
+<span class="fc" id="L173">        return this;</span>
+    }
+
+    /**
+     * Gets source address.
+     *
+     * @return the IPv6 source address
+     */
+    public byte[] getSourceAddress() {
+<span class="fc" id="L182">        return this.sourceAddress;</span>
+    }
+
+    /**
+     * Sets source address.
+     *
+     * @param sourceAddress the IPv6 source address to set
+     * @return this
+     */
+    public IPv6 setSourceAddress(final byte[] sourceAddress) {
+<span class="fc" id="L192">        this.sourceAddress = Arrays.copyOfRange(sourceAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="fc" id="L193">        return this;</span>
+    }
+
+    /**
+     * Gets destination address.
+     *
+     * @return the IPv6 destination address
+     */
+    public byte[] getDestinationAddress() {
+<span class="fc" id="L202">        return this.destinationAddress;</span>
+    }
+
+    /**
+     * Sets destination address.
+     *
+     * @param destinationAddress the IPv6 destination address to set
+     * @return this
+     */
+    public IPv6 setDestinationAddress(final byte[] destinationAddress) {
+<span class="fc" id="L212">        this.destinationAddress = Arrays.copyOfRange(destinationAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="fc" id="L213">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L218">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="fc" id="L220">            this.payload.setParent(this);</span>
+<span class="fc" id="L221">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="fc" id="L224">        this.payloadLength = 0;</span>
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L226">            this.payloadLength = (short) payloadData.length;</span>
+        }
+
+<span class="fc" id="L229">        final byte[] data = new byte[FIXED_HEADER_LENGTH + payloadLength];</span>
+<span class="fc" id="L230">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L232">        bb.putInt((this.version &amp; 0xf) &lt;&lt; 28 | (this.trafficClass &amp; 0xff) &lt;&lt; 20 | this.flowLabel &amp; 0xfffff);</span>
+<span class="fc" id="L233">        bb.putShort(this.payloadLength);</span>
+<span class="fc" id="L234">        bb.put(this.nextHeader);</span>
+<span class="fc" id="L235">        bb.put(this.hopLimit);</span>
+<span class="fc" id="L236">        bb.put(this.sourceAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="fc" id="L237">        bb.put(this.destinationAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L240">            bb.put(payloadData);</span>
+        }
+
+<span class="fc" id="L243">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L249">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+        int iscratch;
+
+<span class="nc" id="L252">        iscratch = bb.getInt();</span>
+<span class="nc" id="L253">        this.version = (byte) (iscratch &gt;&gt; 28 &amp; 0xf);</span>
+<span class="nc" id="L254">        this.trafficClass = (byte) (iscratch &gt;&gt; 20 &amp; 0xff);</span>
+<span class="nc" id="L255">        this.flowLabel = iscratch &amp; 0xfffff;</span>
+<span class="nc" id="L256">        this.payloadLength = bb.getShort();</span>
+<span class="nc" id="L257">        this.nextHeader = bb.get();</span>
+<span class="nc" id="L258">        this.hopLimit = bb.get();</span>
+<span class="nc" id="L259">        bb.get(this.sourceAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="nc" id="L260">        bb.get(this.destinationAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(this.nextHeader)) {</span>
+<span class="nc" id="L264">            deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(this.nextHeader);</span>
+        } else {
+<span class="nc" id="L266">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L269">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L270">                                                    bb.limit() - bb.position());</span>
+<span class="nc" id="L271">            this.payload.setParent(this);</span>
+<span class="nc" id="L272">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L273">            return this;</span>
+<span class="nc" id="L274">        }</span>
+
+<span class="nc" id="L276">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L286">        final int prime = 2521;</span>
+<span class="nc" id="L287">        int result = super.hashCode();</span>
+        ByteBuffer bb;
+<span class="nc" id="L289">        bb = ByteBuffer.wrap(this.destinationAddress);</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">        for (int i = 0; i &lt; 4; i++) {</span>
+<span class="nc" id="L291">            result = prime * result + bb.getInt();</span>
+        }
+<span class="nc" id="L293">        result = prime * result + this.trafficClass;</span>
+<span class="nc" id="L294">        result = prime * result + this.flowLabel;</span>
+<span class="nc" id="L295">        result = prime * result + this.hopLimit;</span>
+<span class="nc" id="L296">        result = prime * result + this.nextHeader;</span>
+<span class="nc" id="L297">        result = prime * result + this.payloadLength;</span>
+<span class="nc" id="L298">        bb = ByteBuffer.wrap(this.sourceAddress);</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        for (int i = 0; i &lt; 4; i++) {</span>
+<span class="nc" id="L300">            result = prime * result + bb.getInt();</span>
+        }
+<span class="nc" id="L302">        result = prime * result + this.version;</span>
+<span class="nc" id="L303">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L313" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L314">            return true;</span>
+        }
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L317">            return false;</span>
+        }
+<span class="pc bpc" id="L319" title="1 of 2 branches missed.">        if (!(obj instanceof IPv6)) {</span>
+<span class="nc" id="L320">            return false;</span>
+        }
+<span class="fc" id="L322">        final IPv6 other = (IPv6) obj;</span>
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">        if (!Arrays.equals(this.destinationAddress, other.destinationAddress)) {</span>
+<span class="fc" id="L324">            return false;</span>
+        }
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        if (this.trafficClass != other.trafficClass) {</span>
+<span class="nc" id="L327">            return false;</span>
+        }
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (this.flowLabel != other.flowLabel) {</span>
+<span class="nc" id="L330">            return false;</span>
+        }
+<span class="nc bnc" id="L332" title="All 2 branches missed.">        if (this.hopLimit != other.hopLimit) {</span>
+<span class="nc" id="L333">            return false;</span>
+        }
+<span class="nc bnc" id="L335" title="All 2 branches missed.">        if (this.nextHeader != other.nextHeader) {</span>
+<span class="nc" id="L336">            return false;</span>
+        }
+<span class="nc bnc" id="L338" title="All 2 branches missed.">        if (this.payloadLength != other.payloadLength) {</span>
+<span class="nc" id="L339">            return false;</span>
+        }
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (!Arrays.equals(this.sourceAddress, other.sourceAddress)) {</span>
+<span class="nc" id="L342">            return false;</span>
+        }
+<span class="nc" id="L344">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for IPv6 packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;IPv6&gt; deserializer() {
+<span class="fc" id="L353">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L354">            checkInput(data, offset, length, FIXED_HEADER_LENGTH);</span>
+
+<span class="fc" id="L356">            IPv6 ipv6 = new IPv6();</span>
+
+<span class="fc" id="L358">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L360">            int iscratch = bb.getInt();</span>
+
+<span class="fc" id="L362">            ipv6.version = (byte) (iscratch &gt;&gt; 28 &amp; 0xf);</span>
+<span class="fc" id="L363">            ipv6.trafficClass = (byte) (iscratch &gt;&gt; 20 &amp; 0xff);</span>
+<span class="fc" id="L364">            ipv6.flowLabel = iscratch &amp; 0xfffff;</span>
+<span class="fc" id="L365">            ipv6.payloadLength = bb.getShort();</span>
+<span class="fc" id="L366">            ipv6.nextHeader = bb.get();</span>
+<span class="fc" id="L367">            ipv6.hopLimit = bb.get();</span>
+<span class="fc" id="L368">            bb.get(ipv6.sourceAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+<span class="fc" id="L369">            bb.get(ipv6.destinationAddress, 0, Ip6Address.BYTE_LENGTH);</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L372" title="1 of 2 branches missed.">            if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(ipv6.nextHeader)) {</span>
+<span class="fc" id="L373">                deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(ipv6.nextHeader);</span>
+            } else {
+<span class="nc" id="L375">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L377">            ipv6.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L378">                                               bb.limit() - bb.position());</span>
+<span class="fc" id="L379">            ipv6.payload.setParent(ipv6);</span>
+
+<span class="fc" id="L381">            return ipv6;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

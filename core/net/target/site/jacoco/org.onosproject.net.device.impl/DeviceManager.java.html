@@ -1,0 +1,778 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DeviceManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.device.impl</a> &gt; <span class="el_source">DeviceManager.java</span></div><h1>DeviceManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.device.impl;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.nullIsNotFound;
+import static org.onosproject.net.MastershipRole.MASTER;
+import static org.onosproject.net.MastershipRole.NONE;
+import static org.onosproject.net.MastershipRole.STANDBY;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.DEVICE_READ;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipEvent;
+import org.onosproject.mastership.MastershipListener;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.mastership.MastershipTerm;
+import org.onosproject.mastership.MastershipTermService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Device;
+import org.onosproject.net.Device.Type;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.config.basics.BasicDeviceConfig;
+import org.onosproject.net.config.basics.OpticalPortConfig;
+import org.onosproject.net.device.DefaultDeviceDescription;
+import org.onosproject.net.device.DefaultPortDescription;
+import org.onosproject.net.device.DeviceAdminService;
+import org.onosproject.net.device.DeviceDescription;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceProvider;
+import org.onosproject.net.device.DeviceProviderRegistry;
+import org.onosproject.net.device.DeviceProviderService;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.device.DeviceStore;
+import org.onosproject.net.device.DeviceStoreDelegate;
+import org.onosproject.net.device.PortDescription;
+import org.onosproject.net.device.PortStatistics;
+import org.onosproject.net.provider.AbstractListenerProviderRegistry;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.slf4j.Logger;
+
+import com.google.common.util.concurrent.Futures;
+
+/**
+ * Provides implementation of the device SB &amp;amp; NB APIs.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L90">public class DeviceManager</span>
+        extends AbstractListenerProviderRegistry&lt;DeviceEvent, DeviceListener, DeviceProvider, DeviceProviderService&gt;
+        implements DeviceService, DeviceAdminService, DeviceProviderRegistry {
+
+    private static final String DEVICE_ID_NULL = &quot;Device ID cannot be null&quot;;
+    private static final String PORT_NUMBER_NULL = &quot;Port number cannot be null&quot;;
+    private static final String DEVICE_DESCRIPTION_NULL = &quot;Device description cannot be null&quot;;
+    private static final String PORT_DESCRIPTION_NULL = &quot;Port description cannot be null&quot;;
+    private static final String PORT_DESC_LIST_NULL = &quot;Port description list cannot be null&quot;;
+
+<span class="fc" id="L100">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L102">    private final DeviceStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+<span class="fc" id="L104">    private final MastershipListener mastershipListener = new InternalMastershipListener();</span>
+    private NodeId localNodeId;
+
+    private ScheduledExecutorService backgroundService;
+
+<span class="fc" id="L109">    private final NetworkConfigListener networkConfigListener = new InternalNetworkConfigListener();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipTermService termService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService networkConfigService;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L128">        backgroundService = newSingleThreadScheduledExecutor(groupedThreads(&quot;onos/device&quot;, &quot;manager-background&quot;));</span>
+<span class="fc" id="L129">        localNodeId = clusterService.getLocalNode().id();</span>
+
+<span class="fc" id="L131">        store.setDelegate(delegate);</span>
+<span class="fc" id="L132">        eventDispatcher.addSink(DeviceEvent.class, listenerRegistry);</span>
+<span class="fc" id="L133">        mastershipService.addListener(mastershipListener);</span>
+<span class="fc" id="L134">        networkConfigService.addListener(networkConfigListener);</span>
+
+<span class="fc" id="L136">        backgroundService.scheduleWithFixedDelay(() -&gt; {</span>
+            try {
+<span class="nc" id="L138">                mastershipCheck();</span>
+<span class="nc" id="L139">            } catch (Exception e) {</span>
+<span class="nc" id="L140">                log.error(&quot;Exception thrown during integrity check&quot;, e);</span>
+<span class="nc" id="L141">            }</span>
+<span class="nc" id="L142">        }, 1, 1, TimeUnit.MINUTES);</span>
+<span class="fc" id="L143">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L144">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L148">        backgroundService.shutdown();</span>
+<span class="fc" id="L149">        networkConfigService.removeListener(networkConfigListener);</span>
+<span class="fc" id="L150">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L151">        mastershipService.removeListener(mastershipListener);</span>
+<span class="fc" id="L152">        eventDispatcher.removeSink(DeviceEvent.class);</span>
+<span class="fc" id="L153">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L154">    }</span>
+
+    @Override
+    public int getDeviceCount() {
+<span class="fc" id="L158">        checkPermission(DEVICE_READ);</span>
+<span class="fc" id="L159">        return store.getDeviceCount();</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getDevices() {
+<span class="fc" id="L164">        checkPermission(DEVICE_READ);</span>
+<span class="fc" id="L165">        return store.getDevices();</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getAvailableDevices() {
+<span class="nc" id="L170">        checkPermission(DEVICE_READ);</span>
+<span class="nc" id="L171">        return store.getAvailableDevices();</span>
+    }
+
+    @Override
+    public Device getDevice(DeviceId deviceId) {
+<span class="fc" id="L176">        checkPermission(DEVICE_READ);</span>
+<span class="fc" id="L177">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L178">        return store.getDevice(deviceId);</span>
+    }
+
+    @Override
+    public MastershipRole getRole(DeviceId deviceId) {
+<span class="fc" id="L183">        checkPermission(DEVICE_READ);</span>
+<span class="fc" id="L184">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L185">        return mastershipService.getLocalRole(deviceId);</span>
+    }
+
+    @Override
+    public List&lt;Port&gt; getPorts(DeviceId deviceId) {
+<span class="fc" id="L190">        checkPermission(DEVICE_READ);</span>
+<span class="fc" id="L191">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L192">        return store.getPorts(deviceId);</span>
+    }
+
+    @Override
+    public List&lt;PortStatistics&gt; getPortStatistics(DeviceId deviceId) {
+<span class="nc" id="L197">        checkPermission(DEVICE_READ);</span>
+<span class="nc" id="L198">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="nc" id="L199">        return store.getPortStatistics(deviceId);</span>
+    }
+
+    @Override
+    public List&lt;PortStatistics&gt; getPortDeltaStatistics(DeviceId deviceId) {
+<span class="nc" id="L204">        checkPermission(DEVICE_READ);</span>
+<span class="nc" id="L205">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="nc" id="L206">        return store.getPortDeltaStatistics(deviceId);</span>
+    }
+
+    @Override
+    public Port getPort(DeviceId deviceId, PortNumber portNumber) {
+<span class="fc" id="L211">        checkPermission(DEVICE_READ);</span>
+<span class="fc" id="L212">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L213">        checkNotNull(portNumber, PORT_NUMBER_NULL);</span>
+<span class="fc" id="L214">        return store.getPort(deviceId, portNumber);</span>
+    }
+
+    @Override
+    public boolean isAvailable(DeviceId deviceId) {
+<span class="fc" id="L219">        checkPermission(DEVICE_READ);</span>
+
+<span class="fc" id="L221">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L222">        return store.isAvailable(deviceId);</span>
+    }
+
+    // Check a device for control channel connectivity.
+    private boolean isReachable(DeviceId deviceId) {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (deviceId == null) {</span>
+<span class="nc" id="L228">            return false;</span>
+        }
+<span class="nc" id="L230">        DeviceProvider provider = getProvider(deviceId);</span>
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        if (provider != null) {</span>
+<span class="nc" id="L232">            return provider.isReachable(deviceId);</span>
+        } else {
+<span class="nc" id="L234">            log.debug(&quot;Provider not found for {}&quot;, deviceId);</span>
+<span class="nc" id="L235">            return false;</span>
+        }
+    }
+
+    @Override
+    public void removeDevice(DeviceId deviceId) {
+<span class="fc" id="L241">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L242">        DeviceEvent event = store.removeDevice(deviceId);</span>
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">        if (event != null) {</span>
+<span class="fc" id="L244">            log.info(&quot;Device {} administratively removed&quot;, deviceId);</span>
+<span class="fc" id="L245">            post(event);</span>
+        }
+<span class="fc" id="L247">    }</span>
+
+    @Override
+    protected DeviceProviderService createProviderService(
+            DeviceProvider provider) {
+<span class="fc" id="L252">        return new InternalDeviceProviderService(provider);</span>
+    }
+
+    /**
+     * Checks if all the reachable devices have a valid mastership role.
+     */
+    private void mastershipCheck() {
+<span class="nc" id="L259">        log.debug(&quot;Checking mastership&quot;);</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        for (Device device : getDevices()) {</span>
+<span class="nc" id="L261">            final DeviceId deviceId = device.id();</span>
+<span class="nc" id="L262">            log.trace(&quot;Checking device {}&quot;, deviceId);</span>
+
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if (!isReachable(deviceId)) {</span>
+<span class="nc" id="L265">                continue;</span>
+            }
+
+<span class="nc bnc" id="L268" title="All 2 branches missed.">            if (mastershipService.getLocalRole(deviceId) != NONE) {</span>
+<span class="nc" id="L269">                continue;</span>
+            }
+
+<span class="nc" id="L272">            log.info(&quot;{} is reachable but did not have a valid role, reasserting&quot;, deviceId);</span>
+
+            // isReachable but was not MASTER or STANDBY, get a role and apply
+            // Note: NONE triggers request to MastershipService
+<span class="nc" id="L276">            reassertRole(deviceId, NONE);</span>
+<span class="nc" id="L277">        }</span>
+<span class="nc" id="L278">    }</span>
+
+    // Personalized device provider service issued to the supplied provider.
+    private class InternalDeviceProviderService
+            extends AbstractProviderService&lt;DeviceProvider&gt;
+            implements DeviceProviderService {
+
+<span class="fc" id="L285">        InternalDeviceProviderService(DeviceProvider provider) {</span>
+<span class="fc" id="L286">            super(provider);</span>
+<span class="fc" id="L287">        }</span>
+
+        /**
+         * Apply role in reaction to provider event.
+         *
+         * @param deviceId device identifier
+         * @param newRole  new role to apply to the device
+         * @return true if the request was sent to provider
+         */
+        private boolean applyRole(DeviceId deviceId, MastershipRole newRole) {
+
+<span class="pc bpc" id="L298" title="1 of 2 branches missed.">            if (newRole.equals(MastershipRole.NONE)) {</span>
+                //no-op
+<span class="nc" id="L300">                return true;</span>
+            }
+
+<span class="fc" id="L303">            DeviceProvider provider = provider();</span>
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">            if (provider == null) {</span>
+<span class="nc" id="L305">                log.warn(&quot;Provider for {} was not found. Cannot apply role {}&quot;,</span>
+                         deviceId, newRole);
+<span class="nc" id="L307">                return false;</span>
+            }
+<span class="fc" id="L309">            provider.roleChanged(deviceId, newRole);</span>
+            // not triggering probe when triggered by provider service event
+
+<span class="fc" id="L312">            return true;</span>
+        }
+
+        @Override
+        public void deviceConnected(DeviceId deviceId,
+                                    DeviceDescription deviceDescription) {
+<span class="fc" id="L318">            checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L319">            checkNotNull(deviceDescription, DEVICE_DESCRIPTION_NULL);</span>
+<span class="fc" id="L320">            checkValidity();</span>
+
+<span class="fc" id="L322">            BasicDeviceConfig cfg = networkConfigService.getConfig(deviceId, BasicDeviceConfig.class);</span>
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">            if (!isAllowed(cfg)) {</span>
+<span class="nc" id="L324">                log.warn(&quot;Device {} is not allowed&quot;, deviceId);</span>
+<span class="nc" id="L325">                return;</span>
+            }
+            // Generate updated description and establish my Role
+<span class="fc" id="L328">            deviceDescription = BasicDeviceOperator.combine(cfg, deviceDescription);</span>
+<span class="fc" id="L329">            Futures.getUnchecked(mastershipService.requestRoleFor(deviceId)</span>
+<span class="fc" id="L330">                    .thenAccept(role -&gt; {</span>
+<span class="fc" id="L331">                        log.info(&quot;Local role is {} for {}&quot;, role, deviceId);</span>
+<span class="fc" id="L332">                        applyRole(deviceId, role);</span>
+<span class="fc" id="L333">                    }));</span>
+
+<span class="fc" id="L335">            DeviceEvent event = store.createOrUpdateDevice(provider().id(), deviceId,</span>
+                                                           deviceDescription);
+<span class="fc" id="L337">            log.info(&quot;Device {} connected&quot;, deviceId);</span>
+<span class="pc bpc" id="L338" title="1 of 2 branches missed.">            if (event != null) {</span>
+<span class="fc" id="L339">                log.trace(&quot;event: {} {}&quot;, event.type(), event);</span>
+<span class="fc" id="L340">                post(event);</span>
+            }
+<span class="fc" id="L342">        }</span>
+
+        @Override
+        public void deviceDisconnected(DeviceId deviceId) {
+<span class="fc" id="L346">            checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L347">            checkValidity();</span>
+
+<span class="fc" id="L349">            log.info(&quot;Device {} disconnected from this node&quot;, deviceId);</span>
+
+<span class="fc" id="L351">            List&lt;Port&gt; ports = store.getPorts(deviceId);</span>
+<span class="fc" id="L352">            final Device device = getDevice(deviceId);</span>
+
+<span class="fc" id="L354">            List&lt;PortDescription&gt; descs = ports.stream().map(</span>
+<span class="nc bnc" id="L355" title="All 2 branches missed.">              port -&gt; (!(Device.Type.ROADM.equals(device.type()))) ?</span>
+<span class="nc" id="L356">                  new DefaultPortDescription(port.number(), false,</span>
+<span class="nc" id="L357">                          port.type(), port.portSpeed()) :</span>
+<span class="nc" id="L358">                      OpticalPortOperator.descriptionOf(port, false)</span>
+<span class="fc" id="L359">                 ).collect(Collectors.toList());</span>
+
+<span class="fc" id="L361">            store.updatePorts(this.provider().id(), deviceId, descs);</span>
+            try {
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">                if (mastershipService.isLocalMaster(deviceId)) {</span>
+<span class="fc" id="L364">                    post(store.markOffline(deviceId));</span>
+                }
+<span class="nc" id="L366">            } catch (IllegalStateException e) {</span>
+<span class="nc" id="L367">                log.warn(&quot;Failed to mark {} offline&quot;, deviceId);</span>
+                // only the MASTER should be marking off-line in normal cases,
+                // but if I was the last STANDBY connection, etc. and no one else
+                // was there to mark the device offline, this instance may need to
+                // temporarily request for Master Role and mark offline.
+
+                //there are times when this node will correctly have mastership, BUT
+                //that isn't reflected in the ClockManager before the device disconnects.
+                //we want to let go of the device anyways, so make sure this happens.
+
+                // FIXME: Store semantics leaking out as IllegalStateException.
+                //  Consider revising store API to handle this scenario.
+<span class="nc" id="L379">                CompletableFuture&lt;MastershipRole&gt; roleFuture = mastershipService.requestRoleFor(deviceId);</span>
+<span class="nc" id="L380">                roleFuture.whenComplete((role, error) -&gt; {</span>
+<span class="nc" id="L381">                    MastershipTerm term = termService.getMastershipTerm(deviceId);</span>
+                    // TODO: Move this type of check inside device clock manager, etc.
+<span class="nc bnc" id="L383" title="All 4 branches missed.">                    if (term != null &amp;&amp; localNodeId.equals(term.master())) {</span>
+<span class="nc" id="L384">                        log.info(&quot;Retry marking {} offline&quot;, deviceId);</span>
+<span class="nc" id="L385">                        post(store.markOffline(deviceId));</span>
+                    } else {
+<span class="nc" id="L387">                        log.info(&quot;Failed again marking {} offline. {}&quot;, deviceId, role);</span>
+                    }
+<span class="nc" id="L389">                });</span>
+            } finally {
+<span class="nc" id="L391">                try {</span>
+                    //relinquish master role and ability to be backup.
+<span class="pc" id="L393">                    mastershipService.relinquishMastership(deviceId).get();</span>
+<span class="nc" id="L394">                } catch (InterruptedException e) {</span>
+<span class="nc" id="L395">                    log.warn(&quot;Interrupted while reliquishing role for {}&quot;, deviceId);</span>
+<span class="nc" id="L396">                    Thread.currentThread().interrupt();</span>
+<span class="nc" id="L397">                } catch (ExecutionException e) {</span>
+<span class="nc" id="L398">                    log.error(&quot;Exception thrown while relinquishing role for {}&quot;, deviceId, e);</span>
+<span class="pc" id="L399">                }</span>
+<span class="nc" id="L400">            }</span>
+<span class="fc" id="L401">        }</span>
+
+        @Override
+        public void updatePorts(DeviceId deviceId,
+                                List&lt;PortDescription&gt; portDescriptions) {
+<span class="fc" id="L406">            checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L407">            checkNotNull(portDescriptions, PORT_DESC_LIST_NULL);</span>
+<span class="fc" id="L408">            checkValidity();</span>
+<span class="pc bpc" id="L409" title="1 of 2 branches missed.">            if (!mastershipService.isLocalMaster(deviceId)) {</span>
+                // Never been a master for this device
+                // any update will be ignored.
+<span class="nc" id="L412">                log.trace(&quot;Ignoring {} port updates on standby node. {}&quot;, deviceId, portDescriptions);</span>
+<span class="nc" id="L413">                return;</span>
+            }
+<span class="fc" id="L415">            portDescriptions = portDescriptions.stream()</span>
+<span class="fc" id="L416">                    .map(e -&gt; consolidate(deviceId, e))</span>
+<span class="fc" id="L417">                    .collect(Collectors.toList());</span>
+<span class="fc" id="L418">            List&lt;DeviceEvent&gt; events = store.updatePorts(this.provider().id(),</span>
+                                                         deviceId, portDescriptions);
+<span class="fc bfc" id="L420" title="All 2 branches covered.">            for (DeviceEvent event : events) {</span>
+<span class="fc" id="L421">                post(event);</span>
+<span class="fc" id="L422">            }</span>
+<span class="fc" id="L423">        }</span>
+
+        @Override
+        public void portStatusChanged(DeviceId deviceId,
+                                      PortDescription portDescription) {
+<span class="fc" id="L428">            checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L429">            checkNotNull(portDescription, PORT_DESCRIPTION_NULL);</span>
+<span class="fc" id="L430">            checkValidity();</span>
+
+<span class="pc bpc" id="L432" title="1 of 2 branches missed.">            if (!mastershipService.isLocalMaster(deviceId)) {</span>
+                // Never been a master for this device
+                // any update will be ignored.
+<span class="nc" id="L435">                log.trace(&quot;Ignoring {} port update on standby node. {}&quot;, deviceId,</span>
+                          portDescription);
+<span class="nc" id="L437">                return;</span>
+            }
+<span class="fc" id="L439">            Device device = nullIsNotFound(getDevice(deviceId), &quot;Device not found&quot;);</span>
+<span class="pc bpc" id="L440" title="1 of 2 branches missed.">            if ((Device.Type.ROADM.equals(device.type()))) {</span>
+<span class="nc" id="L441">                Port port = getPort(deviceId, portDescription.portNumber());</span>
+<span class="nc" id="L442">                portDescription = OpticalPortOperator.descriptionOf(port, portDescription.isEnabled());</span>
+            }
+
+<span class="fc" id="L445">            portDescription = consolidate(deviceId, portDescription);</span>
+<span class="fc" id="L446">            final DeviceEvent event = store.updatePortStatus(this.provider().id(),</span>
+                                                             deviceId, portDescription);
+<span class="fc bfc" id="L448" title="All 2 branches covered.">            if (event != null) {</span>
+<span class="fc" id="L449">                log.info(&quot;Device {} port {} status changed&quot;, deviceId, event.port().number());</span>
+<span class="fc" id="L450">                post(event);</span>
+            }
+<span class="fc" id="L452">        }</span>
+
+        // merges the appropriate PortConfig with the description.
+        private PortDescription consolidate(DeviceId did, PortDescription desc) {
+<span class="pc bpc" id="L456" title="1 of 2 branches missed.">            switch (desc.type()) {</span>
+                case COPPER:
+                case VIRTUAL:
+<span class="fc" id="L459">                    return desc;</span>
+                default:
+<span class="nc" id="L461">                    OpticalPortConfig opc = networkConfigService.getConfig(</span>
+<span class="nc" id="L462">                            new ConnectPoint(did, desc.portNumber()), OpticalPortConfig.class);</span>
+<span class="nc" id="L463">                    return OpticalPortOperator.combine(opc, desc);</span>
+            }
+        }
+
+        @Override
+        public void receivedRoleReply(DeviceId deviceId, MastershipRole requested,
+                                      MastershipRole response) {
+            // Several things can happen here:
+            // 1. request and response match
+            // 2. request and response don't match
+            // 3. MastershipRole and requested match (and 1 or 2 are true)
+            // 4. MastershipRole and requested don't match (and 1 or 2 are true)
+            //
+            // 2, 4, and 3 with case 2 are failure modes.
+
+            // FIXME: implement response to this notification
+
+<span class="nc" id="L480">            log.debug(&quot;got reply to a role request for {}: asked for {}, and got {}&quot;,</span>
+                      deviceId, requested, response);
+
+<span class="nc bnc" id="L483" title="All 4 branches missed.">            if (requested == null &amp;&amp; response == null) {</span>
+                // something was off with DeviceProvider, maybe check channel too?
+<span class="nc" id="L485">                log.warn(&quot;Failed to assert role [{}] onto Device {}&quot;, requested, deviceId);</span>
+<span class="nc" id="L486">                mastershipService.relinquishMastership(deviceId);</span>
+<span class="nc" id="L487">                return;</span>
+            }
+
+<span class="nc bnc" id="L490" title="All 2 branches missed.">            if (Objects.equals(requested, response)) {</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">                if (Objects.equals(requested, mastershipService.getLocalRole(deviceId))) {</span>
+<span class="nc" id="L492">                    return;</span>
+                } else {
+<span class="nc" id="L494">                    return;</span>
+                    // FIXME roleManager got the device to comply, but doesn't agree with
+                    // the store; use the store's view, then try to reassert.
+                }
+            } else {
+                // we didn't get back what we asked for. Reelect someone else.
+<span class="nc" id="L500">                log.warn(&quot;Failed to assert role [{}] onto Device {}&quot;, response, deviceId);</span>
+<span class="nc bnc" id="L501" title="All 2 branches missed.">                if (response == MastershipRole.MASTER) {</span>
+<span class="nc" id="L502">                    mastershipService.relinquishMastership(deviceId);</span>
+                    // TODO: Shouldn't we be triggering event?
+                    //final Device device = getDevice(deviceId);
+                    //post(new DeviceEvent(DEVICE_MASTERSHIP_CHANGED, device));
+                }
+            }
+<span class="nc" id="L508">        }</span>
+
+        @Override
+        public void updatePortStatistics(DeviceId deviceId, Collection&lt;PortStatistics&gt; portStatistics) {
+<span class="nc" id="L512">            checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="nc" id="L513">            checkNotNull(portStatistics, &quot;Port statistics list cannot be null&quot;);</span>
+<span class="nc" id="L514">            checkValidity();</span>
+
+<span class="nc" id="L516">            DeviceEvent event = store.updatePortStatistics(this.provider().id(),</span>
+                                                           deviceId, portStatistics);
+<span class="nc" id="L518">            post(event);</span>
+<span class="nc" id="L519">        }</span>
+    }
+
+    // by default allowed, otherwise check flag
+    private boolean isAllowed(BasicDeviceConfig cfg) {
+<span class="pc bpc" id="L524" title="3 of 4 branches missed.">        return (cfg == null || cfg.isAllowed());</span>
+    }
+
+    // Applies the specified role to the device; ignores NONE
+
+    /**
+     * Apply role to device and send probe if MASTER.
+     *
+     * @param deviceId device identifier
+     * @param newRole  new role to apply to the device
+     * @return true if the request was sent to provider
+     */
+    private boolean applyRoleAndProbe(DeviceId deviceId, MastershipRole newRole) {
+<span class="nc bnc" id="L537" title="All 2 branches missed.">        if (newRole.equals(MastershipRole.NONE)) {</span>
+            //no-op
+<span class="nc" id="L539">            return true;</span>
+        }
+
+<span class="nc" id="L542">        DeviceProvider provider = getProvider(deviceId);</span>
+<span class="nc bnc" id="L543" title="All 2 branches missed.">        if (provider == null) {</span>
+<span class="nc" id="L544">            log.warn(&quot;Provider for {} was not found. Cannot apply role {}&quot;, deviceId, newRole);</span>
+<span class="nc" id="L545">            return false;</span>
+        }
+<span class="nc" id="L547">        provider.roleChanged(deviceId, newRole);</span>
+
+<span class="nc bnc" id="L549" title="All 2 branches missed.">        if (newRole.equals(MastershipRole.MASTER)) {</span>
+            // only trigger event when request was sent to provider
+<span class="nc" id="L551">            provider.triggerProbe(deviceId);</span>
+        }
+<span class="nc" id="L553">        return true;</span>
+    }
+
+    /**
+     * Reaasert role for specified device connected to this node.
+     *
+     * @param did      device identifier
+     * @param nextRole role to apply. If NONE is specified,
+     *                 it will ask mastership service for a role and apply it.
+     */
+    private void reassertRole(final DeviceId did,
+                              final MastershipRole nextRole) {
+
+<span class="nc" id="L566">        MastershipRole myNextRole = nextRole;</span>
+<span class="nc bnc" id="L567" title="All 2 branches missed.">        if (myNextRole == NONE) {</span>
+<span class="nc" id="L568">            mastershipService.requestRoleFor(did);</span>
+<span class="nc" id="L569">            MastershipTerm term = termService.getMastershipTerm(did);</span>
+<span class="nc bnc" id="L570" title="All 4 branches missed.">            if (term != null &amp;&amp; localNodeId.equals(term.master())) {</span>
+<span class="nc" id="L571">                myNextRole = MASTER;</span>
+            } else {
+<span class="nc" id="L573">                myNextRole = STANDBY;</span>
+            }
+        }
+
+<span class="pc bnc" id="L577" title="All 3 branches missed.">        switch (myNextRole) {</span>
+            case MASTER:
+<span class="nc" id="L579">                final Device device = getDevice(did);</span>
+<span class="nc bnc" id="L580" title="All 4 branches missed.">                if ((device != null) &amp;&amp; !isAvailable(did)) {</span>
+                    //flag the device as online. Is there a better way to do this?
+<span class="nc" id="L582">                    DefaultDeviceDescription deviceDescription</span>
+<span class="nc" id="L583">                            = new DefaultDeviceDescription(did.uri(),</span>
+<span class="nc" id="L584">                                                           device.type(),</span>
+<span class="nc" id="L585">                                                           device.manufacturer(),</span>
+<span class="nc" id="L586">                                                           device.hwVersion(),</span>
+<span class="nc" id="L587">                                                           device.swVersion(),</span>
+<span class="nc" id="L588">                                                           device.serialNumber(),</span>
+<span class="nc" id="L589">                                                           device.chassisId());</span>
+<span class="nc" id="L590">                    DeviceEvent devEvent =</span>
+<span class="nc" id="L591">                            store.createOrUpdateDevice(device.providerId(), did,</span>
+                                                       deviceDescription);
+<span class="nc" id="L593">                    post(devEvent);</span>
+                }
+                // TODO: should apply role only if there is mismatch
+<span class="nc" id="L596">                log.debug(&quot;Applying role {} to {}&quot;, myNextRole, did);</span>
+<span class="nc bnc" id="L597" title="All 2 branches missed.">                if (!applyRoleAndProbe(did, MASTER)) {</span>
+<span class="nc" id="L598">                    log.warn(&quot;Unsuccessful applying role {} to {}&quot;, myNextRole, did);</span>
+                    // immediately failed to apply role
+<span class="nc" id="L600">                    mastershipService.relinquishMastership(did);</span>
+                    // FIXME disconnect?
+                }
+                break;
+            case STANDBY:
+<span class="nc" id="L605">                log.debug(&quot;Applying role {} to {}&quot;, myNextRole, did);</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">                if (!applyRoleAndProbe(did, STANDBY)) {</span>
+<span class="nc" id="L607">                    log.warn(&quot;Unsuccessful applying role {} to {}&quot;, myNextRole, did);</span>
+                    // immediately failed to apply role
+<span class="nc" id="L609">                    mastershipService.relinquishMastership(did);</span>
+                    // FIXME disconnect?
+                }
+                break;
+            case NONE:
+            default:
+                // should never reach here
+<span class="nc" id="L616">                log.error(&quot;You didn't see anything. I did not exist.&quot;);</span>
+                break;
+        }
+<span class="nc" id="L619">    }</span>
+
+    private void handleMastershipEvent(MastershipEvent event) {
+<span class="nc bnc" id="L622" title="All 2 branches missed.">        if (event.type() != MastershipEvent.Type.MASTER_CHANGED) {</span>
+            // Don't care if backup list changed.
+<span class="nc" id="L624">            return;</span>
+        }
+
+<span class="nc" id="L627">        final DeviceId did = event.subject();</span>
+
+        // myRole suggested by MastershipService
+        MastershipRole myNextRole;
+<span class="nc bnc" id="L631" title="All 2 branches missed.">        if (localNodeId.equals(event.roleInfo().master())) {</span>
+            // confirm latest info
+<span class="nc" id="L633">            MastershipTerm term = termService.getMastershipTerm(did);</span>
+<span class="nc bnc" id="L634" title="All 4 branches missed.">            final boolean iHaveControl = term != null &amp;&amp; localNodeId.equals(term.master());</span>
+<span class="nc bnc" id="L635" title="All 2 branches missed.">            if (iHaveControl) {</span>
+<span class="nc" id="L636">                myNextRole = MASTER;</span>
+            } else {
+<span class="nc" id="L638">                myNextRole = STANDBY;</span>
+            }
+<span class="nc bnc" id="L640" title="All 2 branches missed.">        } else if (event.roleInfo().backups().contains(localNodeId)) {</span>
+<span class="nc" id="L641">            myNextRole = STANDBY;</span>
+        } else {
+<span class="nc" id="L643">            myNextRole = NONE;</span>
+        }
+
+<span class="nc" id="L646">        final boolean isReachable = isReachable(did);</span>
+<span class="nc bnc" id="L647" title="All 2 branches missed.">        if (!isReachable) {</span>
+            // device is not connected to this node
+<span class="nc bnc" id="L649" title="All 2 branches missed.">            if (myNextRole != NONE) {</span>
+<span class="nc" id="L650">                log.warn(&quot;Node was instructed to be {} role for {}, &quot;</span>
+                                 + &quot;but this node cannot reach the device.  &quot;
+                                 + &quot;Relinquishing role.  &quot;,
+                         myNextRole, did);
+<span class="nc" id="L654">                mastershipService.relinquishMastership(did);</span>
+            }
+<span class="nc" id="L656">            return;</span>
+        }
+
+        // device is connected to this node:
+<span class="nc bnc" id="L660" title="All 2 branches missed.">        if (store.getDevice(did) != null) {</span>
+<span class="nc" id="L661">            reassertRole(did, myNextRole);</span>
+        } else {
+<span class="nc" id="L663">            log.debug(&quot;Device is not yet/no longer in the store: {}&quot;, did);</span>
+        }
+<span class="nc" id="L665">    }</span>
+
+    // Intercepts mastership events
+<span class="fc" id="L668">    private class InternalMastershipListener implements MastershipListener {</span>
+
+        @Override
+        public void event(MastershipEvent event) {
+<span class="nc" id="L672">            backgroundService.submit(() -&gt; {</span>
+                try {
+<span class="nc" id="L674">                    handleMastershipEvent(event);</span>
+<span class="nc" id="L675">                } catch (Exception e) {</span>
+<span class="nc" id="L676">                    log.warn(&quot;Failed to handle {}&quot;, event, e);</span>
+<span class="nc" id="L677">                }</span>
+<span class="nc" id="L678">            });</span>
+<span class="nc" id="L679">        }</span>
+    }
+
+    // Store delegate to re-post events emitted from the store.
+<span class="fc" id="L683">    private class InternalStoreDelegate implements DeviceStoreDelegate {</span>
+        @Override
+        public void notify(DeviceEvent event) {
+<span class="nc" id="L686">            post(event);</span>
+<span class="nc" id="L687">        }</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getDevices(Type type) {
+<span class="nc" id="L692">        checkPermission(DEVICE_READ);</span>
+<span class="nc" id="L693">        Set&lt;Device&gt; results = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L694">        Iterable&lt;Device&gt; devices = store.getDevices();</span>
+<span class="nc bnc" id="L695" title="All 2 branches missed.">        if (devices != null) {</span>
+<span class="nc" id="L696">            devices.forEach(d -&gt; {</span>
+<span class="nc bnc" id="L697" title="All 2 branches missed.">                if (type.equals(d.type())) {</span>
+<span class="nc" id="L698">                    results.add(d);</span>
+                }
+<span class="nc" id="L700">            });</span>
+        }
+<span class="nc" id="L702">        return results;</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getAvailableDevices(Type type) {
+<span class="nc" id="L707">        checkPermission(DEVICE_READ);</span>
+<span class="nc" id="L708">        Set&lt;Device&gt; results = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L709">        Iterable&lt;Device&gt; availableDevices = store.getAvailableDevices();</span>
+<span class="nc bnc" id="L710" title="All 2 branches missed.">        if (availableDevices != null) {</span>
+<span class="nc" id="L711">            availableDevices.forEach(d -&gt; {</span>
+<span class="nc bnc" id="L712" title="All 2 branches missed.">                if (type.equals(d.type())) {</span>
+<span class="nc" id="L713">                    results.add(d);</span>
+                }
+<span class="nc" id="L715">            });</span>
+        }
+<span class="nc" id="L717">        return results;</span>
+    }
+
+<span class="fc" id="L720">    private class InternalNetworkConfigListener implements NetworkConfigListener {</span>
+        @Override
+        public boolean isRelevant(NetworkConfigEvent event) {
+<span class="nc bnc" id="L723" title="All 2 branches missed.">            return (event.type() == NetworkConfigEvent.Type.CONFIG_ADDED</span>
+<span class="nc bnc" id="L724" title="All 2 branches missed.">                    || event.type() == NetworkConfigEvent.Type.CONFIG_UPDATED)</span>
+<span class="nc bnc" id="L725" title="All 2 branches missed.">                    &amp;&amp; (event.configClass().equals(BasicDeviceConfig.class)</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">                        || event.configClass().equals(OpticalPortConfig.class));</span>
+        }
+
+        @Override
+        public void event(NetworkConfigEvent event) {
+<span class="nc" id="L731">            DeviceEvent de = null;</span>
+<span class="nc bnc" id="L732" title="All 2 branches missed.">            if (event.configClass().equals(BasicDeviceConfig.class)) {</span>
+<span class="nc" id="L733">                log.info(&quot;Detected Device network config event {}&quot;, event.type());</span>
+<span class="nc" id="L734">                DeviceId did = (DeviceId) event.subject();</span>
+<span class="nc" id="L735">                BasicDeviceConfig cfg = networkConfigService.getConfig(did, BasicDeviceConfig.class);</span>
+
+<span class="nc bnc" id="L737" title="All 2 branches missed.">                if (!isAllowed(cfg)) {</span>
+<span class="nc" id="L738">                    kickOutBadDevice(did);</span>
+                } else {
+<span class="nc" id="L740">                    Device dev = getDevice(did);</span>
+<span class="nc bnc" id="L741" title="All 2 branches missed.">                    DeviceDescription desc = (dev == null) ? null : BasicDeviceOperator.descriptionOf(dev);</span>
+<span class="nc" id="L742">                    desc = BasicDeviceOperator.combine(cfg, desc);</span>
+<span class="nc bnc" id="L743" title="All 2 branches missed.">                    if (getProvider(did) != null) {</span>
+<span class="nc" id="L744">                        de = store.createOrUpdateDevice(getProvider(did).id(), did, desc);</span>
+                    }
+                }
+            }
+<span class="nc bnc" id="L748" title="All 2 branches missed.">            if (event.configClass().equals(OpticalPortConfig.class)) {</span>
+<span class="nc" id="L749">                ConnectPoint cpt = (ConnectPoint) event.subject();</span>
+<span class="nc" id="L750">                DeviceId did = cpt.deviceId();</span>
+<span class="nc" id="L751">                Port dpt = getPort(did, cpt.port());</span>
+
+<span class="nc bnc" id="L753" title="All 2 branches missed.">                if (dpt != null) {</span>
+<span class="nc" id="L754">                    OpticalPortConfig opc = networkConfigService.getConfig(cpt, OpticalPortConfig.class);</span>
+<span class="nc" id="L755">                    PortDescription desc = OpticalPortOperator.descriptionOf(dpt);</span>
+<span class="nc" id="L756">                    desc = OpticalPortOperator.combine(opc, desc);</span>
+<span class="nc bnc" id="L757" title="All 2 branches missed.">                    if (getProvider(did) != null) {</span>
+<span class="nc" id="L758">                        de = store.updatePortStatus(getProvider(did).id(), did, desc);</span>
+                    }
+                }
+            }
+
+<span class="nc bnc" id="L763" title="All 2 branches missed.">            if (de != null) {</span>
+<span class="nc" id="L764">                post(de);</span>
+            }
+<span class="nc" id="L766">        }</span>
+
+        // checks if the specified device is allowed by the BasicDeviceConfig
+        // and if not, removes it
+        private void kickOutBadDevice(DeviceId deviceId) {
+<span class="nc" id="L771">            Device badDevice = getDevice(deviceId);</span>
+<span class="nc bnc" id="L772" title="All 2 branches missed.">            if (badDevice != null) {</span>
+<span class="nc" id="L773">                removeDevice(deviceId);</span>
+            }
+<span class="nc" id="L775">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

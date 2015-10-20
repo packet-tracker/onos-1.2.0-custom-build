@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BasicElementConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.basics</a> &gt; <span class="el_source">BasicElementConfig.java</span></div><h1>BasicElementConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.basics;
+
+/**
+ * Basic configuration for network elements, e.g. devices, hosts. Such elements
+ * can have a friendly name, geo-coordinates, logical rack coordinates and
+ * an owner entity.
+ */
+<span class="nc" id="L23">public abstract class BasicElementConfig&lt;S&gt; extends AllowedEntityConfig&lt;S&gt; {</span>
+
+    public static final String NAME = &quot;name&quot;;
+
+    public static final String LATITUDE = &quot;latitude&quot;;
+    public static final String LONGITUDE = &quot;longitude&quot;;
+
+    public static final String RACK_ADDRESS = &quot;rackAddress&quot;;
+    public static final String OWNER = &quot;owner&quot;;
+
+    protected static final double DEFAULT_COORD = -1.0;
+
+    /**
+     * Returns friendly label for the element.
+     *
+     * @return friendly label or element id itself if not set
+     */
+    public String name() {
+<span class="nc" id="L41">        return get(NAME, subject.toString());</span>
+    }
+
+    /**
+     * Sets friendly label for the element.
+     *
+     * @param name new friendly label; null to clear
+     * @return self
+     */
+    public BasicElementConfig name(String name) {
+<span class="nc" id="L51">        return (BasicElementConfig) setOrClear(NAME, name);</span>
+    }
+
+    /**
+     * Returns element latitude.
+     *
+     * @return element latitude; -1 if not set
+     */
+    public double latitude() {
+<span class="nc" id="L60">        return get(LATITUDE, DEFAULT_COORD);</span>
+    }
+
+    /**
+     * Sets the element latitude.
+     *
+     * @param latitude new latitude; null to clear
+     * @return self
+     */
+    public BasicElementConfig latitude(Double latitude) {
+<span class="nc" id="L70">        return (BasicElementConfig) setOrClear(LATITUDE, latitude);</span>
+    }
+
+    /**
+     * Returns element latitude.
+     *
+     * @return element latitude; -1 if not set
+     */
+    public double longitude() {
+<span class="nc" id="L79">        return get(LONGITUDE, DEFAULT_COORD);</span>
+    }
+
+    /**
+     * Sets the element longitude.
+     *
+     * @param longitude new longitude; null to clear
+     * @return self
+     */
+    public BasicElementConfig longitude(Double longitude) {
+<span class="nc" id="L89">        return (BasicElementConfig) setOrClear(LONGITUDE, longitude);</span>
+    }
+
+    /**
+     * Returns the element rack address.
+     *
+     * @return rack address; null if not set
+     */
+    public String rackAddress() {
+<span class="nc" id="L98">        return get(RACK_ADDRESS, null);</span>
+    }
+
+    /**
+     * Sets element rack address.
+     *
+     * @param address new rack address; null to clear
+     * @return self
+     */
+    public BasicElementConfig rackAddress(String address) {
+<span class="nc" id="L108">        return (BasicElementConfig) setOrClear(RACK_ADDRESS, address);</span>
+    }
+
+    /**
+     * Returns owner of the element.
+     *
+     * @return owner or null if not set
+     */
+    public String owner() {
+<span class="nc" id="L117">        return get(OWNER, null);</span>
+    }
+
+    /**
+     * Sets the owner of the element.
+     *
+     * @param owner new owner; null to clear
+     * @return self
+     */
+    public BasicElementConfig owner(String owner) {
+<span class="nc" id="L127">        return (BasicElementConfig) setOrClear(OWNER, owner);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

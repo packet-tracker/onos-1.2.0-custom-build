@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultHostDescription.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.host</a> &gt; <span class="el_source">DefaultHostDescription.java</span></div><h1>DefaultHostDescription.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.host;
+
+import java.util.Collections;
+import java.util.Set;
+
+import org.onosproject.net.AbstractDescription;
+import org.onosproject.net.HostLocation;
+import org.onosproject.net.SparseAnnotations;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+
+import com.google.common.collect.ImmutableSet;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Default implementation of an immutable host description.
+ */
+public class DefaultHostDescription extends AbstractDescription
+        implements HostDescription {
+
+    private final MacAddress mac;
+    private final VlanId vlan;
+    private final HostLocation location;
+    private final Set&lt;IpAddress&gt; ip;
+
+    /**
+     * Creates a host description using the supplied information.
+     *
+     * @param mac         host MAC address
+     * @param vlan        host VLAN identifier
+     * @param location    host location
+     * @param annotations optional key/value annotations map
+     */
+    public DefaultHostDescription(MacAddress mac, VlanId vlan,
+                                  HostLocation location,
+                                  SparseAnnotations... annotations) {
+<span class="nc" id="L54">        this(mac, vlan, location, Collections.&lt;IpAddress&gt;emptySet(),</span>
+             annotations);
+<span class="nc" id="L56">    }</span>
+
+    /**
+     * Creates a host description using the supplied information.
+     *
+     * @param mac         host MAC address
+     * @param vlan        host VLAN identifier
+     * @param location    host location
+     * @param ip          host IP address
+     * @param annotations optional key/value annotations map
+     */
+    public DefaultHostDescription(MacAddress mac, VlanId vlan,
+                                  HostLocation location, IpAddress ip,
+                                  SparseAnnotations... annotations) {
+<span class="fc" id="L70">        this(mac, vlan, location, ImmutableSet.of(ip), annotations);</span>
+<span class="fc" id="L71">    }</span>
+
+    /**
+     * Creates a host description using the supplied information.
+     *
+     * @param mac         host MAC address
+     * @param vlan        host VLAN identifier
+     * @param location    host location
+     * @param ip          host IP addresses
+     * @param annotations optional key/value annotations map
+     */
+    public DefaultHostDescription(MacAddress mac, VlanId vlan,
+                                  HostLocation location, Set&lt;IpAddress&gt; ip,
+                                  SparseAnnotations... annotations) {
+<span class="fc" id="L85">        super(annotations);</span>
+<span class="fc" id="L86">        this.mac = mac;</span>
+<span class="fc" id="L87">        this.vlan = vlan;</span>
+<span class="fc" id="L88">        this.location = location;</span>
+<span class="fc" id="L89">        this.ip = ImmutableSet.copyOf(ip);</span>
+<span class="fc" id="L90">    }</span>
+
+    @Override
+    public MacAddress hwAddress() {
+<span class="fc" id="L94">        return mac;</span>
+    }
+
+    @Override
+    public VlanId vlan() {
+<span class="fc" id="L99">        return vlan;</span>
+    }
+
+    @Override
+    public HostLocation location() {
+<span class="fc" id="L104">        return location;</span>
+    }
+
+    @Override
+    public Set&lt;IpAddress&gt; ipAddress() {
+<span class="fc" id="L109">        return ip;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L114">        return toStringHelper(this)</span>
+<span class="fc" id="L115">                .add(&quot;mac&quot;, mac)</span>
+<span class="fc" id="L116">                .add(&quot;vlan&quot;, vlan)</span>
+<span class="fc" id="L117">                .add(&quot;location&quot;, location)</span>
+<span class="fc" id="L118">                .add(&quot;ipAddress&quot;, ip)</span>
+<span class="fc" id="L119">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

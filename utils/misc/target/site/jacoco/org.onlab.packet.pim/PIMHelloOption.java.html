@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PIMHelloOption.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.pim</a> &gt; <span class="el_source">PIMHelloOption.java</span></div><h1>PIMHelloOption.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.pim;
+
+import org.onlab.packet.DeserializationException;
+
+import java.nio.ByteBuffer;
+import java.text.MessageFormat;
+
+import static org.onlab.packet.PacketUtils.checkBufferLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+public class PIMHelloOption {
+
+    /**
+     * PIM Option types.
+     */
+    public static final short OPT_HOLDTIME = 1;
+    public static final short OPT_PRUNEDELAY = 2;
+    public static final short OPT_PRIORITY = 19;
+    public static final short OPT_GENID = 20;
+    public static final short OPT_ADDRLIST = 24;
+
+    public static final short DEFAULT_HOLDTIME = 105;
+    public static final int DEFAULT_PRUNEDELAY = 2000; // 2,000 ms
+    public static final int DEFAULT_PRIORITY = 1;
+    public static final int DEFAULT_GENID = 0;
+
+    public static final int MINIMUM_OPTION_LEN_BYTES = 4;
+
+    // Values for this particular hello option.
+    private short optType;
+    private short optLength;
+    private byte[] optValue;
+
+<span class="fc" id="L49">    public PIMHelloOption() {</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     * Set a PIM Hello option by type. The length and default value of the
+     * type will be auto filled in by default.
+     *
+     * @param type hello option type
+     */
+<span class="fc" id="L58">    public PIMHelloOption(short type) {</span>
+<span class="fc" id="L59">        this.optType = type;</span>
+<span class="pc bpc" id="L60" title="3 of 6 branches missed.">        switch (type) {</span>
+            case OPT_HOLDTIME:
+<span class="fc" id="L62">                this.optLength = 2;</span>
+<span class="fc" id="L63">                this.optValue = new byte[optLength];</span>
+<span class="fc" id="L64">                ByteBuffer.wrap(this.optValue).putShort(PIMHelloOption.DEFAULT_HOLDTIME);</span>
+<span class="fc" id="L65">                break;</span>
+
+            case OPT_PRUNEDELAY:
+<span class="nc" id="L68">                this.optLength = 4;</span>
+<span class="nc" id="L69">                this.optValue = new byte[this.optLength];</span>
+<span class="nc" id="L70">                ByteBuffer.wrap(this.optValue).putInt(PIMHelloOption.DEFAULT_PRUNEDELAY);</span>
+<span class="nc" id="L71">                break;</span>
+
+            case OPT_PRIORITY:
+<span class="fc" id="L74">                this.optLength = 4;</span>
+<span class="fc" id="L75">                this.optValue = new byte[this.optLength];</span>
+<span class="fc" id="L76">                ByteBuffer.wrap(this.optValue).putInt(PIMHelloOption.DEFAULT_PRIORITY);</span>
+<span class="fc" id="L77">                break;</span>
+
+            case OPT_GENID:
+<span class="fc" id="L80">                this.optLength = 4;</span>
+<span class="fc" id="L81">                this.optValue = new byte[this.optLength];</span>
+<span class="fc" id="L82">                ByteBuffer.wrap(this.optValue).putInt(PIMHelloOption.DEFAULT_GENID);</span>
+<span class="fc" id="L83">                break;</span>
+
+            case OPT_ADDRLIST:
+<span class="nc" id="L86">                this.optLength = 0;   // We don't know what the length will be yet.</span>
+<span class="nc" id="L87">                this.optValue = null;</span>
+
+            default:
+                //log.error(&quot;Unkown option type: &quot; + type + &quot;\n&quot; );
+<span class="nc" id="L91">                return;</span>
+        }
+<span class="fc" id="L93">    }</span>
+
+    public void setOptType(short type) {
+<span class="fc" id="L96">        this.optType = type;</span>
+<span class="fc" id="L97">    }</span>
+
+    public short getOptType() {
+<span class="fc" id="L100">        return this.optType;</span>
+    }
+
+    public void setOptLength(short len) {
+<span class="fc" id="L104">        this.optLength = len;</span>
+<span class="fc" id="L105">    }</span>
+
+    public short getOptLength() {
+<span class="fc" id="L108">        return this.optLength;</span>
+    }
+
+    public void setValue(ByteBuffer bb) throws DeserializationException {
+<span class="fc" id="L112">        this.optValue = new byte[this.optLength];</span>
+<span class="fc" id="L113">        bb.get(this.optValue, 0, this.optLength);</span>
+<span class="fc" id="L114">    }</span>
+
+    public byte[] getValue() {
+<span class="nc" id="L117">        return this.optValue;</span>
+    }
+
+    public static PIMHelloOption deserialize(ByteBuffer bb) throws DeserializationException {
+<span class="fc" id="L121">        checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), 4);</span>
+
+<span class="fc" id="L123">        PIMHelloOption opt = new PIMHelloOption();</span>
+<span class="fc" id="L124">        opt.setOptType(bb.getShort());</span>
+<span class="fc" id="L125">        opt.setOptLength(bb.getShort());</span>
+
+<span class="fc" id="L127">        checkBufferLength(bb.limit(), bb.position(), opt.getOptLength());</span>
+<span class="fc" id="L128">        opt.setValue(bb);</span>
+
+<span class="fc" id="L130">        return opt;</span>
+    }
+
+    public byte [] serialize() {
+<span class="fc" id="L134">        int len = 4 + this.optLength;</span>
+<span class="fc" id="L135">        ByteBuffer bb = ByteBuffer.allocate(len);</span>
+<span class="fc" id="L136">        bb.putShort(this.optType);</span>
+<span class="fc" id="L137">        bb.putShort(this.optLength);</span>
+<span class="fc" id="L138">        bb.put(this.optValue);</span>
+<span class="fc" id="L139">        return bb.array();</span>
+    }
+
+    public String toString() {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        return MessageFormat.format(&quot;Type: {0}, len: {1} value: {2}&quot;, this.optType, this.optLength,</span>
+<span class="nc" id="L144">                (this.optValue == null) ? &quot;null&quot; : this.optValue.toString());</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

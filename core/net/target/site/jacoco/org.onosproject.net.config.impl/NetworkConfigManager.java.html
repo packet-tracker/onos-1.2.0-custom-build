@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NetworkConfigManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.impl</a> &gt; <span class="el_source">NetworkConfigManager.java</span></div><h1>NetworkConfigManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.impl;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.event.AbstractListenerManager;
+import org.onosproject.net.config.Config;
+import org.onosproject.net.config.ConfigFactory;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigRegistry;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.config.NetworkConfigStore;
+import org.onosproject.net.config.NetworkConfigStoreDelegate;
+import org.onosproject.net.config.SubjectFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Implementation of the network configuration subsystem.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L51">public class NetworkConfigManager</span>
+        extends AbstractListenerManager&lt;NetworkConfigEvent, NetworkConfigListener&gt;
+        implements NetworkConfigRegistry, NetworkConfigService {
+
+<span class="fc" id="L55">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String NULL_FACTORY_MSG = &quot;Factory cannot be null&quot;;
+    private static final String NULL_SCLASS_MSG = &quot;Subject class cannot be null&quot;;
+    private static final String NULL_CCLASS_MSG = &quot;Config class cannot be null&quot;;
+    private static final String NULL_SUBJECT_MSG = &quot;Subject cannot be null&quot;;
+
+    // Inventory of configuration factories
+<span class="fc" id="L63">    private final Map&lt;ConfigKey, ConfigFactory&gt; factories = Maps.newConcurrentMap();</span>
+
+    // Secondary indices to retrieve subject and config classes by keys
+<span class="fc" id="L66">    private final Map&lt;String, SubjectFactory&gt; subjectClasses = Maps.newConcurrentMap();</span>
+<span class="fc" id="L67">    private final Map&lt;Class, SubjectFactory&gt; subjectClassKeys = Maps.newConcurrentMap();</span>
+<span class="fc" id="L68">    private final Map&lt;ConfigIdentifier, Class&lt;? extends Config&gt;&gt; configClasses = Maps.newConcurrentMap();</span>
+
+<span class="fc" id="L70">    private final NetworkConfigStoreDelegate storeDelegate = new InternalStoreDelegate();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigStore store;
+
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L78">        eventDispatcher.addSink(NetworkConfigEvent.class, listenerRegistry);</span>
+<span class="fc" id="L79">        store.setDelegate(storeDelegate);</span>
+<span class="fc" id="L80">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L81">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L85">        eventDispatcher.removeSink(NetworkConfigEvent.class);</span>
+<span class="fc" id="L86">        store.unsetDelegate(storeDelegate);</span>
+<span class="fc" id="L87">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L88">    }</span>
+
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public void registerConfigFactory(ConfigFactory configFactory) {
+<span class="fc" id="L94">        checkNotNull(configFactory, NULL_FACTORY_MSG);</span>
+<span class="fc" id="L95">        factories.put(key(configFactory), configFactory);</span>
+<span class="fc" id="L96">        configClasses.put(identifier(configFactory), configFactory.configClass());</span>
+
+<span class="fc" id="L98">        SubjectFactory subjectFactory = configFactory.subjectFactory();</span>
+<span class="fc" id="L99">        subjectClasses.putIfAbsent(subjectFactory.subjectClassKey(), subjectFactory);</span>
+<span class="fc" id="L100">        subjectClassKeys.putIfAbsent(subjectFactory.subjectClass(), subjectFactory);</span>
+
+<span class="fc" id="L102">        store.addConfigFactory(configFactory);</span>
+<span class="fc" id="L103">    }</span>
+
+    @Override
+    public void unregisterConfigFactory(ConfigFactory configFactory) {
+<span class="fc" id="L107">        checkNotNull(configFactory, NULL_FACTORY_MSG);</span>
+<span class="fc" id="L108">        factories.remove(key(configFactory));</span>
+<span class="fc" id="L109">        configClasses.remove(identifier(configFactory));</span>
+
+        // Note that we are deliberately not removing subject factory key bindings.
+<span class="fc" id="L112">        store.removeConfigFactory(configFactory);</span>
+<span class="fc" id="L113">    }</span>
+
+    @Override
+    public Set&lt;ConfigFactory&gt; getConfigFactories() {
+<span class="fc" id="L117">        return ImmutableSet.copyOf(factories.values());</span>
+    }
+
+
+    @Override
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;S, C extends Config&lt;S&gt;&gt; Set&lt;ConfigFactory&lt;S, C&gt;&gt; getConfigFactories(Class&lt;S&gt; subjectClass) {
+<span class="fc" id="L124">        ImmutableSet.Builder&lt;ConfigFactory&lt;S, C&gt;&gt; builder = ImmutableSet.builder();</span>
+<span class="fc" id="L125">        factories.forEach((key, factory) -&gt; {</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">            if (factory.subjectFactory().subjectClass().equals(subjectClass)) {</span>
+<span class="fc" id="L127">                builder.add(factory);</span>
+            }
+<span class="fc" id="L129">        });</span>
+<span class="fc" id="L130">        return builder.build();</span>
+    }
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; ConfigFactory&lt;S, C&gt; getConfigFactory(Class&lt;C&gt; configClass) {
+<span class="fc" id="L135">        checkNotNull(configClass, NULL_CCLASS_MSG);</span>
+<span class="fc" id="L136">        return store.getConfigFactory(configClass);</span>
+    }
+
+
+    @Override
+    public Set&lt;Class&gt; getSubjectClasses() {
+<span class="fc" id="L142">        ImmutableSet.Builder&lt;Class&gt; builder = ImmutableSet.builder();</span>
+<span class="fc" id="L143">        factories.forEach((k, v) -&gt; builder.add(k.subjectClass));</span>
+<span class="fc" id="L144">        return builder.build();</span>
+    }
+
+    @Override
+    public SubjectFactory getSubjectFactory(String subjectClassKey) {
+<span class="fc" id="L149">        return subjectClasses.get(subjectClassKey);</span>
+    }
+
+    @Override
+    public SubjectFactory getSubjectFactory(Class subjectClass) {
+<span class="fc" id="L154">        return subjectClassKeys.get(subjectClass);</span>
+    }
+
+    @Override
+    public Class&lt;? extends Config&gt; getConfigClass(String subjectClassKey, String configKey) {
+<span class="fc" id="L159">        return configClasses.get(new ConfigIdentifier(subjectClassKey, configKey));</span>
+    }
+
+    @Override
+    public &lt;S&gt; Set&lt;S&gt; getSubjects(Class&lt;S&gt; subjectClass) {
+<span class="fc" id="L164">        checkNotNull(subjectClass, NULL_SCLASS_MSG);</span>
+<span class="fc" id="L165">        return store.getSubjects(subjectClass);</span>
+    }
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; Set&lt;S&gt; getSubjects(Class&lt;S&gt; subjectClass, Class&lt;C&gt; configClass) {
+<span class="fc" id="L170">        checkNotNull(subjectClass, NULL_SCLASS_MSG);</span>
+<span class="fc" id="L171">        checkNotNull(configClass, NULL_CCLASS_MSG);</span>
+<span class="fc" id="L172">        return store.getSubjects(subjectClass, configClass);</span>
+    }
+
+    @Override
+    public &lt;S&gt; Set&lt;Config&lt;S&gt;&gt; getConfigs(S subject) {
+<span class="fc" id="L177">        checkNotNull(subject, NULL_SUBJECT_MSG);</span>
+<span class="fc" id="L178">        Set&lt;Class&lt;? extends Config&lt;S&gt;&gt;&gt; configClasses = store.getConfigClasses(subject);</span>
+<span class="fc" id="L179">        ImmutableSet.Builder&lt;Config&lt;S&gt;&gt; cfg = ImmutableSet.builder();</span>
+<span class="fc" id="L180">        configClasses.forEach(cc -&gt; cfg.add(store.getConfig(subject, cc)));</span>
+<span class="fc" id="L181">        return cfg.build();</span>
+    }
+
+    @Override
+    public &lt;S, T extends Config&lt;S&gt;&gt; T getConfig(S subject, Class&lt;T&gt; configClass) {
+<span class="fc" id="L186">        checkNotNull(subject, NULL_SUBJECT_MSG);</span>
+<span class="fc" id="L187">        checkNotNull(configClass, NULL_CCLASS_MSG);</span>
+<span class="fc" id="L188">        return store.getConfig(subject, configClass);</span>
+    }
+
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; C addConfig(S subject, Class&lt;C&gt; configClass) {
+<span class="fc" id="L194">        checkNotNull(subject, NULL_SUBJECT_MSG);</span>
+<span class="fc" id="L195">        checkNotNull(configClass, NULL_CCLASS_MSG);</span>
+<span class="fc" id="L196">        return store.createConfig(subject, configClass);</span>
+    }
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; C applyConfig(S subject, Class&lt;C&gt; configClass, JsonNode json) {
+<span class="fc" id="L201">        checkNotNull(subject, NULL_SUBJECT_MSG);</span>
+<span class="fc" id="L202">        checkNotNull(configClass, NULL_CCLASS_MSG);</span>
+<span class="fc" id="L203">        return store.applyConfig(subject, configClass, json);</span>
+    }
+
+    @Override
+    public &lt;S, C extends Config&lt;S&gt;&gt; void removeConfig(S subject, Class&lt;C&gt; configClass) {
+<span class="fc" id="L208">        checkNotNull(subject, NULL_SUBJECT_MSG);</span>
+<span class="fc" id="L209">        checkNotNull(configClass, NULL_CCLASS_MSG);</span>
+<span class="fc" id="L210">        store.clearConfig(subject, configClass);</span>
+<span class="fc" id="L211">    }</span>
+
+    // Auxiliary store delegate to receive notification about changes in
+    // the network configuration store state - by the store itself.
+<span class="fc" id="L215">    private class InternalStoreDelegate implements NetworkConfigStoreDelegate {</span>
+        @Override
+        public void notify(NetworkConfigEvent event) {
+<span class="fc" id="L218">            post(event);</span>
+<span class="fc" id="L219">        }</span>
+    }
+
+
+    // Produces a key for uniquely tracking a config factory.
+    private static ConfigKey key(ConfigFactory factory) {
+<span class="fc" id="L225">        return new ConfigKey(factory.subjectFactory().subjectClass(), factory.configClass());</span>
+    }
+
+    // Auxiliary key to track config factories.
+    protected static final class ConfigKey {
+        final Class subjectClass;
+        final Class configClass;
+
+<span class="fc" id="L233">        protected ConfigKey(Class subjectClass, Class configClass) {</span>
+<span class="fc" id="L234">            this.subjectClass = subjectClass;</span>
+<span class="fc" id="L235">            this.configClass = configClass;</span>
+<span class="fc" id="L236">        }</span>
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L240">            return Objects.hash(subjectClass, configClass);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L245" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L246">                return true;</span>
+            }
+<span class="fc bfc" id="L248" title="All 2 branches covered.">            if (obj instanceof ConfigKey) {</span>
+<span class="fc" id="L249">                final ConfigKey other = (ConfigKey) obj;</span>
+<span class="fc bfc" id="L250" title="All 2 branches covered.">                return Objects.equals(this.subjectClass, other.subjectClass)</span>
+<span class="fc bfc" id="L251" title="All 2 branches covered.">                        &amp;&amp; Objects.equals(this.configClass, other.configClass);</span>
+            }
+<span class="fc" id="L253">            return false;</span>
+        }
+    }
+
+    private static ConfigIdentifier identifier(ConfigFactory factory) {
+<span class="fc" id="L258">        return new ConfigIdentifier(factory.subjectFactory().subjectClassKey(), factory.configKey());</span>
+    }
+
+    static final class ConfigIdentifier {
+        final String subjectKey;
+        final String configKey;
+
+<span class="fc" id="L265">        protected ConfigIdentifier(String subjectKey, String configKey) {</span>
+<span class="fc" id="L266">            this.subjectKey = subjectKey;</span>
+<span class="fc" id="L267">            this.configKey = configKey;</span>
+<span class="fc" id="L268">        }</span>
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L272">            return Objects.hash(subjectKey, configKey);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L277" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L278">                return true;</span>
+            }
+<span class="fc bfc" id="L280" title="All 2 branches covered.">            if (obj instanceof ConfigIdentifier) {</span>
+<span class="fc" id="L281">                final ConfigIdentifier other = (ConfigIdentifier) obj;</span>
+<span class="fc bfc" id="L282" title="All 2 branches covered.">                return Objects.equals(this.subjectKey, other.subjectKey)</span>
+<span class="fc bfc" id="L283" title="All 2 branches covered.">                        &amp;&amp; Objects.equals(this.configKey, other.configKey);</span>
+            }
+<span class="fc" id="L285">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

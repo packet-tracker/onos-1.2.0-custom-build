@@ -1,0 +1,1263 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedGroupStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.group.impl</a> &gt; <span class="el_source">DistributedGroupStore.java</span></div><h1>DistributedGroupStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.group.impl;
+
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.NewConcurrentHashMap;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.core.DefaultGroupId;
+import org.onosproject.core.GroupId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.group.DefaultGroup;
+import org.onosproject.net.group.DefaultGroupBucket;
+import org.onosproject.net.group.DefaultGroupDescription;
+import org.onosproject.net.group.DefaultGroupKey;
+import org.onosproject.net.group.Group;
+import org.onosproject.net.group.Group.GroupState;
+import org.onosproject.net.group.GroupBucket;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupEvent;
+import org.onosproject.net.group.GroupEvent.Type;
+import org.onosproject.net.group.GroupKey;
+import org.onosproject.net.group.GroupOperation;
+import org.onosproject.net.group.GroupStore;
+import org.onosproject.net.group.GroupStoreDelegate;
+import org.onosproject.net.group.StoredGroupBucketEntry;
+import org.onosproject.net.group.StoredGroupEntry;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.service.MultiValuedTimestamp;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapBuilder;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+
+import static org.apache.commons.lang3.concurrent.ConcurrentUtils.createIfAbsentUnchecked;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of group entries using trivial in-memory implementation.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L89">public class DistributedGroupStore</span>
+        extends AbstractStore&lt;GroupEvent, GroupStoreDelegate&gt;
+        implements GroupStore {
+
+<span class="fc" id="L93">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L95">    private final int dummyId = 0xffffffff;</span>
+<span class="fc" id="L96">    private final GroupId dummyGroupId = new DefaultGroupId(dummyId);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    // Per device group table with (device id + app cookie) as key
+<span class="fc" id="L111">    private EventuallyConsistentMap&lt;GroupStoreKeyMapKey,</span>
+        StoredGroupEntry&gt; groupStoreEntriesByKey = null;
+    // Per device group table with (device id + group id) as key
+<span class="fc" id="L114">    private final ConcurrentMap&lt;DeviceId, ConcurrentMap&lt;GroupId, StoredGroupEntry&gt;&gt;</span>
+        groupEntriesById = new ConcurrentHashMap&lt;&gt;();
+<span class="fc" id="L116">    private EventuallyConsistentMap&lt;GroupStoreKeyMapKey,</span>
+        StoredGroupEntry&gt; auditPendingReqQueue = null;
+<span class="fc" id="L118">    private final ConcurrentMap&lt;DeviceId, ConcurrentMap&lt;GroupId, Group&gt;&gt;</span>
+            extraneousGroupEntriesById = new ConcurrentHashMap&lt;&gt;();
+    private ExecutorService messageHandlingExecutor;
+    private static final int MESSAGE_HANDLER_THREAD_POOL_SIZE = 1;
+
+<span class="fc" id="L123">    private final HashMap&lt;DeviceId, Boolean&gt; deviceAuditStatus = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L125">    private final AtomicInteger groupIdGen = new AtomicInteger();</span>
+
+<span class="fc" id="L127">    private KryoNamespace.Builder kryoBuilder = null;</span>
+
+<span class="fc" id="L129">    private final AtomicLong sequenceNumber = new AtomicLong(0);</span>
+
+    private KryoNamespace clusterMsgSerializer;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L135">        kryoBuilder = new KryoNamespace.Builder()</span>
+<span class="fc" id="L136">            .register(KryoNamespaces.API)</span>
+<span class="fc" id="L137">            .register(DefaultGroup.class,</span>
+                      DefaultGroupBucket.class,
+                      DefaultGroupDescription.class,
+                      DefaultGroupKey.class,
+                      GroupDescription.Type.class,
+                      Group.GroupState.class,
+                      GroupBuckets.class,
+                      DefaultGroupId.class,
+                      GroupStoreMessage.class,
+                      GroupStoreMessage.Type.class,
+                      UpdateType.class,
+                      GroupStoreMessageSubjects.class,
+                      MultiValuedTimestamp.class,
+                      GroupStoreKeyMapKey.class,
+                      GroupStoreIdMapKey.class,
+                      GroupStoreMapKey.class
+            );
+
+<span class="fc" id="L155">        clusterMsgSerializer = kryoBuilder.build();</span>
+
+<span class="fc" id="L157">        messageHandlingExecutor = Executors.</span>
+<span class="fc" id="L158">                newFixedThreadPool(MESSAGE_HANDLER_THREAD_POOL_SIZE,</span>
+<span class="fc" id="L159">                                   groupedThreads(&quot;onos/store/group&quot;,</span>
+                                                  &quot;message-handlers&quot;));
+
+<span class="fc" id="L162">        clusterCommunicator.addSubscriber(GroupStoreMessageSubjects.REMOTE_GROUP_OP_REQUEST,</span>
+                clusterMsgSerializer::deserialize,
+                this::process,
+                messageHandlingExecutor);
+
+<span class="fc" id="L167">        log.debug(&quot;Creating EC map groupstorekeymap&quot;);</span>
+        EventuallyConsistentMapBuilder&lt;GroupStoreKeyMapKey, StoredGroupEntry&gt;
+<span class="fc" id="L169">                keyMapBuilder = storageService.eventuallyConsistentMapBuilder();</span>
+
+<span class="fc" id="L171">        groupStoreEntriesByKey = keyMapBuilder</span>
+<span class="fc" id="L172">                .withName(&quot;groupstorekeymap&quot;)</span>
+<span class="fc" id="L173">                .withSerializer(kryoBuilder)</span>
+<span class="pc" id="L174">                .withTimestampProvider((k, v) -&gt; new MultiValuedTimestamp&lt;&gt;(System.currentTimeMillis(),</span>
+<span class="nc" id="L175">                                                                            sequenceNumber.getAndIncrement()))</span>
+<span class="fc" id="L176">                .build();</span>
+<span class="fc" id="L177">        groupStoreEntriesByKey.addListener(new GroupStoreKeyMapListener());</span>
+<span class="fc" id="L178">        log.debug(&quot;Current size of groupstorekeymap:{}&quot;,</span>
+<span class="fc" id="L179">                  groupStoreEntriesByKey.size());</span>
+
+<span class="fc" id="L181">        log.debug(&quot;Creating EC map pendinggroupkeymap&quot;);</span>
+        EventuallyConsistentMapBuilder&lt;GroupStoreKeyMapKey, StoredGroupEntry&gt;
+<span class="fc" id="L183">                auditMapBuilder = storageService.eventuallyConsistentMapBuilder();</span>
+
+<span class="fc" id="L185">        auditPendingReqQueue = auditMapBuilder</span>
+<span class="fc" id="L186">                .withName(&quot;pendinggroupkeymap&quot;)</span>
+<span class="fc" id="L187">                .withSerializer(kryoBuilder)</span>
+<span class="pc" id="L188">                .withTimestampProvider((k, v) -&gt; new MultiValuedTimestamp&lt;&gt;(System.currentTimeMillis(),</span>
+<span class="nc" id="L189">                                                                            sequenceNumber.getAndIncrement()))</span>
+<span class="fc" id="L190">                .build();</span>
+<span class="fc" id="L191">        log.debug(&quot;Current size of pendinggroupkeymap:{}&quot;,</span>
+<span class="fc" id="L192">                  auditPendingReqQueue.size());</span>
+
+<span class="fc" id="L194">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L195">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L199">        clusterCommunicator.removeSubscriber(GroupStoreMessageSubjects.REMOTE_GROUP_OP_REQUEST);</span>
+<span class="fc" id="L200">        groupStoreEntriesByKey.destroy();</span>
+<span class="fc" id="L201">        auditPendingReqQueue.destroy();</span>
+<span class="fc" id="L202">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L203">    }</span>
+
+    private static NewConcurrentHashMap&lt;GroupId, Group&gt;
+        lazyEmptyExtraneousGroupIdTable() {
+<span class="fc" id="L207">        return NewConcurrentHashMap.&lt;GroupId, Group&gt;ifNeeded();</span>
+    }
+
+    private static NewConcurrentHashMap&lt;GroupId, StoredGroupEntry&gt;
+        lazyEmptyGroupIdTable() {
+<span class="fc" id="L212">        return NewConcurrentHashMap.&lt;GroupId, StoredGroupEntry&gt;ifNeeded();</span>
+    }
+
+    /**
+     * Returns the group store eventual consistent key map.
+     *
+     * @return Map representing group key table.
+     */
+    private EventuallyConsistentMap&lt;GroupStoreKeyMapKey, StoredGroupEntry&gt;
+        getGroupStoreKeyMap() {
+<span class="fc" id="L222">        return groupStoreEntriesByKey;</span>
+    }
+
+    /**
+     * Returns the group id table for specified device.
+     *
+     * @param deviceId identifier of the device
+     * @return Map representing group key table of given device.
+     */
+    private ConcurrentMap&lt;GroupId, StoredGroupEntry&gt; getGroupIdTable(DeviceId deviceId) {
+<span class="fc" id="L232">        return createIfAbsentUnchecked(groupEntriesById,</span>
+<span class="fc" id="L233">                                       deviceId, lazyEmptyGroupIdTable());</span>
+    }
+
+    /**
+     * Returns the pending group request table.
+     *
+     * @return Map representing group key table.
+     */
+    private EventuallyConsistentMap&lt;GroupStoreKeyMapKey, StoredGroupEntry&gt;
+        getPendingGroupKeyTable() {
+<span class="fc" id="L243">        return auditPendingReqQueue;</span>
+    }
+
+    /**
+     * Returns the extraneous group id table for specified device.
+     *
+     * @param deviceId identifier of the device
+     * @return Map representing group key table of given device.
+     */
+    private ConcurrentMap&lt;GroupId, Group&gt;
+    getExtraneousGroupIdTable(DeviceId deviceId) {
+<span class="fc" id="L254">        return createIfAbsentUnchecked(extraneousGroupEntriesById,</span>
+                                       deviceId,
+<span class="fc" id="L256">                                       lazyEmptyExtraneousGroupIdTable());</span>
+    }
+
+    /**
+     * Returns the number of groups for the specified device in the store.
+     *
+     * @return number of groups for the specified device
+     */
+    @Override
+    public int getGroupCount(DeviceId deviceId) {
+<span class="pc bpc" id="L266" title="1 of 2 branches missed.">        return (getGroups(deviceId) != null) ?</span>
+<span class="pc" id="L267">                         Iterables.size(getGroups(deviceId)) : 0;</span>
+    }
+
+    /**
+     * Returns the groups associated with a device.
+     *
+     * @param deviceId the device ID
+     *
+     * @return the group entries
+     */
+    @Override
+    public Iterable&lt;Group&gt; getGroups(DeviceId deviceId) {
+        // flatten and make iterator unmodifiable
+<span class="fc" id="L280">        return FluentIterable.from(getGroupStoreKeyMap().values())</span>
+<span class="fc" id="L281">                .filter(input -&gt; input.deviceId().equals(deviceId))</span>
+<span class="fc" id="L282">                .transform(input -&gt; input);</span>
+    }
+
+    private Iterable&lt;StoredGroupEntry&gt; getStoredGroups(DeviceId deviceId) {
+        // flatten and make iterator unmodifiable
+<span class="fc" id="L287">        return FluentIterable.from(getGroupStoreKeyMap().values())</span>
+<span class="fc" id="L288">                .filter(input -&gt; input.deviceId().equals(deviceId));</span>
+    }
+
+    /**
+     * Returns the stored group entry.
+     *
+     * @param deviceId the device ID
+     * @param appCookie the group key
+     *
+     * @return a group associated with the key
+     */
+    @Override
+    public Group getGroup(DeviceId deviceId, GroupKey appCookie) {
+<span class="fc" id="L301">        return getStoredGroupEntry(deviceId, appCookie);</span>
+    }
+
+    private StoredGroupEntry getStoredGroupEntry(DeviceId deviceId,
+                                                 GroupKey appCookie) {
+<span class="fc" id="L306">        return getGroupStoreKeyMap().get(new GroupStoreKeyMapKey(deviceId,</span>
+                                                                 appCookie));
+    }
+
+    @Override
+    public Group getGroup(DeviceId deviceId, GroupId groupId) {
+<span class="fc" id="L312">        return getStoredGroupEntry(deviceId, groupId);</span>
+    }
+
+    private StoredGroupEntry getStoredGroupEntry(DeviceId deviceId,
+                                                 GroupId groupId) {
+<span class="fc" id="L317">        return getGroupIdTable(deviceId).get(groupId);</span>
+    }
+
+    private int getFreeGroupIdValue(DeviceId deviceId) {
+<span class="fc" id="L321">        int freeId = groupIdGen.incrementAndGet();</span>
+
+        while (true) {
+<span class="fc" id="L324">            Group existing = getGroup(deviceId, new DefaultGroupId(freeId));</span>
+<span class="fc bfc" id="L325" title="All 2 branches covered.">            if (existing == null) {</span>
+<span class="fc" id="L326">                existing = (</span>
+<span class="pc bpc" id="L327" title="1 of 2 branches missed.">                        extraneousGroupEntriesById.get(deviceId) != null) ?</span>
+<span class="nc" id="L328">                        extraneousGroupEntriesById.get(deviceId).</span>
+<span class="pc" id="L329">                                get(new DefaultGroupId(freeId)) :</span>
+                        null;
+            }
+<span class="fc bfc" id="L332" title="All 2 branches covered.">            if (existing != null) {</span>
+<span class="fc" id="L333">                freeId = groupIdGen.incrementAndGet();</span>
+            } else {
+                break;
+            }
+<span class="fc" id="L337">        }</span>
+<span class="fc" id="L338">        log.debug(&quot;getFreeGroupIdValue: Next Free ID is {}&quot;, freeId);</span>
+<span class="fc" id="L339">        return freeId;</span>
+    }
+
+    /**
+     * Stores a new group entry using the information from group description.
+     *
+     * @param groupDesc group description to be used to create group entry
+     */
+    @Override
+    public void storeGroupDescription(GroupDescription groupDesc) {
+<span class="fc" id="L349">        log.debug(&quot;In storeGroupDescription&quot;);</span>
+        // Check if a group is existing with the same key
+<span class="pc bpc" id="L351" title="1 of 2 branches missed.">        if (getGroup(groupDesc.deviceId(), groupDesc.appCookie()) != null) {</span>
+<span class="nc" id="L352">            log.warn(&quot;Group already exists with the same key {}&quot;,</span>
+<span class="nc" id="L353">                     groupDesc.appCookie());</span>
+<span class="nc" id="L354">            return;</span>
+        }
+
+        // Check if group to be created by a remote instance
+<span class="pc bpc" id="L358" title="1 of 2 branches missed.">        if (mastershipService.getLocalRole(groupDesc.deviceId()) != MastershipRole.MASTER) {</span>
+<span class="nc" id="L359">            log.debug(&quot;storeGroupDescription: Device {} local role is not MASTER&quot;,</span>
+<span class="nc" id="L360">                      groupDesc.deviceId());</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">            if (mastershipService.getMasterFor(groupDesc.deviceId()) == null) {</span>
+<span class="nc" id="L362">                log.error(&quot;No Master for device {}...&quot;</span>
+                        + &quot;Can not perform add group operation&quot;,
+<span class="nc" id="L364">                        groupDesc.deviceId());</span>
+                //TODO: Send Group operation failure event
+<span class="nc" id="L366">                return;</span>
+            }
+<span class="nc" id="L368">            GroupStoreMessage groupOp = GroupStoreMessage.</span>
+<span class="nc" id="L369">                    createGroupAddRequestMsg(groupDesc.deviceId(),</span>
+                                             groupDesc);
+
+<span class="nc" id="L372">            clusterCommunicator.unicast(groupOp,</span>
+                    GroupStoreMessageSubjects.REMOTE_GROUP_OP_REQUEST,
+                    clusterMsgSerializer::serialize,
+<span class="nc" id="L375">                    mastershipService.getMasterFor(groupDesc.deviceId())).whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">                        if (error != null) {</span>
+<span class="nc" id="L377">                            log.warn(&quot;Failed to send request to master: {} to {}&quot;,</span>
+                                    groupOp,
+<span class="nc" id="L379">                                    mastershipService.getMasterFor(groupDesc.deviceId()));</span>
+                            //TODO: Send Group operation failure event
+                        } else {
+<span class="nc" id="L382">                            log.debug(&quot;Sent Group operation request for device {} &quot;</span>
+                                    + &quot;to remote MASTER {}&quot;,
+<span class="nc" id="L384">                                    groupDesc.deviceId(),</span>
+<span class="nc" id="L385">                                    mastershipService.getMasterFor(groupDesc.deviceId()));</span>
+                        }
+<span class="nc" id="L387">                    });</span>
+<span class="nc" id="L388">            return;</span>
+        }
+
+<span class="fc" id="L391">        log.debug(&quot;Store group for device {} is getting handled locally&quot;,</span>
+<span class="fc" id="L392">                  groupDesc.deviceId());</span>
+<span class="fc" id="L393">        storeGroupDescriptionInternal(groupDesc);</span>
+<span class="fc" id="L394">    }</span>
+
+    private Group getMatchingExtraneousGroupbyId(DeviceId deviceId, Integer groupId) {
+<span class="fc" id="L397">        ConcurrentMap&lt;GroupId, Group&gt; extraneousMap =</span>
+<span class="fc" id="L398">                extraneousGroupEntriesById.get(deviceId);</span>
+<span class="pc bpc" id="L399" title="1 of 2 branches missed.">        if (extraneousMap == null) {</span>
+<span class="fc" id="L400">            return null;</span>
+        }
+<span class="nc" id="L402">        return extraneousMap.get(new DefaultGroupId(groupId));</span>
+    }
+
+    private Group getMatchingExtraneousGroupbyBuckets(DeviceId deviceId,
+                                                      GroupBuckets buckets) {
+<span class="fc" id="L407">        ConcurrentMap&lt;GroupId, Group&gt; extraneousMap =</span>
+<span class="fc" id="L408">                extraneousGroupEntriesById.get(deviceId);</span>
+<span class="pc bpc" id="L409" title="1 of 2 branches missed.">        if (extraneousMap == null) {</span>
+<span class="fc" id="L410">            return null;</span>
+        }
+
+<span class="nc bnc" id="L413" title="All 2 branches missed.">        for (Group extraneousGroup:extraneousMap.values()) {</span>
+<span class="nc bnc" id="L414" title="All 2 branches missed.">            if (extraneousGroup.buckets().equals(buckets)) {</span>
+<span class="nc" id="L415">                return extraneousGroup;</span>
+            }
+<span class="nc" id="L417">        }</span>
+<span class="nc" id="L418">        return null;</span>
+    }
+
+    private void storeGroupDescriptionInternal(GroupDescription groupDesc) {
+        // Check if a group is existing with the same key
+<span class="pc bpc" id="L423" title="1 of 2 branches missed.">        if (getGroup(groupDesc.deviceId(), groupDesc.appCookie()) != null) {</span>
+<span class="nc" id="L424">            return;</span>
+        }
+
+<span class="fc bfc" id="L427" title="All 2 branches covered.">        if (deviceAuditStatus.get(groupDesc.deviceId()) == null) {</span>
+            // Device group audit has not completed yet
+            // Add this group description to pending group key table
+            // Create a group entry object with Dummy Group ID
+<span class="fc" id="L431">            log.debug(&quot;storeGroupDescriptionInternal: Device {} AUDIT pending...Queuing Group ADD request&quot;,</span>
+<span class="fc" id="L432">                    groupDesc.deviceId());</span>
+<span class="fc" id="L433">            StoredGroupEntry group = new DefaultGroup(dummyGroupId, groupDesc);</span>
+<span class="fc" id="L434">            group.setState(GroupState.WAITING_AUDIT_COMPLETE);</span>
+<span class="fc" id="L435">            EventuallyConsistentMap&lt;GroupStoreKeyMapKey, StoredGroupEntry&gt; pendingKeyTable =</span>
+<span class="fc" id="L436">                    getPendingGroupKeyTable();</span>
+<span class="fc" id="L437">            pendingKeyTable.put(new GroupStoreKeyMapKey(groupDesc.deviceId(),</span>
+<span class="fc" id="L438">                                                        groupDesc.appCookie()),</span>
+                                group);
+<span class="fc" id="L440">            return;</span>
+        }
+
+<span class="fc" id="L443">        Group matchingExtraneousGroup = null;</span>
+<span class="fc bfc" id="L444" title="All 2 branches covered.">        if (groupDesc.givenGroupId() != null) {</span>
+            //Check if there is a extraneous group existing with the same Id
+<span class="fc" id="L446">            matchingExtraneousGroup = getMatchingExtraneousGroupbyId(</span>
+<span class="fc" id="L447">                                groupDesc.deviceId(), groupDesc.givenGroupId());</span>
+<span class="pc bpc" id="L448" title="1 of 2 branches missed.">            if (matchingExtraneousGroup != null) {</span>
+<span class="nc" id="L449">                log.debug(&quot;storeGroupDescriptionInternal: Matching extraneous group found in Device {} for group id {}&quot;,</span>
+<span class="nc" id="L450">                          groupDesc.deviceId(),</span>
+<span class="nc" id="L451">                          groupDesc.givenGroupId());</span>
+                //Check if the group buckets matches with user provided buckets
+<span class="nc bnc" id="L453" title="All 2 branches missed.">                if (matchingExtraneousGroup.buckets().equals(groupDesc.buckets())) {</span>
+                    //Group is already existing with the same buckets and Id
+                    // Create a group entry object
+<span class="nc" id="L456">                    log.debug(&quot;storeGroupDescriptionInternal: Buckets also matching in Device {} for group id {}&quot;,</span>
+<span class="nc" id="L457">                              groupDesc.deviceId(),</span>
+<span class="nc" id="L458">                              groupDesc.givenGroupId());</span>
+<span class="nc" id="L459">                    StoredGroupEntry group = new DefaultGroup(</span>
+<span class="nc" id="L460">                              matchingExtraneousGroup.id(), groupDesc);</span>
+                    // Insert the newly created group entry into key and id maps
+<span class="nc" id="L462">                    getGroupStoreKeyMap().</span>
+<span class="nc" id="L463">                        put(new GroupStoreKeyMapKey(groupDesc.deviceId(),</span>
+<span class="nc" id="L464">                                                    groupDesc.appCookie()), group);</span>
+                    // Ensure it also inserted into group id based table to
+                    // avoid any chances of duplication in group id generation
+<span class="nc" id="L467">                    getGroupIdTable(groupDesc.deviceId()).</span>
+<span class="nc" id="L468">                        put(matchingExtraneousGroup.id(), group);</span>
+<span class="nc" id="L469">                    addOrUpdateGroupEntry(matchingExtraneousGroup);</span>
+<span class="nc" id="L470">                    removeExtraneousGroupEntry(matchingExtraneousGroup);</span>
+<span class="nc" id="L471">                    return;</span>
+                } else {
+                    //Group buckets are not matching. Update group
+                    //with user provided buckets.
+                    //TODO
+<span class="nc" id="L476">                    log.debug(&quot;storeGroupDescriptionInternal: Buckets are not matching in Device {} for group id {}&quot;,</span>
+<span class="nc" id="L477">                              groupDesc.deviceId(),</span>
+<span class="nc" id="L478">                              groupDesc.givenGroupId());</span>
+                }
+            }
+        } else {
+            //Check if there is an extraneous group with user provided buckets
+<span class="fc" id="L483">            matchingExtraneousGroup = getMatchingExtraneousGroupbyBuckets(</span>
+<span class="fc" id="L484">                                        groupDesc.deviceId(), groupDesc.buckets());</span>
+<span class="pc bpc" id="L485" title="1 of 2 branches missed.">            if (matchingExtraneousGroup != null) {</span>
+                //Group is already existing with the same buckets.
+                //So reuse this group.
+<span class="nc" id="L488">                log.debug(&quot;storeGroupDescriptionInternal: Matching extraneous group found in Device {}&quot;,</span>
+<span class="nc" id="L489">                          groupDesc.deviceId());</span>
+                //Create a group entry object
+<span class="nc" id="L491">                StoredGroupEntry group = new DefaultGroup(</span>
+<span class="nc" id="L492">                         matchingExtraneousGroup.id(), groupDesc);</span>
+                // Insert the newly created group entry into key and id maps
+<span class="nc" id="L494">                getGroupStoreKeyMap().</span>
+<span class="nc" id="L495">                    put(new GroupStoreKeyMapKey(groupDesc.deviceId(),</span>
+<span class="nc" id="L496">                                                groupDesc.appCookie()), group);</span>
+                // Ensure it also inserted into group id based table to
+                // avoid any chances of duplication in group id generation
+<span class="nc" id="L499">                getGroupIdTable(groupDesc.deviceId()).</span>
+<span class="nc" id="L500">                    put(matchingExtraneousGroup.id(), group);</span>
+<span class="nc" id="L501">                addOrUpdateGroupEntry(matchingExtraneousGroup);</span>
+<span class="nc" id="L502">                removeExtraneousGroupEntry(matchingExtraneousGroup);</span>
+<span class="nc" id="L503">                return;</span>
+            } else {
+                //TODO: Check if there are any empty groups that can be used here
+<span class="fc" id="L506">                log.debug(&quot;storeGroupDescriptionInternal: No matching extraneous groups found in Device {}&quot;,</span>
+<span class="fc" id="L507">                          groupDesc.deviceId());</span>
+            }
+        }
+
+<span class="fc" id="L511">        GroupId id = null;</span>
+<span class="fc bfc" id="L512" title="All 2 branches covered.">        if (groupDesc.givenGroupId() == null) {</span>
+            // Get a new group identifier
+<span class="fc" id="L514">            id = new DefaultGroupId(getFreeGroupIdValue(groupDesc.deviceId()));</span>
+        } else {
+<span class="fc" id="L516">            id = new DefaultGroupId(groupDesc.givenGroupId());</span>
+        }
+        // Create a group entry object
+<span class="fc" id="L519">        StoredGroupEntry group = new DefaultGroup(id, groupDesc);</span>
+        // Insert the newly created group entry into key and id maps
+<span class="fc" id="L521">        getGroupStoreKeyMap().</span>
+<span class="fc" id="L522">            put(new GroupStoreKeyMapKey(groupDesc.deviceId(),</span>
+<span class="fc" id="L523">                                        groupDesc.appCookie()), group);</span>
+        // Ensure it also inserted into group id based table to
+        // avoid any chances of duplication in group id generation
+<span class="fc" id="L526">        getGroupIdTable(groupDesc.deviceId()).</span>
+<span class="fc" id="L527">            put(id, group);</span>
+<span class="fc" id="L528">        log.debug(&quot;storeGroupDescriptionInternal: Processing Group ADD request for Id {} in device {}&quot;,</span>
+                id,
+<span class="fc" id="L530">                groupDesc.deviceId());</span>
+<span class="fc" id="L531">        notifyDelegate(new GroupEvent(GroupEvent.Type.GROUP_ADD_REQUESTED,</span>
+                                      group));
+<span class="fc" id="L533">    }</span>
+
+    /**
+     * Updates the existing group entry with the information
+     * from group description.
+     *
+     * @param deviceId the device ID
+     * @param oldAppCookie the current group key
+     * @param type update type
+     * @param newBuckets group buckets for updates
+     * @param newAppCookie optional new group key
+     */
+    @Override
+    public void updateGroupDescription(DeviceId deviceId,
+                                       GroupKey oldAppCookie,
+                                       UpdateType type,
+                                       GroupBuckets newBuckets,
+                                       GroupKey newAppCookie) {
+        // Check if group update to be done by a remote instance
+<span class="pc bpc" id="L552" title="1 of 2 branches missed.">        if (mastershipService.getMasterFor(deviceId) != null &amp;&amp;</span>
+<span class="nc bnc" id="L553" title="All 2 branches missed.">                mastershipService.getLocalRole(deviceId) != MastershipRole.MASTER) {</span>
+<span class="nc" id="L554">            log.debug(&quot;updateGroupDescription: Device {} local role is not MASTER&quot;,</span>
+                      deviceId);
+<span class="nc bnc" id="L556" title="All 2 branches missed.">            if (mastershipService.getMasterFor(deviceId) == null) {</span>
+<span class="nc" id="L557">                log.error(&quot;No Master for device {}...&quot;</span>
+                        + &quot;Can not perform update group operation&quot;,
+                        deviceId);
+                //TODO: Send Group operation failure event
+<span class="nc" id="L561">                return;</span>
+            }
+<span class="nc" id="L563">            GroupStoreMessage groupOp = GroupStoreMessage.</span>
+<span class="nc" id="L564">                    createGroupUpdateRequestMsg(deviceId,</span>
+                                                oldAppCookie,
+                                                type,
+                                                newBuckets,
+                                                newAppCookie);
+
+<span class="nc" id="L570">            clusterCommunicator.unicast(groupOp,</span>
+                    GroupStoreMessageSubjects.REMOTE_GROUP_OP_REQUEST,
+                    clusterMsgSerializer::serialize,
+<span class="nc" id="L573">                    mastershipService.getMasterFor(deviceId)).whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L574" title="All 2 branches missed.">                        if (error !=  null) {</span>
+<span class="nc" id="L575">                            log.warn(&quot;Failed to send request to master: {} to {}&quot;,</span>
+                                    groupOp,
+<span class="nc" id="L577">                                    mastershipService.getMasterFor(deviceId), error);</span>
+                        }
+                        //TODO: Send Group operation failure event
+<span class="nc" id="L580">                    });</span>
+<span class="nc" id="L581">            return;</span>
+        }
+<span class="fc" id="L583">        log.debug(&quot;updateGroupDescription for device {} is getting handled locally&quot;,</span>
+                  deviceId);
+<span class="fc" id="L585">        updateGroupDescriptionInternal(deviceId,</span>
+                                       oldAppCookie,
+                                       type,
+                                       newBuckets,
+                                       newAppCookie);
+<span class="fc" id="L590">    }</span>
+
+    private void updateGroupDescriptionInternal(DeviceId deviceId,
+                                       GroupKey oldAppCookie,
+                                       UpdateType type,
+                                       GroupBuckets newBuckets,
+                                       GroupKey newAppCookie) {
+        // Check if a group is existing with the provided key
+<span class="fc" id="L598">        Group oldGroup = getGroup(deviceId, oldAppCookie);</span>
+<span class="pc bpc" id="L599" title="1 of 2 branches missed.">        if (oldGroup == null) {</span>
+<span class="nc" id="L600">            log.warn(&quot;updateGroupDescriptionInternal: Group not found...strange&quot;);</span>
+<span class="nc" id="L601">            return;</span>
+        }
+
+<span class="fc" id="L604">        List&lt;GroupBucket&gt; newBucketList = getUpdatedBucketList(oldGroup,</span>
+                                                               type,
+                                                               newBuckets);
+<span class="pc bpc" id="L607" title="1 of 2 branches missed.">        if (newBucketList != null) {</span>
+            // Create a new group object from the old group
+<span class="fc" id="L609">            GroupBuckets updatedBuckets = new GroupBuckets(newBucketList);</span>
+<span class="pc bpc" id="L610" title="1 of 2 branches missed.">            GroupKey newCookie = (newAppCookie != null) ? newAppCookie : oldAppCookie;</span>
+<span class="fc" id="L611">            GroupDescription updatedGroupDesc = new DefaultGroupDescription(</span>
+<span class="fc" id="L612">                    oldGroup.deviceId(),</span>
+<span class="fc" id="L613">                    oldGroup.type(),</span>
+                    updatedBuckets,
+                    newCookie,
+<span class="fc" id="L616">                    oldGroup.givenGroupId(),</span>
+<span class="fc" id="L617">                    oldGroup.appId());</span>
+<span class="fc" id="L618">            StoredGroupEntry newGroup = new DefaultGroup(oldGroup.id(),</span>
+                                                         updatedGroupDesc);
+<span class="fc" id="L620">            log.debug(&quot;updateGroupDescriptionInternal: group entry {} in device {} moving from {} to PENDING_UPDATE&quot;,</span>
+<span class="fc" id="L621">                    oldGroup.id(),</span>
+<span class="fc" id="L622">                    oldGroup.deviceId(),</span>
+<span class="fc" id="L623">                    oldGroup.state());</span>
+<span class="fc" id="L624">            newGroup.setState(GroupState.PENDING_UPDATE);</span>
+<span class="fc" id="L625">            newGroup.setLife(oldGroup.life());</span>
+<span class="fc" id="L626">            newGroup.setPackets(oldGroup.packets());</span>
+<span class="fc" id="L627">            newGroup.setBytes(oldGroup.bytes());</span>
+            //Update the group entry in groupkey based map.
+            //Update to groupid based map will happen in the
+            //groupkey based map update listener
+<span class="fc" id="L631">            log.debug(&quot;updateGroupDescriptionInternal with type {}: Group updated with buckets&quot;,</span>
+                      type);
+<span class="fc" id="L633">            getGroupStoreKeyMap().</span>
+<span class="fc" id="L634">                put(new GroupStoreKeyMapKey(newGroup.deviceId(),</span>
+<span class="fc" id="L635">                                            newGroup.appCookie()), newGroup);</span>
+<span class="fc" id="L636">            notifyDelegate(new GroupEvent(Type.GROUP_UPDATE_REQUESTED, newGroup));</span>
+<span class="fc" id="L637">        } else {</span>
+<span class="nc" id="L638">            log.warn(&quot;updateGroupDescriptionInternal with type {}: No &quot;</span>
+                    + &quot;change in the buckets in update&quot;, type);
+        }
+<span class="fc" id="L641">    }</span>
+
+    private List&lt;GroupBucket&gt; getUpdatedBucketList(Group oldGroup,
+                                                   UpdateType type,
+                                                   GroupBuckets buckets) {
+<span class="fc" id="L646">        GroupBuckets oldBuckets = oldGroup.buckets();</span>
+<span class="fc" id="L647">        List&lt;GroupBucket&gt; newBucketList = new ArrayList&lt;&gt;(oldBuckets.buckets());</span>
+<span class="fc" id="L648">        boolean groupDescUpdated = false;</span>
+
+<span class="pc bpc" id="L650" title="1 of 2 branches missed.">        if (type == UpdateType.ADD) {</span>
+            // Check if the any of the new buckets are part of
+            // the old bucket list
+<span class="fc bfc" id="L653" title="All 2 branches covered.">            for (GroupBucket addBucket:buckets.buckets()) {</span>
+<span class="pc bpc" id="L654" title="1 of 2 branches missed.">                if (!newBucketList.contains(addBucket)) {</span>
+<span class="fc" id="L655">                    newBucketList.add(addBucket);</span>
+<span class="fc" id="L656">                    groupDescUpdated = true;</span>
+                }
+<span class="fc" id="L658">            }</span>
+<span class="nc bnc" id="L659" title="All 2 branches missed.">        } else if (type == UpdateType.REMOVE) {</span>
+            // Check if the to be removed buckets are part of the
+            // old bucket list
+<span class="nc bnc" id="L662" title="All 2 branches missed.">            for (GroupBucket removeBucket:buckets.buckets()) {</span>
+<span class="nc bnc" id="L663" title="All 2 branches missed.">                if (newBucketList.contains(removeBucket)) {</span>
+<span class="nc" id="L664">                    newBucketList.remove(removeBucket);</span>
+<span class="nc" id="L665">                    groupDescUpdated = true;</span>
+                }
+<span class="nc" id="L667">            }</span>
+        }
+
+<span class="pc bpc" id="L670" title="1 of 2 branches missed.">        if (groupDescUpdated) {</span>
+<span class="fc" id="L671">            return newBucketList;</span>
+        } else {
+<span class="nc" id="L673">            return null;</span>
+        }
+    }
+
+    /**
+     * Triggers deleting the existing group entry.
+     *
+     * @param deviceId the device ID
+     * @param appCookie the group key
+     */
+    @Override
+    public void deleteGroupDescription(DeviceId deviceId,
+                                       GroupKey appCookie) {
+        // Check if group to be deleted by a remote instance
+<span class="fc" id="L687">        if (mastershipService.</span>
+<span class="pc bpc" id="L688" title="1 of 2 branches missed.">                getLocalRole(deviceId) != MastershipRole.MASTER) {</span>
+<span class="nc" id="L689">            log.debug(&quot;deleteGroupDescription: Device {} local role is not MASTER&quot;,</span>
+                      deviceId);
+<span class="nc bnc" id="L691" title="All 2 branches missed.">            if (mastershipService.getMasterFor(deviceId) == null) {</span>
+<span class="nc" id="L692">                log.error(&quot;No Master for device {}...&quot;</span>
+                        + &quot;Can not perform delete group operation&quot;,
+                        deviceId);
+                //TODO: Send Group operation failure event
+<span class="nc" id="L696">                return;</span>
+            }
+<span class="nc" id="L698">            GroupStoreMessage groupOp = GroupStoreMessage.</span>
+<span class="nc" id="L699">                    createGroupDeleteRequestMsg(deviceId,</span>
+                                                appCookie);
+
+<span class="nc" id="L702">            clusterCommunicator.unicast(groupOp,</span>
+                    GroupStoreMessageSubjects.REMOTE_GROUP_OP_REQUEST,
+                    clusterMsgSerializer::serialize,
+<span class="nc" id="L705">                    mastershipService.getMasterFor(deviceId)).whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L706" title="All 2 branches missed.">                        if (error != null) {</span>
+<span class="nc" id="L707">                            log.warn(&quot;Failed to send request to master: {} to {}&quot;,</span>
+                                    groupOp,
+<span class="nc" id="L709">                                    mastershipService.getMasterFor(deviceId), error);</span>
+                        }
+                        //TODO: Send Group operation failure event
+<span class="nc" id="L712">                    });</span>
+<span class="nc" id="L713">            return;</span>
+        }
+<span class="fc" id="L715">        log.debug(&quot;deleteGroupDescription in device {} is getting handled locally&quot;,</span>
+                  deviceId);
+<span class="fc" id="L717">        deleteGroupDescriptionInternal(deviceId, appCookie);</span>
+<span class="fc" id="L718">    }</span>
+
+    private void deleteGroupDescriptionInternal(DeviceId deviceId,
+                                                GroupKey appCookie) {
+        // Check if a group is existing with the provided key
+<span class="fc" id="L723">        StoredGroupEntry existing = getStoredGroupEntry(deviceId, appCookie);</span>
+<span class="pc bpc" id="L724" title="1 of 2 branches missed.">        if (existing == null) {</span>
+<span class="nc" id="L725">            return;</span>
+        }
+
+<span class="fc" id="L728">        log.debug(&quot;deleteGroupDescriptionInternal: group entry {} in device {} moving from {} to PENDING_DELETE&quot;,</span>
+<span class="fc" id="L729">                existing.id(),</span>
+<span class="fc" id="L730">                existing.deviceId(),</span>
+<span class="fc" id="L731">                existing.state());</span>
+<span class="fc" id="L732">        synchronized (existing) {</span>
+<span class="fc" id="L733">            existing.setState(GroupState.PENDING_DELETE);</span>
+<span class="pc" id="L734">        }</span>
+<span class="fc" id="L735">        log.debug(&quot;deleteGroupDescriptionInternal: in device {} issuing GROUP_REMOVE_REQUESTED&quot;,</span>
+                  deviceId);
+<span class="fc" id="L737">        notifyDelegate(new GroupEvent(Type.GROUP_REMOVE_REQUESTED, existing));</span>
+<span class="fc" id="L738">    }</span>
+
+    /**
+     * Stores a new group entry, or updates an existing entry.
+     *
+     * @param group group entry
+     */
+    @Override
+    public void addOrUpdateGroupEntry(Group group) {
+        // check if this new entry is an update to an existing entry
+<span class="fc" id="L748">        StoredGroupEntry existing = getStoredGroupEntry(group.deviceId(),</span>
+<span class="fc" id="L749">                                                        group.id());</span>
+<span class="fc" id="L750">        GroupEvent event = null;</span>
+
+<span class="pc bpc" id="L752" title="1 of 2 branches missed.">        if (existing != null) {</span>
+<span class="fc" id="L753">            log.debug(&quot;addOrUpdateGroupEntry: updating group entry {} in device {}&quot;,</span>
+<span class="fc" id="L754">                    group.id(),</span>
+<span class="fc" id="L755">                    group.deviceId());</span>
+<span class="fc" id="L756">            synchronized (existing) {</span>
+<span class="fc bfc" id="L757" title="All 2 branches covered.">                for (GroupBucket bucket:group.buckets().buckets()) {</span>
+<span class="fc" id="L758">                    Optional&lt;GroupBucket&gt; matchingBucket =</span>
+<span class="fc" id="L759">                            existing.buckets().buckets()</span>
+<span class="fc" id="L760">                            .stream()</span>
+<span class="fc" id="L761">                            .filter((existingBucket)-&gt;(existingBucket.equals(bucket)))</span>
+<span class="fc" id="L762">                            .findFirst();</span>
+<span class="pc bpc" id="L763" title="1 of 2 branches missed.">                    if (matchingBucket.isPresent()) {</span>
+<span class="fc" id="L764">                        ((StoredGroupBucketEntry) matchingBucket.</span>
+<span class="fc" id="L765">                                get()).setPackets(bucket.packets());</span>
+<span class="fc" id="L766">                        ((StoredGroupBucketEntry) matchingBucket.</span>
+<span class="fc" id="L767">                                get()).setBytes(bucket.bytes());</span>
+                    } else {
+<span class="nc" id="L769">                        log.warn(&quot;addOrUpdateGroupEntry: No matching &quot;</span>
+                                + &quot;buckets to update stats&quot;);
+                    }
+<span class="fc" id="L772">                }</span>
+<span class="fc" id="L773">                existing.setLife(group.life());</span>
+<span class="fc" id="L774">                existing.setPackets(group.packets());</span>
+<span class="fc" id="L775">                existing.setBytes(group.bytes());</span>
+<span class="pc bpc" id="L776" title="1 of 2 branches missed.">                if ((existing.state() == GroupState.PENDING_ADD) ||</span>
+<span class="nc bnc" id="L777" title="All 2 branches missed.">                    (existing.state() == GroupState.PENDING_ADD_RETRY)) {</span>
+<span class="fc" id="L778">                    log.debug(&quot;addOrUpdateGroupEntry: group entry {} in device {} moving from {} to ADDED&quot;,</span>
+<span class="fc" id="L779">                            existing.id(),</span>
+<span class="fc" id="L780">                            existing.deviceId(),</span>
+<span class="fc" id="L781">                            existing.state());</span>
+<span class="fc" id="L782">                    existing.setState(GroupState.ADDED);</span>
+<span class="fc" id="L783">                    existing.setIsGroupStateAddedFirstTime(true);</span>
+<span class="fc" id="L784">                    event = new GroupEvent(Type.GROUP_ADDED, existing);</span>
+                } else {
+<span class="nc" id="L786">                    log.debug(&quot;addOrUpdateGroupEntry: group entry {} in device {} moving from {} to ADDED&quot;,</span>
+<span class="nc" id="L787">                            existing.id(),</span>
+<span class="nc" id="L788">                            existing.deviceId(),</span>
+                            GroupState.PENDING_UPDATE);
+<span class="nc" id="L790">                    existing.setState(GroupState.ADDED);</span>
+<span class="nc" id="L791">                    existing.setIsGroupStateAddedFirstTime(false);</span>
+<span class="nc" id="L792">                    event = new GroupEvent(Type.GROUP_UPDATED, existing);</span>
+                }
+                //Re-PUT map entries to trigger map update events
+<span class="fc" id="L795">                getGroupStoreKeyMap().</span>
+<span class="fc" id="L796">                    put(new GroupStoreKeyMapKey(existing.deviceId(),</span>
+<span class="fc" id="L797">                                                existing.appCookie()), existing);</span>
+<span class="pc" id="L798">            }</span>
+        } else {
+<span class="nc" id="L800">            log.warn(&quot;addOrUpdateGroupEntry: Group update &quot;</span>
+                    + &quot;happening for a non-existing entry in the map&quot;);
+        }
+
+<span class="pc bpc" id="L804" title="1 of 2 branches missed.">        if (event != null) {</span>
+<span class="fc" id="L805">            notifyDelegate(event);</span>
+        }
+<span class="fc" id="L807">    }</span>
+
+    /**
+     * Removes the group entry from store.
+     *
+     * @param group group entry
+     */
+    @Override
+    public void removeGroupEntry(Group group) {
+<span class="fc" id="L816">        StoredGroupEntry existing = getStoredGroupEntry(group.deviceId(),</span>
+<span class="fc" id="L817">                                                        group.id());</span>
+
+<span class="pc bpc" id="L819" title="1 of 2 branches missed.">        if (existing != null) {</span>
+<span class="fc" id="L820">            log.debug(&quot;removeGroupEntry: removing group entry {} in device {}&quot;,</span>
+<span class="fc" id="L821">                    group.id(),</span>
+<span class="fc" id="L822">                    group.deviceId());</span>
+            //Removal from groupid based map will happen in the
+            //map update listener
+<span class="fc" id="L825">            getGroupStoreKeyMap().remove(new GroupStoreKeyMapKey(existing.deviceId(),</span>
+<span class="fc" id="L826">                                                                 existing.appCookie()));</span>
+<span class="fc" id="L827">            notifyDelegate(new GroupEvent(Type.GROUP_REMOVED, existing));</span>
+        } else {
+<span class="nc" id="L829">            log.warn(&quot;removeGroupEntry for {} in device{} is &quot;</span>
+                    + &quot;not existing in our maps&quot;,
+<span class="nc" id="L831">                    group.id(),</span>
+<span class="nc" id="L832">                    group.deviceId());</span>
+        }
+<span class="fc" id="L834">    }</span>
+
+    @Override
+    public void deviceInitialAuditCompleted(DeviceId deviceId,
+                                            boolean completed) {
+<span class="fc" id="L839">        synchronized (deviceAuditStatus) {</span>
+<span class="pc bpc" id="L840" title="1 of 2 branches missed.">            if (completed) {</span>
+<span class="fc" id="L841">                log.debug(&quot;AUDIT completed for device {}&quot;,</span>
+                          deviceId);
+<span class="fc" id="L843">                deviceAuditStatus.put(deviceId, true);</span>
+                // Execute all pending group requests
+<span class="fc" id="L845">                List&lt;StoredGroupEntry&gt; pendingGroupRequests =</span>
+<span class="fc" id="L846">                        getPendingGroupKeyTable().values()</span>
+<span class="fc" id="L847">                        .stream()</span>
+<span class="fc" id="L848">                        .filter(g-&gt; g.deviceId().equals(deviceId))</span>
+<span class="fc" id="L849">                        .collect(Collectors.toList());</span>
+<span class="fc" id="L850">                log.debug(&quot;processing pending group add requests for device {} and number of pending requests {}&quot;,</span>
+                        deviceId,
+<span class="fc" id="L852">                        pendingGroupRequests.size());</span>
+<span class="fc bfc" id="L853" title="All 2 branches covered.">                for (Group group:pendingGroupRequests) {</span>
+<span class="fc" id="L854">                    GroupDescription tmp = new DefaultGroupDescription(</span>
+<span class="fc" id="L855">                            group.deviceId(),</span>
+<span class="fc" id="L856">                            group.type(),</span>
+<span class="fc" id="L857">                            group.buckets(),</span>
+<span class="fc" id="L858">                            group.appCookie(),</span>
+<span class="fc" id="L859">                            group.givenGroupId(),</span>
+<span class="fc" id="L860">                            group.appId());</span>
+<span class="fc" id="L861">                    storeGroupDescriptionInternal(tmp);</span>
+<span class="fc" id="L862">                    getPendingGroupKeyTable().</span>
+<span class="fc" id="L863">                        remove(new GroupStoreKeyMapKey(deviceId, group.appCookie()));</span>
+<span class="fc" id="L864">                }</span>
+<span class="fc" id="L865">            } else {</span>
+<span class="nc" id="L866">                Boolean audited = deviceAuditStatus.get(deviceId);</span>
+<span class="nc bnc" id="L867" title="All 4 branches missed.">                if (audited != null &amp;&amp; audited) {</span>
+<span class="nc" id="L868">                    log.debug(&quot;Clearing AUDIT status for device {}&quot;, deviceId);</span>
+<span class="nc" id="L869">                    deviceAuditStatus.put(deviceId, false);</span>
+                }
+            }
+<span class="pc" id="L872">        }</span>
+<span class="fc" id="L873">    }</span>
+
+    @Override
+    public boolean deviceInitialAuditStatus(DeviceId deviceId) {
+<span class="fc" id="L877">        synchronized (deviceAuditStatus) {</span>
+<span class="fc" id="L878">            Boolean audited = deviceAuditStatus.get(deviceId);</span>
+<span class="pc bpc" id="L879" title="2 of 4 branches missed.">            return audited != null &amp;&amp; audited;</span>
+<span class="nc" id="L880">        }</span>
+    }
+
+    @Override
+    public void groupOperationFailed(DeviceId deviceId, GroupOperation operation) {
+
+<span class="fc" id="L886">        StoredGroupEntry existing = getStoredGroupEntry(deviceId,</span>
+<span class="fc" id="L887">                                                        operation.groupId());</span>
+
+<span class="pc bpc" id="L889" title="1 of 2 branches missed.">        if (existing == null) {</span>
+<span class="nc" id="L890">            log.warn(&quot;No group entry with ID {} found &quot;, operation.groupId());</span>
+<span class="nc" id="L891">            return;</span>
+        }
+
+<span class="fc" id="L894">        log.warn(&quot;groupOperationFailed: group operation {} failed&quot;</span>
+                + &quot;for group {} in device {}&quot;,
+<span class="fc" id="L896">                operation.opType(),</span>
+<span class="fc" id="L897">                existing.id(),</span>
+<span class="fc" id="L898">                existing.deviceId());</span>
+<span class="pc bpc" id="L899" title="1 of 4 branches missed.">        switch (operation.opType()) {</span>
+            case ADD:
+<span class="pc bpc" id="L901" title="1 of 2 branches missed.">                if (existing.state() == GroupState.PENDING_ADD) {</span>
+                    //TODO: Need to add support for passing the group
+                    //operation failure reason from group provider.
+                    //If the error type is anything other than GROUP_EXISTS,
+                    //then the GROUP_ADD_FAILED event should be raised even
+                    //in PENDING_ADD_RETRY state also.
+<span class="fc" id="L907">                    notifyDelegate(new GroupEvent(Type.GROUP_ADD_FAILED, existing));</span>
+<span class="fc" id="L908">                    log.warn(&quot;groupOperationFailed: cleaningup &quot;</span>
+                            + &quot;group {} from store in device {}....&quot;,
+<span class="fc" id="L910">                            existing.id(),</span>
+<span class="fc" id="L911">                            existing.deviceId());</span>
+                    //Removal from groupid based map will happen in the
+                    //map update listener
+<span class="fc" id="L914">                    getGroupStoreKeyMap().remove(new GroupStoreKeyMapKey(existing.deviceId(),</span>
+<span class="fc" id="L915">                                                                         existing.appCookie()));</span>
+                }
+                break;
+            case MODIFY:
+<span class="fc" id="L919">                notifyDelegate(new GroupEvent(Type.GROUP_UPDATE_FAILED, existing));</span>
+<span class="fc" id="L920">                break;</span>
+            case DELETE:
+<span class="fc" id="L922">                notifyDelegate(new GroupEvent(Type.GROUP_REMOVE_FAILED, existing));</span>
+<span class="fc" id="L923">                break;</span>
+            default:
+<span class="nc" id="L925">                log.warn(&quot;Unknown group operation type {}&quot;, operation.opType());</span>
+        }
+<span class="fc" id="L927">    }</span>
+
+    @Override
+    public void addOrUpdateExtraneousGroupEntry(Group group) {
+<span class="fc" id="L931">        log.debug(&quot;add/update extraneous group entry {} in device {}&quot;,</span>
+<span class="fc" id="L932">                group.id(),</span>
+<span class="fc" id="L933">                group.deviceId());</span>
+<span class="fc" id="L934">        ConcurrentMap&lt;GroupId, Group&gt; extraneousIdTable =</span>
+<span class="fc" id="L935">                getExtraneousGroupIdTable(group.deviceId());</span>
+<span class="fc" id="L936">        extraneousIdTable.put(group.id(), group);</span>
+        // Don't remove the extraneous groups, instead re-use it when
+        // a group request comes with the same set of buckets
+<span class="fc" id="L939">    }</span>
+
+    @Override
+    public void removeExtraneousGroupEntry(Group group) {
+<span class="fc" id="L943">        log.debug(&quot;remove extraneous group entry {} of device {} from store&quot;,</span>
+<span class="fc" id="L944">                group.id(),</span>
+<span class="fc" id="L945">                group.deviceId());</span>
+<span class="fc" id="L946">        ConcurrentMap&lt;GroupId, Group&gt; extraneousIdTable =</span>
+<span class="fc" id="L947">                getExtraneousGroupIdTable(group.deviceId());</span>
+<span class="fc" id="L948">        extraneousIdTable.remove(group.id());</span>
+<span class="fc" id="L949">    }</span>
+
+    @Override
+    public Iterable&lt;Group&gt; getExtraneousGroups(DeviceId deviceId) {
+        // flatten and make iterator unmodifiable
+<span class="fc" id="L954">        return FluentIterable.from(</span>
+<span class="fc" id="L955">                getExtraneousGroupIdTable(deviceId).values());</span>
+    }
+
+    /**
+     * Map handler to receive any events when the group key map is updated.
+     */
+<span class="fc" id="L961">    private class GroupStoreKeyMapListener implements</span>
+            EventuallyConsistentMapListener&lt;GroupStoreKeyMapKey, StoredGroupEntry&gt; {
+
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;GroupStoreKeyMapKey,
+                                  StoredGroupEntry&gt; mapEvent) {
+<span class="fc" id="L967">            GroupEvent groupEvent = null;</span>
+<span class="fc" id="L968">            GroupStoreKeyMapKey key = mapEvent.key();</span>
+<span class="fc" id="L969">            StoredGroupEntry group = mapEvent.value();</span>
+<span class="pc bpc" id="L970" title="3 of 4 branches missed.">            if ((key == null) &amp;&amp; (group == null)) {</span>
+<span class="nc" id="L971">                log.error(&quot;GroupStoreKeyMapListener: Received &quot;</span>
+<span class="nc" id="L972">                        + &quot;event {} with null entry&quot;, mapEvent.type());</span>
+<span class="nc" id="L973">                return;</span>
+<span class="fc bfc" id="L974" title="All 2 branches covered.">            } else if (group == null) {</span>
+<span class="fc" id="L975">                group = getGroupIdTable(key.deviceId()).values()</span>
+<span class="fc" id="L976">                        .stream()</span>
+<span class="fc" id="L977">                        .filter((storedGroup) -&gt; (storedGroup.appCookie().equals(key.appCookie)))</span>
+<span class="fc" id="L978">                        .findFirst().get();</span>
+<span class="pc bpc" id="L979" title="1 of 2 branches missed.">                if (group == null) {</span>
+<span class="nc" id="L980">                    log.error(&quot;GroupStoreKeyMapListener: Received &quot;</span>
+<span class="nc" id="L981">                            + &quot;event {} with null entry... can not process&quot;, mapEvent.type());</span>
+<span class="nc" id="L982">                    return;</span>
+                }
+            }
+<span class="fc" id="L985">            log.trace(&quot;received groupid map event {} for id {} in device {}&quot;,</span>
+<span class="fc" id="L986">                      mapEvent.type(),</span>
+<span class="fc" id="L987">                      group.id(),</span>
+<span class="fc" id="L988">                      key.deviceId());</span>
+<span class="fc bfc" id="L989" title="All 2 branches covered.">            if (mapEvent.type() == EventuallyConsistentMapEvent.Type.PUT) {</span>
+                // Update the group ID table
+<span class="fc" id="L991">                getGroupIdTable(group.deviceId()).put(group.id(), group);</span>
+<span class="fc bfc" id="L992" title="All 2 branches covered.">                if (mapEvent.value().state() == Group.GroupState.ADDED) {</span>
+<span class="pc bpc" id="L993" title="1 of 2 branches missed.">                    if (mapEvent.value().isGroupStateAddedFirstTime()) {</span>
+<span class="fc" id="L994">                        groupEvent = new GroupEvent(Type.GROUP_ADDED,</span>
+<span class="fc" id="L995">                                                    mapEvent.value());</span>
+<span class="fc" id="L996">                        log.trace(&quot;Received first time GROUP_ADDED state update for id {} in device {}&quot;,</span>
+<span class="fc" id="L997">                                group.id(),</span>
+<span class="fc" id="L998">                                group.deviceId());</span>
+                    } else {
+<span class="nc" id="L1000">                        groupEvent = new GroupEvent(Type.GROUP_UPDATED,</span>
+<span class="nc" id="L1001">                                                    mapEvent.value());</span>
+<span class="nc" id="L1002">                        log.trace(&quot;Received following GROUP_ADDED state update for id {} in device {}&quot;,</span>
+<span class="nc" id="L1003">                                group.id(),</span>
+<span class="nc" id="L1004">                                group.deviceId());</span>
+                    }
+                }
+<span class="pc bpc" id="L1007" title="1 of 2 branches missed.">            } else if (mapEvent.type() == EventuallyConsistentMapEvent.Type.REMOVE) {</span>
+<span class="fc" id="L1008">                groupEvent = new GroupEvent(Type.GROUP_REMOVED, group);</span>
+                // Remove the entry from the group ID table
+<span class="fc" id="L1010">                getGroupIdTable(group.deviceId()).remove(group.id(), group);</span>
+            }
+
+<span class="fc bfc" id="L1013" title="All 2 branches covered.">            if (groupEvent != null) {</span>
+<span class="fc" id="L1014">                notifyDelegate(groupEvent);</span>
+            }
+<span class="fc" id="L1016">        }</span>
+    }
+
+    private void process(GroupStoreMessage groupOp) {
+<span class="nc" id="L1020">        log.debug(&quot;Received remote group operation {} request for device {}&quot;,</span>
+<span class="nc" id="L1021">                groupOp.type(),</span>
+<span class="nc" id="L1022">                groupOp.deviceId());</span>
+<span class="nc bnc" id="L1023" title="All 2 branches missed.">      if (!mastershipService.isLocalMaster(groupOp.deviceId())) {</span>
+<span class="nc" id="L1024">          log.warn(&quot;This node is not MASTER for device {}&quot;, groupOp.deviceId());</span>
+<span class="nc" id="L1025">          return;</span>
+      }
+<span class="nc bnc" id="L1027" title="All 2 branches missed.">      if (groupOp.type() == GroupStoreMessage.Type.ADD) {</span>
+<span class="nc" id="L1028">          storeGroupDescriptionInternal(groupOp.groupDesc());</span>
+<span class="nc bnc" id="L1029" title="All 2 branches missed.">      } else if (groupOp.type() == GroupStoreMessage.Type.UPDATE) {</span>
+<span class="nc" id="L1030">          updateGroupDescriptionInternal(groupOp.deviceId(),</span>
+<span class="nc" id="L1031">                                         groupOp.appCookie(),</span>
+<span class="nc" id="L1032">                                         groupOp.updateType(),</span>
+<span class="nc" id="L1033">                                         groupOp.updateBuckets(),</span>
+<span class="nc" id="L1034">                                         groupOp.newAppCookie());</span>
+<span class="nc bnc" id="L1035" title="All 2 branches missed.">      } else if (groupOp.type() == GroupStoreMessage.Type.DELETE) {</span>
+<span class="nc" id="L1036">          deleteGroupDescriptionInternal(groupOp.deviceId(),</span>
+<span class="nc" id="L1037">                                         groupOp.appCookie());</span>
+      }
+<span class="nc" id="L1039">    }</span>
+
+    /**
+     * Flattened map key to be used to store group entries.
+     */
+    protected static class GroupStoreMapKey {
+        private final DeviceId deviceId;
+
+<span class="fc" id="L1047">        public GroupStoreMapKey(DeviceId deviceId) {</span>
+<span class="fc" id="L1048">            this.deviceId = deviceId;</span>
+<span class="fc" id="L1049">        }</span>
+
+        public DeviceId deviceId() {
+<span class="fc" id="L1052">            return deviceId;</span>
+        }
+
+        @Override
+        public boolean equals(Object o) {
+<span class="fc bfc" id="L1057" title="All 2 branches covered.">            if (this == o) {</span>
+<span class="fc" id="L1058">                return true;</span>
+            }
+<span class="fc bfc" id="L1060" title="All 2 branches covered.">            if (!(o instanceof GroupStoreMapKey)) {</span>
+<span class="fc" id="L1061">                return false;</span>
+            }
+<span class="fc" id="L1063">            GroupStoreMapKey that = (GroupStoreMapKey) o;</span>
+<span class="fc" id="L1064">            return this.deviceId.equals(that.deviceId);</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L1069">            int result = 17;</span>
+
+<span class="fc" id="L1071">            result = 31 * result + Objects.hash(this.deviceId);</span>
+
+<span class="fc" id="L1073">            return result;</span>
+        }
+    }
+
+    protected static class GroupStoreKeyMapKey extends GroupStoreMapKey {
+        private final GroupKey appCookie;
+        public GroupStoreKeyMapKey(DeviceId deviceId,
+                                   GroupKey appCookie) {
+<span class="fc" id="L1081">            super(deviceId);</span>
+<span class="fc" id="L1082">            this.appCookie = appCookie;</span>
+<span class="fc" id="L1083">        }</span>
+
+        @Override
+        public boolean equals(Object o) {
+<span class="fc bfc" id="L1087" title="All 2 branches covered.">            if (this == o) {</span>
+<span class="fc" id="L1088">                return true;</span>
+            }
+<span class="fc bfc" id="L1090" title="All 2 branches covered.">            if (!(o instanceof GroupStoreKeyMapKey)) {</span>
+<span class="fc" id="L1091">                return false;</span>
+            }
+<span class="fc" id="L1093">            GroupStoreKeyMapKey that = (GroupStoreKeyMapKey) o;</span>
+<span class="fc bfc" id="L1094" title="All 2 branches covered.">            return (super.equals(that) &amp;&amp;</span>
+<span class="fc bfc" id="L1095" title="All 2 branches covered.">                    this.appCookie.equals(that.appCookie));</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L1100">            int result = 17;</span>
+
+<span class="fc" id="L1102">            result = 31 * result + super.hashCode() + Objects.hash(this.appCookie);</span>
+
+<span class="fc" id="L1104">            return result;</span>
+        }
+    }
+
+    protected static class GroupStoreIdMapKey extends GroupStoreMapKey {
+        private final GroupId groupId;
+        public GroupStoreIdMapKey(DeviceId deviceId,
+                                  GroupId groupId) {
+<span class="fc" id="L1112">            super(deviceId);</span>
+<span class="fc" id="L1113">            this.groupId = groupId;</span>
+<span class="fc" id="L1114">        }</span>
+
+        @Override
+        public boolean equals(Object o) {
+<span class="fc bfc" id="L1118" title="All 2 branches covered.">            if (this == o) {</span>
+<span class="fc" id="L1119">                return true;</span>
+            }
+<span class="fc bfc" id="L1121" title="All 2 branches covered.">            if (!(o instanceof GroupStoreIdMapKey)) {</span>
+<span class="fc" id="L1122">                return false;</span>
+            }
+<span class="fc" id="L1124">            GroupStoreIdMapKey that = (GroupStoreIdMapKey) o;</span>
+<span class="fc bfc" id="L1125" title="All 2 branches covered.">            return (super.equals(that) &amp;&amp;</span>
+<span class="fc bfc" id="L1126" title="All 2 branches covered.">                    this.groupId.equals(that.groupId));</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L1131">            int result = 17;</span>
+
+<span class="fc" id="L1133">            result = 31 * result + super.hashCode() + Objects.hash(this.groupId);</span>
+
+<span class="fc" id="L1135">            return result;</span>
+        }
+    }
+
+    @Override
+    public void pushGroupMetrics(DeviceId deviceId,
+                                 Collection&lt;Group&gt; groupEntries) {
+<span class="fc" id="L1142">        boolean deviceInitialAuditStatus =</span>
+<span class="fc" id="L1143">                deviceInitialAuditStatus(deviceId);</span>
+<span class="fc" id="L1144">        Set&lt;Group&gt; southboundGroupEntries =</span>
+<span class="fc" id="L1145">                Sets.newHashSet(groupEntries);</span>
+<span class="fc" id="L1146">        Set&lt;StoredGroupEntry&gt; storedGroupEntries =</span>
+<span class="fc" id="L1147">                Sets.newHashSet(getStoredGroups(deviceId));</span>
+<span class="fc" id="L1148">        Set&lt;Group&gt; extraneousStoredEntries =</span>
+<span class="fc" id="L1149">                Sets.newHashSet(getExtraneousGroups(deviceId));</span>
+
+<span class="fc" id="L1151">        log.trace(&quot;pushGroupMetrics: Displaying all ({}) southboundGroupEntries for device {}&quot;,</span>
+<span class="fc" id="L1152">                  southboundGroupEntries.size(),</span>
+                  deviceId);
+<span class="fc bfc" id="L1154" title="All 2 branches covered.">        for (Iterator&lt;Group&gt; it = southboundGroupEntries.iterator(); it.hasNext();) {</span>
+<span class="fc" id="L1155">            Group group = it.next();</span>
+<span class="fc" id="L1156">            log.trace(&quot;Group {} in device {}&quot;, group, deviceId);</span>
+<span class="fc" id="L1157">        }</span>
+
+<span class="fc" id="L1159">        log.trace(&quot;Displaying all ({}) stored group entries for device {}&quot;,</span>
+<span class="fc" id="L1160">                  storedGroupEntries.size(),</span>
+                  deviceId);
+<span class="fc" id="L1162">        for (Iterator&lt;StoredGroupEntry&gt; it1 = storedGroupEntries.iterator();</span>
+<span class="fc bfc" id="L1163" title="All 2 branches covered.">                it1.hasNext();) {</span>
+<span class="fc" id="L1164">            Group group = it1.next();</span>
+<span class="fc" id="L1165">            log.trace(&quot;Stored Group {} for device {}&quot;, group, deviceId);</span>
+<span class="fc" id="L1166">        }</span>
+
+<span class="fc bfc" id="L1168" title="All 2 branches covered.">        for (Iterator&lt;Group&gt; it2 = southboundGroupEntries.iterator(); it2.hasNext();) {</span>
+<span class="fc" id="L1169">            Group group = it2.next();</span>
+<span class="pc bpc" id="L1170" title="1 of 2 branches missed.">            if (storedGroupEntries.remove(group)) {</span>
+                // we both have the group, let's update some info then.
+<span class="fc" id="L1172">                log.trace(&quot;Group AUDIT: group {} exists in both planes for device {}&quot;,</span>
+<span class="fc" id="L1173">                        group.id(), deviceId);</span>
+<span class="fc" id="L1174">                groupAdded(group);</span>
+<span class="fc" id="L1175">                it2.remove();</span>
+            }
+<span class="fc" id="L1177">        }</span>
+<span class="pc bpc" id="L1178" title="1 of 2 branches missed.">        for (Group group : southboundGroupEntries) {</span>
+<span class="nc bnc" id="L1179" title="All 2 branches missed.">            if (getGroup(group.deviceId(), group.id()) != null) {</span>
+                // There is a group existing with the same id
+                // It is possible that group update is
+                // in progress while we got a stale info from switch
+<span class="nc bnc" id="L1183" title="All 2 branches missed.">                if (!storedGroupEntries.remove(getGroup(</span>
+<span class="nc" id="L1184">                             group.deviceId(), group.id()))) {</span>
+<span class="nc" id="L1185">                    log.warn(&quot;Group AUDIT: Inconsistent state:&quot;</span>
+                            + &quot;Group exists in ID based table while &quot;
+                            + &quot;not present in key based table&quot;);
+                }
+            } else {
+                // there are groups in the switch that aren't in the store
+<span class="nc" id="L1191">                log.debug(&quot;Group AUDIT: extraneous group {} exists in data plane for device {}&quot;,</span>
+<span class="nc" id="L1192">                        group.id(), deviceId);</span>
+<span class="nc" id="L1193">                extraneousStoredEntries.remove(group);</span>
+<span class="nc" id="L1194">                extraneousGroup(group);</span>
+            }
+<span class="nc" id="L1196">        }</span>
+<span class="fc bfc" id="L1197" title="All 2 branches covered.">        for (Group group : storedGroupEntries) {</span>
+            // there are groups in the store that aren't in the switch
+<span class="fc" id="L1199">            log.debug(&quot;Group AUDIT: group {} missing in data plane for device {}&quot;,</span>
+<span class="fc" id="L1200">                    group.id(), deviceId);</span>
+<span class="fc" id="L1201">            groupMissing(group);</span>
+<span class="fc" id="L1202">        }</span>
+<span class="pc bpc" id="L1203" title="1 of 2 branches missed.">        for (Group group : extraneousStoredEntries) {</span>
+            // there are groups in the extraneous store that
+            // aren't in the switch
+<span class="nc" id="L1206">            log.debug(&quot;Group AUDIT: clearing extransoeus group {} from store for device {}&quot;,</span>
+<span class="nc" id="L1207">                    group.id(), deviceId);</span>
+<span class="nc" id="L1208">            removeExtraneousGroupEntry(group);</span>
+<span class="nc" id="L1209">        }</span>
+
+<span class="pc bpc" id="L1211" title="1 of 2 branches missed.">        if (!deviceInitialAuditStatus) {</span>
+<span class="nc" id="L1212">            log.debug(&quot;Group AUDIT: Setting device {} initial AUDIT completed&quot;,</span>
+                      deviceId);
+<span class="nc" id="L1214">            deviceInitialAuditCompleted(deviceId, true);</span>
+        }
+<span class="fc" id="L1216">    }</span>
+
+    private void groupMissing(Group group) {
+<span class="pc bpc" id="L1219" title="2 of 3 branches missed.">        switch (group.state()) {</span>
+            case PENDING_DELETE:
+<span class="nc" id="L1221">                log.debug(&quot;Group {} delete confirmation from device {}&quot;,</span>
+<span class="nc" id="L1222">                          group, group.deviceId());</span>
+<span class="nc" id="L1223">                removeGroupEntry(group);</span>
+<span class="nc" id="L1224">                break;</span>
+            case ADDED:
+            case PENDING_ADD:
+            case PENDING_ADD_RETRY:
+            case PENDING_UPDATE:
+<span class="fc" id="L1229">                log.debug(&quot;Group {} is in store but not on device {}&quot;,</span>
+<span class="fc" id="L1230">                          group, group.deviceId());</span>
+<span class="fc" id="L1231">                StoredGroupEntry existing =</span>
+<span class="fc" id="L1232">                        getStoredGroupEntry(group.deviceId(), group.id());</span>
+<span class="fc" id="L1233">                log.debug(&quot;groupMissing: group entry {} in device {} moving from {} to PENDING_ADD_RETRY&quot;,</span>
+<span class="fc" id="L1234">                        existing.id(),</span>
+<span class="fc" id="L1235">                        existing.deviceId(),</span>
+<span class="fc" id="L1236">                        existing.state());</span>
+<span class="fc" id="L1237">                existing.setState(Group.GroupState.PENDING_ADD_RETRY);</span>
+                //Re-PUT map entries to trigger map update events
+<span class="fc" id="L1239">                getGroupStoreKeyMap().</span>
+<span class="fc" id="L1240">                    put(new GroupStoreKeyMapKey(existing.deviceId(),</span>
+<span class="fc" id="L1241">                                                existing.appCookie()), existing);</span>
+<span class="fc" id="L1242">                notifyDelegate(new GroupEvent(GroupEvent.Type.GROUP_ADD_REQUESTED,</span>
+                                              group));
+<span class="fc" id="L1244">                break;</span>
+            default:
+<span class="nc" id="L1246">                log.debug(&quot;Group {} has not been installed.&quot;, group);</span>
+                break;
+        }
+<span class="fc" id="L1249">    }</span>
+
+    private void extraneousGroup(Group group) {
+<span class="nc" id="L1252">        log.debug(&quot;Group {} is on device {} but not in store.&quot;,</span>
+<span class="nc" id="L1253">                  group, group.deviceId());</span>
+<span class="nc" id="L1254">        addOrUpdateExtraneousGroupEntry(group);</span>
+<span class="nc" id="L1255">    }</span>
+
+    private void groupAdded(Group group) {
+<span class="fc" id="L1258">        log.trace(&quot;Group {} Added or Updated in device {}&quot;,</span>
+<span class="fc" id="L1259">                  group, group.deviceId());</span>
+<span class="fc" id="L1260">        addOrUpdateGroupEntry(group);</span>
+<span class="fc" id="L1261">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

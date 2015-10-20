@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultMessageStream.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio.service</a> &gt; <span class="el_source">DefaultMessageStream.java</span></div><h1>DefaultMessageStream.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio.service;
+
+import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.onlab.nio.IOLoop;
+import org.onlab.nio.MessageStream;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpAddress.Version;
+import org.onosproject.store.cluster.messaging.Endpoint;
+
+import com.google.common.base.Charsets;
+
+/**
+ * Default bi-directional message stream for transferring messages to &amp;amp; from the
+ * network via two byte buffers.
+ */
+public class DefaultMessageStream extends MessageStream&lt;DefaultMessage&gt; {
+
+<span class="nc" id="L37">    private final CompletableFuture&lt;Void&gt; connectFuture = new CompletableFuture&lt;&gt;();</span>
+
+    public DefaultMessageStream(
+            IOLoop&lt;DefaultMessage, ?&gt; loop,
+            ByteChannel byteChannel,
+            int bufferSize,
+            int maxIdleMillis) {
+<span class="nc" id="L44">        super(loop, byteChannel, bufferSize, maxIdleMillis);</span>
+<span class="nc" id="L45">    }</span>
+
+    public CompletableFuture&lt;DefaultMessageStream&gt; connectedFuture() {
+<span class="nc" id="L48">        return connectFuture.thenApply(v -&gt; this);</span>
+    }
+
+<span class="nc" id="L51">    private final AtomicInteger messageLength = new AtomicInteger(-1);</span>
+
+    @Override
+    protected DefaultMessage read(ByteBuffer buffer) {
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        if (messageLength.get() == -1) {</span>
+            // check if we can read the message length.
+<span class="nc bnc" id="L57" title="All 2 branches missed.">            if (buffer.remaining() &lt; Integer.BYTES) {</span>
+<span class="nc" id="L58">                return null;</span>
+            } else {
+<span class="nc" id="L60">                messageLength.set(buffer.getInt());</span>
+            }
+        }
+
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        if (buffer.remaining() &lt; messageLength.get()) {</span>
+<span class="nc" id="L65">            return null;</span>
+        }
+
+<span class="nc" id="L68">        long id = buffer.getLong();</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        Version ipVersion = buffer.get() == 0x0 ? Version.INET : Version.INET6;</span>
+<span class="nc" id="L70">        byte[] octects = new byte[IpAddress.byteLength(ipVersion)];</span>
+<span class="nc" id="L71">        buffer.get(octects);</span>
+<span class="nc" id="L72">        IpAddress senderIp = IpAddress.valueOf(ipVersion, octects);</span>
+<span class="nc" id="L73">        int senderPort = buffer.getInt();</span>
+<span class="nc" id="L74">        int messageTypeByteLength = buffer.getInt();</span>
+<span class="nc" id="L75">        byte[] messageTypeBytes = new byte[messageTypeByteLength];</span>
+<span class="nc" id="L76">        buffer.get(messageTypeBytes);</span>
+<span class="nc" id="L77">        String messageType = new String(messageTypeBytes, Charsets.UTF_8);</span>
+<span class="nc" id="L78">        int payloadLength = buffer.getInt();</span>
+<span class="nc" id="L79">        byte[] payloadBytes = new byte[payloadLength];</span>
+<span class="nc" id="L80">        buffer.get(payloadBytes);</span>
+
+        // reset for next message
+<span class="nc" id="L83">        messageLength.set(-1);</span>
+
+<span class="nc" id="L85">        return new DefaultMessage(id, new Endpoint(senderIp, senderPort), messageType, payloadBytes);</span>
+    }
+
+    @Override
+    protected void write(DefaultMessage message, ByteBuffer buffer) {
+<span class="nc" id="L90">        Endpoint sender = message.sender();</span>
+<span class="nc" id="L91">        byte[] messageTypeBytes = message.type().getBytes(Charsets.UTF_8);</span>
+<span class="nc" id="L92">        IpAddress senderIp = sender.host();</span>
+<span class="nc" id="L93">        byte[] ipOctets = senderIp.toOctets();</span>
+<span class="nc" id="L94">        byte[] payload = message.payload();</span>
+
+<span class="nc" id="L96">        int messageLength = 21 + ipOctets.length + messageTypeBytes.length + payload.length;</span>
+
+<span class="nc" id="L98">        buffer.putInt(messageLength);</span>
+
+<span class="nc" id="L100">        buffer.putLong(message.id());</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (senderIp.version() == Version.INET) {</span>
+<span class="nc" id="L103">            buffer.put((byte) 0x0);</span>
+        } else {
+<span class="nc" id="L105">            buffer.put((byte) 0x1);</span>
+        }
+<span class="nc" id="L107">        buffer.put(ipOctets);</span>
+
+        // write sender port
+<span class="nc" id="L110">        buffer.putInt(sender.port());</span>
+
+        // write length of message type
+<span class="nc" id="L113">        buffer.putInt(messageTypeBytes.length);</span>
+
+        // write message type bytes
+<span class="nc" id="L116">        buffer.put(messageTypeBytes);</span>
+
+        // write payload length
+<span class="nc" id="L119">        buffer.putInt(payload.length);</span>
+
+        // write payload.
+<span class="nc" id="L122">        buffer.put(payload);</span>
+<span class="nc" id="L123">    }</span>
+
+    /**
+     * Callback invoked when the stream is successfully connected.
+     */
+    public void connected() {
+<span class="nc" id="L129">        connectFuture.complete(null);</span>
+<span class="nc" id="L130">    }</span>
+
+    /**
+     * Callback invoked when the stream fails to connect.
+     * @param cause failure cause
+     */
+    public void connectFailed(Throwable cause) {
+<span class="nc" id="L137">        connectFuture.completeExceptionally(cause);</span>
+<span class="nc" id="L138">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

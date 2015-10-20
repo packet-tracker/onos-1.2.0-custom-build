@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentProcessPhase.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.phase</a> &gt; <span class="el_source">IntentProcessPhase.java</span></div><h1>IntentProcessPhase.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.phase;
+
+import org.onosproject.net.intent.IntentData;
+import org.onosproject.net.intent.impl.IntentProcessor;
+
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Represents a phase of processing an intent.
+ */
+public interface IntentProcessPhase {
+
+    /**
+     * Execute the procedure represented by the instance
+     * and generates the next update instance.
+     *
+     * @return next update
+     */
+    Optional&lt;IntentProcessPhase&gt; execute();
+
+    /**
+     * Create a starting intent process phase according to intent data this class holds.
+     *
+     * @param processor intent processor to be passed to intent process phases
+     *                  generated while this instance is working
+     * @param data intent data to be processed
+     * @param current intent date that is stored in the store
+     * @return starting intent process phase
+     */
+    static IntentProcessPhase newInitialPhase(IntentProcessor processor,
+                                              IntentData data, IntentData current) {
+<span class="pc bpc" id="L48" title="2 of 4 branches missed.">        switch (data.request()) {</span>
+            case INSTALL_REQ:
+<span class="fc" id="L50">                return new InstallRequest(processor, data, Optional.ofNullable(current));</span>
+            case WITHDRAW_REQ:
+<span class="fc" id="L52">                return new WithdrawRequest(processor, data, Optional.ofNullable(current));</span>
+            case PURGE_REQ:
+<span class="nc" id="L54">                return new PurgeRequest(data, Optional.ofNullable(current));</span>
+            default:
+                // illegal state
+<span class="nc" id="L57">                return new Failed(data);</span>
+        }
+    }
+
+    static void transferErrorCount(IntentData data, Optional&lt;IntentData&gt; stored) {
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        if (stored.isPresent()) {</span>
+<span class="fc" id="L63">            IntentData storedData = stored.get();</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">            if (Objects.equals(data.intent(), storedData.intent()) &amp;&amp;</span>
+<span class="fc bfc" id="L65" title="All 2 branches covered.">                    Objects.equals(data.request(), storedData.request())) {</span>
+<span class="fc" id="L66">                data.setErrorCount(storedData.errorCount());</span>
+            } else {
+<span class="fc" id="L68">                data.setErrorCount(0);</span>
+            }
+        }
+<span class="fc" id="L71">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

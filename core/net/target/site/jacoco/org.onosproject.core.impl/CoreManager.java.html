@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>CoreManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.core.impl</a> &gt; <span class="el_source">CoreManager.java</span></div><h1>CoreManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.core.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.SharedExecutors;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.ApplicationIdStore;
+import org.onosproject.core.CoreService;
+import org.onosproject.core.IdBlockStore;
+import org.onosproject.core.IdGenerator;
+import org.onosproject.core.Version;
+import org.onosproject.event.EventDeliveryService;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Dictionary;
+import java.util.List;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+
+/**
+ * Core service implementation.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L60">public class CoreManager implements CoreService {</span>
+
+<span class="nc" id="L62">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+<span class="nc" id="L64">    private static final File VERSION_FILE = new File(&quot;../VERSION&quot;);</span>
+<span class="nc" id="L65">    private static Version version = Version.version(&quot;1.4.0-SNAPSHOT&quot;);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ApplicationIdStore applicationIdStore;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IdBlockStore idBlockStore;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected EventDeliveryService eventDeliveryService;
+
+    private static final int DEFAULT_POOL_SIZE = 30;
+<span class="nc" id="L80">    @Property(name = &quot;sharedThreadPoolSize&quot;, intValue = DEFAULT_POOL_SIZE,</span>
+            label = &quot;Configure shared pool maximum size &quot;)
+    private int sharedThreadPoolSize = DEFAULT_POOL_SIZE;
+
+    private static final int DEFAULT_EVENT_TIME = 2000;
+<span class="nc" id="L85">    @Property(name = &quot;maxEventTimeLimit&quot;, intValue = DEFAULT_EVENT_TIME,</span>
+            label = &quot;Maximum number of millis an event sink has to process an event&quot;)
+    private int maxEventTimeLimit = DEFAULT_EVENT_TIME;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L91">        registerApplication(CORE_APP_NAME);</span>
+<span class="nc" id="L92">        cfgService.registerProperties(getClass());</span>
+        try {
+<span class="nc" id="L94">            Path path = Paths.get(VERSION_FILE.getPath());</span>
+<span class="nc" id="L95">            List&lt;String&gt; versionLines = Files.readAllLines(path);</span>
+<span class="nc bnc" id="L96" title="All 4 branches missed.">            if (versionLines != null &amp;&amp; !versionLines.isEmpty()) {</span>
+<span class="nc" id="L97">                version = Version.version(versionLines.get(0));</span>
+            }
+<span class="nc" id="L99">        } catch (IOException e) {</span>
+            // version file not found, using default
+<span class="nc" id="L101">            log.trace(&quot;Version file not found&quot;, e);</span>
+<span class="nc" id="L102">        }</span>
+<span class="nc" id="L103">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L107">        cfgService.unregisterProperties(getClass(), false);</span>
+<span class="nc" id="L108">        SharedExecutors.shutdown();</span>
+<span class="nc" id="L109">    }</span>
+
+    @Override
+    public Version version() {
+<span class="nc" id="L113">        checkPermission(APP_READ);</span>
+
+<span class="nc" id="L115">        return version;</span>
+    }
+
+    @Override
+    public Set&lt;ApplicationId&gt; getAppIds() {
+<span class="nc" id="L120">        checkPermission(APP_READ);</span>
+
+<span class="nc" id="L122">        return applicationIdStore.getAppIds();</span>
+    }
+
+    @Override
+    public ApplicationId getAppId(Short id) {
+<span class="nc" id="L127">        checkPermission(APP_READ);</span>
+
+<span class="nc" id="L129">        return applicationIdStore.getAppId(id);</span>
+    }
+
+    @Override
+    public ApplicationId getAppId(String name) {
+<span class="nc" id="L134">        checkPermission(APP_READ);</span>
+
+<span class="nc" id="L136">        return applicationIdStore.getAppId(name);</span>
+    }
+
+
+    @Override
+    public ApplicationId registerApplication(String name) {
+<span class="nc" id="L142">        checkNotNull(name, &quot;Application ID cannot be null&quot;);</span>
+<span class="nc" id="L143">        return applicationIdStore.registerApplication(name);</span>
+    }
+
+    @Override
+    public IdGenerator getIdGenerator(String topic) {
+<span class="nc" id="L148">        IdBlockAllocator allocator = new StoreBasedIdBlockAllocator(topic, idBlockStore);</span>
+<span class="nc" id="L149">        return new BlockAllocatorBasedIdGenerator(allocator);</span>
+    }
+
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="nc" id="L155">        Dictionary&lt;?, ?&gt; properties = context.getProperties();</span>
+<span class="nc" id="L156">        Integer poolSize = getIntegerProperty(properties, &quot;sharedThreadPoolSize&quot;);</span>
+
+<span class="nc bnc" id="L158" title="All 4 branches missed.">        if (poolSize != null &amp;&amp; poolSize &gt; 1) {</span>
+<span class="nc" id="L159">            sharedThreadPoolSize = poolSize;</span>
+<span class="nc" id="L160">            SharedExecutors.setPoolSize(sharedThreadPoolSize);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        } else if (poolSize != null) {</span>
+<span class="nc" id="L162">            log.warn(&quot;sharedThreadPoolSize must be greater than 1&quot;);</span>
+        }
+
+<span class="nc" id="L165">        Integer timeLimit = getIntegerProperty(properties, &quot;maxEventTimeLimit&quot;);</span>
+<span class="nc bnc" id="L166" title="All 4 branches missed.">        if (timeLimit != null &amp;&amp; timeLimit &gt; 1) {</span>
+<span class="nc" id="L167">            maxEventTimeLimit = timeLimit;</span>
+<span class="nc" id="L168">            eventDeliveryService.setDispatchTimeLimit(maxEventTimeLimit);</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        } else if (timeLimit != null) {</span>
+<span class="nc" id="L170">            log.warn(&quot;maxEventTimeLimit must be greater than 1&quot;);</span>
+        }
+
+<span class="nc" id="L173">        log.info(&quot;Settings: sharedThreadPoolSize={}, maxEventTimeLimit={}&quot;,</span>
+<span class="nc" id="L174">                 sharedThreadPoolSize, maxEventTimeLimit);</span>
+<span class="nc" id="L175">    }</span>
+
+
+    /**
+     * Get Integer property from the propertyName
+     * Return null if propertyName is not found.
+     *
+     * @param properties   properties to be looked up
+     * @param propertyName the name of the property to look up
+     * @return value when the propertyName is defined or return null
+     */
+    private static Integer getIntegerProperty(Dictionary&lt;?, ?&gt; properties,
+                                              String propertyName) {
+<span class="nc" id="L188">        Integer value = null;</span>
+        try {
+<span class="nc" id="L190">            String s = (String) properties.get(propertyName);</span>
+<span class="nc bnc" id="L191" title="All 2 branches missed.">            value = isNullOrEmpty(s) ? value : Integer.parseInt(s.trim());</span>
+<span class="nc" id="L192">        } catch (NumberFormatException | ClassCastException e) {</span>
+<span class="nc" id="L193">            value = null;</span>
+<span class="nc" id="L194">        }</span>
+<span class="nc" id="L195">        return value;</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

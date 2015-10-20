@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupModBuilder.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-group</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.group.impl</a> &gt; <span class="el_source">GroupModBuilder.java</span></div><h1>GroupModBuilder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.of.group.impl;
+
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.Ip6Address;
+import org.onosproject.core.GroupId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction;
+import org.onosproject.net.flow.instructions.L2ModificationInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction;
+import org.onosproject.net.group.GroupBucket;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.projectfloodlight.openflow.protocol.OFBucket;
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFGroupAdd;
+import org.projectfloodlight.openflow.protocol.OFGroupDelete;
+import org.projectfloodlight.openflow.protocol.OFGroupMod;
+import org.projectfloodlight.openflow.protocol.OFGroupType;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionGroup;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.oxm.OFOxm;
+import org.projectfloodlight.openflow.types.CircuitSignalID;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.IPv6Address;
+import org.projectfloodlight.openflow.types.IPv6FlowLabel;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFBooleanValue;
+import org.projectfloodlight.openflow.types.OFGroup;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.OFVlanVidMatch;
+import org.projectfloodlight.openflow.types.U32;
+import org.projectfloodlight.openflow.types.VlanPcp;
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/*
+ * Builder for GroupMod.
+ */
+public final class GroupModBuilder {
+
+    private GroupBuckets buckets;
+    private GroupId groupId;
+    private GroupDescription.Type type;
+    private OFFactory factory;
+    private Long xid;
+
+<span class="fc" id="L74">    private final Logger log = getLogger(getClass());</span>
+
+    private static final int OFPCML_NO_BUFFER = 0xffff;
+
+    private GroupModBuilder(GroupBuckets buckets, GroupId groupId,
+                             GroupDescription.Type type, OFFactory factory,
+<span class="fc" id="L80">                             Optional&lt;Long&gt; xid) {</span>
+<span class="fc" id="L81">        this.buckets = buckets;</span>
+<span class="fc" id="L82">        this.groupId = groupId;</span>
+<span class="fc" id="L83">        this.type = type;</span>
+<span class="fc" id="L84">        this.factory = factory;</span>
+<span class="fc" id="L85">        this.xid = xid.orElse((long) 0);</span>
+<span class="fc" id="L86">    }</span>
+
+    /**
+     * Creates a builder for GroupMod.
+     *
+     * @param buckets GroupBuckets object
+     * @param groupId Group Id to create
+     * @param type Group type
+     * @param factory OFFactory object
+     * @param xid transaction ID
+     * @return GroupModBuilder object
+     */
+    public static GroupModBuilder builder(GroupBuckets buckets, GroupId groupId,
+                                          GroupDescription.Type type, OFFactory factory,
+                                          Optional&lt;Long&gt; xid) {
+
+<span class="fc" id="L102">        return new GroupModBuilder(buckets, groupId, type, factory, xid);</span>
+    }
+
+    /**
+     * Builds the GroupAdd OF message.
+     *
+     * @return GroupAdd OF message
+     */
+    public OFGroupAdd buildGroupAdd() {
+
+<span class="fc" id="L112">        List&lt;OFBucket&gt; ofBuckets = new ArrayList&lt;OFBucket&gt;();</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        for (GroupBucket bucket: buckets.buckets()) {</span>
+<span class="fc" id="L114">            List&lt;OFAction&gt; actions = buildActions(bucket.treatment());</span>
+
+<span class="fc" id="L116">            OFBucket.Builder bucketBuilder = factory.buildBucket();</span>
+<span class="fc" id="L117">            bucketBuilder.setActions(actions);</span>
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">            if (type == GroupDescription.Type.SELECT) {</span>
+<span class="fc" id="L119">                bucketBuilder.setWeight(1);</span>
+            }
+<span class="fc" id="L121">            bucketBuilder.setWatchGroup(OFGroup.ANY);</span>
+<span class="fc" id="L122">            bucketBuilder.setWatchPort(OFPort.ANY);</span>
+<span class="fc" id="L123">            OFBucket ofBucket = bucketBuilder.build();</span>
+<span class="fc" id="L124">            ofBuckets.add(ofBucket);</span>
+<span class="fc" id="L125">        }</span>
+
+<span class="fc" id="L127">        OFGroupAdd groupMsg = factory.buildGroupAdd()</span>
+<span class="fc" id="L128">                .setGroup(OFGroup.of(groupId.id()))</span>
+<span class="fc" id="L129">                .setBuckets(ofBuckets)</span>
+<span class="fc" id="L130">                .setGroupType(getOFGroupType(type))</span>
+<span class="fc" id="L131">                .setXid(xid)</span>
+<span class="fc" id="L132">                .build();</span>
+
+<span class="fc" id="L134">        return groupMsg;</span>
+    }
+
+    /**
+     * Builds the GroupMod OF message.
+     *
+     * @return GroupMod OF message
+     */
+    public OFGroupMod buildGroupMod() {
+<span class="nc" id="L143">        List&lt;OFBucket&gt; ofBuckets = new ArrayList&lt;OFBucket&gt;();</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        for (GroupBucket bucket: buckets.buckets()) {</span>
+<span class="nc" id="L145">            List&lt;OFAction&gt; actions = buildActions(bucket.treatment());</span>
+
+<span class="nc" id="L147">            OFBucket.Builder bucketBuilder = factory.buildBucket();</span>
+<span class="nc" id="L148">            bucketBuilder.setActions(actions);</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">            if (type == GroupDescription.Type.SELECT) {</span>
+<span class="nc" id="L150">                bucketBuilder.setWeight(1);</span>
+            }
+<span class="nc" id="L152">            bucketBuilder.setWatchGroup(OFGroup.ANY);</span>
+<span class="nc" id="L153">            bucketBuilder.setWatchPort(OFPort.ANY);</span>
+<span class="nc" id="L154">            OFBucket ofBucket = bucketBuilder.build();</span>
+<span class="nc" id="L155">            ofBuckets.add(ofBucket);</span>
+<span class="nc" id="L156">        }</span>
+
+<span class="nc" id="L158">        OFGroupMod groupMsg = factory.buildGroupModify()</span>
+<span class="nc" id="L159">                .setGroup(OFGroup.of(groupId.id()))</span>
+<span class="nc" id="L160">                .setBuckets(ofBuckets)</span>
+<span class="nc" id="L161">                .setGroupType(getOFGroupType(type))</span>
+<span class="nc" id="L162">                .setXid(xid)</span>
+<span class="nc" id="L163">                .build();</span>
+
+<span class="nc" id="L165">        return groupMsg;</span>
+    }
+
+    /**
+     * Builds the GroupDel OF message.
+     *
+     * @return GroupDel OF message
+     */
+    public OFGroupDelete buildGroupDel() {
+
+<span class="nc" id="L175">        OFGroupDelete groupMsg = factory.buildGroupDelete()</span>
+<span class="nc" id="L176">                .setGroup(OFGroup.of(groupId.id()))</span>
+<span class="nc" id="L177">                .setGroupType(OFGroupType.SELECT)</span>
+<span class="nc" id="L178">                .setXid(xid)</span>
+<span class="nc" id="L179">                .build();</span>
+
+<span class="nc" id="L181">        return groupMsg;</span>
+    }
+
+    private List&lt;OFAction&gt; buildActions(TrafficTreatment treatment) {
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (treatment == null) {</span>
+<span class="nc" id="L186">            return Collections.emptyList();</span>
+        }
+
+<span class="fc" id="L189">        List&lt;OFAction&gt; actions = new LinkedList&lt;&gt;();</span>
+<span class="fc bfc" id="L190" title="All 2 branches covered.">        for (Instruction i : treatment.allInstructions()) {</span>
+<span class="pc bpc" id="L191" title="6 of 7 branches missed.">            switch (i.type()) {</span>
+                case DROP:
+<span class="nc" id="L193">                    log.warn(&quot;Saw drop action; assigning drop action&quot;);</span>
+<span class="nc" id="L194">                    return Collections.emptyList();</span>
+                case L0MODIFICATION:
+<span class="nc" id="L196">                    actions.add(buildL0Modification(i));</span>
+<span class="nc" id="L197">                    break;</span>
+                case L2MODIFICATION:
+<span class="nc" id="L199">                    actions.add(buildL2Modification(i));</span>
+<span class="nc" id="L200">                    break;</span>
+                case L3MODIFICATION:
+<span class="nc" id="L202">                    actions.add(buildL3Modification(i));</span>
+<span class="nc" id="L203">                    break;</span>
+                case OUTPUT:
+<span class="fc" id="L205">                    Instructions.OutputInstruction out =</span>
+                            (Instructions.OutputInstruction) i;
+<span class="fc" id="L207">                    OFActionOutput.Builder action = factory.actions().buildOutput()</span>
+<span class="fc" id="L208">                            .setPort(OFPort.of((int) out.port().toLong()));</span>
+<span class="pc bpc" id="L209" title="1 of 2 branches missed.">                    if (out.port().equals(PortNumber.CONTROLLER)) {</span>
+<span class="nc" id="L210">                        action.setMaxLen(OFPCML_NO_BUFFER);</span>
+                    }
+<span class="fc" id="L212">                    actions.add(action.build());</span>
+<span class="fc" id="L213">                    break;</span>
+                case GROUP:
+<span class="nc" id="L215">                    Instructions.GroupInstruction grp =</span>
+                            (Instructions.GroupInstruction) i;
+<span class="nc" id="L217">                    OFActionGroup.Builder actgrp = factory.actions().buildGroup()</span>
+<span class="nc" id="L218">                            .setGroup(OFGroup.of(grp.groupId().id()));</span>
+<span class="nc" id="L219">                    actions.add(actgrp.build());</span>
+<span class="nc" id="L220">                    break;</span>
+                default:
+<span class="nc" id="L222">                    log.warn(&quot;Instruction type {} not yet implemented.&quot;, i.type());</span>
+            }
+<span class="fc" id="L224">        }</span>
+
+<span class="fc" id="L226">        return actions;</span>
+    }
+
+    private OFAction buildL0Modification(Instruction i) {
+<span class="nc" id="L230">        L0ModificationInstruction l0m = (L0ModificationInstruction) i;</span>
+<span class="pc bnc" id="L231" title="All 2 branches missed.">        switch (l0m.subtype()) {</span>
+            case LAMBDA:
+<span class="nc" id="L233">                L0ModificationInstruction.ModLambdaInstruction ml =</span>
+                        (L0ModificationInstruction.ModLambdaInstruction) i;
+<span class="nc" id="L235">                return factory.actions().circuit(factory.oxms().ochSigidBasic(</span>
+<span class="nc" id="L236">                        new CircuitSignalID((byte) 1, (byte) 2, ml.lambda(), (short) 1)));</span>
+            default:
+<span class="nc" id="L238">                log.warn(&quot;Unimplemented action type {}.&quot;, l0m.subtype());</span>
+                break;
+        }
+<span class="nc" id="L241">        return null;</span>
+    }
+
+    private OFAction buildL2Modification(Instruction i) {
+<span class="nc" id="L245">        L2ModificationInstruction l2m = (L2ModificationInstruction) i;</span>
+        L2ModificationInstruction.ModEtherInstruction eth;
+<span class="nc" id="L247">        OFOxm&lt;?&gt; oxm = null;</span>
+<span class="pc bnc" id="L248" title="All 12 branches missed.">        switch (l2m.subtype()) {</span>
+            case ETH_DST:
+<span class="nc" id="L250">                eth = (L2ModificationInstruction.ModEtherInstruction) l2m;</span>
+<span class="nc" id="L251">                oxm = factory.oxms().ethDst(MacAddress.of(eth.mac().toLong()));</span>
+<span class="nc" id="L252">                break;</span>
+            case ETH_SRC:
+<span class="nc" id="L254">                eth = (L2ModificationInstruction.ModEtherInstruction) l2m;</span>
+<span class="nc" id="L255">                oxm = factory.oxms().ethSrc(MacAddress.of(eth.mac().toLong()));</span>
+<span class="nc" id="L256">                break;</span>
+            case VLAN_ID:
+<span class="nc" id="L258">                L2ModificationInstruction.ModVlanIdInstruction vlanId =</span>
+                        (L2ModificationInstruction.ModVlanIdInstruction) l2m;
+<span class="nc" id="L260">                oxm = factory.oxms().vlanVid(OFVlanVidMatch.ofVlan(vlanId.vlanId().toShort()));</span>
+<span class="nc" id="L261">                break;</span>
+            case VLAN_PCP:
+<span class="nc" id="L263">                L2ModificationInstruction.ModVlanPcpInstruction vlanPcp =</span>
+                        (L2ModificationInstruction.ModVlanPcpInstruction) l2m;
+<span class="nc" id="L265">                oxm = factory.oxms().vlanPcp(VlanPcp.of(vlanPcp.vlanPcp()));</span>
+<span class="nc" id="L266">                break;</span>
+            case VLAN_POP:
+<span class="nc" id="L268">                return factory.actions().popVlan();</span>
+            case VLAN_PUSH:
+<span class="nc" id="L270">                L2ModificationInstruction.PushHeaderInstructions pushVlanInstruction</span>
+                        = (L2ModificationInstruction.PushHeaderInstructions) l2m;
+<span class="nc" id="L272">                return factory.actions().pushVlan(</span>
+<span class="nc" id="L273">                        EthType.of(pushVlanInstruction.ethernetType().toShort()));</span>
+            case MPLS_PUSH:
+<span class="nc" id="L275">                L2ModificationInstruction.PushHeaderInstructions pushHeaderInstructions =</span>
+                        (L2ModificationInstruction.PushHeaderInstructions) l2m;
+<span class="nc" id="L277">                return factory.actions().pushMpls(EthType.of(pushHeaderInstructions</span>
+<span class="nc" id="L278">                                                             .ethernetType().toShort()));</span>
+            case MPLS_POP:
+<span class="nc" id="L280">                L2ModificationInstruction.PushHeaderInstructions popHeaderInstructions =</span>
+                        (L2ModificationInstruction.PushHeaderInstructions) l2m;
+<span class="nc" id="L282">                return factory.actions().popMpls(EthType.of(popHeaderInstructions</span>
+<span class="nc" id="L283">                                                            .ethernetType().toShort()));</span>
+            case MPLS_LABEL:
+<span class="nc" id="L285">                L2ModificationInstruction.ModMplsLabelInstruction mplsLabel =</span>
+                        (L2ModificationInstruction.ModMplsLabelInstruction) l2m;
+<span class="nc" id="L287">                oxm = factory.oxms().mplsLabel(U32.of(mplsLabel.mplsLabel().toInt()));</span>
+<span class="nc" id="L288">                break;</span>
+            case MPLS_BOS:
+<span class="nc" id="L290">                L2ModificationInstruction.ModMplsBosInstruction mplsBos =</span>
+                        (L2ModificationInstruction.ModMplsBosInstruction) l2m;
+<span class="nc" id="L292">                oxm = factory.oxms()</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">                        .mplsBos(mplsBos.mplsBos() ? OFBooleanValue.TRUE</span>
+                                                   : OFBooleanValue.FALSE);
+<span class="nc" id="L295">                break;</span>
+            case DEC_MPLS_TTL:
+<span class="nc" id="L297">                return factory.actions().decMplsTtl();</span>
+            default:
+<span class="nc" id="L299">                log.warn(&quot;Unimplemented action type {}.&quot;, l2m.subtype());</span>
+                break;
+        }
+
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (oxm != null) {</span>
+<span class="nc" id="L304">            return factory.actions().buildSetField().setField(oxm).build();</span>
+        }
+<span class="nc" id="L306">        return null;</span>
+    }
+
+    private OFAction buildL3Modification(Instruction i) {
+<span class="nc" id="L310">        L3ModificationInstruction l3m = (L3ModificationInstruction) i;</span>
+        L3ModificationInstruction.ModIPInstruction ip;
+        Ip4Address ip4;
+        Ip6Address ip6;
+<span class="nc" id="L314">        OFOxm&lt;?&gt; oxm = null;</span>
+<span class="pc bnc" id="L315" title="All 9 branches missed.">        switch (l3m.subtype()) {</span>
+            case IPV4_SRC:
+<span class="nc" id="L317">                ip = (L3ModificationInstruction.ModIPInstruction) i;</span>
+<span class="nc" id="L318">                ip4 = ip.ip().getIp4Address();</span>
+<span class="nc" id="L319">                oxm = factory.oxms().ipv4Src(IPv4Address.of(ip4.toInt()));</span>
+<span class="nc" id="L320">                break;</span>
+            case IPV4_DST:
+<span class="nc" id="L322">                ip = (L3ModificationInstruction.ModIPInstruction) i;</span>
+<span class="nc" id="L323">                ip4 = ip.ip().getIp4Address();</span>
+<span class="nc" id="L324">                oxm = factory.oxms().ipv4Dst(IPv4Address.of(ip4.toInt()));</span>
+<span class="nc" id="L325">                break;</span>
+            case IPV6_SRC:
+<span class="nc" id="L327">                ip = (L3ModificationInstruction.ModIPInstruction) i;</span>
+<span class="nc" id="L328">                ip6 = ip.ip().getIp6Address();</span>
+<span class="nc" id="L329">                oxm = factory.oxms().ipv6Src(IPv6Address.of(ip6.toOctets()));</span>
+<span class="nc" id="L330">                break;</span>
+            case IPV6_DST:
+<span class="nc" id="L332">                ip = (L3ModificationInstruction.ModIPInstruction) i;</span>
+<span class="nc" id="L333">                ip6 = ip.ip().getIp6Address();</span>
+<span class="nc" id="L334">                oxm = factory.oxms().ipv6Dst(IPv6Address.of(ip6.toOctets()));</span>
+<span class="nc" id="L335">                break;</span>
+            case IPV6_FLABEL:
+<span class="nc" id="L337">                L3ModificationInstruction.ModIPv6FlowLabelInstruction flowLabelInstruction =</span>
+                    (L3ModificationInstruction.ModIPv6FlowLabelInstruction) i;
+<span class="nc" id="L339">                int flowLabel = flowLabelInstruction.flowLabel();</span>
+<span class="nc" id="L340">                oxm = factory.oxms().ipv6Flabel(IPv6FlowLabel.of(flowLabel));</span>
+<span class="nc" id="L341">                break;</span>
+            case DEC_TTL:
+<span class="nc" id="L343">                return factory.actions().decNwTtl();</span>
+            case TTL_IN:
+<span class="nc" id="L345">                return factory.actions().copyTtlIn();</span>
+            case TTL_OUT:
+<span class="nc" id="L347">                return factory.actions().copyTtlOut();</span>
+            default:
+<span class="nc" id="L349">                log.warn(&quot;Unimplemented action type {}.&quot;, l3m.subtype());</span>
+                break;
+        }
+
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        if (oxm != null) {</span>
+<span class="nc" id="L354">            return factory.actions().buildSetField().setField(oxm).build();</span>
+        }
+<span class="nc" id="L356">        return null;</span>
+    }
+
+    private OFGroupType getOFGroupType(GroupDescription.Type groupType) {
+<span class="pc bpc" id="L360" title="4 of 5 branches missed.">        switch (groupType) {</span>
+            case INDIRECT:
+<span class="nc" id="L362">                return OFGroupType.INDIRECT;</span>
+            case SELECT:
+<span class="fc" id="L364">                return OFGroupType.SELECT;</span>
+            case FAILOVER:
+<span class="nc" id="L366">                return OFGroupType.FF;</span>
+            case ALL:
+<span class="nc" id="L368">                return OFGroupType.ALL;</span>
+            default:
+<span class="nc" id="L370">                log.error(&quot;Unsupported group type : {}&quot;, groupType);</span>
+                break;
+        }
+<span class="nc" id="L373">        return null;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TimeFormatter.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.table.cell</a> &gt; <span class="el_source">TimeFormatter.java</span></div><h1>TimeFormatter.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.table.cell;
+
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+
+import java.util.Locale;
+
+/**
+ * Formats time values using {@link DateTimeFormatter}.
+ */
+public final class TimeFormatter extends AbstractCellFormatter {
+
+    private DateTimeFormatter dtf;
+
+    // NOTE: Unlike other formatters in this package, this one is not
+    //       implemented as a Singleton, because instances may be
+    //       decorated with alternate locale and/or timezone.
+
+    /**
+     * Constructs a time formatter that uses the default locale and timezone.
+     */
+<span class="fc" id="L40">    public TimeFormatter() {</span>
+<span class="fc" id="L41">        dtf = DateTimeFormat.longTime();</span>
+<span class="fc" id="L42">    }</span>
+
+    /**
+     * Sets the locale to use for formatting the time.
+     *
+     * @param locale locale to use for formatting
+     * @return self, for chaining
+     */
+    public TimeFormatter withLocale(Locale locale) {
+<span class="fc" id="L51">        dtf = dtf.withLocale(locale);</span>
+<span class="fc" id="L52">        return this;</span>
+    }
+
+    /**
+     * Sets the time zone to use for formatting the time.
+     *
+     * @param zone time zone to use
+     * @return self, for chaining
+     */
+    public TimeFormatter withZone(DateTimeZone zone) {
+<span class="fc" id="L62">        dtf = dtf.withZone(zone);</span>
+<span class="fc" id="L63">        return this;</span>
+    }
+
+    @Override
+    protected String nonNullFormat(Object value) {
+<span class="fc" id="L68">        return dtf.print((DateTime) value);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

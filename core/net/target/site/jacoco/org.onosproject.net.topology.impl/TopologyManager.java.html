@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TopologyManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.topology.impl</a> &gt; <span class="el_source">TopologyManager.java</span></div><h1>TopologyManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.topology.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.DisjointPath;
+import org.onosproject.net.provider.AbstractListenerProviderRegistry;
+import org.onosproject.event.Event;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.onosproject.net.topology.ClusterId;
+import org.onosproject.net.topology.GraphDescription;
+import org.onosproject.net.topology.LinkWeight;
+import org.onosproject.net.topology.Topology;
+import org.onosproject.net.topology.TopologyCluster;
+import org.onosproject.net.topology.TopologyEvent;
+import org.onosproject.net.topology.TopologyGraph;
+import org.onosproject.net.topology.TopologyListener;
+import org.onosproject.net.topology.TopologyProvider;
+import org.onosproject.net.topology.TopologyProviderRegistry;
+import org.onosproject.net.topology.TopologyProviderService;
+import org.onosproject.net.topology.TopologyService;
+import org.onosproject.net.topology.TopologyStore;
+import org.onosproject.net.topology.TopologyStoreDelegate;
+import org.slf4j.Logger;
+
+import java.util.List;
+import java.util.Set;
+import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Provides basic implementation of the topology SB &amp;amp; NB APIs.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L63">public class TopologyManager</span>
+        extends AbstractListenerProviderRegistry&lt;TopologyEvent, TopologyListener,
+        TopologyProvider, TopologyProviderService&gt;
+        implements TopologyService, TopologyProviderRegistry {
+
+    public static final String TOPOLOGY_NULL = &quot;Topology cannot be null&quot;;
+    private static final String DEVICE_ID_NULL = &quot;Device ID cannot be null&quot;;
+    private static final String CLUSTER_ID_NULL = &quot;Cluster ID cannot be null&quot;;
+    private static final String CLUSTER_NULL = &quot;Topology cluster cannot be null&quot;;
+    public static final String CONNECTION_POINT_NULL = &quot;Connection point cannot be null&quot;;
+    public static final String LINK_WEIGHT_NULL = &quot;Link weight cannot be null&quot;;
+
+<span class="fc" id="L75">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L77">    private TopologyStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyStore store;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L84">        store.setDelegate(delegate);</span>
+<span class="fc" id="L85">        eventDispatcher.addSink(TopologyEvent.class, listenerRegistry);</span>
+<span class="fc" id="L86">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L87">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L91">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L92">        eventDispatcher.removeSink(TopologyEvent.class);</span>
+<span class="fc" id="L93">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L94">    }</span>
+
+    @Override
+    public Topology currentTopology() {
+<span class="fc" id="L98">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L99">        return store.currentTopology();</span>
+    }
+
+    @Override
+    public boolean isLatest(Topology topology) {
+<span class="fc" id="L104">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L105">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L106">        return store.isLatest(topology);</span>
+    }
+
+    @Override
+    public Set&lt;TopologyCluster&gt; getClusters(Topology topology) {
+<span class="fc" id="L111">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L112">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L113">        return store.getClusters(topology);</span>
+    }
+
+    @Override
+    public TopologyCluster getCluster(Topology topology, ClusterId clusterId) {
+<span class="fc" id="L118">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L119">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L120">        checkNotNull(topology, CLUSTER_ID_NULL);</span>
+<span class="fc" id="L121">        return store.getCluster(topology, clusterId);</span>
+    }
+
+    @Override
+    public Set&lt;DeviceId&gt; getClusterDevices(Topology topology, TopologyCluster cluster) {
+<span class="fc" id="L126">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L127">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L128">        checkNotNull(topology, CLUSTER_NULL);</span>
+<span class="fc" id="L129">        return store.getClusterDevices(topology, cluster);</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getClusterLinks(Topology topology, TopologyCluster cluster) {
+<span class="fc" id="L134">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L135">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L136">        checkNotNull(topology, CLUSTER_NULL);</span>
+<span class="fc" id="L137">        return store.getClusterLinks(topology, cluster);</span>
+    }
+
+    @Override
+    public TopologyGraph getGraph(Topology topology) {
+<span class="fc" id="L142">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L143">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L144">        return store.getGraph(topology);</span>
+    }
+
+    @Override
+    public Set&lt;Path&gt; getPaths(Topology topology, DeviceId src, DeviceId dst) {
+<span class="fc" id="L149">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L150">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L151">        checkNotNull(src, DEVICE_ID_NULL);</span>
+<span class="fc" id="L152">        checkNotNull(dst, DEVICE_ID_NULL);</span>
+<span class="fc" id="L153">        return store.getPaths(topology, src, dst);</span>
+    }
+
+    @Override
+    public Set&lt;Path&gt; getPaths(Topology topology, DeviceId src, DeviceId dst, LinkWeight weight) {
+<span class="fc" id="L158">        checkPermission(TOPOLOGY_READ);</span>
+
+<span class="fc" id="L160">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L161">        checkNotNull(src, DEVICE_ID_NULL);</span>
+<span class="fc" id="L162">        checkNotNull(dst, DEVICE_ID_NULL);</span>
+<span class="fc" id="L163">        checkNotNull(weight, &quot;Link weight cannot be null&quot;);</span>
+<span class="fc" id="L164">        return store.getPaths(topology, src, dst, weight);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src, DeviceId dst) {
+<span class="nc" id="L169">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="nc" id="L170">        checkNotNull(src, DEVICE_ID_NULL);</span>
+<span class="nc" id="L171">        checkNotNull(dst, DEVICE_ID_NULL);</span>
+<span class="nc" id="L172">        return store.getDisjointPaths(topology, src, dst);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src,
+                                              DeviceId dst, LinkWeight weight) {
+<span class="nc" id="L178">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="nc" id="L179">        checkNotNull(src, DEVICE_ID_NULL);</span>
+<span class="nc" id="L180">        checkNotNull(dst, DEVICE_ID_NULL);</span>
+<span class="nc" id="L181">        checkNotNull(weight, LINK_WEIGHT_NULL);</span>
+<span class="nc" id="L182">        return store.getDisjointPaths(topology, src, dst, weight);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src, DeviceId dst,
+                                              Map&lt;Link, Object&gt; riskProfile) {
+<span class="nc" id="L188">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="nc" id="L189">        checkNotNull(src, DEVICE_ID_NULL);</span>
+<span class="nc" id="L190">        checkNotNull(dst, DEVICE_ID_NULL);</span>
+<span class="nc" id="L191">        return store.getDisjointPaths(topology, src, dst, riskProfile);</span>
+    }
+
+    @Override
+    public Set&lt;DisjointPath&gt; getDisjointPaths(Topology topology, DeviceId src,
+                                              DeviceId dst, LinkWeight weight,
+                                              Map&lt;Link, Object&gt; riskProfile) {
+<span class="nc" id="L198">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="nc" id="L199">        checkNotNull(src, DEVICE_ID_NULL);</span>
+<span class="nc" id="L200">        checkNotNull(dst, DEVICE_ID_NULL);</span>
+<span class="nc" id="L201">        checkNotNull(weight, LINK_WEIGHT_NULL);</span>
+<span class="nc" id="L202">        return store.getDisjointPaths(topology, src, dst, weight, riskProfile);</span>
+    }
+
+    @Override
+    public boolean isInfrastructure(Topology topology, ConnectPoint connectPoint) {
+<span class="fc" id="L207">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L208">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L209">        checkNotNull(connectPoint, CONNECTION_POINT_NULL);</span>
+<span class="fc" id="L210">        return store.isInfrastructure(topology, connectPoint);</span>
+    }
+
+    @Override
+    public boolean isBroadcastPoint(Topology topology, ConnectPoint connectPoint) {
+<span class="fc" id="L215">        checkPermission(TOPOLOGY_READ);</span>
+<span class="fc" id="L216">        checkNotNull(topology, TOPOLOGY_NULL);</span>
+<span class="fc" id="L217">        checkNotNull(connectPoint, CONNECTION_POINT_NULL);</span>
+<span class="fc" id="L218">        return store.isBroadcastPoint(topology, connectPoint);</span>
+    }
+
+    // Personalized host provider service issued to the supplied provider.
+    @Override
+    protected TopologyProviderService createProviderService(TopologyProvider provider) {
+<span class="fc" id="L224">        return new InternalTopologyProviderService(provider);</span>
+    }
+
+    private class InternalTopologyProviderService
+            extends AbstractProviderService&lt;TopologyProvider&gt;
+            implements TopologyProviderService {
+
+<span class="fc" id="L231">        InternalTopologyProviderService(TopologyProvider provider) {</span>
+<span class="fc" id="L232">            super(provider);</span>
+<span class="fc" id="L233">        }</span>
+
+        @Override
+        public void topologyChanged(GraphDescription topoDescription,
+                                    List&lt;Event&gt; reasons) {
+<span class="fc" id="L238">            checkNotNull(topoDescription, &quot;Topology description cannot be null&quot;);</span>
+
+<span class="fc" id="L240">            TopologyEvent event = store.updateTopology(provider().id(),</span>
+                                                       topoDescription, reasons);
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">            if (event != null) {</span>
+<span class="fc" id="L243">                log.info(&quot;Topology {} changed&quot;, event.subject());</span>
+<span class="fc" id="L244">                post(event);</span>
+            }
+<span class="fc" id="L246">        }</span>
+    }
+
+    // Store delegate to re-post events emitted from the store.
+<span class="fc" id="L250">    private class InternalStoreDelegate implements TopologyStoreDelegate {</span>
+        @Override
+        public void notify(TopologyEvent event) {
+<span class="nc" id="L253">            post(event);</span>
+<span class="nc" id="L254">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

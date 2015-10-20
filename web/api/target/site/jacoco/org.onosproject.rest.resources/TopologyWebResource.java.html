@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TopologyWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">TopologyWebResource.java</span></div><h1>TopologyWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Lists;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.topology.ClusterId;
+import org.onosproject.net.topology.Topology;
+import org.onosproject.net.topology.TopologyCluster;
+import org.onosproject.net.topology.TopologyService;
+import org.onosproject.rest.AbstractWebResource;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.util.List;
+
+import static org.onlab.util.Tools.nullIsNotFound;
+
+/**
+ * Query network topology graph and its components.
+ */
+@Path(&quot;topology&quot;)
+<span class="fc" id="L45">public class TopologyWebResource extends AbstractWebResource {</span>
+
+    public static final String CLUSTER_NOT_FOUND = &quot;Cluster is not found&quot;;
+
+    /**
+     * Get overview of current topology.
+     *
+     * @return topology overview
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getTopology() {
+<span class="fc" id="L57">        Topology topology = get(TopologyService.class).currentTopology();</span>
+<span class="fc" id="L58">        ObjectNode root = codec(Topology.class).encode(topology, this);</span>
+<span class="fc" id="L59">        return ok(root).build();</span>
+    }
+
+    /**
+     * Get overview of topology SCCs.
+     *
+     * @return topology clusters overview
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;clusters&quot;)
+    public Response getClusters() {
+<span class="fc" id="L71">        TopologyService service = get(TopologyService.class);</span>
+<span class="fc" id="L72">        Topology topology = service.currentTopology();</span>
+<span class="fc" id="L73">        Iterable&lt;TopologyCluster&gt; clusters = service.getClusters(topology);</span>
+<span class="fc" id="L74">        ObjectNode root = encodeArray(TopologyCluster.class, &quot;clusters&quot;, clusters);</span>
+<span class="fc" id="L75">        return ok(root).build();</span>
+    }
+
+    /**
+     * Get details of a specific SCC.
+     *
+     * @param clusterId id of the cluster to query
+     * @return topology cluster details
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;clusters/{id}&quot;)
+    public Response getCluster(@PathParam(&quot;id&quot;) int clusterId) {
+<span class="fc" id="L88">        Topology topology = get(TopologyService.class).currentTopology();</span>
+<span class="fc" id="L89">        TopologyCluster cluster = getTopologyCluster(clusterId, topology);</span>
+<span class="fc" id="L90">        ObjectNode root = codec(TopologyCluster.class).encode(cluster, this);</span>
+<span class="fc" id="L91">        return ok(root).build();</span>
+    }
+
+    private TopologyCluster getTopologyCluster(int clusterId, Topology topology) {
+<span class="fc" id="L95">        return nullIsNotFound(</span>
+<span class="fc" id="L96">                get(TopologyService.class)</span>
+<span class="fc" id="L97">                        .getCluster(topology, ClusterId.clusterId(clusterId)),</span>
+                CLUSTER_NOT_FOUND);
+    }
+
+    /**
+     * Get devices in a specific SCC.
+     *
+     * @param clusterId id of the cluster to query
+     * @return topology cluster devices
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;clusters/{id}/devices&quot;)
+    public Response getClusterDevices(@PathParam(&quot;id&quot;) int clusterId) {
+<span class="fc" id="L111">        TopologyService service = get(TopologyService.class);</span>
+<span class="fc" id="L112">        Topology topology = service.currentTopology();</span>
+<span class="fc" id="L113">        TopologyCluster cluster = getTopologyCluster(clusterId, topology);</span>
+
+<span class="fc" id="L115">        List&lt;DeviceId&gt; deviceIds =</span>
+<span class="fc" id="L116">                Lists.newArrayList(service.getClusterDevices(topology, cluster));</span>
+
+<span class="fc" id="L118">        ObjectNode root = mapper().createObjectNode();</span>
+<span class="fc" id="L119">        ArrayNode devicesNode = root.putArray(&quot;devices&quot;);</span>
+<span class="fc" id="L120">        deviceIds.forEach(id -&gt; devicesNode.add(id.toString()));</span>
+<span class="fc" id="L121">        return ok(root).build();</span>
+    }
+
+    /**
+     * Get links in specific SCC.
+     *
+     * @param clusterId id of the cluster to query
+     * @return topology cluster links
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;clusters/{id}/links&quot;)
+    public Response getClusterLinks(@PathParam(&quot;id&quot;) int clusterId) {
+<span class="fc" id="L134">        Topology topology = get(TopologyService.class).currentTopology();</span>
+<span class="fc" id="L135">        TopologyCluster cluster = getTopologyCluster(clusterId, topology);</span>
+
+<span class="fc" id="L137">        List&lt;Link&gt; links =</span>
+<span class="fc" id="L138">                Lists.newArrayList(get(TopologyService.class)</span>
+<span class="fc" id="L139">                        .getClusterLinks(topology, cluster));</span>
+
+<span class="fc" id="L141">        return ok(encodeArray(Link.class, &quot;links&quot;, links)).build();</span>
+    }
+
+    /**
+     * Extracts the port number portion of the ConnectPoint.
+     *
+     * @param deviceString string representing the device/port
+     * @return port number as a string, empty string if the port is not found
+     */
+    private static String getPortNumber(String deviceString) {
+<span class="fc" id="L151">        int separator = deviceString.lastIndexOf(':');</span>
+<span class="pc bpc" id="L152" title="1 of 2 branches missed.">        if (separator &lt;= 0) {</span>
+<span class="nc" id="L153">            return &quot;&quot;;</span>
+        }
+<span class="fc" id="L155">        return deviceString.substring(separator + 1, deviceString.length());</span>
+    }
+
+    /**
+     * Extracts the device ID portion of the ConnectPoint.
+     *
+     * @param deviceString string representing the device/port
+     * @return device ID string
+     */
+    private static String getDeviceId(String deviceString) {
+<span class="fc" id="L165">        int separator = deviceString.lastIndexOf(':');</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">        if (separator &lt;= 0) {</span>
+<span class="nc" id="L167">            return &quot;&quot;;</span>
+        }
+<span class="fc" id="L169">        return deviceString.substring(0, separator);</span>
+    }
+
+    /**
+     * Test if a connect point is in broadcast set.
+     *
+     * @param connectPointString deviceid:portnumber
+     * @return JSON representation of true if the connect point is broadcast,
+     *         false otherwise
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;broadcast/{connectPoint}&quot;)
+    public Response getConnectPointBroadcast(@PathParam(&quot;connectPoint&quot;) String connectPointString) {
+<span class="fc" id="L183">        Topology topology = get(TopologyService.class).currentTopology();</span>
+
+<span class="fc" id="L185">        DeviceId deviceId = DeviceId.deviceId(getDeviceId(connectPointString));</span>
+<span class="fc" id="L186">        PortNumber portNumber = PortNumber.portNumber(getPortNumber(connectPointString));</span>
+<span class="fc" id="L187">        ConnectPoint connectPoint = new ConnectPoint(deviceId, portNumber);</span>
+<span class="fc" id="L188">        boolean isBroadcast = get(TopologyService.class).isBroadcastPoint(topology, connectPoint);</span>
+
+<span class="fc" id="L190">        return ok(mapper()</span>
+<span class="fc" id="L191">                .createObjectNode()</span>
+<span class="fc" id="L192">                .put(&quot;broadcast&quot;, isBroadcast))</span>
+<span class="fc" id="L193">                .build();</span>
+    }
+
+    /**
+     * Test if a connect point is infrastructure or edge.
+     *
+     * @param connectPointString deviceid:portnumber
+     * @return JSON representation of true if the connect point is broadcast,
+     *         false otherwise
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;infrastructure/{connectPoint}&quot;)
+    public Response getConnectPointInfrastructure(@PathParam(&quot;connectPoint&quot;) String connectPointString) {
+<span class="fc" id="L207">        Topology topology = get(TopologyService.class).currentTopology();</span>
+
+<span class="fc" id="L209">        DeviceId deviceId = DeviceId.deviceId(getDeviceId(connectPointString));</span>
+<span class="fc" id="L210">        PortNumber portNumber = PortNumber.portNumber(getPortNumber(connectPointString));</span>
+<span class="fc" id="L211">        ConnectPoint connectPoint = new ConnectPoint(deviceId, portNumber);</span>
+<span class="fc" id="L212">        boolean isInfrastructure = get(TopologyService.class).isInfrastructure(topology, connectPoint);</span>
+
+<span class="fc" id="L214">        return ok(mapper()</span>
+<span class="fc" id="L215">                .createObjectNode()</span>
+<span class="fc" id="L216">                .put(&quot;infrastructure&quot;, isInfrastructure))</span>
+<span class="fc" id="L217">                .build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

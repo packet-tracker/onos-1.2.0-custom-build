@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupBucketEntryBuilder.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-group</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.group.impl</a> &gt; <span class="el_source">GroupBucketEntryBuilder.java</span></div><h1>GroupBucketEntryBuilder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.of.group.impl;
+
+import com.google.common.collect.Lists;
+
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.VlanId;
+import org.onosproject.core.DefaultGroupId;
+import org.onosproject.core.GroupId;
+import org.onosproject.net.Lambda;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.group.DefaultGroupBucket;
+import org.onosproject.net.group.GroupBucket;
+import org.onosproject.net.group.GroupBuckets;
+import org.projectfloodlight.openflow.protocol.OFBucket;
+import org.projectfloodlight.openflow.protocol.OFGroupType;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionCircuit;
+import org.projectfloodlight.openflow.protocol.action.OFActionCopyTtlIn;
+import org.projectfloodlight.openflow.protocol.action.OFActionCopyTtlOut;
+import org.projectfloodlight.openflow.protocol.action.OFActionDecMplsTtl;
+import org.projectfloodlight.openflow.protocol.action.OFActionDecNwTtl;
+import org.projectfloodlight.openflow.protocol.action.OFActionExperimenter;
+import org.projectfloodlight.openflow.protocol.action.OFActionGroup;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.action.OFActionPopMpls;
+import org.projectfloodlight.openflow.protocol.action.OFActionPushMpls;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetDlDst;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetDlSrc;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetField;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetNwDst;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetNwSrc;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetVlanPcp;
+import org.projectfloodlight.openflow.protocol.action.OFActionSetVlanVid;
+import org.projectfloodlight.openflow.protocol.oxm.OFOxm;
+import org.projectfloodlight.openflow.protocol.oxm.OFOxmOchSigidBasic;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.OFVlanVidMatch;
+import org.projectfloodlight.openflow.types.U32;
+import org.projectfloodlight.openflow.types.U8;
+import org.projectfloodlight.openflow.types.VlanPcp;
+import org.slf4j.Logger;
+
+import java.util.List;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/*
+ * Builder for GroupBucketEntry.
+ */
+public class GroupBucketEntryBuilder {
+
+    private List&lt;OFBucket&gt; ofBuckets;
+    private OFGroupType type;
+
+<span class="nc" id="L75">    private final Logger log = getLogger(getClass());</span>
+
+    /**
+     * Creates a builder.
+     *
+     * @param ofBuckets list of OFBucket
+     * @param type Group type
+     */
+<span class="nc" id="L83">    public GroupBucketEntryBuilder(List&lt;OFBucket&gt; ofBuckets, OFGroupType type) {</span>
+<span class="nc" id="L84">        this.ofBuckets = ofBuckets;</span>
+<span class="nc" id="L85">        this.type = type;</span>
+<span class="nc" id="L86">    }</span>
+
+    /**
+     * Builds a GroupBuckets.
+     *
+     * @return GroupBuckets object, a list of GroupBuckets
+     */
+    public GroupBuckets build() {
+<span class="nc" id="L94">        List&lt;GroupBucket&gt; bucketList = Lists.newArrayList();</span>
+
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        for (OFBucket bucket: ofBuckets) {</span>
+<span class="nc" id="L97">            TrafficTreatment treatment = buildTreatment(bucket.getActions());</span>
+            // TODO: Use GroupBucketEntry
+<span class="nc" id="L99">            GroupBucket groupBucket = null;</span>
+<span class="nc bnc" id="L100" title="All 4 branches missed.">            switch (type) {</span>
+                case INDIRECT:
+<span class="nc" id="L102">                    groupBucket =</span>
+<span class="nc" id="L103">                            DefaultGroupBucket.createIndirectGroupBucket(treatment);</span>
+<span class="nc" id="L104">                    break;</span>
+                case SELECT:
+<span class="nc" id="L106">                    groupBucket =</span>
+<span class="nc" id="L107">                            DefaultGroupBucket.createSelectGroupBucket(treatment);</span>
+<span class="nc" id="L108">                    break;</span>
+                case FF:
+<span class="nc" id="L110">                    PortNumber port =</span>
+<span class="nc" id="L111">                            PortNumber.portNumber(bucket.getWatchPort().getPortNumber());</span>
+<span class="nc" id="L112">                    GroupId groupId =</span>
+<span class="nc" id="L113">                            new DefaultGroupId(bucket.getWatchGroup().getGroupNumber());</span>
+<span class="nc" id="L114">                    groupBucket =</span>
+<span class="nc" id="L115">                            DefaultGroupBucket.createFailoverGroupBucket(treatment,</span>
+                                    port, groupId);
+<span class="nc" id="L117">                    break;</span>
+                default:
+<span class="nc" id="L119">                    log.error(&quot;Unsupported Group type : {}&quot;, type);</span>
+            }
+<span class="nc bnc" id="L121" title="All 2 branches missed.">            if (groupBucket != null) {</span>
+<span class="nc" id="L122">                bucketList.add(groupBucket);</span>
+            }
+<span class="nc" id="L124">        }</span>
+<span class="nc" id="L125">        return new GroupBuckets(bucketList);</span>
+    }
+
+
+    private TrafficTreatment buildTreatment(List&lt;OFAction&gt; actions) {
+<span class="nc" id="L130">        TrafficTreatment.Builder builder = DefaultTrafficTreatment.builder();</span>
+        // If this is a drop rule
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (actions.size() == 0) {</span>
+<span class="nc" id="L133">            builder.drop();</span>
+<span class="nc" id="L134">            return builder.build();</span>
+        }
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        for (OFAction act : actions) {</span>
+<span class="nc bnc" id="L137" title="All 19 branches missed.">            switch (act.getType()) {</span>
+                case OUTPUT:
+<span class="nc" id="L139">                    OFActionOutput out = (OFActionOutput) act;</span>
+<span class="nc" id="L140">                    builder.setOutput(</span>
+<span class="nc" id="L141">                            PortNumber.portNumber(out.getPort().getPortNumber()));</span>
+<span class="nc" id="L142">                    break;</span>
+                case SET_VLAN_VID:
+<span class="nc" id="L144">                    OFActionSetVlanVid vlan = (OFActionSetVlanVid) act;</span>
+<span class="nc" id="L145">                    builder.setVlanId(VlanId.vlanId(vlan.getVlanVid().getVlan()));</span>
+<span class="nc" id="L146">                    break;</span>
+                case SET_VLAN_PCP:
+<span class="nc" id="L148">                    OFActionSetVlanPcp pcp = (OFActionSetVlanPcp) act;</span>
+<span class="nc" id="L149">                    builder.setVlanPcp(pcp.getVlanPcp().getValue());</span>
+<span class="nc" id="L150">                    break;</span>
+                case POP_VLAN:
+<span class="nc" id="L152">                    builder.popVlan();</span>
+<span class="nc" id="L153">                    break;</span>
+                case PUSH_VLAN:
+<span class="nc" id="L155">                    builder.pushVlan();</span>
+<span class="nc" id="L156">                    break;</span>
+                case SET_DL_DST:
+<span class="nc" id="L158">                    OFActionSetDlDst dldst = (OFActionSetDlDst) act;</span>
+<span class="nc" id="L159">                    builder.setEthDst(</span>
+<span class="nc" id="L160">                            MacAddress.valueOf(dldst.getDlAddr().getLong()));</span>
+<span class="nc" id="L161">                    break;</span>
+                case SET_DL_SRC:
+<span class="nc" id="L163">                    OFActionSetDlSrc dlsrc = (OFActionSetDlSrc) act;</span>
+<span class="nc" id="L164">                    builder.setEthSrc(</span>
+<span class="nc" id="L165">                            MacAddress.valueOf(dlsrc.getDlAddr().getLong()));</span>
+
+<span class="nc" id="L167">                    break;</span>
+                case SET_NW_DST:
+<span class="nc" id="L169">                    OFActionSetNwDst nwdst = (OFActionSetNwDst) act;</span>
+<span class="nc" id="L170">                    IPv4Address di = nwdst.getNwAddr();</span>
+<span class="nc" id="L171">                    builder.setIpDst(Ip4Address.valueOf(di.getInt()));</span>
+<span class="nc" id="L172">                    break;</span>
+                case SET_NW_SRC:
+<span class="nc" id="L174">                    OFActionSetNwSrc nwsrc = (OFActionSetNwSrc) act;</span>
+<span class="nc" id="L175">                    IPv4Address si = nwsrc.getNwAddr();</span>
+<span class="nc" id="L176">                    builder.setIpSrc(Ip4Address.valueOf(si.getInt()));</span>
+<span class="nc" id="L177">                    break;</span>
+                case EXPERIMENTER:
+<span class="nc" id="L179">                    OFActionExperimenter exp = (OFActionExperimenter) act;</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">                    if (exp.getExperimenter() == 0x80005A06 ||</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">                            exp.getExperimenter() == 0x748771) {</span>
+<span class="nc" id="L182">                        OFActionCircuit ct = (OFActionCircuit) exp;</span>
+<span class="nc" id="L183">                        short lambda = ((OFOxmOchSigidBasic) ct.getField()).getValue().getChannelNumber();</span>
+<span class="nc" id="L184">                        builder.add(Instructions.modL0Lambda(Lambda.indexedLambda(lambda)));</span>
+<span class="nc" id="L185">                    } else {</span>
+<span class="nc" id="L186">                        log.warn(&quot;Unsupported OFActionExperimenter {}&quot;, exp.getExperimenter());</span>
+                    }
+<span class="nc" id="L188">                    break;</span>
+                case SET_FIELD:
+<span class="nc" id="L190">                    OFActionSetField setField = (OFActionSetField) act;</span>
+<span class="nc" id="L191">                    handleSetField(builder, setField.getField());</span>
+<span class="nc" id="L192">                    break;</span>
+                case POP_MPLS:
+<span class="nc" id="L194">                    OFActionPopMpls popMpls = (OFActionPopMpls) act;</span>
+<span class="nc" id="L195">                    builder.popMpls((short) popMpls.getEthertype().getValue());</span>
+<span class="nc" id="L196">                    break;</span>
+                case PUSH_MPLS:
+<span class="nc" id="L198">                    OFActionPushMpls pushMpls = (OFActionPushMpls) act;</span>
+<span class="nc" id="L199">                    builder.pushMpls();</span>
+<span class="nc" id="L200">                    break;</span>
+                case COPY_TTL_IN:
+<span class="nc" id="L202">                    OFActionCopyTtlIn copyTtlIn = (OFActionCopyTtlIn) act;</span>
+<span class="nc" id="L203">                    builder.copyTtlIn();</span>
+<span class="nc" id="L204">                    break;</span>
+                case COPY_TTL_OUT:
+<span class="nc" id="L206">                    OFActionCopyTtlOut copyTtlOut = (OFActionCopyTtlOut) act;</span>
+<span class="nc" id="L207">                    builder.copyTtlOut();</span>
+<span class="nc" id="L208">                    break;</span>
+                case DEC_MPLS_TTL:
+<span class="nc" id="L210">                    OFActionDecMplsTtl decMplsTtl = (OFActionDecMplsTtl) act;</span>
+<span class="nc" id="L211">                    builder.decMplsTtl();</span>
+<span class="nc" id="L212">                    break;</span>
+                case DEC_NW_TTL:
+<span class="nc" id="L214">                    OFActionDecNwTtl decNwTtl = (OFActionDecNwTtl) act;</span>
+<span class="nc" id="L215">                    builder.decNwTtl();</span>
+<span class="nc" id="L216">                    break;</span>
+                case GROUP:
+<span class="nc" id="L218">                    OFActionGroup grp = (OFActionGroup) act;</span>
+<span class="nc" id="L219">                    builder.group(new DefaultGroupId(grp.getGroup().getGroupNumber()));</span>
+<span class="nc" id="L220">                    break;</span>
+                case SET_TP_DST:
+                case SET_TP_SRC:
+                case POP_PBB:
+                case PUSH_PBB:
+                case SET_MPLS_LABEL:
+                case SET_MPLS_TC:
+                case SET_MPLS_TTL:
+                case SET_NW_ECN:
+                case SET_NW_TOS:
+                case SET_NW_TTL:
+                case SET_QUEUE:
+                case STRIP_VLAN:
+                case ENQUEUE:
+                default:
+<span class="nc" id="L235">                    log.warn(&quot;Action type {} not yet implemented.&quot;, act.getType());</span>
+            }
+<span class="nc" id="L237">        }</span>
+
+<span class="nc" id="L239">        return builder.build();</span>
+    }
+
+    private void handleSetField(TrafficTreatment.Builder builder, OFOxm&lt;?&gt; oxm) {
+<span class="nc bnc" id="L243" title="All 9 branches missed.">        switch (oxm.getMatchField().id) {</span>
+            case VLAN_PCP:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L246">                OFOxm&lt;VlanPcp&gt; vlanpcp = (OFOxm&lt;VlanPcp&gt;) oxm;</span>
+<span class="nc" id="L247">                builder.setVlanPcp(vlanpcp.getValue().getValue());</span>
+<span class="nc" id="L248">                break;</span>
+            case VLAN_VID:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L251">                OFOxm&lt;OFVlanVidMatch&gt; vlanvid = (OFOxm&lt;OFVlanVidMatch&gt;) oxm;</span>
+<span class="nc" id="L252">                builder.setVlanId(VlanId.vlanId(vlanvid.getValue().getVlan()));</span>
+<span class="nc" id="L253">                break;</span>
+            case ETH_DST:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L256">                OFOxm&lt;org.projectfloodlight.openflow.types.MacAddress&gt; ethdst =</span>
+                        (OFOxm&lt;org.projectfloodlight.openflow.types.MacAddress&gt;) oxm;
+<span class="nc" id="L258">                builder.setEthDst(MacAddress.valueOf(ethdst.getValue().getLong()));</span>
+<span class="nc" id="L259">                break;</span>
+            case ETH_SRC:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L262">                OFOxm&lt;org.projectfloodlight.openflow.types.MacAddress&gt; ethsrc =</span>
+                        (OFOxm&lt;org.projectfloodlight.openflow.types.MacAddress&gt;) oxm;
+<span class="nc" id="L264">                builder.setEthSrc(MacAddress.valueOf(ethsrc.getValue().getLong()));</span>
+<span class="nc" id="L265">                break;</span>
+            case IPV4_DST:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L268">                OFOxm&lt;IPv4Address&gt; ip4dst = (OFOxm&lt;IPv4Address&gt;) oxm;</span>
+<span class="nc" id="L269">                builder.setIpDst(Ip4Address.valueOf(ip4dst.getValue().getInt()));</span>
+<span class="nc" id="L270">                break;</span>
+            case IPV4_SRC:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L273">                OFOxm&lt;IPv4Address&gt; ip4src = (OFOxm&lt;IPv4Address&gt;) oxm;</span>
+<span class="nc" id="L274">                builder.setIpSrc(Ip4Address.valueOf(ip4src.getValue().getInt()));</span>
+<span class="nc" id="L275">                break;</span>
+            case MPLS_LABEL:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L278">                OFOxm&lt;U32&gt; labelId = (OFOxm&lt;U32&gt;) oxm;</span>
+<span class="nc" id="L279">                builder.setMpls(MplsLabel.mplsLabel((int) labelId.getValue().getValue()));</span>
+<span class="nc" id="L280">                break;</span>
+            case MPLS_BOS:
+                @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L283">                OFOxm&lt;U8&gt; mplsBos = (OFOxm&lt;U8&gt;) oxm;</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                builder.setMplsBos(mplsBos.getValue() == U8.ZERO ? false : true);</span>
+<span class="nc" id="L285">                break;</span>
+            case ARP_OP:
+            case ARP_SHA:
+            case ARP_SPA:
+            case ARP_THA:
+            case ARP_TPA:
+            case BSN_EGR_PORT_GROUP_ID:
+            case BSN_GLOBAL_VRF_ALLOWED:
+            case BSN_IN_PORTS_128:
+            case BSN_L3_DST_CLASS_ID:
+            case BSN_L3_INTERFACE_CLASS_ID:
+            case BSN_L3_SRC_CLASS_ID:
+            case BSN_LAG_ID:
+            case BSN_TCP_FLAGS:
+            case BSN_UDF0:
+            case BSN_UDF1:
+            case BSN_UDF2:
+            case BSN_UDF3:
+            case BSN_UDF4:
+            case BSN_UDF5:
+            case BSN_UDF6:
+            case BSN_UDF7:
+            case BSN_VLAN_XLATE_PORT_GROUP_ID:
+            case BSN_VRF:
+            case ETH_TYPE:
+            case ICMPV4_CODE:
+            case ICMPV4_TYPE:
+            case ICMPV6_CODE:
+            case ICMPV6_TYPE:
+            case IN_PHY_PORT:
+            case IN_PORT:
+            case IPV6_DST:
+            case IPV6_FLABEL:
+            case IPV6_ND_SLL:
+            case IPV6_ND_TARGET:
+            case IPV6_ND_TLL:
+            case IPV6_SRC:
+            case IP_DSCP:
+            case IP_ECN:
+            case IP_PROTO:
+            case METADATA:
+            case MPLS_TC:
+            case OCH_SIGID:
+            case OCH_SIGID_BASIC:
+            case OCH_SIGTYPE:
+            case OCH_SIGTYPE_BASIC:
+            case SCTP_DST:
+            case SCTP_SRC:
+            case TCP_DST:
+            case TCP_SRC:
+            case TUNNEL_ID:
+            case UDP_DST:
+            case UDP_SRC:
+            default:
+<span class="nc" id="L339">                log.warn(&quot;Set field type {} not yet implemented.&quot;, oxm.getMatchField().id);</span>
+                break;
+        }
+<span class="nc" id="L342">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

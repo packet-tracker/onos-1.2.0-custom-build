@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AbstractGraphPathSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">AbstractGraphPathSearch.java</span></div><h1>AbstractGraphPathSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Basis for various graph path search algorithm implementations.
+ *
+ * @param &lt;V&gt; vertex type
+ * @param &lt;E&gt; edge type
+ */
+<span class="fc" id="L33">public abstract class AbstractGraphPathSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;</span>
+        implements GraphPathSearch&lt;V, E&gt; {
+
+<span class="fc" id="L36">    private double samenessThreshold = Double.MIN_VALUE;</span>
+
+    /**
+     * Sets a new sameness threshold for comparing cost values; default is
+     * is {@link Double#MIN_VALUE}.
+     *
+     * @param threshold fractional double value
+     */
+    public void setSamenessThreshold(double threshold) {
+<span class="fc" id="L45">        samenessThreshold = threshold;</span>
+<span class="fc" id="L46">    }</span>
+
+    /**
+     * Returns the current sameness threshold for comparing cost values.
+     *
+     * @return current threshold
+     */
+    public double samenessThreshold() {
+<span class="fc" id="L54">        return samenessThreshold;</span>
+    }
+
+    /**
+     * Default path search result that uses the DefaultPath to convey paths
+     * in a graph.
+     */
+    protected class DefaultResult implements Result&lt;V, E&gt; {
+
+        private final V src;
+        private final V dst;
+<span class="fc" id="L65">        protected final Set&lt;Path&lt;V, E&gt;&gt; paths = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L66">        protected final Map&lt;V, Double&gt; costs = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L67">        protected final Map&lt;V, Set&lt;E&gt;&gt; parents = new HashMap&lt;&gt;();</span>
+        protected final int maxPaths;
+
+        /**
+         * Creates the result of a single-path search.
+         *
+         * @param src path source
+         * @param dst optional path destination
+         */
+        public DefaultResult(V src, V dst) {
+<span class="nc" id="L77">            this(src, dst, 1);</span>
+<span class="nc" id="L78">        }</span>
+
+        /**
+         * Creates the result of path search.
+         *
+         * @param src      path source
+         * @param dst      optional path destination
+         * @param maxPaths optional limit of number of paths;
+         *                 {@link GraphPathSearch#ALL_PATHS} if no limit
+         */
+<span class="fc" id="L88">        public DefaultResult(V src, V dst, int maxPaths) {</span>
+<span class="fc" id="L89">            checkNotNull(src, &quot;Source cannot be null&quot;);</span>
+<span class="fc" id="L90">            this.src = src;</span>
+<span class="fc" id="L91">            this.dst = dst;</span>
+<span class="fc" id="L92">            this.maxPaths = maxPaths;</span>
+<span class="fc" id="L93">        }</span>
+
+        @Override
+        public V src() {
+<span class="nc" id="L97">            return src;</span>
+        }
+
+        @Override
+        public V dst() {
+<span class="nc" id="L102">            return dst;</span>
+        }
+
+        @Override
+        public Set&lt;Path&lt;V, E&gt;&gt; paths() {
+<span class="fc" id="L107">            return paths;</span>
+        }
+
+        @Override
+        public Map&lt;V, Double&gt; costs() {
+<span class="nc" id="L112">            return costs;</span>
+        }
+
+        @Override
+        public Map&lt;V, Set&lt;E&gt;&gt; parents() {
+<span class="nc" id="L117">            return parents;</span>
+        }
+
+        /**
+         * Indicates whether or not the given vertex has a cost yet.
+         *
+         * @param v vertex to test
+         * @return true if the vertex has cost already
+         */
+        boolean hasCost(V v) {
+<span class="fc bfc" id="L127" title="All 2 branches covered.">            return costs.get(v) != null;</span>
+        }
+
+        /**
+         * Returns the current cost to reach the specified vertex.
+         *
+         * @param v vertex to reach
+         * @return cost to reach the vertex
+         */
+        double cost(V v) {
+<span class="fc" id="L137">            Double c = costs.get(v);</span>
+<span class="fc bfc" id="L138" title="All 2 branches covered.">            return c == null ? Double.MAX_VALUE : c;</span>
+        }
+
+        /**
+         * Updates the cost of the vertex using its existing cost plus the
+         * cost to traverse the specified edge. If the search is in single
+         * path mode, only one path will be accrued.
+         *
+         * @param vertex  vertex to update
+         * @param edge    edge through which vertex is reached
+         * @param cost    current cost to reach the vertex from the source
+         * @param replace true to indicate that any accrued edges are to be
+         *                cleared; false to indicate that the edge should be
+         *                added to the previously accrued edges as they yield
+         *                the same cost
+         */
+        void updateVertex(V vertex, E edge, double cost, boolean replace) {
+<span class="fc" id="L155">            costs.put(vertex, cost);</span>
+<span class="fc bfc" id="L156" title="All 2 branches covered.">            if (edge != null) {</span>
+<span class="fc" id="L157">                Set&lt;E&gt; edges = parents.get(vertex);</span>
+<span class="fc bfc" id="L158" title="All 2 branches covered.">                if (edges == null) {</span>
+<span class="fc" id="L159">                    edges = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L160">                    parents.put(vertex, edges);</span>
+                }
+<span class="fc bfc" id="L162" title="All 2 branches covered.">                if (replace) {</span>
+<span class="fc" id="L163">                    edges.clear();</span>
+                }
+<span class="fc bfc" id="L165" title="All 4 branches covered.">                if (maxPaths == ALL_PATHS || edges.size() &lt; maxPaths) {</span>
+<span class="fc" id="L166">                    edges.add(edge);</span>
+                }
+            }
+<span class="fc" id="L169">        }</span>
+
+        /**
+         * Removes the set of parent edges for the specified vertex.
+         *
+         * @param v vertex
+         */
+        void removeVertex(V v) {
+<span class="fc" id="L177">            parents.remove(v);</span>
+<span class="fc" id="L178">        }</span>
+
+        /**
+         * If possible, relax the specified edge using the supplied base cost
+         * and edge-weight function.
+         *
+         * @param edge            edge to be relaxed
+         * @param cost            base cost to reach the edge destination vertex
+         * @param ew              optional edge weight function
+         * @param forbidNegatives if true negative values will forbid the link
+         * @return true if the edge was relaxed; false otherwise
+         */
+        boolean relaxEdge(E edge, double cost, EdgeWeight&lt;V, E&gt; ew,
+                          boolean... forbidNegatives) {
+<span class="fc" id="L192">            V v = edge.dst();</span>
+<span class="fc" id="L193">            double oldCost = cost(v);</span>
+<span class="fc bfc" id="L194" title="All 2 branches covered.">            double hopCost = ew == null ? 1.0 : ew.weight(edge);</span>
+<span class="pc bpc" id="L195" title="1 of 6 branches missed.">            if (hopCost &lt; 0 &amp;&amp; forbidNegatives.length == 1 &amp;&amp; forbidNegatives[0]) {</span>
+<span class="fc" id="L196">                return false;</span>
+            }
+
+<span class="fc" id="L199">            double newCost = cost + hopCost;</span>
+<span class="fc bfc" id="L200" title="All 2 branches covered.">            boolean relaxed = newCost &lt; oldCost;</span>
+<span class="fc bfc" id="L201" title="All 2 branches covered.">            boolean same = Math.abs(newCost - oldCost) &lt;= samenessThreshold;</span>
+<span class="fc bfc" id="L202" title="All 4 branches covered.">            if (same || relaxed) {</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">                updateVertex(v, edge, newCost, !same);</span>
+            }
+<span class="fc" id="L205">            return relaxed;</span>
+        }
+
+        /**
+         * Builds a set of paths for the specified src/dst vertex pair.
+         */
+        protected void buildPaths() {
+<span class="fc" id="L212">            Set&lt;V&gt; destinations = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">            if (dst == null) {</span>
+<span class="fc" id="L214">                destinations.addAll(costs.keySet());</span>
+            } else {
+<span class="fc" id="L216">                destinations.add(dst);</span>
+            }
+
+            // Build all paths between the source and all requested destinations.
+<span class="fc bfc" id="L220" title="All 2 branches covered.">            for (V v : destinations) {</span>
+                // Ignore the source, if it is among the destinations.
+<span class="fc bfc" id="L222" title="All 2 branches covered.">                if (!v.equals(src)) {</span>
+<span class="fc" id="L223">                    buildAllPaths(this, src, v, maxPaths);</span>
+                }
+<span class="fc" id="L225">            }</span>
+<span class="fc" id="L226">        }</span>
+
+    }
+
+    /**
+     * Builds a set of all paths between the source and destination using the
+     * graph search result by applying breadth-first search through the parent
+     * edges and vertex costs.
+     *
+     * @param result   graph search result
+     * @param src      source vertex
+     * @param dst      destination vertex
+     * @param maxPaths limit on the number of paths built;
+     *                 {@link GraphPathSearch#ALL_PATHS} if no limit
+     */
+    private void buildAllPaths(DefaultResult result, V src, V dst, int maxPaths) {
+<span class="fc" id="L242">        DefaultMutablePath&lt;V, E&gt; basePath = new DefaultMutablePath&lt;&gt;();</span>
+<span class="fc" id="L243">        basePath.setCost(result.cost(dst));</span>
+
+<span class="fc" id="L245">        Set&lt;DefaultMutablePath&lt;V, E&gt;&gt; pendingPaths = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L246">        pendingPaths.add(basePath);</span>
+
+<span class="fc bfc" id="L248" title="All 4 branches covered.">        while (!pendingPaths.isEmpty() &amp;&amp;</span>
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">                (maxPaths == ALL_PATHS || result.paths.size() &lt; maxPaths)) {</span>
+<span class="fc" id="L250">            Set&lt;DefaultMutablePath&lt;V, E&gt;&gt; frontier = new HashSet&lt;&gt;();</span>
+
+<span class="fc bfc" id="L252" title="All 2 branches covered.">            for (DefaultMutablePath&lt;V, E&gt; path : pendingPaths) {</span>
+                // For each pending path, locate its first vertex since we
+                // will be moving backwards from it.
+<span class="fc" id="L255">                V firstVertex = firstVertex(path, dst);</span>
+
+                // If the first vertex is our expected source, we have reached
+                // the beginning, so add the this path to the result paths.
+<span class="fc bfc" id="L259" title="All 2 branches covered.">                if (firstVertex.equals(src)) {</span>
+<span class="fc" id="L260">                    path.setCost(result.cost(dst));</span>
+<span class="fc" id="L261">                    result.paths.add(new DefaultPath&lt;&gt;(path.edges(), path.cost()));</span>
+
+                } else {
+                    // If we have not reached the beginning, i.e. the source,
+                    // fetch the set of edges leading to the first vertex of
+                    // this pending path; if there are none, abandon processing
+                    // this path for good.
+<span class="fc" id="L268">                    Set&lt;E&gt; firstVertexParents = result.parents.get(firstVertex);</span>
+<span class="pc bpc" id="L269" title="1 of 4 branches missed.">                    if (firstVertexParents == null || firstVertexParents.isEmpty()) {</span>
+<span class="nc" id="L270">                        break;</span>
+                    }
+
+                    // Now iterate over all the edges and for each of them
+                    // cloning the current path and then insert that edge to
+                    // the path and then add that path to the pending ones.
+                    // When processing the last edge, modify the current
+                    // pending path rather than cloning a new one.
+<span class="fc" id="L278">                    Iterator&lt;E&gt; edges = firstVertexParents.iterator();</span>
+<span class="fc bfc" id="L279" title="All 2 branches covered.">                    while (edges.hasNext()) {</span>
+<span class="fc" id="L280">                        E edge = edges.next();</span>
+<span class="fc bfc" id="L281" title="All 2 branches covered.">                        boolean isLast = !edges.hasNext();</span>
+<span class="fc bfc" id="L282" title="All 2 branches covered.">                        DefaultMutablePath&lt;V, E&gt; pendingPath = isLast ? path : new DefaultMutablePath&lt;&gt;(path);</span>
+<span class="fc" id="L283">                        pendingPath.insertEdge(edge);</span>
+<span class="fc" id="L284">                        frontier.add(pendingPath);</span>
+<span class="fc" id="L285">                    }</span>
+                }
+<span class="fc" id="L287">            }</span>
+
+            // All pending paths have been scanned so promote the next frontier
+<span class="fc" id="L290">            pendingPaths = frontier;</span>
+<span class="fc" id="L291">        }</span>
+<span class="fc" id="L292">    }</span>
+
+    // Returns the first vertex of the specified path. This is either the source
+    // of the first edge or, if there are no edges yet, the given destination.
+    private V firstVertex(Path&lt;V, E&gt; path, V dst) {
+<span class="fc bfc" id="L297" title="All 2 branches covered.">        return path.edges().isEmpty() ? dst : path.edges().get(0).src();</span>
+    }
+
+    /**
+     * Checks the specified path search arguments for validity.
+     *
+     * @param graph graph; must not be null
+     * @param src   source vertex; must not be null and belong to graph
+     * @param dst   optional target vertex; must belong to graph
+     */
+    protected void checkArguments(Graph&lt;V, E&gt; graph, V src, V dst) {
+<span class="fc" id="L308">        checkNotNull(graph, &quot;Graph cannot be null&quot;);</span>
+<span class="fc" id="L309">        checkNotNull(src, &quot;Source cannot be null&quot;);</span>
+<span class="fc" id="L310">        Set&lt;V&gt; vertices = graph.getVertexes();</span>
+<span class="fc" id="L311">        checkArgument(vertices.contains(src), &quot;Source not in the graph&quot;);</span>
+<span class="pc bpc" id="L312" title="1 of 4 branches missed.">        checkArgument(dst == null || vertices.contains(dst),</span>
+                      &quot;Destination not in graph&quot;);
+<span class="fc" id="L314">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

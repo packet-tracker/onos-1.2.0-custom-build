@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalPathIntent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">OpticalPathIntent.java</span></div><h1>OpticalPathIntent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.OchSignalType;
+import org.onosproject.net.Path;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableSet;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * An optical layer intent with explicitly selected path.
+ */
+@Beta
+public final class OpticalPathIntent extends Intent {
+
+    private final ConnectPoint src;
+    private final ConnectPoint dst;
+    private final Path path;
+    private final OchSignal lambda;
+    private final OchSignalType signalType;
+    private final boolean isBidirectional;
+
+    private OpticalPathIntent(ApplicationId appId,
+                              Key key,
+                              ConnectPoint src,
+                              ConnectPoint dst,
+                              Path path,
+                              OchSignal lambda,
+                              OchSignalType signalType,
+                              boolean isBidirectional,
+                              int priority) {
+<span class="fc" id="L52">        super(appId, key, ImmutableSet.copyOf(path.links()), priority);</span>
+<span class="fc" id="L53">        this.src = checkNotNull(src);</span>
+<span class="fc" id="L54">        this.dst = checkNotNull(dst);</span>
+<span class="fc" id="L55">        this.path = checkNotNull(path);</span>
+<span class="fc" id="L56">        this.lambda = checkNotNull(lambda);</span>
+<span class="fc" id="L57">        this.signalType = checkNotNull(signalType);</span>
+<span class="fc" id="L58">        this.isBidirectional = isBidirectional;</span>
+<span class="fc" id="L59">    }</span>
+
+<span class="nc" id="L61">    protected OpticalPathIntent() {</span>
+<span class="nc" id="L62">        this.src = null;</span>
+<span class="nc" id="L63">        this.dst = null;</span>
+<span class="nc" id="L64">        this.path = null;</span>
+<span class="nc" id="L65">        this.lambda = null;</span>
+<span class="nc" id="L66">        this.signalType = null;</span>
+<span class="nc" id="L67">        this.isBidirectional = true;</span>
+<span class="nc" id="L68">    }</span>
+
+    /**
+     * Returns a new optical connectivity intent builder.
+     *
+     * @return host to host intent builder
+     */
+    public static Builder builder() {
+<span class="fc" id="L76">        return new Builder();</span>
+    }
+
+
+    /**
+     * Builder for optical path intents.
+     */
+<span class="fc" id="L83">    public static class Builder extends Intent.Builder {</span>
+        private ConnectPoint src;
+        private ConnectPoint dst;
+        private Path path;
+        private OchSignal lambda;
+        private OchSignalType signalType;
+        private boolean isBidirectional;
+        Key key;
+
+        @Override
+        public Builder appId(ApplicationId appId) {
+<span class="fc" id="L94">            return (Builder) super.appId(appId);</span>
+        }
+
+        @Override
+        public Builder key(Key key) {
+<span class="nc" id="L99">            return (Builder) super.key(key);</span>
+        }
+
+        @Override
+        public Builder priority(int priority) {
+<span class="fc" id="L104">            return (Builder) super.priority(priority);</span>
+        }
+
+        /**
+         * Sets the source for the intent that will be built.
+         *
+         * @param src source to use for built intent
+         * @return this builder
+         */
+        public Builder src(ConnectPoint src) {
+<span class="fc" id="L114">            this.src = src;</span>
+<span class="fc" id="L115">            return this;</span>
+        }
+
+        /**
+         * Sets the destination for the intent that will be built.
+         *
+         * @param dst dest to use for built intent
+         * @return this builder
+         */
+        public Builder dst(ConnectPoint dst) {
+<span class="fc" id="L125">            this.dst = dst;</span>
+<span class="fc" id="L126">            return this;</span>
+        }
+
+        /**
+         * Sets the path for the intent that will be built.
+         *
+         * @param path path to use for built intent
+         * @return this builder
+         */
+        public Builder path(Path path) {
+<span class="fc" id="L136">            this.path = path;</span>
+<span class="fc" id="L137">            return this;</span>
+        }
+
+        /**
+         * Sets the optical channel (lambda) for the intent that will be built.
+         *
+         * @param lambda the optical channel
+         * @return this builder
+         */
+        public Builder lambda(OchSignal lambda) {
+<span class="fc" id="L147">            this.lambda = lambda;</span>
+<span class="fc" id="L148">            return this;</span>
+        }
+
+        /**
+         * Sets the optical signal type for the intent that will be built.
+         *
+         * @param signalType the optical signal type
+         * @return this builder
+         */
+        public Builder signalType(OchSignalType signalType) {
+<span class="fc" id="L158">            this.signalType = signalType;</span>
+<span class="fc" id="L159">            return this;</span>
+        }
+
+        /**
+         * Sets the intent's direction.
+         *
+         * @param isBidirectional indicates if intent is bidirectional
+         * @return this builder
+         */
+        public Builder bidirectional(boolean isBidirectional) {
+<span class="nc" id="L169">            this.isBidirectional = isBidirectional;</span>
+<span class="nc" id="L170">            return this;</span>
+        }
+
+        /**
+         * Builds an optical path intent from the accumulated parameters.
+         *
+         * @return optical path intent
+         */
+        public OpticalPathIntent build() {
+
+<span class="fc" id="L180">            return new OpticalPathIntent(</span>
+                    appId,
+                    key,
+                    src,
+                    dst,
+                    path,
+                    lambda,
+                    signalType,
+                    isBidirectional,
+                    priority
+            );
+        }
+    }
+
+
+    public ConnectPoint src() {
+<span class="fc" id="L196">        return src;</span>
+    }
+
+    public ConnectPoint dst() {
+<span class="fc" id="L200">        return dst;</span>
+    }
+
+    public Path path() {
+<span class="fc" id="L204">        return path;</span>
+    }
+
+    public OchSignal lambda() {
+<span class="nc" id="L208">        return lambda;</span>
+    }
+
+    public OchSignalType signalType() {
+<span class="nc" id="L212">        return signalType;</span>
+    }
+
+    public boolean isBidirectional() {
+<span class="nc" id="L216">        return isBidirectional;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L221">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L222">                .add(&quot;id&quot;, id())</span>
+<span class="fc" id="L223">                .add(&quot;appId&quot;, appId())</span>
+<span class="fc" id="L224">                .add(&quot;key&quot;, key())</span>
+<span class="fc" id="L225">                .add(&quot;resources&quot;, resources())</span>
+<span class="fc" id="L226">                .add(&quot;ingressPort&quot;, src)</span>
+<span class="fc" id="L227">                .add(&quot;egressPort&quot;, dst)</span>
+<span class="fc" id="L228">                .add(&quot;path&quot;, path)</span>
+<span class="fc" id="L229">                .add(&quot;lambda&quot;, lambda)</span>
+<span class="fc" id="L230">                .add(&quot;signalType&quot;, signalType)</span>
+<span class="fc" id="L231">                .add(&quot;isBidirectional&quot;, isBidirectional)</span>
+<span class="fc" id="L232">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

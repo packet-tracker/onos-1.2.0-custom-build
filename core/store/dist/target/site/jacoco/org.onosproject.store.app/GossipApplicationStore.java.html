@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GossipApplicationStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.app</a> &gt; <span class="el_source">GossipApplicationStore.java</span></div><h1>GossipApplicationStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.app;
+
+import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableSet;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.app.ApplicationDescription;
+import org.onosproject.app.ApplicationEvent;
+import org.onosproject.app.ApplicationException;
+import org.onosproject.app.ApplicationState;
+import org.onosproject.app.ApplicationStore;
+import org.onosproject.app.ApplicationStoreDelegate;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.common.app.ApplicationArchive;
+import org.onosproject.core.Application;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.ApplicationIdStore;
+import org.onosproject.core.DefaultApplication;
+import org.onosproject.security.Permission;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.LogicalClockService;
+import org.onosproject.store.service.MultiValuedTimestamp;
+import org.onosproject.store.service.StorageException;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Function;
+
+import static com.google.common.io.ByteStreams.toByteArray;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.randomDelay;
+import static org.onosproject.app.ApplicationEvent.Type.*;
+import static org.onosproject.store.app.GossipApplicationStore.InternalState.*;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.REMOVE;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of applications in a distributed data store that uses
+ * optimistic replication and gossip based anti-entropy techniques.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L80">public class GossipApplicationStore extends ApplicationArchive</span>
+        implements ApplicationStore {
+
+<span class="nc" id="L83">    private final Logger log = getLogger(getClass());</span>
+
+<span class="nc" id="L85">    private static final MessageSubject APP_BITS_REQUEST = new MessageSubject(&quot;app-bits-request&quot;);</span>
+
+    private static final int MAX_LOAD_RETRIES = 5;
+    private static final int RETRY_DELAY_MS = 2_000;
+
+    private static final int FETCH_TIMEOUT_MS = 10_000;
+
+<span class="nc" id="L92">    public enum InternalState {</span>
+<span class="nc" id="L93">        INSTALLED, ACTIVATED, DEACTIVATED</span>
+    }
+
+    private ScheduledExecutorService executor;
+    private ExecutorService messageHandlingExecutor;
+
+    private EventuallyConsistentMap&lt;ApplicationId, Application&gt; apps;
+    private EventuallyConsistentMap&lt;Application, InternalState&gt; states;
+    private EventuallyConsistentMap&lt;Application, Set&lt;Permission&gt;&gt; permissions;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LogicalClockService clockService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ApplicationIdStore idStore;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L120">        KryoNamespace.Builder serializer = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L121">                .register(KryoNamespaces.API)</span>
+<span class="nc" id="L122">                .register(MultiValuedTimestamp.class)</span>
+<span class="nc" id="L123">                .register(InternalState.class);</span>
+
+<span class="nc" id="L125">        executor = Executors.newSingleThreadScheduledExecutor(groupedThreads(&quot;onos/app&quot;, &quot;store&quot;));</span>
+
+<span class="nc" id="L127">        messageHandlingExecutor = Executors.newSingleThreadExecutor(</span>
+<span class="nc" id="L128">                groupedThreads(&quot;onos/store/app&quot;, &quot;message-handler&quot;));</span>
+
+<span class="nc" id="L130">        clusterCommunicator.&lt;String, byte[]&gt;addSubscriber(APP_BITS_REQUEST,</span>
+<span class="nc" id="L131">                bytes -&gt; new String(bytes, Charsets.UTF_8),</span>
+                name -&gt; {
+                    try {
+<span class="nc" id="L134">                        return toByteArray(getApplicationInputStream(name));</span>
+<span class="nc" id="L135">                    } catch (IOException e) {</span>
+<span class="nc" id="L136">                        throw new StorageException(e);</span>
+                    }
+                },
+<span class="nc" id="L139">                Function.identity(),</span>
+                messageHandlingExecutor);
+
+        // FIXME: Consider consolidating into a single map.
+
+<span class="nc" id="L144">        apps = storageService.&lt;ApplicationId, Application&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L145">                .withName(&quot;apps&quot;)</span>
+<span class="nc" id="L146">                .withSerializer(serializer)</span>
+<span class="nc" id="L147">                .withTimestampProvider((k, v) -&gt; clockService.getTimestamp())</span>
+<span class="nc" id="L148">                .build();</span>
+
+<span class="nc" id="L150">        states = storageService.&lt;Application, InternalState&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L151">                .withName(&quot;app-states&quot;)</span>
+<span class="nc" id="L152">                .withSerializer(serializer)</span>
+<span class="nc" id="L153">                .withTimestampProvider((k, v) -&gt; clockService.getTimestamp())</span>
+<span class="nc" id="L154">                .build();</span>
+
+<span class="nc" id="L156">        states.addListener(new InternalAppStatesListener());</span>
+
+<span class="nc" id="L158">        permissions = storageService.&lt;Application, Set&lt;Permission&gt;&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L159">                .withName(&quot;app-permissions&quot;)</span>
+<span class="nc" id="L160">                .withSerializer(serializer)</span>
+<span class="nc" id="L161">                .withTimestampProvider((k, v) -&gt; clockService.getTimestamp())</span>
+<span class="nc" id="L162">                .build();</span>
+
+<span class="nc" id="L164">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L165">    }</span>
+
+    /**
+     * Loads the application inventory from the disk and activates apps if
+     * they are marked to be active.
+     */
+    private void loadFromDisk() {
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        for (String name : getApplicationNames()) {</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">            for (int i = 0; i &lt; MAX_LOAD_RETRIES; i++) {</span>
+                try {
+<span class="nc" id="L175">                    Application app = create(getApplicationDescription(name), false);</span>
+<span class="nc bnc" id="L176" title="All 4 branches missed.">                    if (app != null &amp;&amp; isActive(app.id().name())) {</span>
+<span class="nc" id="L177">                        activate(app.id(), false);</span>
+                        // load app permissions
+                    }
+<span class="nc" id="L180">                } catch (Exception e) {</span>
+<span class="nc" id="L181">                    log.warn(&quot;Unable to load application {} from disk; retrying&quot;, name);</span>
+<span class="nc" id="L182">                    randomDelay(RETRY_DELAY_MS);  // FIXME: This is a deliberate hack; fix in Drake</span>
+<span class="nc" id="L183">                }</span>
+            }
+<span class="nc" id="L185">        }</span>
+<span class="nc" id="L186">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L190">        clusterCommunicator.removeSubscriber(APP_BITS_REQUEST);</span>
+<span class="nc" id="L191">        messageHandlingExecutor.shutdown();</span>
+<span class="nc" id="L192">        executor.shutdown();</span>
+<span class="nc" id="L193">        apps.destroy();</span>
+<span class="nc" id="L194">        states.destroy();</span>
+<span class="nc" id="L195">        permissions.destroy();</span>
+<span class="nc" id="L196">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L197">    }</span>
+
+    @Override
+    public void setDelegate(ApplicationStoreDelegate delegate) {
+<span class="nc" id="L201">        super.setDelegate(delegate);</span>
+<span class="nc" id="L202">        loadFromDisk();</span>
+//        executor.schedule(this::pruneUninstalledApps, LOAD_TIMEOUT_MS, MILLISECONDS);
+<span class="nc" id="L204">    }</span>
+
+    @Override
+    public Set&lt;Application&gt; getApplications() {
+<span class="nc" id="L208">        return ImmutableSet.copyOf(apps.values());</span>
+    }
+
+    @Override
+    public ApplicationId getId(String name) {
+<span class="nc" id="L213">        return idStore.getAppId(name);</span>
+    }
+
+    @Override
+    public Application getApplication(ApplicationId appId) {
+<span class="nc" id="L218">        return apps.get(appId);</span>
+    }
+
+    @Override
+    public ApplicationState getState(ApplicationId appId) {
+<span class="nc" id="L223">        Application app = apps.get(appId);</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        InternalState s = app == null ? null : states.get(app);</span>
+<span class="nc bnc" id="L225" title="All 4 branches missed.">        return s == null ? null : s == ACTIVATED ?</span>
+                ApplicationState.ACTIVE : ApplicationState.INSTALLED;
+    }
+
+    @Override
+    public Application create(InputStream appDescStream) {
+<span class="nc" id="L231">        ApplicationDescription appDesc = saveApplication(appDescStream);</span>
+<span class="nc" id="L232">        return create(appDesc, true);</span>
+    }
+
+    private Application create(ApplicationDescription appDesc, boolean updateTime) {
+<span class="nc" id="L236">        Application app = registerApp(appDesc);</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (updateTime) {</span>
+<span class="nc" id="L238">            updateTime(app.id().name());</span>
+        }
+<span class="nc" id="L240">        apps.put(app.id(), app);</span>
+<span class="nc" id="L241">        states.put(app, INSTALLED);</span>
+<span class="nc" id="L242">        return app;</span>
+    }
+
+    @Override
+    public void remove(ApplicationId appId) {
+<span class="nc" id="L247">        Application app = apps.get(appId);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (app != null) {</span>
+<span class="nc" id="L249">            apps.remove(appId);</span>
+<span class="nc" id="L250">            states.remove(app);</span>
+<span class="nc" id="L251">            permissions.remove(app);</span>
+        }
+<span class="nc" id="L253">    }</span>
+
+    @Override
+    public void activate(ApplicationId appId) {
+<span class="nc" id="L257">        activate(appId, true);</span>
+<span class="nc" id="L258">    }</span>
+
+    private void activate(ApplicationId appId, boolean updateTime) {
+<span class="nc" id="L261">        Application app = apps.get(appId);</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (app != null) {</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            if (updateTime) {</span>
+<span class="nc" id="L264">                updateTime(appId.name());</span>
+            }
+<span class="nc" id="L266">            states.put(app, ACTIVATED);</span>
+        }
+<span class="nc" id="L268">    }</span>
+
+    @Override
+    public void deactivate(ApplicationId appId) {
+<span class="nc" id="L272">        Application app = apps.get(appId);</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        if (app != null) {</span>
+<span class="nc" id="L274">            updateTime(appId.name());</span>
+<span class="nc" id="L275">            states.put(app, DEACTIVATED);</span>
+        }
+<span class="nc" id="L277">    }</span>
+
+    @Override
+    public Set&lt;Permission&gt; getPermissions(ApplicationId appId) {
+<span class="nc" id="L281">        Application app = apps.get(appId);</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        return app != null ? permissions.get(app) : null;</span>
+    }
+
+    @Override
+    public void setPermissions(ApplicationId appId, Set&lt;Permission&gt; permissions) {
+<span class="nc" id="L287">        Application app = getApplication(appId);</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        if (app != null) {</span>
+<span class="nc" id="L289">            this.permissions.put(app, permissions);</span>
+<span class="nc" id="L290">            delegate.notify(new ApplicationEvent(APP_PERMISSIONS_CHANGED, app));</span>
+        }
+<span class="nc" id="L292">    }</span>
+
+    /**
+     * Listener to application state distributed map changes.
+     */
+<span class="nc" id="L297">    private final class InternalAppStatesListener</span>
+            implements EventuallyConsistentMapListener&lt;Application, InternalState&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;Application, InternalState&gt; event) {
+            // If we do not have a delegate, refuse to process any events entirely.
+            // This is to allow the anti-entropy to kick in and process the events
+            // perhaps a bit later, but with opportunity to notify delegate.
+<span class="nc bnc" id="L304" title="All 2 branches missed.">            if (delegate == null) {</span>
+<span class="nc" id="L305">                return;</span>
+            }
+
+<span class="nc" id="L308">            Application app = event.key();</span>
+<span class="nc" id="L309">            InternalState state = event.value();</span>
+
+<span class="nc bnc" id="L311" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">                if (state == INSTALLED) {</span>
+<span class="nc" id="L313">                    fetchBitsIfNeeded(app);</span>
+<span class="nc" id="L314">                    delegate.notify(new ApplicationEvent(APP_INSTALLED, app));</span>
+
+<span class="nc bnc" id="L316" title="All 2 branches missed.">                } else if (state == ACTIVATED) {</span>
+<span class="nc" id="L317">                    installAppIfNeeded(app);</span>
+<span class="nc" id="L318">                    setActive(app.id().name());</span>
+<span class="nc" id="L319">                    delegate.notify(new ApplicationEvent(APP_ACTIVATED, app));</span>
+
+<span class="nc bnc" id="L321" title="All 2 branches missed.">                } else if (state == DEACTIVATED) {</span>
+<span class="nc" id="L322">                    clearActive(app.id().name());</span>
+<span class="nc" id="L323">                    delegate.notify(new ApplicationEvent(APP_DEACTIVATED, app));</span>
+                }
+<span class="nc bnc" id="L325" title="All 2 branches missed.">            } else if (event.type() == REMOVE) {</span>
+<span class="nc" id="L326">                delegate.notify(new ApplicationEvent(APP_UNINSTALLED, app));</span>
+<span class="nc" id="L327">                purgeApplication(app.id().name());</span>
+            }
+<span class="nc" id="L329">        }</span>
+    }
+
+    /**
+     * Determines if the application bits are available locally.
+     */
+    private boolean appBitsAvailable(Application app) {
+        try {
+<span class="nc" id="L337">            ApplicationDescription appDesc = getApplicationDescription(app.id().name());</span>
+<span class="nc" id="L338">            return appDesc.version().equals(app.version());</span>
+<span class="nc" id="L339">        } catch (ApplicationException e) {</span>
+<span class="nc" id="L340">            return false;</span>
+        }
+    }
+
+    /**
+     * Fetches the bits from the cluster peers if necessary.
+     */
+    private void fetchBitsIfNeeded(Application app) {
+<span class="nc bnc" id="L348" title="All 2 branches missed.">        if (!appBitsAvailable(app)) {</span>
+<span class="nc" id="L349">            fetchBits(app);</span>
+        }
+<span class="nc" id="L351">    }</span>
+
+    /**
+     * Installs the application if necessary from the application peers.
+     */
+    private void installAppIfNeeded(Application app) {
+<span class="nc bnc" id="L357" title="All 2 branches missed.">        if (!appBitsAvailable(app)) {</span>
+<span class="nc" id="L358">            fetchBits(app);</span>
+<span class="nc" id="L359">            delegate.notify(new ApplicationEvent(APP_INSTALLED, app));</span>
+        }
+<span class="nc" id="L361">    }</span>
+
+    /**
+     * Fetches the bits from the cluster peers.
+     */
+    private void fetchBits(Application app) {
+<span class="nc" id="L367">        ControllerNode localNode = clusterService.getLocalNode();</span>
+<span class="nc" id="L368">        CountDownLatch latch = new CountDownLatch(1);</span>
+
+        // FIXME: send message with name &amp; version to make sure we don't get served old bits
+
+<span class="nc" id="L372">        log.info(&quot;Downloading bits for application {}&quot;, app.id().name());</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        for (ControllerNode node : clusterService.getNodes()) {</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">            if (latch.getCount() == 0) {</span>
+<span class="nc" id="L375">                break;</span>
+            }
+<span class="nc bnc" id="L377" title="All 2 branches missed.">            if (node.equals(localNode)) {</span>
+<span class="nc" id="L378">                continue;</span>
+            }
+<span class="nc" id="L380">            clusterCommunicator.sendAndReceive(app.id().name(),</span>
+                                               APP_BITS_REQUEST,
+<span class="nc" id="L382">                                               s -&gt; s.getBytes(Charsets.UTF_8),</span>
+<span class="nc" id="L383">                                               Function.identity(),</span>
+<span class="nc" id="L384">                                               node.id())</span>
+<span class="nc" id="L385">                    .whenCompleteAsync((bits, error) -&gt; {</span>
+<span class="nc bnc" id="L386" title="All 4 branches missed.">                        if (error == null &amp;&amp; latch.getCount() &gt; 0) {</span>
+<span class="nc" id="L387">                            saveApplication(new ByteArrayInputStream(bits));</span>
+<span class="nc" id="L388">                            log.info(&quot;Downloaded bits for application {} from node {}&quot;,</span>
+<span class="nc" id="L389">                                     app.id().name(), node.id());</span>
+<span class="nc" id="L390">                            latch.countDown();</span>
+<span class="nc bnc" id="L391" title="All 2 branches missed.">                        } else if (error != null) {</span>
+<span class="nc" id="L392">                            log.warn(&quot;Unable to fetch bits for application {} from node {}&quot;,</span>
+<span class="nc" id="L393">                                     app.id().name(), node.id());</span>
+                        }
+<span class="nc" id="L395">                    }, executor);</span>
+<span class="nc" id="L396">        }</span>
+
+        try {
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            if (!latch.await(FETCH_TIMEOUT_MS, MILLISECONDS)) {</span>
+<span class="nc" id="L400">                log.warn(&quot;Unable to fetch bits for application {}&quot;, app.id().name());</span>
+            }
+<span class="nc" id="L402">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L403">            log.warn(&quot;Interrupted while fetching bits for application {}&quot;, app.id().name());</span>
+<span class="nc" id="L404">        }</span>
+<span class="nc" id="L405">    }</span>
+
+    /**
+     * Prunes applications which are not in the map, but are on disk.
+     */
+    private void pruneUninstalledApps() {
+<span class="nc bnc" id="L411" title="All 2 branches missed.">        for (String name : getApplicationNames()) {</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">            if (getApplication(getId(name)) == null) {</span>
+<span class="nc" id="L413">                Application app = registerApp(getApplicationDescription(name));</span>
+<span class="nc" id="L414">                delegate.notify(new ApplicationEvent(APP_UNINSTALLED, app));</span>
+<span class="nc" id="L415">                purgeApplication(app.id().name());</span>
+            }
+<span class="nc" id="L417">        }</span>
+<span class="nc" id="L418">    }</span>
+
+    /**
+     * Produces a registered application from the supplied description.
+     */
+    private Application registerApp(ApplicationDescription appDesc) {
+<span class="nc" id="L424">        ApplicationId appId = idStore.registerApplication(appDesc.name());</span>
+<span class="nc" id="L425">        return new DefaultApplication(appId, appDesc.version(), appDesc.description(),</span>
+<span class="nc" id="L426">                                      appDesc.origin(), appDesc.role(), appDesc.permissions(),</span>
+<span class="nc" id="L427">                                      appDesc.featuresRepo(), appDesc.features());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

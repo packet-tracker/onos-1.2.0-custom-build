@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AclWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-acl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.acl</a> &gt; <span class="el_source">AclWebResource.java</span></div><h1>AclWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ * Originally created by Pengfei Lu, Network and Cloud Computing Laboratory, Dalian University of Technology, China
+ * Advisers: Keqiu Li, Heng Qi and Haisheng Yu
+ * This work is supported by the State Key Program of National Natural Science of China(Grant No. 61432002)
+ * and Prospective Research Project on Future Networks in Jiangsu Future Networks Innovation Institute.
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.acl;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.onlab.packet.IPv4;
+import org.onlab.packet.Ip4Prefix;
+import org.onosproject.rest.AbstractWebResource;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
+
+/**
+ * Manage ACL rules.
+ */
+@Path(&quot;rules&quot;)
+<span class="nc" id="L48">public class AclWebResource extends AbstractWebResource {</span>
+
+    /**
+     * Get all ACL rules.
+     * Returns array of all ACL rules.
+     *
+     * @return 200 OK
+     */
+    @GET
+    public Response queryAclRule() {
+<span class="nc" id="L58">        List&lt;AclRule&gt; rules = get(AclService.class).getAclRules();</span>
+<span class="nc" id="L59">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L60">        ObjectNode root = mapper.createObjectNode();</span>
+<span class="nc" id="L61">        ArrayNode arrayNode = mapper.createArrayNode();</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        for (AclRule rule : rules) {</span>
+<span class="nc" id="L63">            ObjectNode node = mapper.createObjectNode();</span>
+<span class="nc" id="L64">            node.put(&quot;id&quot;, rule.id().toString());</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">            if (rule.srcIp() != null) {</span>
+<span class="nc" id="L66">                node.put(&quot;srcIp&quot;, rule.srcIp().toString());</span>
+            }
+<span class="nc bnc" id="L68" title="All 2 branches missed.">            if (rule.dstIp() != null) {</span>
+<span class="nc" id="L69">                node.put(&quot;dstIp&quot;, rule.dstIp().toString());</span>
+            }
+<span class="nc bnc" id="L71" title="All 2 branches missed.">            if (rule.ipProto() != 0) {</span>
+<span class="nc bnc" id="L72" title="All 4 branches missed.">                switch (rule.ipProto()) {</span>
+                    case IPv4.PROTOCOL_ICMP:
+<span class="nc" id="L74">                        node.put(&quot;ipProto&quot;, &quot;ICMP&quot;);</span>
+<span class="nc" id="L75">                        break;</span>
+                    case IPv4.PROTOCOL_TCP:
+<span class="nc" id="L77">                        node.put(&quot;ipProto&quot;, &quot;TCP&quot;);</span>
+<span class="nc" id="L78">                        break;</span>
+                    case IPv4.PROTOCOL_UDP:
+<span class="nc" id="L80">                        node.put(&quot;ipProto&quot;, &quot;UDP&quot;);</span>
+<span class="nc" id="L81">                        break;</span>
+                    default:
+                        break;
+                }
+            }
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            if (rule.dstTpPort() != 0) {</span>
+<span class="nc" id="L87">                node.put(&quot;dstTpPort&quot;, rule.dstTpPort());</span>
+            }
+<span class="nc" id="L89">            node.put(&quot;action&quot;, rule.action().toString());</span>
+<span class="nc" id="L90">            arrayNode.add(node);</span>
+<span class="nc" id="L91">        }</span>
+<span class="nc" id="L92">        root.set(&quot;aclRules&quot;, arrayNode);</span>
+<span class="nc" id="L93">        return Response.ok(root.toString(), MediaType.APPLICATION_JSON_TYPE).build();</span>
+    }
+
+    /**
+     * Add a new ACL rule.
+     *
+     * @param stream JSON data describing the rule
+     * @return 200 OK
+     * @throws URISyntaxException uri syntax exception
+     */
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response addAclRule(InputStream stream) throws URISyntaxException {
+<span class="nc" id="L106">        AclRule newRule = jsonToRule(stream);</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        return get(AclService.class).addAclRule(newRule) ?</span>
+<span class="nc" id="L108">                Response.created(new URI(newRule.id().toString())).build() :</span>
+<span class="nc" id="L109">                Response.serverError().build();</span>
+    }
+
+    /**
+     * Remove ACL rule.
+     *
+     * @param id ACL rule id (in hex string format)
+     * @return 200 OK
+     */
+    @DELETE
+    @Path(&quot;{id}&quot;)
+    public Response removeAclRule(@PathParam(&quot;id&quot;) String id) {
+<span class="nc" id="L121">        RuleId ruleId = new RuleId(Long.parseLong(id.substring(2), 16));</span>
+<span class="nc" id="L122">        get(AclService.class).removeAclRule(ruleId);</span>
+<span class="nc" id="L123">        return Response.ok().build();</span>
+    }
+
+    /**
+     * Remove all ACL rules.
+     *
+     * @return 200 OK
+     */
+    @DELETE
+    public Response clearACL() {
+<span class="nc" id="L133">        get(AclService.class).clearAcl();</span>
+<span class="nc" id="L134">        return Response.ok().build();</span>
+    }
+
+    /**
+     * Turns a JSON string into an ACL rule instance.
+     */
+    private AclRule jsonToRule(InputStream stream) {
+        JsonNode node;
+        try {
+<span class="nc" id="L143">            node = mapper().readTree(stream);</span>
+<span class="nc" id="L144">        } catch (IOException e) {</span>
+<span class="nc" id="L145">            throw new IllegalArgumentException(&quot;Unable to parse ACL request&quot;, e);</span>
+<span class="nc" id="L146">        }</span>
+
+<span class="nc" id="L148">        AclRule.Builder rule = AclRule.builder();</span>
+
+<span class="nc" id="L150">        String s = node.path(&quot;srcIp&quot;).asText(null);</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        if (s != null) {</span>
+<span class="nc" id="L152">            rule.srcIp(Ip4Prefix.valueOf(s));</span>
+        }
+
+<span class="nc" id="L155">        s = node.path(&quot;dstIp&quot;).asText(null);</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">        if (s != null) {</span>
+<span class="nc" id="L157">            rule.dstIp(Ip4Prefix.valueOf(s));</span>
+        }
+
+<span class="nc" id="L160">        s = node.path(&quot;ipProto&quot;).asText(null);</span>
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (s != null) {</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (&quot;TCP&quot;.equalsIgnoreCase(s)) {</span>
+<span class="nc" id="L163">                rule.ipProto(IPv4.PROTOCOL_TCP);</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            } else if (&quot;UDP&quot;.equalsIgnoreCase(s)) {</span>
+<span class="nc" id="L165">                rule.ipProto(IPv4.PROTOCOL_UDP);</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">            } else if (&quot;ICMP&quot;.equalsIgnoreCase(s)) {</span>
+<span class="nc" id="L167">                rule.ipProto(IPv4.PROTOCOL_ICMP);</span>
+            } else {
+<span class="nc" id="L169">                throw new IllegalArgumentException(&quot;ipProto must be assigned to TCP, UDP, or ICMP&quot;);</span>
+            }
+        }
+
+<span class="nc" id="L173">        int port = node.path(&quot;dstTpPort&quot;).asInt(0);</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        if (port &gt; 0) {</span>
+<span class="nc" id="L175">            rule.dstTpPort((short) port);</span>
+        }
+
+<span class="nc" id="L178">        s = node.path(&quot;action&quot;).asText(null);</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (s != null) {</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">            if (&quot;allow&quot;.equalsIgnoreCase(s)) {</span>
+<span class="nc" id="L181">                rule.action(AclRule.Action.ALLOW);</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            } else if (&quot;deny&quot;.equalsIgnoreCase(s)) {</span>
+<span class="nc" id="L183">                rule.action(AclRule.Action.DENY);</span>
+            } else {
+<span class="nc" id="L185">                throw new IllegalArgumentException(&quot;action must be ALLOW or DENY&quot;);</span>
+            }
+        }
+
+<span class="nc" id="L189">        return rule.build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

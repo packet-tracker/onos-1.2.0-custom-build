@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcInitiatedLspRequestVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcInitiatedLspRequestVer1.java</span></div><h1>PcInitiatedLspRequestVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcInitiatedLspRequest;
+import org.onosproject.pcepio.protocol.PcepAttribute;
+import org.onosproject.pcepio.protocol.PcepEndPointsObject;
+import org.onosproject.pcepio.protocol.PcepEroObject;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PcInitiatedLspRequest for PCEP Initiate message.
+ * Reference : PCE initiated tunnel setup draft-ietf-pce-pce-initiated-lsp-03.
+ */
+public class PcInitiatedLspRequestVer1 implements PcInitiatedLspRequest {
+
+    /*
+     * &lt;PCE-initiated-lsp-request&gt;       ::= (&lt;PCE-initiated-lsp-instantiation&gt;|&lt;PCE-initiated-lsp-deletion&gt;)
+       &lt;PCE-initiated-lsp-instantiation&gt; ::= &lt;SRP&gt;
+                                             &lt;LSP&gt;
+                                             &lt;END-POINTS&gt;
+                                             &lt;ERO&gt;
+                                             [&lt;attribute-list&gt;]
+            &lt;PCE-initiated-lsp-deletion&gt; ::= &lt;SRP&gt;
+                                             &lt;LSP&gt;
+     */
+
+<span class="fc" id="L48">    protected static final Logger log = LoggerFactory.getLogger(PcInitiatedLspRequestVer1.class);</span>
+
+    //PCEP SRP Object
+    private PcepSrpObject srpObject;
+    //PCEP LSP Object
+    private PcepLspObject lspObject;
+    //PCEP End Point Object
+    private PcepEndPointsObject endPointsObject;
+    //PCEP ERO Object
+    private PcepEroObject eroObject;
+    //PCEP Attribute list
+    private PcepAttribute pcepAttribute;
+
+    /**
+     * Default constructor.
+     */
+<span class="fc" id="L64">    public PcInitiatedLspRequestVer1() {</span>
+<span class="fc" id="L65">        srpObject = null;</span>
+<span class="fc" id="L66">        lspObject = null;</span>
+<span class="fc" id="L67">        endPointsObject = null;</span>
+<span class="fc" id="L68">        eroObject = null;</span>
+<span class="fc" id="L69">        pcepAttribute = null;</span>
+
+<span class="fc" id="L71">    }</span>
+
+    /**
+     * Constructor to initialize all parameters of PC initiated lsp request.
+     *
+     * @param srpObject PCEP srp Object
+     * @param lspObject PCEP lsp object
+     * @param endPointsObject PCPE endpoints object
+     * @param eroObject PCEP ero object
+     * @param pcepAttribute PCEP attribute
+     */
+    public PcInitiatedLspRequestVer1(PcepSrpObject srpObject, PcepLspObject lspObject,
+<span class="nc" id="L83">            PcepEndPointsObject endPointsObject, PcepEroObject eroObject, PcepAttribute pcepAttribute) {</span>
+<span class="nc" id="L84">        this.srpObject = srpObject;</span>
+<span class="nc" id="L85">        this.lspObject = lspObject;</span>
+<span class="nc" id="L86">        this.endPointsObject = endPointsObject;</span>
+<span class="nc" id="L87">        this.eroObject = eroObject;</span>
+<span class="nc" id="L88">        this.pcepAttribute = pcepAttribute;</span>
+
+<span class="nc" id="L90">    }</span>
+
+    @Override
+    public PcepSrpObject getSrpObject() {
+<span class="fc" id="L94">        return srpObject;</span>
+    }
+
+    @Override
+    public PcepLspObject getLspObject() {
+<span class="fc" id="L99">        return lspObject;</span>
+    }
+
+    @Override
+    public PcepEndPointsObject getEndPointsObject() {
+<span class="fc" id="L104">        return endPointsObject;</span>
+    }
+
+    @Override
+    public PcepEroObject getEroObject() {
+<span class="fc" id="L109">        return eroObject;</span>
+    }
+
+    @Override
+    public PcepAttribute getPcepAttribute() {
+<span class="fc" id="L114">        return pcepAttribute;</span>
+    }
+
+    @Override
+    public void setSrpObject(PcepSrpObject srpobj) {
+<span class="fc" id="L119">        this.srpObject = srpobj;</span>
+
+<span class="fc" id="L121">    }</span>
+
+    @Override
+    public void setLspObject(PcepLspObject lspObject) {
+<span class="fc" id="L125">        this.lspObject = lspObject;</span>
+<span class="fc" id="L126">    }</span>
+
+    @Override
+    public void setEndPointsObject(PcepEndPointsObject endPointsObject) {
+<span class="fc" id="L130">        this.endPointsObject = endPointsObject;</span>
+<span class="fc" id="L131">    }</span>
+
+    @Override
+    public void setEroObject(PcepEroObject eroObject) {
+<span class="fc" id="L135">        this.eroObject = eroObject;</span>
+<span class="fc" id="L136">    }</span>
+
+    @Override
+    public void setPcepAttribute(PcepAttribute pcepAttribute) {
+<span class="fc" id="L140">        this.pcepAttribute = pcepAttribute;</span>
+<span class="fc" id="L141">    }</span>
+
+    /**
+     * Builder class for PC initiated lsp reuqest.
+     */
+<span class="nc" id="L146">    public static class Builder implements PcInitiatedLspRequest.Builder {</span>
+
+<span class="nc" id="L148">        private boolean bIsSRPObjectSet = false;</span>
+<span class="nc" id="L149">        private boolean bIsLSPObjectSet = false;</span>
+<span class="nc" id="L150">        private boolean bIsEndPointsObjectSet = false;</span>
+<span class="nc" id="L151">        private boolean bIsEROObjectSet = false;</span>
+<span class="nc" id="L152">        private boolean bIsPcepAttributeSet = false;</span>
+<span class="nc" id="L153">        private boolean bIsbRFlagSet = false;</span>
+
+        //PCEP SRP Object
+        private PcepSrpObject srpObject;
+        //PCEP LSP Object
+        private PcepLspObject lspObject;
+        //PCEP End Point Object
+        private PcepEndPointsObject endPointsObject;
+        //PCEP ERO Object
+        private PcepEroObject eroObject;
+        //PCEP Attribute list
+        private PcepAttribute pcepAttribute;
+
+        @Override
+        public PcInitiatedLspRequest build() throws PcepParseException {
+
+            //PCEP SRP Object
+<span class="nc" id="L170">            PcepSrpObject srpObject = null;</span>
+            //PCEP LSP Object
+<span class="nc" id="L172">            PcepLspObject lspObject = null;</span>
+            //PCEP End Point Object
+<span class="nc" id="L174">            PcepEndPointsObject endPointsObject = null;</span>
+            //PCEP ERO Object
+<span class="nc" id="L176">            PcepEroObject eroObject = null;</span>
+            //PCEP Attribute list
+<span class="nc" id="L178">            PcepAttribute pcepAttribute = null;</span>
+<span class="nc" id="L179">            boolean bRFlag = false;</span>
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            if (!this.bIsSRPObjectSet) {</span>
+<span class="nc" id="L182">                throw new PcepParseException(&quot;Srp object NOT Set while building PcInitiatedLspRequest&quot;);</span>
+            } else {
+<span class="nc" id="L184">                srpObject = this.srpObject;</span>
+<span class="nc" id="L185">                bRFlag = srpObject.getRFlag();</span>
+            }
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            if (bRFlag) {</span>
+<span class="nc" id="L189">                this.bIsbRFlagSet = true;</span>
+            } else {
+<span class="nc" id="L191">                this.bIsbRFlagSet = false;</span>
+            }
+
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if (!this.bIsLSPObjectSet) {</span>
+<span class="nc" id="L195">                throw new PcepParseException(&quot;LSP Object NOT Set while building PcInitiatedLspRequest&quot;);</span>
+            } else {
+<span class="nc" id="L197">                lspObject = this.lspObject;</span>
+            }
+<span class="nc bnc" id="L199" title="All 2 branches missed.">            if (!this.bIsbRFlagSet) {</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">                if (!this.bIsEndPointsObjectSet) {</span>
+<span class="nc" id="L202">                    throw new PcepParseException(&quot;EndPoints Object NOT Set while building PcInitiatedLspRequest&quot;);</span>
+                } else {
+<span class="nc" id="L204">                    endPointsObject = this.endPointsObject;</span>
+                }
+<span class="nc bnc" id="L206" title="All 2 branches missed.">                if (!this.bIsEROObjectSet) {</span>
+<span class="nc" id="L207">                    throw new PcepParseException(&quot;ERO Object NOT Set while building PcInitiatedLspRequest&quot;);</span>
+                } else {
+<span class="nc" id="L209">                    eroObject = this.eroObject;</span>
+                }
+<span class="nc bnc" id="L211" title="All 2 branches missed.">                if (bIsPcepAttributeSet) {</span>
+<span class="nc" id="L212">                    pcepAttribute = this.pcepAttribute;</span>
+                }
+            }
+<span class="nc" id="L215">            return new PcInitiatedLspRequestVer1(srpObject, lspObject, endPointsObject, eroObject, pcepAttribute);</span>
+        }
+
+        @Override
+        public PcepSrpObject getSrpObject() {
+<span class="nc" id="L220">            return this.srpObject;</span>
+        }
+
+        @Override
+        public PcepLspObject getLspObject() {
+<span class="nc" id="L225">            return this.lspObject;</span>
+        }
+
+        @Override
+        public PcepEndPointsObject getEndPointsObject() {
+<span class="nc" id="L230">            return this.endPointsObject;</span>
+        }
+
+        @Override
+        public PcepEroObject getEroObject() {
+<span class="nc" id="L235">            return this.eroObject;</span>
+        }
+
+        @Override
+        public PcepAttribute getPcepAttribute() {
+<span class="nc" id="L240">            return this.pcepAttribute;</span>
+        }
+
+        @Override
+        public Builder setSrpObject(PcepSrpObject srpobj) {
+<span class="nc" id="L245">            this.srpObject = srpobj;</span>
+<span class="nc" id="L246">            this.bIsSRPObjectSet = true;</span>
+<span class="nc" id="L247">            return this;</span>
+
+        }
+
+        @Override
+        public Builder setLspObject(PcepLspObject lspObject) {
+<span class="nc" id="L253">            this.lspObject = lspObject;</span>
+<span class="nc" id="L254">            this.bIsLSPObjectSet = true;</span>
+<span class="nc" id="L255">            return this;</span>
+        }
+
+        @Override
+        public Builder setEndPointsObject(PcepEndPointsObject endPointsObject) {
+<span class="nc" id="L260">            this.endPointsObject = endPointsObject;</span>
+<span class="nc" id="L261">            this.bIsEndPointsObjectSet = true;</span>
+<span class="nc" id="L262">            return this;</span>
+        }
+
+        @Override
+        public Builder setEroObject(PcepEroObject eroObject) {
+<span class="nc" id="L267">            this.eroObject = eroObject;</span>
+<span class="nc" id="L268">            this.bIsEROObjectSet = true;</span>
+<span class="nc" id="L269">            return this;</span>
+        }
+
+        @Override
+        public Builder setPcepAttribute(PcepAttribute pcepAttribute) {
+<span class="nc" id="L274">            this.pcepAttribute = pcepAttribute;</span>
+<span class="nc" id="L275">            this.bIsPcepAttributeSet = true;</span>
+<span class="nc" id="L276">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L282">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L283">                .omitNullValues()</span>
+<span class="nc" id="L284">                .add(&quot;SrpObject&quot;, srpObject)</span>
+<span class="nc" id="L285">                .add(&quot;LspObject&quot;, lspObject)</span>
+<span class="nc" id="L286">                .add(&quot;EndPointObject&quot;, endPointsObject)</span>
+<span class="nc" id="L287">                .add(&quot;EroObject&quot;, eroObject)</span>
+<span class="nc" id="L288">                .add(&quot;PcepAttribute&quot;, pcepAttribute)</span>
+<span class="nc" id="L289">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

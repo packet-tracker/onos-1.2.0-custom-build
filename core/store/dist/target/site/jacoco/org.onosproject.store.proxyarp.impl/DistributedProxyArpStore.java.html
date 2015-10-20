@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedProxyArpStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.proxyarp.impl</a> &gt; <span class="el_source">DistributedProxyArpStore.java</span></div><h1>DistributedProxyArpStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.proxyarp.impl;
+
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.host.HostEvent;
+import org.onosproject.net.host.HostListener;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.proxyarp.ProxyArpStore;
+import org.onosproject.net.proxyarp.ProxyArpStoreDelegate;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+
+import static org.onlab.util.BoundedThreadPool.newFixedThreadPool;
+import static org.onlab.util.Tools.groupedThreads;
+
+/**
+ * Implementation of proxy ARP distribution mechanism.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L56">public class DistributedProxyArpStore implements ProxyArpStore {</span>
+
+<span class="nc" id="L58">    private Logger log = LoggerFactory.getLogger(getClass());</span>
+
+<span class="nc" id="L60">    private static final MessageSubject ARP_RESPONSE_MESSAGE =</span>
+            new MessageSubject(&quot;onos-arp-response&quot;);
+
+<span class="nc" id="L63">    protected final KryoSerializer serializer = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L66">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L67">                    .register(KryoNamespaces.API)</span>
+<span class="nc" id="L68">                    .register(ArpResponseMessage.class)</span>
+<span class="nc" id="L69">                    .register(ByteBuffer.class)</span>
+<span class="nc" id="L70">                    .build();</span>
+<span class="nc" id="L71">        }</span>
+    };
+
+    private ProxyArpStoreDelegate delegate;
+
+<span class="nc" id="L76">    private Map&lt;HostId, ArpResponseMessage&gt; pendingMessages = Maps.newConcurrentMap();</span>
+
+<span class="nc" id="L78">    private ExecutorService executor =</span>
+<span class="nc" id="L79">            newFixedThreadPool(4, groupedThreads(&quot;onos/arp&quot;, &quot;sender-%d&quot;));</span>
+
+    private NodeId localNodeId;
+
+<span class="nc" id="L83">    private HostListener hostListener = new InternalHostListener();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService commService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+
+
+    @Activate
+    protected void activate() {
+<span class="nc" id="L100">        localNodeId = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L101">        hostService.addListener(hostListener);</span>
+<span class="nc" id="L102">        commService.addSubscriber(ARP_RESPONSE_MESSAGE, serializer::decode,</span>
+                                  this::processArpResponse, executor);
+<span class="nc" id="L104">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L105">    }</span>
+
+    @Deactivate
+    protected void deactivate() {
+<span class="nc" id="L109">        commService.removeSubscriber(ARP_RESPONSE_MESSAGE);</span>
+<span class="nc" id="L110">        hostService.removeListener(hostListener);</span>
+<span class="nc" id="L111">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L112">    }</span>
+
+    @Override
+    public void forward(ConnectPoint outPort, Host subject, ByteBuffer packet) {
+<span class="nc" id="L116">        NodeId nodeId = mastershipService.getMasterFor(outPort.deviceId());</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        if (nodeId.equals(localNodeId)) {</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">            if (delegate != null) {</span>
+<span class="nc" id="L119">                delegate.emitResponse(outPort, packet);</span>
+            }
+        } else {
+<span class="nc" id="L122">            log.info(&quot;Forwarding ARP response from {} to {}&quot;, subject.id(), outPort);</span>
+<span class="nc" id="L123">            commService.unicast(new ArpResponseMessage(outPort, subject, packet.array()),</span>
+                                ARP_RESPONSE_MESSAGE, serializer::encode, nodeId);
+        }
+<span class="nc" id="L126">    }</span>
+
+    @Override
+    public void setDelegate(ProxyArpStoreDelegate delegate) {
+<span class="nc" id="L130">        this.delegate = delegate;</span>
+<span class="nc" id="L131">    }</span>
+
+    // Processes the incoming ARP response message.
+    private void processArpResponse(ArpResponseMessage msg) {
+<span class="nc" id="L135">        pendingMessages.put(msg.subject.id(), msg);</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        if (hostService.getHost(msg.subject.id()) != null) {</span>
+<span class="nc" id="L137">            checkPendingArps(msg.subject.id());</span>
+        }
+        // FIXME: figure out pruning so stuff does not build up
+<span class="nc" id="L140">    }</span>
+
+    // Checks for pending ARP response message for the specified host.
+    // If one exists, emit response via delegate.
+    private void checkPendingArps(HostId id) {
+<span class="nc" id="L145">        ArpResponseMessage msg = pendingMessages.remove(id);</span>
+<span class="nc bnc" id="L146" title="All 4 branches missed.">        if (msg != null &amp;&amp; delegate != null) {</span>
+<span class="nc" id="L147">            log.info(&quot;Emitting ARP response from {} to {}&quot;, id, msg.outPort);</span>
+<span class="nc" id="L148">            delegate.emitResponse(msg.outPort, ByteBuffer.wrap(msg.packet));</span>
+        }
+<span class="nc" id="L150">    }</span>
+
+    // Message carrying an ARP response.
+    private static class ArpResponseMessage {
+        private ConnectPoint outPort;
+        private Host subject;
+        private byte[] packet;
+
+<span class="nc" id="L158">        public ArpResponseMessage(ConnectPoint outPort, Host subject, byte[] packet) {</span>
+<span class="nc" id="L159">            this.outPort = outPort;</span>
+<span class="nc" id="L160">            this.subject = subject;</span>
+<span class="nc" id="L161">            this.packet = packet;</span>
+<span class="nc" id="L162">        }</span>
+
+<span class="nc" id="L164">        private ArpResponseMessage() {</span>
+<span class="nc" id="L165">        }</span>
+    }
+
+<span class="nc" id="L168">    private class InternalHostListener implements HostListener {</span>
+        @Override
+        public void event(HostEvent event) {
+<span class="nc" id="L171">            checkPendingArps(event.subject().id());</span>
+<span class="nc" id="L172">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LabelResourcePool.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.resource.label</a> &gt; <span class="el_source">LabelResourcePool.java</span></div><h1>LabelResourcePool.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.resource.label;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+import java.util.Collections;
+import java.util.Objects;
+import java.util.Set;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.net.DeviceId;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableSet;
+
+/**
+ * Abstraction of the capacity of device label resource or global label
+ * resource. It's contiguous range of label resource. When a application apply
+ * some labels of some device, first catch from Set that store
+ * available labels, if the size of the Set less than the apply number, then get
+ * labels by calculating with three attributes, beginLabel,endLabel and
+ * currentUsedMaxLabelId.
+ */
+@Beta
+public class LabelResourcePool {
+
+    private final DeviceId deviceId;
+    private final LabelResourceId beginLabel;
+    private final LabelResourceId endLabel;
+    private final long totalNum; // capacity of label resource pool
+    private final long usedNum; // have used label number
+    private final LabelResourceId currentUsedMaxLabelId; // the maximal label
+                                                        // number id
+    private ImmutableSet&lt;LabelResource&gt; releaseLabelId; // Set of released label
+
+    /**
+     * Creates a pool by device id,begin label id,end label id.
+     *
+     * @param deviceId device identifier
+     * @param beginLabel represents for the first label id in the range of label
+     *            resource pool
+     * @param endLabel represents for the last label id in the range of label
+     *            resource pool
+     */
+    public LabelResourcePool(String deviceId, long beginLabel, long endLabel) {
+<span class="fc" id="L60">        this(deviceId, beginLabel, endLabel, endLabel - beginLabel + 1, 0L,</span>
+<span class="fc" id="L61">             beginLabel, ImmutableSet.copyOf(Collections.emptySet()));</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * Creates a pool by device id,begin label id,end label id.
+     * Used to update a pool in the store.
+     *
+     * @param deviceId device identifier
+     * @param beginLabel represents for the first label id in the range of label
+     *            resource pool
+     * @param endLabel represents for the last label id in the range of label
+     *            resource pool
+     * @param totalNum capacity of label resource pool
+     * @param usedNum have used label number
+     * @param currentUsedMaxLabelId the maximal label number id
+     * @param releaseLabelId Set of released label
+     */
+    public LabelResourcePool(String deviceId, long beginLabel, long endLabel,
+                             long totalNum, long usedNum,
+                             long currentUsedMaxLabelId,
+<span class="fc" id="L81">                             ImmutableSet&lt;LabelResource&gt; releaseLabelId) {</span>
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">        checkArgument(endLabel &gt;= beginLabel,</span>
+                      &quot;endLabel %s must be greater than or equal to beginLabel %s&quot;,
+<span class="fc" id="L84">                      endLabel, beginLabel);</span>
+<span class="fc" id="L85">        this.deviceId = DeviceId.deviceId(deviceId);</span>
+<span class="fc" id="L86">        this.beginLabel = LabelResourceId.labelResourceId(beginLabel);</span>
+<span class="fc" id="L87">        this.endLabel = LabelResourceId.labelResourceId(endLabel);</span>
+<span class="fc" id="L88">        this.totalNum = totalNum;</span>
+<span class="fc" id="L89">        this.usedNum = usedNum;</span>
+<span class="fc" id="L90">        this.currentUsedMaxLabelId = LabelResourceId</span>
+<span class="fc" id="L91">                .labelResourceId(currentUsedMaxLabelId);</span>
+<span class="fc" id="L92">        this.releaseLabelId = releaseLabelId;</span>
+<span class="fc" id="L93">    }</span>
+
+    /**
+     * Returns a device id.
+     *
+     * @return DeviceId
+     */
+    public DeviceId deviceId() {
+<span class="nc" id="L101">        return deviceId;</span>
+    }
+
+    /**
+     * Returns a begin Label id.
+     *
+     * @return begin Label id
+     */
+    public LabelResourceId beginLabel() {
+<span class="nc" id="L110">        return beginLabel;</span>
+    }
+
+    /**
+     * Returns an end Label id.
+     *
+     * @return end Label id
+     */
+    public LabelResourceId endLabel() {
+<span class="nc" id="L119">        return endLabel;</span>
+    }
+
+    /**
+     * Returns a begin Label id.
+     *
+     * @return current Used Maximal Label Id
+     */
+    public LabelResourceId currentUsedMaxLabelId() {
+<span class="nc" id="L128">        return currentUsedMaxLabelId;</span>
+    }
+
+    /**
+     * Returns total number.
+     *
+     * @return the total label number
+     */
+    public long totalNum() {
+<span class="nc" id="L137">        return totalNum;</span>
+    }
+
+    /**
+     * Returns used number.
+     *
+     * @return the used label number
+     */
+    public long usedNum() {
+<span class="nc" id="L146">        return usedNum;</span>
+    }
+
+    /**
+     * Returns the Set of released label before.
+     *
+     * @return the Set of LabelResource
+     */
+    public Set&lt;LabelResource&gt; releaseLabelId() {
+<span class="nc" id="L155">        return releaseLabelId;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L160">        return Objects.hash(this.deviceId, this.beginLabel, this.endLabel,</span>
+<span class="fc" id="L161">                            this.totalNum, this.usedNum,</span>
+                            this.currentUsedMaxLabelId, this.releaseLabelId);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        if (obj instanceof LabelResourcePool) {</span>
+<span class="fc" id="L168">            LabelResourcePool that = (LabelResourcePool) obj;</span>
+<span class="fc bfc" id="L169" title="All 2 branches covered.">            return Objects.equals(this.deviceId, that.deviceId)</span>
+<span class="pc bpc" id="L170" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.beginLabel, that.beginLabel)</span>
+<span class="pc bpc" id="L171" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.endLabel, that.endLabel)</span>
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.totalNum, that.totalNum)</span>
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.usedNum, that.usedNum)</span>
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.currentUsedMaxLabelId,</span>
+                                      that.currentUsedMaxLabelId)
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.releaseLabelId, that.releaseLabelId);</span>
+        }
+<span class="fc" id="L178">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+        // TODO Auto-generated method stub
+<span class="fc" id="L184">        return MoreObjects.toStringHelper(this).add(&quot;deviceId&quot;, this.deviceId)</span>
+<span class="fc" id="L185">                .add(&quot;beginLabel&quot;, this.beginLabel)</span>
+<span class="fc" id="L186">                .add(&quot;endLabel&quot;, this.endLabel).add(&quot;totalNum&quot;, this.totalNum)</span>
+<span class="fc" id="L187">                .add(&quot;usedNum&quot;, this.usedNum)</span>
+<span class="fc" id="L188">                .add(&quot;currentUsedMaxLabelId&quot;, this.currentUsedMaxLabelId)</span>
+<span class="fc" id="L189">                .add(&quot;releaseLabelId&quot;, this.releaseLabelId).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

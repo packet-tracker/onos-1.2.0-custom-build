@@ -1,0 +1,771 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Instructions.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.instructions</a> &gt; <span class="el_source">Instructions.java</span></div><h1>Instructions.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.instructions;
+
+import org.onlab.packet.EthType;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.TpPort;
+import org.onlab.packet.VlanId;
+import org.onosproject.core.GroupId;
+import org.onosproject.net.IndexedLambda;
+import org.onosproject.net.Lambda;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.OduSignalId;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction.L0SubType;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction.ModLambdaInstruction;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction.ModOchSignalInstruction;
+import org.onosproject.net.flow.instructions.L1ModificationInstruction.ModOduSignalIdInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction.L3SubType;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction.ModIPInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction.ModIPv6FlowLabelInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction.ModTtlInstruction;
+import org.onosproject.net.flow.instructions.L4ModificationInstruction.L4SubType;
+import org.onosproject.net.flow.instructions.L4ModificationInstruction.ModTransportPortInstruction;
+import org.onosproject.net.meter.MeterId;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Factory class for creating various traffic treatment instructions.
+ */
+public final class Instructions {
+
+    // Ban construction
+<span class="fc" id="L53">    private Instructions() {}</span>
+
+    /**
+     * Creates an output instruction using the specified port number. This can
+     * include logical ports such as CONTROLLER, FLOOD, etc.
+     *
+     * @param number port number
+     * @return output instruction
+     */
+    public static OutputInstruction createOutput(final PortNumber number) {
+<span class="fc" id="L63">        checkNotNull(number, &quot;PortNumber cannot be null&quot;);</span>
+<span class="fc" id="L64">        return new OutputInstruction(number);</span>
+    }
+
+    /**
+     * Creates a drop instruction.
+     *
+     * @return drop instruction
+     */
+    @Deprecated
+    public static DropInstruction createDrop() {
+<span class="fc" id="L74">        return new DropInstruction();</span>
+    }
+
+    /**
+     * Creates a no action instruction.
+     *
+     * @return no action instruction
+     */
+    public static NoActionInstruction createNoAction() {
+<span class="fc" id="L83">        return new NoActionInstruction();</span>
+    }
+
+    /**
+     * Creates a group instruction.
+     *
+     * @param groupId Group Id
+     * @return group instruction
+     */
+    public static GroupInstruction createGroup(final GroupId groupId) {
+<span class="nc" id="L93">        checkNotNull(groupId, &quot;GroupId cannot be null&quot;);</span>
+<span class="nc" id="L94">        return new GroupInstruction(groupId);</span>
+    }
+
+    public static MeterInstruction meterTraffic(final MeterId meterId) {
+<span class="nc" id="L98">        checkNotNull(meterId, &quot;meter id cannot be null&quot;);</span>
+<span class="nc" id="L99">        return new MeterInstruction(meterId);</span>
+    }
+
+    /**
+     * Creates an L0 modification with the specified OCh signal.
+     *
+     * @param lambda OCh signal
+     * @return an L0 modification
+     */
+    public static L0ModificationInstruction modL0Lambda(Lambda lambda) {
+<span class="fc" id="L109">        checkNotNull(lambda, &quot;L0 OCh signal cannot be null&quot;);</span>
+
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (lambda instanceof IndexedLambda) {</span>
+<span class="fc" id="L112">            return new ModLambdaInstruction(L0SubType.LAMBDA, (short) ((IndexedLambda) lambda).index());</span>
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">        } else if (lambda instanceof OchSignal) {</span>
+<span class="fc" id="L114">            return new ModOchSignalInstruction((OchSignal) lambda);</span>
+        } else {
+<span class="nc" id="L116">            throw new UnsupportedOperationException(String.format(&quot;Unsupported type: %s&quot;, lambda));</span>
+        }
+    }
+
+    /**
+     * Creates an L1 modification with the specified ODU signal Id.
+     *
+     * @param oduSignalId ODU Signal Id
+     * @return a L1 modification
+     */
+    public static L1ModificationInstruction modL1OduSignalId(OduSignalId oduSignalId) {
+<span class="fc" id="L127">        checkNotNull(oduSignalId, &quot;L1 ODU signal ID cannot be null&quot;);</span>
+<span class="fc" id="L128">        return new ModOduSignalIdInstruction(oduSignalId);</span>
+    }
+    /**
+     * Creates a l2 src modification.
+     *
+     * @param addr the mac address to modify to
+     * @return a l2 modification
+     */
+    public static L2ModificationInstruction modL2Src(MacAddress addr) {
+<span class="fc" id="L137">        checkNotNull(addr, &quot;Src l2 address cannot be null&quot;);</span>
+<span class="fc" id="L138">        return new L2ModificationInstruction.ModEtherInstruction(</span>
+                L2ModificationInstruction.L2SubType.ETH_SRC, addr);
+    }
+
+    /**
+     * Creates a L2 dst modification.
+     *
+     * @param addr the mac address to modify to
+     * @return a L2 modification
+     */
+    public static L2ModificationInstruction modL2Dst(MacAddress addr) {
+<span class="fc" id="L149">        checkNotNull(addr, &quot;Dst l2 address cannot be null&quot;);</span>
+<span class="fc" id="L150">        return new L2ModificationInstruction.ModEtherInstruction(</span>
+                L2ModificationInstruction.L2SubType.ETH_DST, addr);
+    }
+
+    /**
+     * Creates a VLAN ID modification.
+     *
+     * @param vlanId the VLAN ID to modify to
+     * @return a L2 modification
+     */
+    public static L2ModificationInstruction modVlanId(VlanId vlanId) {
+<span class="fc" id="L161">        checkNotNull(vlanId, &quot;VLAN id cannot be null&quot;);</span>
+<span class="fc" id="L162">        return new L2ModificationInstruction.ModVlanIdInstruction(vlanId);</span>
+    }
+
+    /**
+     * Creates a VLAN PCP modification.
+     *
+     * @param vlanPcp the PCP to modify to
+     * @return a L2 modification
+     */
+    public static L2ModificationInstruction modVlanPcp(Byte vlanPcp) {
+<span class="fc" id="L172">        checkNotNull(vlanPcp, &quot;VLAN Pcp cannot be null&quot;);</span>
+<span class="fc" id="L173">        return new L2ModificationInstruction.ModVlanPcpInstruction(vlanPcp);</span>
+    }
+
+    /**
+     * Creates a MPLS label modification.
+     *
+     * @param mplsLabel MPLS label to set
+     * @return a L2 Modification
+     */
+    public static L2ModificationInstruction modMplsLabel(MplsLabel mplsLabel) {
+<span class="fc" id="L183">        checkNotNull(mplsLabel, &quot;MPLS label cannot be null&quot;);</span>
+<span class="fc" id="L184">        return new L2ModificationInstruction.ModMplsLabelInstruction(mplsLabel);</span>
+    }
+
+    /**
+     * Creates a MPLS BOS bit modification.
+     *
+     * @param mplsBos MPLS BOS bit to set (true) or unset (false)
+     * @return a L2 Modification
+     */
+    public static L2ModificationInstruction modMplsBos(boolean mplsBos) {
+<span class="nc" id="L194">        return new L2ModificationInstruction.ModMplsBosInstruction(mplsBos);</span>
+    }
+
+    /**
+     * Creates a MPLS decrement TTL modification.
+     *
+     * @return a L2 Modification
+     */
+    public static L2ModificationInstruction decMplsTtl() {
+<span class="nc" id="L203">        return new L2ModificationInstruction.ModMplsTtlInstruction();</span>
+    }
+
+    /**
+     * Creates a L3 IPv4 src modification.
+     *
+     * @param addr the IPv4 address to modify to
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction modL3Src(IpAddress addr) {
+<span class="fc" id="L213">        checkNotNull(addr, &quot;Src l3 IPv4 address cannot be null&quot;);</span>
+<span class="fc" id="L214">        return new ModIPInstruction(L3SubType.IPV4_SRC, addr);</span>
+    }
+
+    /**
+     * Creates a L3 IPv4 dst modification.
+     *
+     * @param addr the IPv4 address to modify to
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction modL3Dst(IpAddress addr) {
+<span class="fc" id="L224">        checkNotNull(addr, &quot;Dst l3 IPv4 address cannot be null&quot;);</span>
+<span class="fc" id="L225">        return new ModIPInstruction(L3SubType.IPV4_DST, addr);</span>
+    }
+
+    /**
+     * Creates a L3 IPv6 src modification.
+     *
+     * @param addr the IPv6 address to modify to
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction modL3IPv6Src(IpAddress addr) {
+<span class="fc" id="L235">        checkNotNull(addr, &quot;Src l3 IPv6 address cannot be null&quot;);</span>
+<span class="fc" id="L236">        return new ModIPInstruction(L3SubType.IPV6_SRC, addr);</span>
+    }
+
+    /**
+     * Creates a L3 IPv6 dst modification.
+     *
+     * @param addr the IPv6 address to modify to
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction modL3IPv6Dst(IpAddress addr) {
+<span class="fc" id="L246">        checkNotNull(addr, &quot;Dst l3 IPv6 address cannot be null&quot;);</span>
+<span class="fc" id="L247">        return new ModIPInstruction(L3SubType.IPV6_DST, addr);</span>
+    }
+
+    /**
+     * Creates a L3 IPv6 Flow Label modification.
+     *
+     * @param flowLabel the IPv6 flow label to modify to (20 bits)
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction modL3IPv6FlowLabel(int flowLabel) {
+<span class="fc" id="L257">        return new ModIPv6FlowLabelInstruction(flowLabel);</span>
+    }
+
+    /**
+     * Creates a L3 decrement TTL modification.
+     *
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction decNwTtl() {
+<span class="nc" id="L266">        return new ModTtlInstruction(L3SubType.DEC_TTL);</span>
+    }
+
+    /**
+     * Creates a L3 copy TTL to outer header modification.
+     *
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction copyTtlOut() {
+<span class="nc" id="L275">        return new ModTtlInstruction(L3SubType.TTL_OUT);</span>
+    }
+
+    /**
+     * Creates a L3 copy TTL to inner header modification.
+     *
+     * @return a L3 modification
+     */
+    public static L3ModificationInstruction copyTtlIn() {
+<span class="nc" id="L284">        return new ModTtlInstruction(L3SubType.TTL_IN);</span>
+    }
+
+    /**
+     * Creates a push MPLS header instruction.
+     *
+     * @return a L2 modification.
+     */
+    public static Instruction pushMpls() {
+<span class="nc" id="L293">        return new L2ModificationInstruction.PushHeaderInstructions(</span>
+                L2ModificationInstruction.L2SubType.MPLS_PUSH,
+<span class="nc" id="L295">                                          EthType.EtherType.MPLS_UNICAST.ethType());</span>
+    }
+
+    /**
+     * Creates a pop MPLS header instruction.
+     *
+     * @return a L2 modification.
+     */
+    public static Instruction popMpls() {
+<span class="nc" id="L304">        return new L2ModificationInstruction.PushHeaderInstructions(</span>
+                L2ModificationInstruction.L2SubType.MPLS_POP,
+<span class="nc" id="L306">                EthType.EtherType.MPLS_UNICAST.ethType());</span>
+    }
+
+    /**
+     * Creates a pop MPLS header instruction with a particular ethertype.
+     *
+     * @param etherType Ethernet type to set
+     * @return a L2 modification.
+     */
+    public static Instruction popMpls(EthType etherType) {
+<span class="nc" id="L316">        checkNotNull(etherType, &quot;Ethernet type cannot be null&quot;);</span>
+<span class="nc" id="L317">        return new L2ModificationInstruction.PushHeaderInstructions(</span>
+                L2ModificationInstruction.L2SubType.MPLS_POP, etherType);
+    }
+
+    /**
+     * Creates a pop VLAN header instruction.
+     *
+     * @return a L2 modification
+     */
+    public static Instruction popVlan() {
+<span class="fc" id="L327">        return new L2ModificationInstruction.PopVlanInstruction(</span>
+                L2ModificationInstruction.L2SubType.VLAN_POP);
+    }
+
+    /**
+     * Creates a push VLAN header instruction.
+     *
+     * @return a L2 modification
+     */
+    public static Instruction pushVlan() {
+<span class="fc" id="L337">        return new L2ModificationInstruction.PushHeaderInstructions(</span>
+                L2ModificationInstruction.L2SubType.VLAN_PUSH,
+<span class="fc" id="L339">                EthType.EtherType.VLAN.ethType());</span>
+    }
+
+    /**
+     * Sends the packet to the table id.
+     *
+     * @param tableId flow rule table id
+     * @return table type transition instruction
+     */
+    public static Instruction transition(Integer tableId) {
+<span class="nc" id="L349">        checkNotNull(tableId, &quot;Table id cannot be null&quot;);</span>
+<span class="nc" id="L350">        return new TableTypeTransition(tableId);</span>
+    }
+
+    /**
+     * Writes metadata to associate with a packet.
+     *
+     * @param metadata the metadata value to write
+     * @param metadataMask the bits to mask for the metadata value
+     * @return metadata instruction
+     */
+    public static Instruction writeMetadata(long metadata, long metadataMask) {
+<span class="nc" id="L361">        return new MetadataInstruction(metadata, metadataMask);</span>
+    }
+
+    /**
+     * Creates a Tunnel ID modification.
+     *
+     * @param tunnelId the Tunnel ID to modify to
+     * @return a L2 modification
+     */
+    public static L2ModificationInstruction modTunnelId(long tunnelId) {
+<span class="fc" id="L371">        checkNotNull(tunnelId, &quot;Tunnel id cannot be null&quot;);</span>
+<span class="fc" id="L372">        return new L2ModificationInstruction.ModTunnelIdInstruction(tunnelId);</span>
+    }
+
+    /**
+     * Creates a TCP src modification.
+     *
+     * @param port the TCP port number to modify to
+     * @return a L4 modification
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static L4ModificationInstruction modTcpSrc(short port) {
+<span class="nc" id="L384">       checkNotNull(port, &quot;Src TCP port cannot be null&quot;);</span>
+<span class="nc" id="L385">       return new ModTransportPortInstruction(L4SubType.TCP_SRC, TpPort.tpPort(port));</span>
+    }
+
+    /**
+     * Creates a TCP src modification.
+     *
+     * @param port the TCP port number to modify to
+     * @return a L4 modification
+     */
+    public static L4ModificationInstruction modTcpSrc(TpPort port) {
+<span class="fc" id="L395">       checkNotNull(port, &quot;Src TCP port cannot be null&quot;);</span>
+<span class="fc" id="L396">       return new ModTransportPortInstruction(L4SubType.TCP_SRC, port);</span>
+    }
+
+    /**
+     * Creates a TCP dst modification.
+     *
+     * @param port the TCP port number to modify to
+     * @return a L4 modification
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static L4ModificationInstruction modTcpDst(short port) {
+<span class="nc" id="L408">        checkNotNull(port, &quot;Dst TCP port cannot be null&quot;);</span>
+<span class="nc" id="L409">        return new ModTransportPortInstruction(L4SubType.TCP_DST, TpPort.tpPort(port));</span>
+    }
+
+    /**
+     * Creates a TCP dst modification.
+     *
+     * @param port the TCP port number to modify to
+     * @return a L4 modification
+     */
+    public static L4ModificationInstruction modTcpDst(TpPort port) {
+<span class="fc" id="L419">        checkNotNull(port, &quot;Dst TCP port cannot be null&quot;);</span>
+<span class="fc" id="L420">        return new ModTransportPortInstruction(L4SubType.TCP_DST, port);</span>
+    }
+
+    /**
+     * Creates a UDP src modification.
+     *
+     * @param port the UDP port number to modify to
+     * @return a L4 modification
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static L4ModificationInstruction modUdpSrc(short port) {
+<span class="nc" id="L432">        checkNotNull(port, &quot;Src UDP port cannot be null&quot;);</span>
+<span class="nc" id="L433">        return new ModTransportPortInstruction(L4SubType.UDP_SRC, TpPort.tpPort(port));</span>
+    }
+
+    /**
+     * Creates a UDP src modification.
+     *
+     * @param port the UDP port number to modify to
+     * @return a L4 modification
+     */
+    public static L4ModificationInstruction modUdpSrc(TpPort port) {
+<span class="fc" id="L443">        checkNotNull(port, &quot;Src UDP port cannot be null&quot;);</span>
+<span class="fc" id="L444">        return new ModTransportPortInstruction(L4SubType.UDP_SRC, port);</span>
+    }
+
+    /**
+     * Creates a UDP dst modification.
+     *
+     * @param port the UDP port number to modify to
+     * @return a L4 modification
+     * @deprecated in Drake release
+     */
+    @Deprecated
+    public static L4ModificationInstruction modUdpDst(short port) {
+<span class="nc" id="L456">        checkNotNull(port, &quot;Dst UDP port cannot be null&quot;);</span>
+<span class="nc" id="L457">        return new ModTransportPortInstruction(L4SubType.UDP_DST, TpPort.tpPort(port));</span>
+    }
+
+    /**
+     * Creates a UDP dst modification.
+     *
+     * @param port the UDP port number to modify to
+     * @return a L4 modification
+     */
+    public static L4ModificationInstruction modUdpDst(TpPort port) {
+<span class="fc" id="L467">        checkNotNull(port, &quot;Dst UDP port cannot be null&quot;);</span>
+<span class="fc" id="L468">        return new ModTransportPortInstruction(L4SubType.UDP_DST, port);</span>
+    }
+
+    /**
+     *  Drop instruction.
+     */
+    @Deprecated
+    public static final class DropInstruction implements Instruction {
+
+<span class="fc" id="L477">        private DropInstruction() {}</span>
+
+        @Override
+        public Type type() {
+<span class="fc" id="L481">            return Type.DROP;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L486">            return toStringHelper(type().toString()).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L491">            return Objects.hash(type().ordinal());</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="pc bpc" id="L496" title="1 of 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L497">                return true;</span>
+            }
+<span class="pc bpc" id="L499" title="1 of 2 branches missed.">            if (obj instanceof DropInstruction) {</span>
+<span class="fc" id="L500">                return true;</span>
+            }
+<span class="nc" id="L502">            return false;</span>
+        }
+    }
+
+    /**
+     *  No Action instruction.
+     */
+    public static final class NoActionInstruction implements Instruction {
+
+<span class="fc" id="L511">        private NoActionInstruction() {}</span>
+
+        @Override
+        public Type type() {
+<span class="fc" id="L515">            return Type.NOACTION;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="fc" id="L520">            return toStringHelper(type().toString()).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L525">            return Objects.hash(type().ordinal());</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="pc bpc" id="L530" title="1 of 2 branches missed.">            if (this == obj) {</span>
+<span class="fc" id="L531">                return true;</span>
+            }
+<span class="nc bnc" id="L533" title="All 2 branches missed.">            if (obj instanceof NoActionInstruction) {</span>
+<span class="nc" id="L534">                return true;</span>
+            }
+<span class="nc" id="L536">            return false;</span>
+        }
+    }
+
+    /**
+     *  Output Instruction.
+     */
+    public static final class OutputInstruction implements Instruction {
+        private final PortNumber port;
+
+<span class="fc" id="L546">        private OutputInstruction(PortNumber port) {</span>
+<span class="fc" id="L547">            this.port = port;</span>
+<span class="fc" id="L548">        }</span>
+
+        public PortNumber port() {
+<span class="fc" id="L551">            return port;</span>
+        }
+
+        @Override
+        public Type type() {
+<span class="fc" id="L556">            return Type.OUTPUT;</span>
+        }
+        @Override
+        public String toString() {
+<span class="fc" id="L560">            return toStringHelper(type().toString())</span>
+<span class="fc" id="L561">                    .add(&quot;port&quot;, port).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="fc" id="L566">            return Objects.hash(type().ordinal(), port);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="fc bfc" id="L571" title="All 2 branches covered.">            if (this == obj) {</span>
+<span class="fc" id="L572">                return true;</span>
+            }
+<span class="fc bfc" id="L574" title="All 2 branches covered.">            if (obj instanceof OutputInstruction) {</span>
+<span class="fc" id="L575">                OutputInstruction that = (OutputInstruction) obj;</span>
+<span class="fc" id="L576">                return Objects.equals(port, that.port);</span>
+
+            }
+<span class="fc" id="L579">            return false;</span>
+        }
+    }
+
+    /**
+     *  Group Instruction.
+     */
+    public static final class GroupInstruction implements Instruction {
+        private final GroupId groupId;
+
+<span class="nc" id="L589">        private GroupInstruction(GroupId groupId) {</span>
+<span class="nc" id="L590">            this.groupId = groupId;</span>
+<span class="nc" id="L591">        }</span>
+
+        public GroupId groupId() {
+<span class="nc" id="L594">            return groupId;</span>
+        }
+
+        @Override
+        public Type type() {
+<span class="nc" id="L599">            return Type.GROUP;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L604">            return toStringHelper(type().toString())</span>
+<span class="nc" id="L605">                    .add(&quot;group ID&quot;, groupId.id()).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L610">            return Objects.hash(type().ordinal(), groupId);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L615" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L616">                return true;</span>
+            }
+<span class="nc bnc" id="L618" title="All 2 branches missed.">            if (obj instanceof GroupInstruction) {</span>
+<span class="nc" id="L619">                GroupInstruction that = (GroupInstruction) obj;</span>
+<span class="nc" id="L620">                return Objects.equals(groupId, that.groupId);</span>
+
+            }
+<span class="nc" id="L623">            return false;</span>
+        }
+    }
+
+    /**
+     * A meter instruction.
+     */
+    public static final class MeterInstruction implements Instruction {
+        private final MeterId meterId;
+
+<span class="nc" id="L633">        private MeterInstruction(MeterId meterId) {</span>
+<span class="nc" id="L634">            this.meterId = meterId;</span>
+<span class="nc" id="L635">        }</span>
+
+        public MeterId meterId() {
+<span class="nc" id="L638">            return meterId;</span>
+        }
+
+        @Override
+        public Type type() {
+<span class="nc" id="L643">            return Type.METER;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L648">            return toStringHelper(type().toString())</span>
+<span class="nc" id="L649">                    .add(&quot;meter ID&quot;, meterId.id()).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L654">            return Objects.hash(type().ordinal(), meterId);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L659" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L660">                return true;</span>
+            }
+<span class="nc bnc" id="L662" title="All 2 branches missed.">            if (obj instanceof MeterInstruction) {</span>
+<span class="nc" id="L663">                MeterInstruction that = (MeterInstruction) obj;</span>
+<span class="nc" id="L664">                return Objects.equals(meterId, that.meterId);</span>
+
+            }
+<span class="nc" id="L667">            return false;</span>
+        }
+    }
+
+    /**
+     *  Transition instruction.
+     */
+    public static class TableTypeTransition implements Instruction {
+        private final Integer tableId;
+
+<span class="nc" id="L677">        TableTypeTransition(Integer tableId) {</span>
+<span class="nc" id="L678">            this.tableId = tableId;</span>
+<span class="nc" id="L679">        }</span>
+
+        @Override
+        public Type type() {
+<span class="nc" id="L683">            return Type.TABLE;</span>
+        }
+
+        public Integer tableId() {
+<span class="nc" id="L687">            return this.tableId;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L692">            return toStringHelper(type().toString())</span>
+<span class="nc" id="L693">                    .add(&quot;tableId&quot;, this.tableId).toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L698">            return Objects.hash(type().ordinal(), tableId);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L703" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L704">                return true;</span>
+            }
+<span class="nc bnc" id="L706" title="All 2 branches missed.">            if (obj instanceof TableTypeTransition) {</span>
+<span class="nc" id="L707">                TableTypeTransition that = (TableTypeTransition) obj;</span>
+<span class="nc" id="L708">                return Objects.equals(tableId, that.tableId);</span>
+
+            }
+<span class="nc" id="L711">            return false;</span>
+        }
+    }
+
+    /**
+     *  Metadata instruction.
+     */
+    public static class MetadataInstruction implements Instruction {
+        private final long metadata;
+        private final long metadataMask;
+
+<span class="nc" id="L722">        MetadataInstruction(long metadata, long metadataMask) {</span>
+<span class="nc" id="L723">            this.metadata = metadata;</span>
+<span class="nc" id="L724">            this.metadataMask = metadataMask;</span>
+<span class="nc" id="L725">        }</span>
+
+        @Override
+        public Type type() {
+<span class="nc" id="L729">            return Type.METADATA;</span>
+        }
+
+        public long metadata() {
+<span class="nc" id="L733">            return this.metadata;</span>
+        }
+
+        public long metadataMask() {
+<span class="nc" id="L737">            return this.metadataMask;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L742">            return toStringHelper(type().toString())</span>
+<span class="nc" id="L743">                    .add(&quot;metadata&quot;, Long.toHexString(this.metadata))</span>
+<span class="nc" id="L744">                    .add(&quot;metadata mask&quot;, Long.toHexString(this.metadataMask))</span>
+<span class="nc" id="L745">                    .toString();</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L750">            return Objects.hash(type().ordinal(), metadata, metadataMask);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L755" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L756">                return true;</span>
+            }
+<span class="nc bnc" id="L758" title="All 2 branches missed.">            if (obj instanceof MetadataInstruction) {</span>
+<span class="nc" id="L759">                MetadataInstruction that = (MetadataInstruction) obj;</span>
+<span class="nc bnc" id="L760" title="All 2 branches missed.">                return Objects.equals(metadata, that.metadata) &amp;&amp;</span>
+<span class="nc bnc" id="L761" title="All 2 branches missed.">                        Objects.equals(metadataMask, that.metadataMask);</span>
+
+            }
+<span class="nc" id="L764">            return false;</span>
+        }
+    }
+
+}
+
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

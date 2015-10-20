@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupStoreMessage.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.group.impl</a> &gt; <span class="el_source">GroupStoreMessage.java</span></div><h1>GroupStoreMessage.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.group.impl;
+
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupKey;
+import org.onosproject.net.group.GroupStore.UpdateType;
+
+/**
+ * Format of the Group store message that is used to
+ * communicate with the peer nodes in the cluster.
+ */
+public final class GroupStoreMessage {
+    private final DeviceId deviceId;
+    private final GroupKey appCookie;
+    private final GroupDescription groupDesc;
+    private final UpdateType updateType;
+    private final GroupBuckets updateBuckets;
+    private final GroupKey newAppCookie;
+    private final Type type;
+
+    /**
+     * Type of group store request.
+     */
+<span class="pc" id="L40">    public enum Type {</span>
+<span class="fc" id="L41">        ADD,</span>
+<span class="fc" id="L42">        UPDATE,</span>
+<span class="fc" id="L43">        DELETE</span>
+    }
+
+    private GroupStoreMessage(Type type,
+                             DeviceId deviceId,
+                             GroupKey appCookie,
+                             GroupDescription groupDesc,
+                             UpdateType updateType,
+                             GroupBuckets updateBuckets,
+<span class="nc" id="L52">                             GroupKey newAppCookie) {</span>
+<span class="nc" id="L53">        this.type = type;</span>
+<span class="nc" id="L54">        this.deviceId = deviceId;</span>
+<span class="nc" id="L55">        this.appCookie = appCookie;</span>
+<span class="nc" id="L56">        this.groupDesc = groupDesc;</span>
+<span class="nc" id="L57">        this.updateType = updateType;</span>
+<span class="nc" id="L58">        this.updateBuckets = updateBuckets;</span>
+<span class="nc" id="L59">        this.newAppCookie = newAppCookie;</span>
+<span class="nc" id="L60">    }</span>
+
+    /**
+     * Creates a group store message for group ADD request.
+     *
+     * @param deviceId device identifier in which group to be added
+     * @param desc group creation parameters
+     * @return constructed group store message
+     */
+    public static GroupStoreMessage createGroupAddRequestMsg(DeviceId deviceId,
+                                                             GroupDescription desc) {
+<span class="nc" id="L71">        return new GroupStoreMessage(Type.ADD,</span>
+                              deviceId,
+                              null,
+                              desc,
+                              null,
+                              null,
+                              null);
+    }
+
+    /**
+     * Creates a group store message for group UPDATE request.
+     *
+     * @param deviceId the device ID
+     * @param appCookie the current group key
+     * @param updateType update (add or delete) type
+     * @param updateBuckets group buckets for updates
+     * @param newAppCookie optional new group key
+     * @return constructed group store message
+     */
+    public static GroupStoreMessage createGroupUpdateRequestMsg(DeviceId deviceId,
+                                                        GroupKey appCookie,
+                                                        UpdateType updateType,
+                                                        GroupBuckets updateBuckets,
+                                                        GroupKey newAppCookie) {
+<span class="nc" id="L95">        return new GroupStoreMessage(Type.UPDATE,</span>
+                              deviceId,
+                              appCookie,
+                              null,
+                              updateType,
+                              updateBuckets,
+                              newAppCookie);
+    }
+
+    /**
+     * Creates a group store message for group DELETE request.
+     *
+     * @param deviceId the device ID
+     * @param appCookie the group key
+     * @return constructed group store message
+     */
+    public static GroupStoreMessage createGroupDeleteRequestMsg(DeviceId deviceId,
+                                                                GroupKey appCookie) {
+<span class="nc" id="L113">        return new GroupStoreMessage(Type.DELETE,</span>
+                                     deviceId,
+                                     appCookie,
+                                     null,
+                                     null,
+                                     null,
+                                     null);
+    }
+
+    /**
+     * Returns the device identifier of this group request.
+     *
+     * @return device identifier
+     */
+    public DeviceId deviceId() {
+<span class="nc" id="L128">        return deviceId;</span>
+    }
+
+    /**
+     * Returns the application cookie associated with this group request.
+     *
+     * @return application cookie
+     */
+    public GroupKey appCookie() {
+<span class="nc" id="L137">        return appCookie;</span>
+    }
+
+    /**
+     * Returns the group create parameters associated with this group request.
+     *
+     * @return group create parameters
+     */
+    public GroupDescription groupDesc() {
+<span class="nc" id="L146">        return groupDesc;</span>
+    }
+
+    /**
+     * Returns the group buckets to be updated as part of this group request.
+     *
+     * @return group buckets to be updated
+     */
+    public GroupBuckets updateBuckets() {
+<span class="nc" id="L155">        return updateBuckets;</span>
+    }
+
+    /**
+     * Returns the update group operation type.
+     *
+     * @return update operation type
+     */
+    public UpdateType updateType() {
+<span class="nc" id="L164">        return updateType;</span>
+    }
+
+    /**
+     * Returns the new application cookie associated with this group operation.
+     *
+     * @return new application cookie
+     */
+    public GroupKey newAppCookie() {
+<span class="nc" id="L173">        return newAppCookie;</span>
+    }
+
+    /**
+     * Returns the type of this group operation.
+     *
+     * @return group message type
+     */
+    public Type type() {
+<span class="nc" id="L182">        return type;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

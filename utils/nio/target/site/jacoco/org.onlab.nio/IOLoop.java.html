@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IOLoop.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio</a> &gt; <span class="el_source">IOLoop.java</span></div><h1>IOLoop.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio;
+
+import java.io.IOException;
+import java.nio.channels.ByteChannel;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SelectableChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArraySet;
+
+/**
+ * I/O loop for driving inbound &amp;amp; outbound {@link Message} transfer via
+ * {@link MessageStream}.
+ *
+ * @param &lt;M&gt; message type
+ * @param &lt;S&gt; message stream type
+ */
+public abstract class IOLoop&lt;M extends Message, S extends MessageStream&lt;M&gt;&gt;
+        extends SelectorLoop {
+
+    // Queue of requests for new message streams to enter the IO loop processing.
+<span class="fc" id="L43">    private final Queue&lt;NewStreamRequest&gt; newStreamRequests = new ConcurrentLinkedQueue&lt;&gt;();</span>
+
+    // Carries information required for admitting a new message stream.
+    private class NewStreamRequest {
+        private final S stream;
+        private final SelectableChannel channel;
+        private final int op;
+
+<span class="nc" id="L51">        public NewStreamRequest(S stream, SelectableChannel channel, int op) {</span>
+<span class="nc" id="L52">            this.stream = stream;</span>
+<span class="nc" id="L53">            this.channel = channel;</span>
+<span class="nc" id="L54">            this.op = op;</span>
+<span class="nc" id="L55">        }</span>
+    }
+
+    // Set of message streams currently admitted into the IO loop.
+<span class="fc" id="L59">    private final Set&lt;MessageStream&lt;M&gt;&gt; streams = new CopyOnWriteArraySet&lt;&gt;();</span>
+
+    /**
+     * Creates an IO loop with the given selection timeout.
+     *
+     * @param timeout selection timeout in milliseconds
+     * @throws IOException if the backing selector cannot be opened
+     */
+    public IOLoop(long timeout) throws IOException {
+<span class="fc" id="L68">        super(timeout);</span>
+<span class="fc" id="L69">    }</span>
+
+    /**
+     * Returns the number of message stream in custody of the loop.
+     *
+     * @return number of message streams
+     */
+    public int streamCount() {
+<span class="nc" id="L77">        return streams.size();</span>
+    }
+
+    /**
+     * Creates a new message stream backed by the specified socket channel.
+     *
+     * @param byteChannel backing byte channel
+     * @return newly created message stream
+     */
+    protected abstract S createStream(ByteChannel byteChannel);
+
+    /**
+     * Removes the specified message stream from the IO loop.
+     *
+     * @param stream message stream to remove
+     */
+    protected void removeStream(MessageStream&lt;M&gt; stream) {
+<span class="fc" id="L94">        streams.remove(stream);</span>
+<span class="fc" id="L95">    }</span>
+
+    /**
+     * Processes the list of messages extracted from the specified message
+     * stream.
+     *
+     * @param messages non-empty list of received messages
+     * @param stream   message stream from which the messages were extracted
+     */
+    protected abstract void processMessages(List&lt;M&gt; messages, MessageStream&lt;M&gt; stream);
+
+    /**
+     * Completes connection request pending on the given selection key.
+     *
+     * @param key selection key holding the pending connect operation.
+     * @throws IOException when I/O exception of some sort has occurred
+     */
+    protected void connect(SelectionKey key) throws IOException {
+<span class="nc" id="L113">        SocketChannel ch = (SocketChannel) key.channel();</span>
+<span class="nc" id="L114">        ch.finishConnect();</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (key.isValid()) {</span>
+<span class="nc" id="L116">            key.interestOps(SelectionKey.OP_READ);</span>
+        }
+<span class="nc" id="L118">    }</span>
+
+    /**
+     * Processes an IO operation pending on the specified key.
+     *
+     * @param key selection key holding the pending I/O operation.
+     */
+    protected void processKeyOperation(SelectionKey key) {
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L127">        S stream = (S) key.attachment();</span>
+
+        try {
+            // If the key is not valid, bail out.
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            if (!key.isValid()) {</span>
+<span class="nc" id="L132">                stream.close();</span>
+<span class="nc" id="L133">                return;</span>
+            }
+
+            // If there is a pending connect operation, complete it.
+<span class="nc bnc" id="L137" title="All 2 branches missed.">            if (key.isConnectable()) {</span>
+                try {
+<span class="nc" id="L139">                    connect(key);</span>
+<span class="nc" id="L140">                } catch (IOException | IllegalStateException e) {</span>
+<span class="nc" id="L141">                    log.warn(&quot;Unable to complete connection&quot;, e);</span>
+<span class="nc" id="L142">                }</span>
+            }
+
+            // If there is a read operation, slurp as much data as possible.
+<span class="nc bnc" id="L146" title="All 2 branches missed.">            if (key.isReadable()) {</span>
+<span class="nc" id="L147">                List&lt;M&gt; messages = stream.read();</span>
+
+                // No messages or failed flush imply disconnect; bail.
+<span class="nc bnc" id="L150" title="All 4 branches missed.">                if (messages == null || stream.hadError()) {</span>
+<span class="nc" id="L151">                    stream.close();</span>
+<span class="nc" id="L152">                    return;</span>
+                }
+
+                // If there were any messages read, process them.
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                if (!messages.isEmpty()) {</span>
+                    try {
+<span class="nc" id="L158">                        processMessages(messages, stream);</span>
+<span class="nc" id="L159">                    } catch (RuntimeException e) {</span>
+<span class="nc" id="L160">                        onError(stream, e);</span>
+<span class="nc" id="L161">                    }</span>
+                }
+            }
+
+            // If there are pending writes, flush them
+<span class="nc bnc" id="L166" title="All 2 branches missed.">            if (key.isWritable()) {</span>
+<span class="nc" id="L167">                stream.flushIfPossible();</span>
+            }
+
+            // If there were any issued flushing, close the stream.
+<span class="nc bnc" id="L171" title="All 2 branches missed.">            if (stream.hadError()) {</span>
+<span class="nc" id="L172">                stream.close();</span>
+            }
+
+<span class="nc" id="L175">        } catch (CancelledKeyException e) {</span>
+            // Key was cancelled, so silently close the stream
+<span class="nc" id="L177">            stream.close();</span>
+<span class="nc" id="L178">        } catch (IOException e) {</span>
+<span class="nc bnc" id="L179" title="All 4 branches missed.">            if (!stream.isClosed() &amp;&amp; !isResetByPeer(e)) {</span>
+<span class="nc" id="L180">                log.warn(&quot;Unable to process IO&quot;, e);</span>
+            }
+<span class="nc" id="L182">            stream.close();</span>
+<span class="nc" id="L183">        }</span>
+<span class="nc" id="L184">    }</span>
+
+    // Indicates whether or not this exception is caused by 'reset by peer'.
+    private boolean isResetByPeer(IOException e) {
+<span class="nc" id="L188">        Throwable cause = e.getCause();</span>
+<span class="nc bnc" id="L189" title="All 4 branches missed.">        return cause != null &amp;&amp; cause instanceof IOException &amp;&amp;</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">                cause.getMessage().contains(&quot;reset by peer&quot;);</span>
+    }
+
+    /**
+     * Hook to allow intercept of any errors caused during message processing.
+     * Default behaviour is to rethrow the error.
+     *
+     * @param stream message stream involved in the error
+     * @param error  the runtime exception
+     */
+    protected void onError(S stream, RuntimeException error) {
+<span class="nc" id="L201">        throw error;</span>
+    }
+
+    /**
+     * Admits a new message stream backed by the specified socket channel
+     * with a pending accept operation.
+     *
+     * @param channel backing socket channel
+     * @return newly accepted message stream
+     */
+    public S acceptStream(SocketChannel channel) {
+<span class="nc" id="L212">        return createAndAdmit(channel, SelectionKey.OP_READ);</span>
+    }
+
+
+    /**
+     * Admits a new message stream backed by the specified socket channel
+     * with a pending connect operation.
+     *
+     * @param channel backing socket channel
+     * @return newly connected message stream
+     */
+    public S connectStream(SocketChannel channel) {
+<span class="nc" id="L224">        return createAndAdmit(channel, SelectionKey.OP_CONNECT);</span>
+    }
+
+    /**
+     * Creates a new message stream backed by the specified socket channel
+     * and admits it into the IO loop.
+     *
+     * @param channel socket channel
+     * @param op      pending operations mask to be applied to the selection
+     *                key as a set of initial interestedOps
+     * @return newly created message stream
+     */
+    private synchronized S createAndAdmit(SocketChannel channel, int op) {
+<span class="nc" id="L237">        S stream = createStream(channel);</span>
+<span class="nc" id="L238">        streams.add(stream);</span>
+<span class="nc" id="L239">        newStreamRequests.add(new NewStreamRequest(stream, channel, op));</span>
+<span class="nc" id="L240">        selector.wakeup();</span>
+<span class="nc" id="L241">        return stream;</span>
+    }
+
+    /**
+     * Safely admits new streams into the IO loop.
+     */
+    private void admitNewStreams() {
+<span class="nc" id="L248">        Iterator&lt;NewStreamRequest&gt; it = newStreamRequests.iterator();</span>
+<span class="nc bnc" id="L249" title="All 4 branches missed.">        while (isRunning() &amp;&amp; it.hasNext()) {</span>
+            try {
+<span class="nc" id="L251">                NewStreamRequest request = it.next();</span>
+<span class="nc" id="L252">                it.remove();</span>
+<span class="nc" id="L253">                SelectionKey key = request.channel.register(selector, request.op,</span>
+<span class="nc" id="L254">                                                            request.stream);</span>
+<span class="nc" id="L255">                request.stream.setKey(key);</span>
+<span class="nc" id="L256">            } catch (ClosedChannelException e) {</span>
+<span class="nc" id="L257">                log.warn(&quot;Unable to admit new message stream&quot;, e);</span>
+<span class="nc" id="L258">            }</span>
+        }
+<span class="nc" id="L260">    }</span>
+
+    @Override
+    protected void loop() throws IOException {
+<span class="nc" id="L264">        notifyReady();</span>
+
+        // Keep going until told otherwise.
+<span class="nc bnc" id="L267" title="All 2 branches missed.">        while (isRunning()) {</span>
+<span class="nc" id="L268">            admitNewStreams();</span>
+
+            // Process flushes &amp; write selects on all streams
+<span class="nc bnc" id="L271" title="All 2 branches missed.">            for (MessageStream&lt;M&gt; stream : streams) {</span>
+<span class="nc" id="L272">                stream.flushIfWriteNotPending();</span>
+<span class="nc" id="L273">            }</span>
+
+            // Select keys and process them.
+<span class="nc" id="L276">            int count = selector.select(selectTimeout);</span>
+<span class="nc bnc" id="L277" title="All 4 branches missed.">            if (count &gt; 0 &amp;&amp; isRunning()) {</span>
+<span class="nc" id="L278">                Iterator&lt;SelectionKey&gt; it = selector.selectedKeys().iterator();</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">                while (it.hasNext()) {</span>
+<span class="nc" id="L280">                    SelectionKey key = it.next();</span>
+<span class="nc" id="L281">                    it.remove();</span>
+<span class="nc" id="L282">                    processKeyOperation(key);</span>
+<span class="nc" id="L283">                }</span>
+            }
+<span class="nc" id="L285">        }</span>
+<span class="nc" id="L286">    }</span>
+
+    /**
+     * Prunes the registered streams by discarding any stale ones.
+     *
+     * @return number of remaining streams
+     */
+    public synchronized int pruneStaleStreams() {
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        for (MessageStream&lt;M&gt; stream : streams) {</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">            if (stream.isStale()) {</span>
+<span class="nc" id="L296">                stream.close();</span>
+            }
+<span class="nc" id="L298">        }</span>
+<span class="nc" id="L299">        return streams.size();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

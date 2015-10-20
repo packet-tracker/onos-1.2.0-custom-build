@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Ip6Prefix.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">Ip6Prefix.java</span></div><h1>Ip6Prefix.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+/**
+ * The class representing an IPv6 network address.
+ * This class is immutable.
+ */
+public final class Ip6Prefix extends IpPrefix {
+<span class="fc" id="L23">    public static final IpAddress.Version VERSION = IpAddress.Version.INET6;</span>
+    // Maximum network mask length
+    public static final int MAX_MASK_LENGTH = IpPrefix.MAX_INET6_MASK_LENGTH;
+
+    /**
+     * Constructor for given IPv6 address, and a prefix length.
+     *
+     * @param address the IPv6 address
+     * @param prefixLength the prefix length
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    private Ip6Prefix(Ip6Address address, int prefixLength) {
+<span class="fc" id="L35">        super(address, prefixLength);</span>
+<span class="fc" id="L36">    }</span>
+
+    /**
+     * Returns the IPv6 address value of the prefix.
+     *
+     * @return the IPv6 address value of the prefix
+     */
+    public Ip6Address address() {
+<span class="fc" id="L44">        IpAddress a = super.address();</span>
+<span class="fc" id="L45">        return (Ip6Address) a;</span>
+    }
+
+    /**
+     * Converts a byte array and a prefix length into an IPv6 prefix.
+     *
+     * @param address the IPv6 address value stored in network byte order
+     * @param prefixLength the prefix length
+     * @return an IPv6 prefix
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    public static Ip6Prefix valueOf(byte[] address, int prefixLength) {
+<span class="fc" id="L57">        return new Ip6Prefix(Ip6Address.valueOf(address), prefixLength);</span>
+    }
+
+    /**
+     * Converts an IPv6 address and a prefix length into an IPv6 prefix.
+     *
+     * @param address the IPv6 address
+     * @param prefixLength the prefix length
+     * @return an IPv6 prefix
+     * @throws IllegalArgumentException if the prefix length value is invalid
+     */
+    public static Ip6Prefix valueOf(Ip6Address address, int prefixLength) {
+<span class="fc" id="L69">        return new Ip6Prefix(address, prefixLength);</span>
+    }
+
+    /**
+     * Converts a CIDR (slash) notation string (e.g., &quot;1111:2222::/64&quot;)
+     * into an IPv6 prefix.
+     *
+     * @param address an IP prefix in string form (e.g.,&quot;1111:2222::/64&quot;)
+     * @return an IPv6 prefix
+     * @throws IllegalArgumentException if the arguments are invalid
+     */
+    public static Ip6Prefix valueOf(String address) {
+<span class="fc" id="L81">        final String[] parts = address.split(&quot;/&quot;);</span>
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        if (parts.length != 2) {</span>
+<span class="fc" id="L83">            String msg = &quot;Malformed IPv6 prefix string: &quot; + address + &quot;. &quot; +</span>
+                &quot;Address must take form &quot; +
+                &quot;\&quot;xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx/y\&quot;&quot;;
+<span class="fc" id="L86">            throw new IllegalArgumentException(msg);</span>
+        }
+<span class="fc" id="L88">        Ip6Address ipAddress = Ip6Address.valueOf(parts[0]);</span>
+<span class="fc" id="L89">        int prefixLength = Integer.parseInt(parts[1]);</span>
+
+<span class="fc" id="L91">        return new Ip6Prefix(ipAddress, prefixLength);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

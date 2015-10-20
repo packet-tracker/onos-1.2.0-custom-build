@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DependencyCycle.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">jdvue</a> &gt; <a href="index.source.html" class="el_package">org.onlab.jdvue</a> &gt; <span class="el_source">DependencyCycle.java</span></div><h1>DependencyCycle.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.jdvue;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Simple representation of a Java package dependency cycle.
+ */
+public class DependencyCycle {
+
+    private final List&lt;JavaPackage&gt; cycle;
+
+    /**
+     * Creates a normalized dependency cycle represented by the specified list
+     * of Java packages, which are expected to be given in order of dependency.
+     * List is assumed to be non-empty.
+     *
+     * @param cycle list of Java packages in the dependency cycle
+     * @param cause Java package that caused the cycle
+     */
+<span class="fc" id="L40">    DependencyCycle(List&lt;JavaPackage&gt; cycle, JavaPackage cause) {</span>
+<span class="fc" id="L41">        this.cycle = normalize(cycle, cause);</span>
+<span class="fc" id="L42">    }</span>
+
+    /**
+     * Produces a normalized dependency cycle list. Normalization is performed
+     * by rotating the list so that the package with the least lexicographic
+     * name is at the start of the list.
+     *
+     * @param cycle list of Java packages in the dependency cycle
+     * @param cause Java package that caused the cycle
+     * @return normalized cycle
+     */
+    private List&lt;JavaPackage&gt; normalize(List&lt;JavaPackage&gt; cycle, JavaPackage cause) {
+<span class="fc" id="L54">        int start = cycle.indexOf(cause);</span>
+<span class="fc" id="L55">        List&lt;JavaPackage&gt; clone = new ArrayList&lt;&gt;(cycle.subList(start, cycle.size()));</span>
+<span class="fc" id="L56">        int leastIndex = findIndexOfLeastName(clone);</span>
+<span class="fc" id="L57">        Collections.rotate(clone, -leastIndex);</span>
+<span class="fc" id="L58">        return Collections.unmodifiableList(clone);</span>
+    }
+
+    /**
+     * Returns the index of the Java package with the least name.
+     *
+     * @param cycle list of Java packages in the dependency cycle
+     * @return index of the least Java package name
+     */
+    private int findIndexOfLeastName(List&lt;JavaPackage&gt; cycle) {
+<span class="fc" id="L68">        int leastIndex = 0;</span>
+<span class="fc" id="L69">        String leastName = cycle.get(leastIndex).name();</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">        for (int i = 1, n = cycle.size(); i &lt; n; i++) {</span>
+<span class="fc" id="L71">            JavaPackage javaPackage = cycle.get(i);</span>
+<span class="fc bfc" id="L72" title="All 2 branches covered.">            if (leastName.compareTo(javaPackage.name()) &gt; 0) {</span>
+<span class="fc" id="L73">                leastIndex = i;</span>
+<span class="fc" id="L74">                leastName = javaPackage.name();</span>
+            }
+        }
+<span class="fc" id="L77">        return leastIndex;</span>
+    }
+
+    /**
+     * Returns the normalized Java package dependency cycle
+     *
+     * @return list of packages in the dependency cycle
+     */
+    public List&lt;JavaPackage&gt; getCycle() {
+<span class="fc" id="L86">        return cycle;</span>
+    }
+
+    /**
+     * Returns the dependency cycle in form of individual dependencies.
+     *
+     * @return list of dependencies forming the cycle
+     */
+    public List&lt;Dependency&gt; getCycleSegments() {
+<span class="fc" id="L95">        List&lt;Dependency&gt; dependencies = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L96" title="All 2 branches covered.">        for (int i = 0, n = cycle.size(); i &lt; n; i++) {</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">            dependencies.add(new Dependency(cycle.get(i), cycle.get(i &lt; n - 1 ? i + 1 : 0)));</span>
+        }
+<span class="fc" id="L99">        return dependencies;</span>
+    }
+
+    @Override
+    public boolean equals(Object o) {
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">        if (o instanceof DependencyCycle) {</span>
+<span class="fc" id="L105">            DependencyCycle that = (DependencyCycle) o;</span>
+<span class="fc" id="L106">            return Objects.equals(cycle, that.cycle);</span>
+        }
+<span class="nc" id="L108">        return false;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L113">        return Objects.hash(cycle);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L118">        return toStringHelper(this).add(&quot;cycle&quot;, cycle).toString();</span>
+    }
+
+    public String toShortString() {
+<span class="fc" id="L122">        StringBuilder sb = new StringBuilder(&quot;[&quot;);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        for (JavaPackage javaPackage : cycle) {</span>
+<span class="fc" id="L124">            sb.append(javaPackage.name()).append(&quot;, &quot;);</span>
+<span class="fc" id="L125">        }</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">        if (sb.length() &gt; 1) {</span>
+<span class="fc" id="L127">            sb.delete(sb.length() - 2, sb.length());</span>
+        }
+<span class="fc" id="L129">        sb.append(&quot;]&quot;);</span>
+<span class="fc" id="L130">        return sb.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

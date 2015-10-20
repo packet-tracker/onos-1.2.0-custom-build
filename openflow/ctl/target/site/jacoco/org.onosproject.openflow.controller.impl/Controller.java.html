@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Controller.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-ctl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.openflow.controller.impl</a> &gt; <span class="el_source">Controller.java</span></div><h1>Controller.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.openflow.controller.impl;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
+import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.channel.group.ChannelGroup;
+import org.jboss.netty.channel.group.DefaultChannelGroup;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.onlab.util.ItemNotFoundException;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.driver.DefaultDriverData;
+import org.onosproject.net.driver.DefaultDriverHandler;
+import org.onosproject.net.driver.Driver;
+import org.onosproject.net.driver.DriverService;
+import org.onosproject.openflow.controller.Dpid;
+import org.onosproject.openflow.controller.driver.OpenFlowAgent;
+import org.onosproject.openflow.controller.driver.OpenFlowSwitchDriver;
+import org.projectfloodlight.openflow.protocol.OFDescStatsReply;
+import org.projectfloodlight.openflow.protocol.OFFactories;
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.FileInputStream;
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+import java.net.InetSocketAddress;
+import java.security.KeyStore;
+import java.util.Dictionary;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.onlab.util.Tools.get;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.net.DeviceId.deviceId;
+import static org.onosproject.openflow.controller.Dpid.uri;
+
+
+/**
+ * The main controller class.  Handles all setup and network listeners
+ * - Distributed ownership control of switch through IControllerRegistryService
+ */
+<span class="nc" id="L69">public class Controller {</span>
+
+<span class="nc" id="L71">    protected static final Logger log = LoggerFactory.getLogger(Controller.class);</span>
+
+<span class="nc" id="L73">    protected static final OFFactory FACTORY13 = OFFactories.getFactory(OFVersion.OF_13);</span>
+<span class="nc" id="L74">    protected static final OFFactory FACTORY10 = OFFactories.getFactory(OFVersion.OF_10);</span>
+    private static final boolean TLS_DISABLED = false;
+    private static final short MIN_KS_LENGTH = 6;
+
+    protected HashMap&lt;String, String&gt; controllerNodeIPsCache;
+
+    private ChannelGroup cg;
+
+    // Configuration options
+<span class="nc" id="L83">    protected List&lt;Integer&gt; openFlowPorts = ImmutableList.of(6633, 6653);</span>
+<span class="nc" id="L84">    protected int workerThreads = 16;</span>
+
+    // Start time of the controller
+    protected long systemStartTime;
+
+    private OpenFlowAgent agent;
+
+    private NioServerSocketChannelFactory execFactory;
+
+    protected String ksLocation;
+    protected String tsLocation;
+    protected char[] ksPwd;
+    protected char[] tsPwd;
+    private SSLEngine serverSSLEngine;
+
+    // Perf. related configuration
+    protected static final int SEND_BUFFER_SIZE = 4 * 1024 * 1024;
+    private DriverService driverService;
+<span class="nc" id="L102">    private boolean enableOFTLS = TLS_DISABLED;</span>
+
+    // ***************
+    // Getters/Setters
+    // ***************
+
+    public OFFactory getOFMessageFactory10() {
+<span class="nc" id="L109">        return FACTORY10;</span>
+    }
+
+
+    public OFFactory getOFMessageFactory13() {
+<span class="nc" id="L114">        return FACTORY13;</span>
+    }
+
+
+    public Map&lt;String, String&gt; getControllerNodeIPs() {
+        // We return a copy of the mapping so we can guarantee that
+        // the mapping return is the same as one that will be (or was)
+        // dispatched to IHAListeners
+<span class="nc" id="L122">        HashMap&lt;String, String&gt; retval = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L123">        synchronized (controllerNodeIPsCache) {</span>
+<span class="nc" id="L124">            retval.putAll(controllerNodeIPsCache);</span>
+<span class="nc" id="L125">        }</span>
+<span class="nc" id="L126">        return retval;</span>
+    }
+
+
+    public long getSystemStartTime() {
+<span class="nc" id="L131">        return (this.systemStartTime);</span>
+    }
+
+    // **************
+    // Initialization
+    // **************
+
+    /**
+     * Tell controller that we're ready to accept switches loop.
+     */
+    public void run() {
+
+        try {
+<span class="nc" id="L144">            final ServerBootstrap bootstrap = createServerBootStrap();</span>
+
+<span class="nc" id="L146">            bootstrap.setOption(&quot;reuseAddr&quot;, true);</span>
+<span class="nc" id="L147">            bootstrap.setOption(&quot;child.keepAlive&quot;, true);</span>
+<span class="nc" id="L148">            bootstrap.setOption(&quot;child.tcpNoDelay&quot;, true);</span>
+<span class="nc" id="L149">            bootstrap.setOption(&quot;child.sendBufferSize&quot;, Controller.SEND_BUFFER_SIZE);</span>
+
+<span class="nc" id="L151">            ChannelPipelineFactory pfact =</span>
+                    new OpenflowPipelineFactory(this, null, serverSSLEngine);
+<span class="nc" id="L153">            bootstrap.setPipelineFactory(pfact);</span>
+<span class="nc" id="L154">            cg = new DefaultChannelGroup();</span>
+<span class="nc" id="L155">            openFlowPorts.forEach(port -&gt; {</span>
+<span class="nc" id="L156">                InetSocketAddress sa = new InetSocketAddress(port);</span>
+<span class="nc" id="L157">                cg.add(bootstrap.bind(sa));</span>
+<span class="nc" id="L158">                log.info(&quot;Listening for switch connections on {}&quot;, sa);</span>
+<span class="nc" id="L159">            });</span>
+
+<span class="nc" id="L161">        } catch (Exception e) {</span>
+<span class="nc" id="L162">            throw new RuntimeException(e);</span>
+<span class="nc" id="L163">        }</span>
+
+<span class="nc" id="L165">    }</span>
+
+    private ServerBootstrap createServerBootStrap() {
+
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (workerThreads == 0) {</span>
+<span class="nc" id="L170">            execFactory = new NioServerSocketChannelFactory(</span>
+<span class="nc" id="L171">                    Executors.newCachedThreadPool(groupedThreads(&quot;onos/of&quot;, &quot;boss-%d&quot;)),</span>
+<span class="nc" id="L172">                    Executors.newCachedThreadPool(groupedThreads(&quot;onos/of&quot;, &quot;worker-%d&quot;)));</span>
+<span class="nc" id="L173">            return new ServerBootstrap(execFactory);</span>
+        } else {
+<span class="nc" id="L175">            execFactory = new NioServerSocketChannelFactory(</span>
+<span class="nc" id="L176">                    Executors.newCachedThreadPool(groupedThreads(&quot;onos/of&quot;, &quot;boss-%d&quot;)),</span>
+<span class="nc" id="L177">                    Executors.newCachedThreadPool(groupedThreads(&quot;onos/of&quot;, &quot;worker-%d&quot;)), workerThreads);</span>
+<span class="nc" id="L178">            return new ServerBootstrap(execFactory);</span>
+        }
+    }
+
+    public void setConfigParams(Dictionary&lt;?, ?&gt; properties) {
+<span class="nc" id="L183">        String ports = get(properties, &quot;openflowPorts&quot;);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (!Strings.isNullOrEmpty(ports)) {</span>
+<span class="nc" id="L185">            this.openFlowPorts = Stream.of(ports.split(&quot;,&quot;))</span>
+<span class="nc" id="L186">                                       .map(s -&gt; Integer.parseInt(s))</span>
+<span class="nc" id="L187">                                       .collect(Collectors.toList());</span>
+        }
+<span class="nc" id="L189">        log.debug(&quot;OpenFlow ports set to {}&quot;, this.openFlowPorts);</span>
+
+<span class="nc" id="L191">        String threads = get(properties, &quot;workerThreads&quot;);</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if (!Strings.isNullOrEmpty(threads)) {</span>
+<span class="nc" id="L193">            this.workerThreads = Integer.parseInt(threads);</span>
+        }
+<span class="nc" id="L195">        log.debug(&quot;Number of worker threads set to {}&quot;, this.workerThreads);</span>
+<span class="nc" id="L196">    }</span>
+
+    /**
+     * Initialize internal data structures.
+     */
+    public void init() {
+        // These data structures are initialized here because other
+        // module's startUp() might be called before ours
+<span class="nc" id="L204">        this.controllerNodeIPsCache = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L206">        this.systemStartTime = System.currentTimeMillis();</span>
+
+        try {
+<span class="nc" id="L209">            getTLSParameters();</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">            if (enableOFTLS) {</span>
+<span class="nc" id="L211">                initSSL();</span>
+            }
+<span class="nc" id="L213">        } catch (Exception ex) {</span>
+<span class="nc" id="L214">            log.error(&quot;SSL init failed: {}&quot;, ex.getMessage());</span>
+<span class="nc" id="L215">        }</span>
+
+<span class="nc" id="L217">    }</span>
+
+    private void getTLSParameters() {
+<span class="nc" id="L220">        String tempString = System.getProperty(&quot;enableOFTLS&quot;);</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        enableOFTLS = Strings.isNullOrEmpty(tempString) ? TLS_DISABLED : Boolean.parseBoolean(tempString);</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        log.info(&quot;OpenFlow Security is {}&quot;, enableOFTLS ? &quot;enabled&quot; : &quot;disabled&quot;);</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if (enableOFTLS) {</span>
+<span class="nc" id="L224">            ksLocation = System.getProperty(&quot;javax.net.ssl.keyStore&quot;);</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">            if (Strings.isNullOrEmpty(ksLocation)) {</span>
+<span class="nc" id="L226">                enableOFTLS = TLS_DISABLED;</span>
+<span class="nc" id="L227">                return;</span>
+            }
+<span class="nc" id="L229">            tsLocation = System.getProperty(&quot;javax.net.ssl.trustStore&quot;);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">            if (Strings.isNullOrEmpty(tsLocation)) {</span>
+<span class="nc" id="L231">                enableOFTLS = TLS_DISABLED;</span>
+<span class="nc" id="L232">                return;</span>
+            }
+<span class="nc" id="L234">            ksPwd = System.getProperty(&quot;javax.net.ssl.keyStorePassword&quot;).toCharArray();</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">            if (MIN_KS_LENGTH &gt; ksPwd.length) {</span>
+<span class="nc" id="L236">                enableOFTLS = TLS_DISABLED;</span>
+<span class="nc" id="L237">                return;</span>
+            }
+<span class="nc" id="L239">            tsPwd = System.getProperty(&quot;javax.net.ssl.trustStorePassword&quot;).toCharArray();</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (MIN_KS_LENGTH &gt; tsPwd.length) {</span>
+<span class="nc" id="L241">                enableOFTLS = TLS_DISABLED;</span>
+<span class="nc" id="L242">                return;</span>
+            }
+        }
+<span class="nc" id="L245">    }</span>
+
+    private void initSSL() throws Exception {
+
+<span class="nc" id="L249">        TrustManagerFactory tmFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());</span>
+<span class="nc" id="L250">        KeyStore ts = KeyStore.getInstance(&quot;JKS&quot;);</span>
+<span class="nc" id="L251">        ts.load(new FileInputStream(tsLocation), tsPwd);</span>
+<span class="nc" id="L252">        tmFactory.init(ts);</span>
+
+<span class="nc" id="L254">        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());</span>
+<span class="nc" id="L255">        KeyStore ks = KeyStore.getInstance(&quot;JKS&quot;);</span>
+<span class="nc" id="L256">        ks.load(new FileInputStream(ksLocation), ksPwd);</span>
+<span class="nc" id="L257">        kmf.init(ks, ksPwd);</span>
+
+<span class="nc" id="L259">        SSLContext serverContext = SSLContext.getInstance(&quot;TLS&quot;);</span>
+<span class="nc" id="L260">        serverContext.init(kmf.getKeyManagers(), tmFactory.getTrustManagers(), null);</span>
+
+<span class="nc" id="L262">        serverSSLEngine = serverContext.createSSLEngine();</span>
+
+<span class="nc" id="L264">        serverSSLEngine.setNeedClientAuth(true);</span>
+<span class="nc" id="L265">        serverSSLEngine.setUseClientMode(false);</span>
+<span class="nc" id="L266">        serverSSLEngine.setEnabledProtocols(serverSSLEngine.getSupportedProtocols());</span>
+<span class="nc" id="L267">        serverSSLEngine.setEnabledCipherSuites(serverSSLEngine.getSupportedCipherSuites());</span>
+<span class="nc" id="L268">        serverSSLEngine.setEnableSessionCreation(true);</span>
+<span class="nc" id="L269">    }</span>
+
+    // **************
+    // Utility methods
+    // **************
+
+    public Map&lt;String, Long&gt; getMemory() {
+<span class="nc" id="L276">        Map&lt;String, Long&gt; m = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L277">        Runtime runtime = Runtime.getRuntime();</span>
+<span class="nc" id="L278">        m.put(&quot;total&quot;, runtime.totalMemory());</span>
+<span class="nc" id="L279">        m.put(&quot;free&quot;, runtime.freeMemory());</span>
+<span class="nc" id="L280">        return m;</span>
+    }
+
+
+    public Long getUptime() {
+<span class="nc" id="L285">        RuntimeMXBean rb = ManagementFactory.getRuntimeMXBean();</span>
+<span class="nc" id="L286">        return rb.getUptime();</span>
+    }
+
+    /**
+     * Forward to the driver-manager to get an IOFSwitch instance.
+     *
+     * @param dpid data path id
+     * @param desc switch description
+     * @param ofv  OpenFlow version
+     * @return switch instance
+     */
+    protected OpenFlowSwitchDriver getOFSwitchInstance(long dpid,
+                                                       OFDescStatsReply desc,
+                                                       OFVersion ofv) {
+<span class="nc" id="L300">        Dpid dpidObj = new Dpid(dpid);</span>
+
+        Driver driver;
+        try {
+<span class="nc" id="L304">            driver = driverService.getDriver(DeviceId.deviceId(Dpid.uri(dpidObj)));</span>
+<span class="nc" id="L305">        } catch (ItemNotFoundException e) {</span>
+<span class="nc" id="L306">            driver = driverService.getDriver(desc.getMfrDesc(), desc.getHwDesc(), desc.getSwDesc());</span>
+<span class="nc" id="L307">        }</span>
+
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        if (driver != null &amp;&amp; driver.hasBehaviour(OpenFlowSwitchDriver.class)) {</span>
+<span class="nc" id="L310">            Dpid did = new Dpid(dpid);</span>
+<span class="nc" id="L311">            DefaultDriverHandler handler =</span>
+<span class="nc" id="L312">                    new DefaultDriverHandler(new DefaultDriverData(driver, deviceId(uri(did))));</span>
+<span class="nc" id="L313">            OpenFlowSwitchDriver ofSwitchDriver =</span>
+<span class="nc" id="L314">                    driver.createBehaviour(handler, OpenFlowSwitchDriver.class);</span>
+<span class="nc" id="L315">            ofSwitchDriver.init(did, desc, ofv);</span>
+<span class="nc" id="L316">            ofSwitchDriver.setAgent(agent);</span>
+<span class="nc" id="L317">            ofSwitchDriver.setRoleHandler(new RoleManager(ofSwitchDriver));</span>
+<span class="nc" id="L318">            log.info(&quot;OpenFlow handshaker found for device {}: {}&quot;, dpid, ofSwitchDriver);</span>
+<span class="nc" id="L319">            return ofSwitchDriver;</span>
+        }
+<span class="nc" id="L321">        log.error(&quot;No OpenFlow driver for {} : {}&quot;, dpid, desc);</span>
+<span class="nc" id="L322">        return null;</span>
+
+    }
+
+    public void start(OpenFlowAgent ag, DriverService driverService) {
+<span class="nc" id="L327">        log.info(&quot;Starting OpenFlow IO&quot;);</span>
+<span class="nc" id="L328">        this.agent = ag;</span>
+<span class="nc" id="L329">        this.driverService = driverService;</span>
+<span class="nc" id="L330">        this.init();</span>
+<span class="nc" id="L331">        this.run();</span>
+<span class="nc" id="L332">    }</span>
+
+
+    public void stop() {
+<span class="nc" id="L336">        log.info(&quot;Stopping OpenFlow IO&quot;);</span>
+<span class="nc" id="L337">        cg.close();</span>
+<span class="nc" id="L338">        execFactory.shutdown();</span>
+<span class="nc" id="L339">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

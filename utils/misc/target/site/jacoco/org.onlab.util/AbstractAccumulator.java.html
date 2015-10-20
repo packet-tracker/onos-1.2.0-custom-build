@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AbstractAccumulator.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.util</a> &gt; <span class="el_source">AbstractAccumulator.java</span></div><h1>AbstractAccumulator.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.util;
+
+import com.google.common.collect.Lists;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Base implementation of an item accumulator. It allows triggering based on
+ * item inter-arrival time threshold, maximum batch life threshold and maximum
+ * batch size.
+ */
+public abstract class AbstractAccumulator&lt;T&gt; implements Accumulator&lt;T&gt; {
+
+<span class="fc" id="L36">    private Logger log = LoggerFactory.getLogger(AbstractAccumulator.class);</span>
+
+    private final Timer timer;
+    private final int maxItems;
+    private final int maxBatchMillis;
+    private final int maxIdleMillis;
+
+<span class="fc" id="L43">    private volatile TimerTask idleTask = new ProcessorTask();</span>
+<span class="fc" id="L44">    private volatile TimerTask maxTask = new ProcessorTask();</span>
+
+<span class="fc" id="L46">    private List&lt;T&gt; items = Lists.newArrayList();</span>
+
+    /**
+     * Creates an item accumulator capable of triggering on the specified
+     * thresholds.
+     *
+     * @param timer          timer to use for scheduling check-points
+     * @param maxItems       maximum number of items to accumulate before
+     *                       processing is triggered
+     * @param maxBatchMillis maximum number of millis allowed since the first
+     *                       item before processing is triggered
+     * @param maxIdleMillis  maximum number millis between items before
+     *                       processing is triggered
+     */
+    protected AbstractAccumulator(Timer timer, int maxItems,
+<span class="fc" id="L61">                                  int maxBatchMillis, int maxIdleMillis) {</span>
+<span class="fc" id="L62">        this.timer = checkNotNull(timer, &quot;Timer cannot be null&quot;);</span>
+
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        checkArgument(maxItems &gt; 1, &quot;Maximum number of items must be &gt; 1&quot;);</span>
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">        checkArgument(maxBatchMillis &gt; 0, &quot;Maximum millis must be positive&quot;);</span>
+<span class="pc bpc" id="L66" title="1 of 2 branches missed.">        checkArgument(maxIdleMillis &gt; 0, &quot;Maximum idle millis must be positive&quot;);</span>
+
+<span class="fc" id="L68">        this.maxItems = maxItems;</span>
+<span class="fc" id="L69">        this.maxBatchMillis = maxBatchMillis;</span>
+<span class="fc" id="L70">        this.maxIdleMillis = maxIdleMillis;</span>
+<span class="fc" id="L71">    }</span>
+
+    @Override
+    public synchronized void add(T item) {
+<span class="fc" id="L75">        idleTask = cancelIfActive(idleTask);</span>
+<span class="fc" id="L76">        items.add(checkNotNull(item, &quot;Item cannot be null&quot;));</span>
+
+        // Did we hit the max item threshold?
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        if (items.size() &gt;= maxItems) {</span>
+<span class="fc" id="L80">            maxTask = cancelIfActive(maxTask);</span>
+<span class="fc" id="L81">            scheduleNow();</span>
+        } else {
+            // Otherwise, schedule idle task and if this is a first item
+            // also schedule the max batch age task.
+<span class="fc" id="L85">            idleTask = schedule(maxIdleMillis);</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">            if (items.size() == 1) {</span>
+<span class="fc" id="L87">                maxTask = schedule(maxBatchMillis);</span>
+            }
+        }
+<span class="fc" id="L90">    }</span>
+
+    /**
+     * Finalizes the current batch, if ready, and schedules a new processor
+     * in the immediate future.
+     */
+    private void scheduleNow() {
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if (isReady()) {</span>
+<span class="fc" id="L98">            TimerTask task = new ProcessorTask(finalizeCurrentBatch());</span>
+<span class="fc" id="L99">            timer.schedule(task, 1);</span>
+        }
+<span class="fc" id="L101">    }</span>
+
+    /**
+     * Schedules a new processor task given number of millis in the future.
+     * Batch finalization is deferred to time of execution.
+     */
+    private TimerTask schedule(int millis) {
+<span class="fc" id="L108">        TimerTask task = new ProcessorTask();</span>
+<span class="fc" id="L109">        timer.schedule(task, millis);</span>
+<span class="fc" id="L110">        return task;</span>
+    }
+
+    /**
+     * Cancels the specified task if it is active.
+     */
+    private TimerTask cancelIfActive(TimerTask task) {
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">        if (task != null) {</span>
+<span class="fc" id="L118">            task.cancel();</span>
+        }
+<span class="fc" id="L120">        return task;</span>
+    }
+
+    // Task for triggering processing of accumulated items
+    private class ProcessorTask extends TimerTask {
+
+        private final List&lt;T&gt; items;
+
+        // Creates a new processor task with deferred batch finalization.
+<span class="fc" id="L129">        ProcessorTask() {</span>
+<span class="fc" id="L130">            this.items = null;</span>
+<span class="fc" id="L131">        }</span>
+
+        // Creates a new processor task with pre-emptive batch finalization.
+<span class="fc" id="L134">        ProcessorTask(List&lt;T&gt; items) {</span>
+<span class="fc" id="L135">            this.items = items;</span>
+<span class="fc" id="L136">        }</span>
+
+        @Override
+        public void run() {
+<span class="fc" id="L140">            synchronized (AbstractAccumulator.this) {</span>
+<span class="fc" id="L141">                idleTask = cancelIfActive(idleTask);</span>
+<span class="pc" id="L142">            }</span>
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            if (isReady()) {</span>
+                try {
+<span class="fc" id="L145">                    synchronized (AbstractAccumulator.this) {</span>
+<span class="fc" id="L146">                        maxTask = cancelIfActive(maxTask);</span>
+<span class="pc" id="L147">                    }</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">                    List&lt;T&gt; batch = items != null ? items : finalizeCurrentBatch();</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">                    if (!batch.isEmpty()) {</span>
+<span class="fc" id="L150">                        processItems(batch);</span>
+                    }
+<span class="nc" id="L152">                } catch (Exception e) {</span>
+<span class="nc" id="L153">                    log.warn(&quot;Unable to process batch due to&quot;, e);</span>
+<span class="pc" id="L154">                }</span>
+            } else {
+<span class="fc" id="L156">                synchronized (AbstractAccumulator.this) {</span>
+<span class="fc" id="L157">                    idleTask = schedule(maxIdleMillis);</span>
+<span class="pc" id="L158">                }</span>
+            }
+<span class="fc" id="L160">        }</span>
+    }
+
+    // Demotes and returns the current batch of items and promotes a new one.
+    private synchronized List&lt;T&gt; finalizeCurrentBatch() {
+<span class="fc" id="L165">        List&lt;T&gt; toBeProcessed = items;</span>
+<span class="fc" id="L166">        items = Lists.newArrayList();</span>
+<span class="fc" id="L167">        return toBeProcessed;</span>
+    }
+
+    @Override
+    public boolean isReady() {
+<span class="nc" id="L172">        return true;</span>
+    }
+
+    /**
+     * Returns the backing timer.
+     *
+     * @return backing timer
+     */
+    public Timer timer() {
+<span class="fc" id="L181">        return timer;</span>
+    }
+
+    /**
+     * Returns the maximum number of items allowed to accumulate before
+     * processing is triggered.
+     *
+     * @return max number of items
+     */
+    public int maxItems() {
+<span class="fc" id="L191">        return maxItems;</span>
+    }
+
+    /**
+     * Returns the maximum number of millis allowed to expire since the first
+     * item before processing is triggered.
+     *
+     * @return max number of millis a batch is allowed to last
+     */
+    public int maxBatchMillis() {
+<span class="fc" id="L201">        return maxBatchMillis;</span>
+    }
+
+    /**
+     * Returns the maximum number of millis allowed to expire since the last
+     * item arrival before processing is triggered.
+     *
+     * @return max number of millis since the last item
+     */
+    public int maxIdleMillis() {
+<span class="fc" id="L211">        return maxIdleMillis;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

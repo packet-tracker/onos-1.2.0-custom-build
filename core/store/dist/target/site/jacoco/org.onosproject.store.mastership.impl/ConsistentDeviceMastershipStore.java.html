@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConsistentDeviceMastershipStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.mastership.impl</a> &gt; <span class="el_source">ConsistentDeviceMastershipStore.java</span></div><h1>ConsistentDeviceMastershipStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.mastership.impl;
+
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.futureGetOrElse;
+import static org.onosproject.mastership.MastershipEvent.Type.BACKUPS_CHANGED;
+import static org.onosproject.mastership.MastershipEvent.Type.MASTER_CHANGED;
+import static org.slf4j.LoggerFactory.getLogger;
+import static com.google.common.base.Preconditions.checkArgument;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.Leadership;
+import org.onosproject.cluster.LeadershipEvent;
+import org.onosproject.cluster.LeadershipEventListener;
+import org.onosproject.cluster.LeadershipService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.cluster.RoleInfo;
+import org.onosproject.mastership.MastershipEvent;
+import org.onosproject.mastership.MastershipStore;
+import org.onosproject.mastership.MastershipStoreDelegate;
+import org.onosproject.mastership.MastershipTerm;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.serializers.StoreSerializer;
+import org.slf4j.Logger;
+
+import com.google.common.base.Objects;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
+/**
+ * Implementation of the MastershipStore on top of Leadership Service.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L75">public class ConsistentDeviceMastershipStore</span>
+    extends AbstractStore&lt;MastershipEvent, MastershipStoreDelegate&gt;
+    implements MastershipStore {
+
+<span class="nc" id="L79">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LeadershipService leadershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    private NodeId localNodeId;
+<span class="nc" id="L91">    private final Set&lt;DeviceId&gt; connectedDevices = Sets.newHashSet();</span>
+
+<span class="nc" id="L93">    private static final MessageSubject ROLE_RELINQUISH_SUBJECT =</span>
+            new MessageSubject(&quot;mastership-store-device-role-relinquish&quot;);
+<span class="nc" id="L95">    private static final MessageSubject TRANSITION_FROM_MASTER_TO_STANDBY_SUBJECT =</span>
+            new MessageSubject(&quot;mastership-store-device-mastership-relinquish&quot;);
+
+<span class="nc" id="L98">    private static final Pattern DEVICE_MASTERSHIP_TOPIC_PATTERN =</span>
+<span class="nc" id="L99">            Pattern.compile(&quot;device:(.*)&quot;);</span>
+
+    private ExecutorService messageHandlingExecutor;
+    private ScheduledExecutorService transferExecutor;
+<span class="nc" id="L103">    private final LeadershipEventListener leadershipEventListener =</span>
+            new InternalDeviceMastershipEventListener();
+
+    private static final String NODE_ID_NULL = &quot;Node ID cannot be null&quot;;
+    private static final String DEVICE_ID_NULL = &quot;Device ID cannot be null&quot;;
+    private static final int WAIT_BEFORE_MASTERSHIP_HANDOFF_MILLIS = 3000;
+
+<span class="nc" id="L110">    public static final StoreSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L113">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L114">                    .register(KryoNamespaces.API)</span>
+<span class="nc" id="L115">                    .register(MastershipRole.class)</span>
+<span class="nc" id="L116">                    .register(MastershipEvent.class)</span>
+<span class="nc" id="L117">                    .register(MastershipEvent.Type.class)</span>
+<span class="nc" id="L118">                    .build();</span>
+<span class="nc" id="L119">        }</span>
+    };
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L124">        messageHandlingExecutor =</span>
+<span class="nc" id="L125">                Executors.newSingleThreadExecutor(</span>
+<span class="nc" id="L126">                        groupedThreads(&quot;onos/store/device/mastership&quot;, &quot;message-handler&quot;));</span>
+<span class="nc" id="L127">        transferExecutor =</span>
+<span class="nc" id="L128">                Executors.newSingleThreadScheduledExecutor(</span>
+<span class="nc" id="L129">                        groupedThreads(&quot;onos/store/device/mastership&quot;, &quot;mastership-transfer-executor&quot;));</span>
+<span class="nc" id="L130">        clusterCommunicator.addSubscriber(ROLE_RELINQUISH_SUBJECT,</span>
+                SERIALIZER::decode,
+                this::relinquishLocalRole,
+                SERIALIZER::encode,
+                messageHandlingExecutor);
+<span class="nc" id="L135">        clusterCommunicator.addSubscriber(TRANSITION_FROM_MASTER_TO_STANDBY_SUBJECT,</span>
+                SERIALIZER::decode,
+                this::transitionFromMasterToStandby,
+                SERIALIZER::encode,
+                messageHandlingExecutor);
+<span class="nc" id="L140">        localNodeId = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L141">        leadershipService.addListener(leadershipEventListener);</span>
+
+<span class="nc" id="L143">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L144">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L148">        clusterCommunicator.removeSubscriber(ROLE_RELINQUISH_SUBJECT);</span>
+<span class="nc" id="L149">        clusterCommunicator.removeSubscriber(TRANSITION_FROM_MASTER_TO_STANDBY_SUBJECT);</span>
+<span class="nc" id="L150">        messageHandlingExecutor.shutdown();</span>
+<span class="nc" id="L151">        transferExecutor.shutdown();</span>
+<span class="nc" id="L152">        leadershipService.removeListener(leadershipEventListener);</span>
+
+<span class="nc" id="L154">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L155">    }</span>
+
+    @Override
+    public CompletableFuture&lt;MastershipRole&gt; requestRole(DeviceId deviceId) {
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L161">        String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (connectedDevices.add(deviceId)) {</span>
+<span class="nc" id="L163">            return leadershipService.runForLeadership(leadershipTopic)</span>
+<span class="nc" id="L164">                                    .thenApply(leadership -&gt; {</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                                        return Objects.equal(localNodeId, leadership.leader())</span>
+                                                ? MastershipRole.MASTER : MastershipRole.STANDBY;
+                                    });
+        } else {
+<span class="nc" id="L169">            NodeId leader = leadershipService.getLeader(leadershipTopic);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            if (Objects.equal(localNodeId, leader)) {</span>
+<span class="nc" id="L171">                return CompletableFuture.completedFuture(MastershipRole.MASTER);</span>
+            } else {
+<span class="nc" id="L173">                return CompletableFuture.completedFuture(MastershipRole.STANDBY);</span>
+            }
+        }
+    }
+
+    @Override
+    public MastershipRole getRole(NodeId nodeId, DeviceId deviceId) {
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        checkArgument(nodeId != null, NODE_ID_NULL);</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L183">        String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc" id="L184">        NodeId leader = leadershipService.getLeader(leadershipTopic);</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        if (Objects.equal(nodeId, leader)) {</span>
+<span class="nc" id="L186">            return MastershipRole.MASTER;</span>
+        }
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        return leadershipService.getCandidates(leadershipTopic).contains(nodeId) ?</span>
+                MastershipRole.STANDBY : MastershipRole.NONE;
+    }
+
+    @Override
+    public NodeId getMaster(DeviceId deviceId) {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L196">        String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc" id="L197">        return leadershipService.getLeader(leadershipTopic);</span>
+    }
+
+    @Override
+    public RoleInfo getNodes(DeviceId deviceId) {
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L204">        Map&lt;NodeId, MastershipRole&gt; roles = Maps.newHashMap();</span>
+<span class="nc" id="L205">        clusterService</span>
+<span class="nc" id="L206">            .getNodes()</span>
+<span class="nc" id="L207">            .forEach((node) -&gt; roles.put(node.id(), getRole(node.id(), deviceId)));</span>
+
+<span class="nc" id="L209">        NodeId master = null;</span>
+<span class="nc" id="L210">        final List&lt;NodeId&gt; standbys = Lists.newLinkedList();</span>
+
+<span class="nc" id="L212">        List&lt;NodeId&gt; candidates = leadershipService.getCandidates(createDeviceMastershipTopic(deviceId));</span>
+
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        for (Map.Entry&lt;NodeId, MastershipRole&gt; entry : roles.entrySet()) {</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            if (entry.getValue() == MastershipRole.MASTER) {</span>
+<span class="nc" id="L216">                master = entry.getKey();</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">            } else if (entry.getValue() == MastershipRole.STANDBY) {</span>
+<span class="nc" id="L218">                standbys.add(entry.getKey());</span>
+            }
+<span class="nc" id="L220">        }</span>
+
+<span class="nc" id="L222">        List&lt;NodeId&gt; sortedStandbyList = candidates.stream().filter(standbys::contains).collect(Collectors.toList());</span>
+
+<span class="nc" id="L224">        return new RoleInfo(master, sortedStandbyList);</span>
+    }
+
+    @Override
+    public Set&lt;DeviceId&gt; getDevices(NodeId nodeId) {
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        checkArgument(nodeId != null, NODE_ID_NULL);</span>
+
+<span class="nc" id="L231">        return leadershipService</span>
+<span class="nc" id="L232">                .ownedTopics(nodeId)</span>
+<span class="nc" id="L233">                .stream()</span>
+<span class="nc" id="L234">                .filter(this::isDeviceMastershipTopic)</span>
+<span class="nc" id="L235">                .map(this::extractDeviceIdFromTopic)</span>
+<span class="nc" id="L236">                .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;MastershipEvent&gt; setMaster(NodeId nodeId, DeviceId deviceId) {
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        checkArgument(nodeId != null, NODE_ID_NULL);</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L244">        NodeId currentMaster = getMaster(deviceId);</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if (nodeId.equals(currentMaster)) {</span>
+<span class="nc" id="L246">            return CompletableFuture.completedFuture(null);</span>
+        } else {
+<span class="nc" id="L248">            String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc" id="L249">            List&lt;NodeId&gt; candidates = leadershipService.getCandidates(leadershipTopic);</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            if (candidates.isEmpty()) {</span>
+<span class="nc" id="L251">                return  CompletableFuture.completedFuture(null);</span>
+            }
+<span class="nc bnc" id="L253" title="All 2 branches missed.">            if (leadershipService.makeTopCandidate(leadershipTopic, nodeId)) {</span>
+<span class="nc" id="L254">                CompletableFuture&lt;MastershipEvent&gt; result = new CompletableFuture&lt;&gt;();</span>
+                // There is brief wait before we step down from mastership.
+                // This is to ensure any work that happens when standby preference
+                // order changes can complete. For example: flow entries need to be backed
+                // to the new top standby (ONOS-1883)
+                // FIXME: This potentially introduces a race-condition.
+                // Right now role changes are only forced via CLI.
+<span class="nc" id="L261">                transferExecutor.schedule(() -&gt; {</span>
+<span class="nc" id="L262">                    result.complete(transitionFromMasterToStandby(deviceId));</span>
+<span class="nc" id="L263">                }, WAIT_BEFORE_MASTERSHIP_HANDOFF_MILLIS, TimeUnit.MILLISECONDS);</span>
+<span class="nc" id="L264">                return result;</span>
+            } else {
+<span class="nc" id="L266">                log.warn(&quot;Failed to promote {} to mastership for {}&quot;, nodeId, deviceId);</span>
+            }
+        }
+<span class="nc" id="L269">        return CompletableFuture.completedFuture(null);</span>
+    }
+
+    @Override
+    public MastershipTerm getTermFor(DeviceId deviceId) {
+<span class="nc bnc" id="L274" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L276">        String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc" id="L277">        Leadership leadership = leadershipService.getLeadership(leadershipTopic);</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        return leadership != null ? MastershipTerm.of(leadership.leader(), leadership.epoch()) : null;</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;MastershipEvent&gt; setStandby(NodeId nodeId, DeviceId deviceId) {
+<span class="nc bnc" id="L283" title="All 2 branches missed.">        checkArgument(nodeId != null, NODE_ID_NULL);</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L286">        NodeId currentMaster = getMaster(deviceId);</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (!nodeId.equals(currentMaster)) {</span>
+<span class="nc" id="L288">            return CompletableFuture.completedFuture(null);</span>
+        }
+
+<span class="nc" id="L291">        String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc" id="L292">        List&lt;NodeId&gt; candidates = leadershipService.getCandidates(leadershipTopic);</span>
+
+<span class="nc" id="L294">        NodeId newMaster = candidates.stream()</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">                                     .filter(candidate -&gt; !Objects.equal(nodeId, candidate))</span>
+<span class="nc" id="L296">                                     .findFirst()</span>
+<span class="nc" id="L297">                                     .orElse(null);</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        log.info(&quot;Transitioning to role {} for {}. Next master: {}&quot;,</span>
+                newMaster != null ? MastershipRole.STANDBY : MastershipRole.NONE, deviceId, newMaster);
+
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        if (newMaster != null) {</span>
+<span class="nc" id="L302">            return setMaster(newMaster, deviceId);</span>
+        }
+<span class="nc" id="L304">        return relinquishRole(nodeId, deviceId);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;MastershipEvent&gt; relinquishRole(NodeId nodeId, DeviceId deviceId) {
+<span class="nc bnc" id="L309" title="All 2 branches missed.">        checkArgument(nodeId != null, NODE_ID_NULL);</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (nodeId.equals(localNodeId)) {</span>
+<span class="nc" id="L313">            return relinquishLocalRole(deviceId);</span>
+        }
+
+<span class="nc" id="L316">        log.debug(&quot;Forwarding request to relinquish &quot;</span>
+                + &quot;role for device {} to {}&quot;, deviceId, nodeId);
+<span class="nc" id="L318">        return clusterCommunicator.sendAndReceive(</span>
+                deviceId,
+                ROLE_RELINQUISH_SUBJECT,
+                SERIALIZER::encode,
+                SERIALIZER::decode,
+                nodeId);
+    }
+
+    private CompletableFuture&lt;MastershipEvent&gt; relinquishLocalRole(DeviceId deviceId) {
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+        // Check if this node is can be managed by this node.
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        if (!connectedDevices.contains(deviceId)) {</span>
+<span class="nc" id="L331">            return CompletableFuture.completedFuture(null);</span>
+        }
+
+<span class="nc" id="L334">        String leadershipTopic = createDeviceMastershipTopic(deviceId);</span>
+<span class="nc" id="L335">        NodeId currentLeader = leadershipService.getLeader(leadershipTopic);</span>
+
+<span class="nc bnc" id="L337" title="All 2 branches missed.">        MastershipEvent.Type eventType = Objects.equal(currentLeader, localNodeId)</span>
+            ? MastershipEvent.Type.MASTER_CHANGED
+            : MastershipEvent.Type.BACKUPS_CHANGED;
+
+<span class="nc" id="L341">        connectedDevices.remove(deviceId);</span>
+<span class="nc" id="L342">        return leadershipService.withdraw(leadershipTopic)</span>
+<span class="nc" id="L343">                                .thenApply(v -&gt; new MastershipEvent(eventType, deviceId, getNodes(deviceId)));</span>
+    }
+
+    private MastershipEvent transitionFromMasterToStandby(DeviceId deviceId) {
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        checkArgument(deviceId != null, DEVICE_ID_NULL);</span>
+
+<span class="nc" id="L349">        NodeId currentMaster = getMaster(deviceId);</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (currentMaster == null) {</span>
+<span class="nc" id="L351">            return null;</span>
+        }
+
+<span class="nc bnc" id="L354" title="All 2 branches missed.">        if (!currentMaster.equals(localNodeId)) {</span>
+<span class="nc" id="L355">            log.info(&quot;Forwarding request to relinquish &quot;</span>
+                    + &quot;mastership for device {} to {}&quot;, deviceId, currentMaster);
+<span class="nc" id="L357">            return futureGetOrElse(clusterCommunicator.sendAndReceive(</span>
+                    deviceId,
+                    TRANSITION_FROM_MASTER_TO_STANDBY_SUBJECT,
+                    SERIALIZER::encode,
+                    SERIALIZER::decode,
+                    currentMaster), null);
+        }
+
+<span class="nc bnc" id="L365" title="All 2 branches missed.">        return leadershipService.stepdown(createDeviceMastershipTopic(deviceId))</span>
+<span class="nc" id="L366">                ? new MastershipEvent(MastershipEvent.Type.MASTER_CHANGED, deviceId, getNodes(deviceId)) : null;</span>
+    }
+
+    @Override
+    public void relinquishAllRole(NodeId nodeId) {
+        // Noop. LeadershipService already takes care of detecting and purging deadlocks.
+<span class="nc" id="L372">    }</span>
+
+<span class="nc" id="L374">    private class InternalDeviceMastershipEventListener implements LeadershipEventListener {</span>
+        @Override
+        public void event(LeadershipEvent event) {
+<span class="nc" id="L377">            Leadership leadership = event.subject();</span>
+<span class="nc bnc" id="L378" title="All 2 branches missed.">            if (!isDeviceMastershipTopic(leadership.topic())) {</span>
+<span class="nc" id="L379">                return;</span>
+            }
+<span class="nc" id="L381">            DeviceId deviceId = extractDeviceIdFromTopic(leadership.topic());</span>
+<span class="nc bnc" id="L382" title="All 5 branches missed.">            switch (event.type()) {</span>
+            case LEADER_ELECTED:
+<span class="nc" id="L384">                notifyDelegate(new MastershipEvent(MASTER_CHANGED, deviceId, getNodes(deviceId)));</span>
+<span class="nc" id="L385">                break;</span>
+            case LEADER_REELECTED:
+                // There is no concept of leader re-election in the new distributed leadership manager.
+<span class="nc" id="L388">                throw new IllegalStateException(&quot;Unexpected event type&quot;);</span>
+            case LEADER_BOOTED:
+<span class="nc" id="L390">                notifyDelegate(new MastershipEvent(MASTER_CHANGED, deviceId, getNodes(deviceId)));</span>
+<span class="nc" id="L391">                break;</span>
+            case CANDIDATES_CHANGED:
+<span class="nc" id="L393">                notifyDelegate(new MastershipEvent(BACKUPS_CHANGED, deviceId, getNodes(deviceId)));</span>
+<span class="nc" id="L394">                break;</span>
+            default:
+<span class="nc" id="L396">                return;</span>
+            }
+<span class="nc" id="L398">        }</span>
+    }
+
+    private String createDeviceMastershipTopic(DeviceId deviceId) {
+<span class="nc" id="L402">        return String.format(&quot;device:%s&quot;, deviceId.toString());</span>
+    }
+
+    private DeviceId extractDeviceIdFromTopic(String topic) {
+<span class="nc" id="L406">        Matcher m = DEVICE_MASTERSHIP_TOPIC_PATTERN.matcher(topic);</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        if (m.matches()) {</span>
+<span class="nc" id="L408">            return DeviceId.deviceId(m.group(1));</span>
+        } else {
+<span class="nc" id="L410">            throw new IllegalArgumentException(&quot;Invalid device mastership topic: &quot; + topic);</span>
+        }
+    }
+
+    private boolean isDeviceMastershipTopic(String topic) {
+<span class="nc" id="L415">        Matcher m = DEVICE_MASTERSHIP_TOPIC_PATTERN.matcher(topic);</span>
+<span class="nc" id="L416">        return m.matches();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

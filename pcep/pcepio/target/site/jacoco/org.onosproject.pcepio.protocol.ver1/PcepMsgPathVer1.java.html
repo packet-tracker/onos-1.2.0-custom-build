@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepMsgPathVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepMsgPathVer1.java</span></div><h1>PcepMsgPathVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepAttribute;
+import org.onosproject.pcepio.protocol.PcepEroObject;
+import org.onosproject.pcepio.protocol.PcepMsgPath;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Message PAth for update message.
+ * Reference :PCE extensions for stateful draft-ietf-pce-stateful-pce-10.
+ */
+public class PcepMsgPathVer1 implements PcepMsgPath {
+
+    /*
+     *  &lt;path&gt;         ::= &lt;ERO&gt;&lt;attribute-list&gt;
+     */
+
+<span class="fc" id="L38">    protected static final Logger log = LoggerFactory.getLogger(PcepMsgPathVer1.class);</span>
+    //PcepEroObject
+    private PcepEroObject eroObj;
+    private boolean isEroObjectSet;
+    // PcepAttribute
+    private PcepAttribute attrList;
+    private boolean isAttributeListSet;
+
+    /**
+     * constructor to initialize objects.
+     */
+<span class="fc" id="L49">    public PcepMsgPathVer1() {</span>
+<span class="fc" id="L50">        eroObj = null;</span>
+<span class="fc" id="L51">        attrList = null;</span>
+<span class="fc" id="L52">        isEroObjectSet = false;</span>
+<span class="fc" id="L53">        isAttributeListSet = false;</span>
+<span class="fc" id="L54">    }</span>
+
+    @Override
+    public PcepEroObject getEroObject() {
+<span class="nc" id="L58">        return eroObj;</span>
+    }
+
+    @Override
+    public PcepAttribute getPcepAttribute() {
+<span class="nc" id="L63">        return attrList;</span>
+    }
+
+    @Override
+    public void setEroObject(PcepEroObject eroObj) {
+<span class="nc" id="L68">        this.eroObj = eroObj;</span>
+<span class="nc" id="L69">    }</span>
+
+    @Override
+    public void setPcepAttribute(PcepAttribute attrList) {
+<span class="nc" id="L73">        this.attrList = attrList;</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     * constructor to initialize member variables.
+     *
+     * @param eroObj pcep ero object
+     * @param attrList pcep attribute
+     */
+<span class="fc" id="L82">    public PcepMsgPathVer1(PcepEroObject eroObj, PcepAttribute attrList) {</span>
+<span class="fc" id="L83">        this.eroObj = eroObj;</span>
+<span class="fc" id="L84">        isEroObjectSet = true;</span>
+<span class="fc" id="L85">        this.attrList = attrList;</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        if (attrList == null) {</span>
+<span class="fc" id="L87">            isAttributeListSet = false;</span>
+        } else {
+<span class="fc" id="L89">            isAttributeListSet = true;</span>
+        }
+<span class="fc" id="L91">    }</span>
+
+    @Override
+    public PcepMsgPath read(ChannelBuffer cb) throws PcepParseException {
+        PcepEroObject eroObj;
+        PcepAttribute attrList;
+
+<span class="fc" id="L98">        eroObj = PcepEroObjectVer1.read(cb);</span>
+<span class="fc" id="L99">        attrList = PcepAttributeVer1.read(cb);</span>
+
+<span class="fc" id="L101">        return new PcepMsgPathVer1(eroObj, attrList);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L106">        int iLenStartIndex = cb.writerIndex();</span>
+
+        //write Object header
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        if (this.isEroObjectSet) {</span>
+<span class="fc" id="L110">            this.eroObj.write(cb);</span>
+        }
+<span class="fc bfc" id="L112" title="All 2 branches covered.">        if (this.isAttributeListSet) {</span>
+<span class="fc" id="L113">            attrList.write(cb);</span>
+        }
+
+<span class="fc" id="L116">        return cb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Builder class for PCEP Message path.
+     */
+<span class="nc" id="L122">    public static class Builder implements PcepMsgPath.Builder {</span>
+
+<span class="nc" id="L124">        private boolean bIsEROObjectSet = false;</span>
+<span class="nc" id="L125">        private boolean bIsPcepAttributeSet = false;</span>
+
+        //PCEP ERO Object
+        private PcepEroObject eroObject;
+        //PCEP Attribute list
+        private PcepAttribute pcepAttribute;
+
+        @Override
+        public PcepMsgPath build() throws PcepParseException {
+
+            //PCEP ERO Object
+<span class="nc" id="L136">            PcepEroObject eroObject = null;</span>
+            //PCEP Attribute list
+<span class="nc" id="L138">            PcepAttribute pcepAttribute = null;</span>
+
+<span class="nc bnc" id="L140" title="All 2 branches missed.">            if (!this.bIsEROObjectSet) {</span>
+<span class="nc" id="L141">                throw new PcepParseException(&quot;ERO Object NOT Set while building PcepMsgPath.&quot;);</span>
+            } else {
+<span class="nc" id="L143">                eroObject = this.eroObject;</span>
+            }
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            if (!this.bIsPcepAttributeSet) {</span>
+<span class="nc" id="L146">                throw new PcepParseException(&quot;Pcep Attributes NOT Set while building PcepMsgPath.&quot;);</span>
+            } else {
+<span class="nc" id="L148">                pcepAttribute = this.pcepAttribute;</span>
+            }
+
+<span class="nc" id="L151">            return new PcepMsgPathVer1(eroObject, pcepAttribute);</span>
+        }
+
+        @Override
+        public PcepEroObject getEroObject() {
+<span class="nc" id="L156">            return this.eroObject;</span>
+        }
+
+        @Override
+        public PcepAttribute getPcepAttribute() {
+<span class="nc" id="L161">            return this.pcepAttribute;</span>
+        }
+
+        @Override
+        public Builder setEroObject(PcepEroObject eroObject) {
+<span class="nc" id="L166">            this.eroObject = eroObject;</span>
+<span class="nc" id="L167">            this.bIsEROObjectSet = true;</span>
+<span class="nc" id="L168">            return this;</span>
+        }
+
+        @Override
+        public Builder setPcepAttribute(PcepAttribute pcepAttribute) {
+<span class="nc" id="L173">            this.pcepAttribute = pcepAttribute;</span>
+<span class="nc" id="L174">            this.bIsPcepAttributeSet = true;</span>
+<span class="nc" id="L175">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L182">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L183">                .add(&quot;EroObject&quot;, eroObj)</span>
+<span class="nc" id="L184">                .add(&quot;AttributeList&quot;, attrList)</span>
+<span class="nc" id="L185">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

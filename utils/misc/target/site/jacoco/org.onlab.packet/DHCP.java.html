@@ -1,0 +1,633 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DHCP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">DHCP.java</span></div><h1>DHCP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ListIterator;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ *
+ */
+<span class="fc" id="L33">public class DHCP extends BasePacket {</span>
+    /**
+     * Dynamic Host Configuration Protocol packet.
+     * ------------------------------------------ |op (1) | htype(1) | hlen(1) |
+     * hops(1) | ------------------------------------------ | xid (4) |
+     * ------------------------------------------ | secs (2) | flags (2) |
+     * ------------------------------------------ | ciaddr (4) |
+     * ------------------------------------------ | yiaddr (4) |
+     * ------------------------------------------ | siaddr (4) |
+     * ------------------------------------------ | giaddr (4) |
+     * ------------------------------------------ | chaddr (16) |
+     * ------------------------------------------ | sname (64) |
+     * ------------------------------------------ | file (128) |
+     * ------------------------------------------ | options (312) |
+     * ------------------------------------------
+     *
+     */
+    // Header + magic without options
+    public static final int MIN_HEADER_LENGTH = 240;
+    public static final byte OPCODE_REQUEST = 0x1;
+    public static final byte OPCODE_REPLY = 0x2;
+
+    public static final byte HWTYPE_ETHERNET = 0x1;
+
+<span class="nc" id="L57">    public enum DHCPOptionCode {</span>
+<span class="nc" id="L58">        OptionCode_SubnetMask((byte) 1), OptionCode_RouterAddress((byte) 3), OptionCode_DomainServer((byte) 6),</span>
+<span class="nc" id="L59">        OptionCode_HostName((byte) 12), OptionCode_DomainName((byte) 15), OptionCode_BroadcastAddress((byte) 28),</span>
+<span class="nc" id="L60">        OptionCode_RequestedIP((byte) 50), OptionCode_LeaseTime((byte) 51), OptionCode_MessageType((byte) 53),</span>
+<span class="nc" id="L61">        OptionCode_DHCPServerIp((byte) 54), OptionCode_RequestedParameters((byte) 55),</span>
+<span class="nc" id="L62">        OptionCode_RenewalTime((byte) 58), OPtionCode_RebindingTime((byte) 59), OptionCode_ClientID((byte) 61),</span>
+<span class="nc" id="L63">        OptionCode_END((byte) 255);</span>
+
+        protected byte value;
+
+<span class="nc" id="L67">        private DHCPOptionCode(final byte value) {</span>
+<span class="nc" id="L68">            this.value = value;</span>
+<span class="nc" id="L69">        }</span>
+
+        public byte getValue() {
+<span class="nc" id="L72">            return this.value;</span>
+        }
+    }
+
+    protected byte opCode;
+    protected byte hardwareType;
+    protected byte hardwareAddressLength;
+    protected byte hops;
+    protected int transactionId;
+    protected short seconds;
+    protected short flags;
+    protected int clientIPAddress;
+    protected int yourIPAddress;
+    protected int serverIPAddress;
+    protected int gatewayIPAddress;
+    protected byte[] clientHardwareAddress;
+    protected String serverName;
+    protected String bootFileName;
+<span class="fc" id="L90">    protected List&lt;DHCPOption&gt; options = new ArrayList&lt;DHCPOption&gt;();</span>
+
+    /**
+     * @return the opCode
+     */
+    public byte getOpCode() {
+<span class="nc" id="L96">        return this.opCode;</span>
+    }
+
+    /**
+     * @param opCode
+     *            the opCode to set
+     * @return this
+     */
+    public DHCP setOpCode(final byte opCode) {
+<span class="nc" id="L105">        this.opCode = opCode;</span>
+<span class="nc" id="L106">        return this;</span>
+    }
+
+    /**
+     * @return the hardwareType
+     */
+    public byte getHardwareType() {
+<span class="nc" id="L113">        return this.hardwareType;</span>
+    }
+
+    /**
+     * @param hardwareType
+     *            the hardwareType to set
+     * @return this
+     */
+    public DHCP setHardwareType(final byte hardwareType) {
+<span class="nc" id="L122">        this.hardwareType = hardwareType;</span>
+<span class="nc" id="L123">        return this;</span>
+    }
+
+    /**
+     * @return the hardwareAddressLength
+     */
+    public byte getHardwareAddressLength() {
+<span class="nc" id="L130">        return this.hardwareAddressLength;</span>
+    }
+
+    /**
+     * @param hardwareAddressLength
+     *            the hardwareAddressLength to set
+     * @return this
+     */
+    public DHCP setHardwareAddressLength(final byte hardwareAddressLength) {
+<span class="nc" id="L139">        this.hardwareAddressLength = hardwareAddressLength;</span>
+<span class="nc" id="L140">        return this;</span>
+    }
+
+    /**
+     * @return the hops
+     */
+    public byte getHops() {
+<span class="nc" id="L147">        return this.hops;</span>
+    }
+
+    /**
+     * @param hops
+     *            the hops to set
+     * @return this
+     */
+    public DHCP setHops(final byte hops) {
+<span class="nc" id="L156">        this.hops = hops;</span>
+<span class="nc" id="L157">        return this;</span>
+    }
+
+    /**
+     * @return the transactionId
+     */
+    public int getTransactionId() {
+<span class="nc" id="L164">        return this.transactionId;</span>
+    }
+
+    /**
+     * @param transactionId
+     *            the transactionId to set
+     * @return this
+     */
+    public DHCP setTransactionId(final int transactionId) {
+<span class="nc" id="L173">        this.transactionId = transactionId;</span>
+<span class="nc" id="L174">        return this;</span>
+    }
+
+    /**
+     * @return the seconds
+     */
+    public short getSeconds() {
+<span class="nc" id="L181">        return this.seconds;</span>
+    }
+
+    /**
+     * @param seconds
+     *            the seconds to set
+     * @return this
+     */
+    public DHCP setSeconds(final short seconds) {
+<span class="nc" id="L190">        this.seconds = seconds;</span>
+<span class="nc" id="L191">        return this;</span>
+    }
+
+    /**
+     * @return the flags
+     */
+    public short getFlags() {
+<span class="nc" id="L198">        return this.flags;</span>
+    }
+
+    /**
+     * @param flags
+     *            the flags to set
+     * @return this
+     */
+    public DHCP setFlags(final short flags) {
+<span class="nc" id="L207">        this.flags = flags;</span>
+<span class="nc" id="L208">        return this;</span>
+    }
+
+    /**
+     * @return the clientIPAddress
+     */
+    public int getClientIPAddress() {
+<span class="nc" id="L215">        return this.clientIPAddress;</span>
+    }
+
+    /**
+     * @param clientIPAddress
+     *            the clientIPAddress to set
+     * @return this
+     */
+    public DHCP setClientIPAddress(final int clientIPAddress) {
+<span class="nc" id="L224">        this.clientIPAddress = clientIPAddress;</span>
+<span class="nc" id="L225">        return this;</span>
+    }
+
+    /**
+     * @return the yourIPAddress
+     */
+    public int getYourIPAddress() {
+<span class="nc" id="L232">        return this.yourIPAddress;</span>
+    }
+
+    /**
+     * @param yourIPAddress
+     *            the yourIPAddress to set
+     * @return this
+     */
+    public DHCP setYourIPAddress(final int yourIPAddress) {
+<span class="nc" id="L241">        this.yourIPAddress = yourIPAddress;</span>
+<span class="nc" id="L242">        return this;</span>
+    }
+
+    /**
+     * @return the serverIPAddress
+     */
+    public int getServerIPAddress() {
+<span class="nc" id="L249">        return this.serverIPAddress;</span>
+    }
+
+    /**
+     * @param serverIPAddress
+     *            the serverIPAddress to set
+     * @return this
+     */
+    public DHCP setServerIPAddress(final int serverIPAddress) {
+<span class="nc" id="L258">        this.serverIPAddress = serverIPAddress;</span>
+<span class="nc" id="L259">        return this;</span>
+    }
+
+    /**
+     * @return the gatewayIPAddress
+     */
+    public int getGatewayIPAddress() {
+<span class="nc" id="L266">        return this.gatewayIPAddress;</span>
+    }
+
+    /**
+     * @param gatewayIPAddress
+     *            the gatewayIPAddress to set
+     * @return this
+     */
+    public DHCP setGatewayIPAddress(final int gatewayIPAddress) {
+<span class="nc" id="L275">        this.gatewayIPAddress = gatewayIPAddress;</span>
+<span class="nc" id="L276">        return this;</span>
+    }
+
+    /**
+     * @return the clientHardwareAddress
+     */
+    public byte[] getClientHardwareAddress() {
+<span class="nc" id="L283">        return this.clientHardwareAddress;</span>
+    }
+
+    /**
+     * @param clientHardwareAddress
+     *            the clientHardwareAddress to set
+     * @return this
+     */
+    public DHCP setClientHardwareAddress(final byte[] clientHardwareAddress) {
+<span class="nc" id="L292">        this.clientHardwareAddress = clientHardwareAddress;</span>
+<span class="nc" id="L293">        return this;</span>
+    }
+
+    /**
+     * Gets a specific DHCP option parameter.
+     *
+     * @param optionCode
+     *            The option code to get
+     * @return The value of the option if it exists, null otherwise
+     */
+    public DHCPOption getOption(final DHCPOptionCode optionCode) {
+<span class="nc bnc" id="L304" title="All 2 branches missed.">        for (final DHCPOption opt : this.options) {</span>
+<span class="nc bnc" id="L305" title="All 2 branches missed.">            if (opt.code == optionCode.value) {</span>
+<span class="nc" id="L306">                return opt;</span>
+            }
+<span class="nc" id="L308">        }</span>
+<span class="nc" id="L309">        return null;</span>
+    }
+
+    /**
+     * @return the options
+     */
+    public List&lt;DHCPOption&gt; getOptions() {
+<span class="nc" id="L316">        return this.options;</span>
+    }
+
+    /**
+     * @param options
+     *            the options to set
+     * @return this
+     */
+    public DHCP setOptions(final List&lt;DHCPOption&gt; options) {
+<span class="nc" id="L325">        this.options = options;</span>
+<span class="nc" id="L326">        return this;</span>
+    }
+
+    /**
+     * @return the packetType base on option 53
+     */
+    public DHCPPacketType getPacketType() {
+<span class="nc" id="L333">        final ListIterator&lt;DHCPOption&gt; lit = this.options.listIterator();</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">        while (lit.hasNext()) {</span>
+<span class="nc" id="L335">            final DHCPOption option = lit.next();</span>
+            // only care option 53
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (option.getCode() == 53) {</span>
+<span class="nc" id="L338">                return DHCPPacketType.getType(option.getData()[0]);</span>
+            }
+<span class="nc" id="L340">        }</span>
+<span class="nc" id="L341">        return null;</span>
+    }
+
+    /**
+     * @return the serverName
+     */
+    public String getServerName() {
+<span class="nc" id="L348">        return this.serverName;</span>
+    }
+
+    /**
+     * @param server
+     *            the serverName to set
+     * @return this
+     */
+    public DHCP setServerName(final String server) {
+<span class="nc" id="L357">        this.serverName = server;</span>
+<span class="nc" id="L358">        return this;</span>
+    }
+
+    /**
+     * @return the bootFileName
+     */
+    public String getBootFileName() {
+<span class="nc" id="L365">        return this.bootFileName;</span>
+    }
+
+    /**
+     * @param bootFile
+     *            the bootFileName to set
+     * @return this
+     */
+    public DHCP setBootFileName(final String bootFile) {
+<span class="nc" id="L374">        this.bootFileName = bootFile;</span>
+<span class="nc" id="L375">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+        // not guaranteed to retain length/exact format
+<span class="nc" id="L381">        this.resetChecksum();</span>
+
+        // minimum size 240 including magic cookie, options generally padded to
+        // 300
+<span class="nc" id="L385">        int optionsLength = 0;</span>
+<span class="nc bnc" id="L386" title="All 2 branches missed.">        for (final DHCPOption option : this.options) {</span>
+<span class="nc bnc" id="L387" title="All 4 branches missed.">            if (option.getCode() == 0 || option.getCode() == ((byte) 255)) {</span>
+<span class="nc" id="L388">                optionsLength += 1;</span>
+            } else {
+<span class="nc" id="L390">                optionsLength += 2 + (0xff &amp; option.getLength());</span>
+            }
+<span class="nc" id="L392">        }</span>
+<span class="nc" id="L393">        int optionsPadLength = 0;</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">        if (optionsLength &lt; 60) {</span>
+<span class="nc" id="L395">            optionsPadLength = 60 - optionsLength;</span>
+        }
+
+<span class="nc" id="L398">        final byte[] data = new byte[240 + optionsLength + optionsPadLength];</span>
+<span class="nc" id="L399">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="nc" id="L400">        bb.put(this.opCode);</span>
+<span class="nc" id="L401">        bb.put(this.hardwareType);</span>
+<span class="nc" id="L402">        bb.put(this.hardwareAddressLength);</span>
+<span class="nc" id="L403">        bb.put(this.hops);</span>
+<span class="nc" id="L404">        bb.putInt(this.transactionId);</span>
+<span class="nc" id="L405">        bb.putShort(this.seconds);</span>
+<span class="nc" id="L406">        bb.putShort(this.flags);</span>
+<span class="nc" id="L407">        bb.putInt(this.clientIPAddress);</span>
+<span class="nc" id="L408">        bb.putInt(this.yourIPAddress);</span>
+<span class="nc" id="L409">        bb.putInt(this.serverIPAddress);</span>
+<span class="nc" id="L410">        bb.putInt(this.gatewayIPAddress);</span>
+<span class="nc bnc" id="L411" title="All 2 branches missed.">        checkArgument(this.clientHardwareAddress.length &lt;= 16,</span>
+<span class="nc" id="L412">                &quot;Hardware address is too long (%s bytes)&quot;, this.clientHardwareAddress.length);</span>
+<span class="nc" id="L413">        bb.put(this.clientHardwareAddress);</span>
+<span class="nc bnc" id="L414" title="All 2 branches missed.">        if (this.clientHardwareAddress.length &lt; 16) {</span>
+<span class="nc bnc" id="L415" title="All 2 branches missed.">            for (int i = 0; i &lt; 16 - this.clientHardwareAddress.length; ++i) {</span>
+<span class="nc" id="L416">                bb.put((byte) 0x0);</span>
+            }
+        }
+<span class="nc" id="L419">        this.writeString(this.serverName, bb, 64);</span>
+<span class="nc" id="L420">        this.writeString(this.bootFileName, bb, 128);</span>
+        // magic cookie
+<span class="nc" id="L422">        bb.put((byte) 0x63);</span>
+<span class="nc" id="L423">        bb.put((byte) 0x82);</span>
+<span class="nc" id="L424">        bb.put((byte) 0x53);</span>
+<span class="nc" id="L425">        bb.put((byte) 0x63);</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">        for (final DHCPOption option : this.options) {</span>
+<span class="nc" id="L427">            final int code = option.getCode() &amp; 0xff;</span>
+<span class="nc" id="L428">            bb.put((byte) code);</span>
+<span class="nc bnc" id="L429" title="All 4 branches missed.">            if (code != 0 &amp;&amp; code != 255) {</span>
+<span class="nc" id="L430">                bb.put(option.getLength());</span>
+<span class="nc" id="L431">                bb.put(option.getData());</span>
+            }
+<span class="nc" id="L433">        }</span>
+        // assume the rest is padded out with zeroes
+<span class="nc" id="L435">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L441">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">        if (bb.remaining() &lt; DHCP.MIN_HEADER_LENGTH) {</span>
+<span class="nc" id="L443">            return this;</span>
+        }
+
+<span class="nc" id="L446">        this.opCode = bb.get();</span>
+<span class="nc" id="L447">        this.hardwareType = bb.get();</span>
+<span class="nc" id="L448">        this.hardwareAddressLength = bb.get();</span>
+<span class="nc" id="L449">        this.hops = bb.get();</span>
+<span class="nc" id="L450">        this.transactionId = bb.getInt();</span>
+<span class="nc" id="L451">        this.seconds = bb.getShort();</span>
+<span class="nc" id="L452">        this.flags = bb.getShort();</span>
+<span class="nc" id="L453">        this.clientIPAddress = bb.getInt();</span>
+<span class="nc" id="L454">        this.yourIPAddress = bb.getInt();</span>
+<span class="nc" id="L455">        this.serverIPAddress = bb.getInt();</span>
+<span class="nc" id="L456">        this.gatewayIPAddress = bb.getInt();</span>
+<span class="nc" id="L457">        final int hardwareAddressLength = 0xff &amp; this.hardwareAddressLength;</span>
+<span class="nc" id="L458">        this.clientHardwareAddress = new byte[hardwareAddressLength];</span>
+
+<span class="nc" id="L460">        bb.get(this.clientHardwareAddress);</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">        for (int i = hardwareAddressLength; i &lt; 16; ++i) {</span>
+<span class="nc" id="L462">            bb.get();</span>
+        }
+<span class="nc" id="L464">        this.serverName = this.readString(bb, 64);</span>
+<span class="nc" id="L465">        this.bootFileName = this.readString(bb, 128);</span>
+        // read the magic cookie
+        // magic cookie
+<span class="nc" id="L468">        bb.get();</span>
+<span class="nc" id="L469">        bb.get();</span>
+<span class="nc" id="L470">        bb.get();</span>
+<span class="nc" id="L471">        bb.get();</span>
+        // read options
+<span class="nc bnc" id="L473" title="All 2 branches missed.">        while (bb.hasRemaining()) {</span>
+<span class="nc" id="L474">            final DHCPOption option = new DHCPOption();</span>
+<span class="nc" id="L475">            int code = 0xff &amp; bb.get(); // convert signed byte to int in range</span>
+            // [0,255]
+<span class="nc" id="L477">            option.setCode((byte) code);</span>
+<span class="nc bnc" id="L478" title="All 2 branches missed.">            if (code == 0) {</span>
+                // skip these
+<span class="nc" id="L480">                continue;</span>
+<span class="nc bnc" id="L481" title="All 2 branches missed.">            } else if (code != 255) {</span>
+<span class="nc bnc" id="L482" title="All 2 branches missed.">                if (bb.hasRemaining()) {</span>
+<span class="nc" id="L483">                    final int l = 0xff &amp; bb.get(); // convert signed byte to</span>
+                    // int in range [0,255]
+<span class="nc" id="L485">                    option.setLength((byte) l);</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">                    if (bb.remaining() &gt;= l) {</span>
+<span class="nc" id="L487">                        final byte[] optionData = new byte[l];</span>
+<span class="nc" id="L488">                        bb.get(optionData);</span>
+<span class="nc" id="L489">                        option.setData(optionData);</span>
+<span class="nc" id="L490">                    } else {</span>
+                        // Skip the invalid option and set the END option
+<span class="nc" id="L492">                        code = 0xff;</span>
+<span class="nc" id="L493">                        option.setCode((byte) code);</span>
+<span class="nc" id="L494">                        option.setLength((byte) 0);</span>
+                    }
+<span class="nc" id="L496">                } else {</span>
+                    // Skip the invalid option and set the END option
+<span class="nc" id="L498">                    code = 0xff;</span>
+<span class="nc" id="L499">                    option.setCode((byte) code);</span>
+<span class="nc" id="L500">                    option.setLength((byte) 0);</span>
+                }
+            }
+<span class="nc" id="L503">            this.options.add(option);</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">            if (code == 255) {</span>
+                // remaining bytes are supposed to be 0, but ignore them just in
+                // case
+<span class="nc" id="L507">                break;</span>
+            }
+<span class="nc" id="L509">        }</span>
+
+<span class="nc" id="L511">        return this;</span>
+    }
+
+    protected void writeString(final String string, final ByteBuffer bb,
+            final int maxLength) {
+<span class="nc bnc" id="L516" title="All 2 branches missed.">        if (string == null) {</span>
+<span class="nc bnc" id="L517" title="All 2 branches missed.">            for (int i = 0; i &lt; maxLength; ++i) {</span>
+<span class="nc" id="L518">                bb.put((byte) 0x0);</span>
+            }
+        } else {
+<span class="nc" id="L521">            byte[] bytes = null;</span>
+            try {
+<span class="nc" id="L523">                bytes = string.getBytes(&quot;ascii&quot;);</span>
+<span class="nc" id="L524">            } catch (final UnsupportedEncodingException e) {</span>
+<span class="nc" id="L525">                throw new RuntimeException(&quot;Failure encoding server name&quot;, e);</span>
+<span class="nc" id="L526">            }</span>
+<span class="nc" id="L527">            int writeLength = bytes.length;</span>
+<span class="nc bnc" id="L528" title="All 2 branches missed.">            if (writeLength &gt; maxLength) {</span>
+<span class="nc" id="L529">                writeLength = maxLength;</span>
+            }
+<span class="nc" id="L531">            bb.put(bytes, 0, writeLength);</span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">            for (int i = writeLength; i &lt; maxLength; ++i) {</span>
+<span class="nc" id="L533">                bb.put((byte) 0x0);</span>
+            }
+        }
+<span class="nc" id="L536">    }</span>
+
+    private static String readString(final ByteBuffer bb, final int maxLength) {
+<span class="fc" id="L539">        final byte[] bytes = new byte[maxLength];</span>
+<span class="fc" id="L540">        bb.get(bytes);</span>
+<span class="fc" id="L541">        String result = null;</span>
+        try {
+<span class="fc" id="L543">            result = new String(bytes, &quot;ascii&quot;).trim();</span>
+<span class="nc" id="L544">        } catch (final UnsupportedEncodingException e) {</span>
+<span class="nc" id="L545">            throw new RuntimeException(&quot;Failure decoding string&quot;, e);</span>
+<span class="fc" id="L546">        }</span>
+<span class="fc" id="L547">        return result;</span>
+    }
+
+    /**
+     * Deserializer function for DHCP packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;DHCP&gt; deserializer() {
+<span class="fc" id="L556">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L557">            checkInput(data, offset, length, MIN_HEADER_LENGTH);</span>
+
+<span class="fc" id="L559">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L560">            DHCP dhcp = new DHCP();</span>
+
+<span class="fc" id="L562">            dhcp.opCode = bb.get();</span>
+<span class="fc" id="L563">            dhcp.hardwareType = bb.get();</span>
+<span class="fc" id="L564">            dhcp.hardwareAddressLength = bb.get();</span>
+<span class="fc" id="L565">            dhcp.hops = bb.get();</span>
+<span class="fc" id="L566">            dhcp.transactionId = bb.getInt();</span>
+<span class="fc" id="L567">            dhcp.seconds = bb.getShort();</span>
+<span class="fc" id="L568">            dhcp.flags = bb.getShort();</span>
+<span class="fc" id="L569">            dhcp.clientIPAddress = bb.getInt();</span>
+<span class="fc" id="L570">            dhcp.yourIPAddress = bb.getInt();</span>
+<span class="fc" id="L571">            dhcp.serverIPAddress = bb.getInt();</span>
+<span class="fc" id="L572">            dhcp.gatewayIPAddress = bb.getInt();</span>
+<span class="fc" id="L573">            final int hardwareAddressLength = 0xff &amp; dhcp.hardwareAddressLength;</span>
+<span class="fc" id="L574">            dhcp.clientHardwareAddress = new byte[hardwareAddressLength];</span>
+
+<span class="fc" id="L576">            bb.get(dhcp.clientHardwareAddress);</span>
+<span class="fc bfc" id="L577" title="All 2 branches covered.">            for (int i = hardwareAddressLength; i &lt; 16; ++i) {</span>
+<span class="fc" id="L578">                bb.get();</span>
+            }
+<span class="fc" id="L580">            dhcp.serverName = readString(bb, 64);</span>
+<span class="fc" id="L581">            dhcp.bootFileName = readString(bb, 128);</span>
+            // read the magic cookie
+            // magic cookie
+<span class="fc" id="L584">            bb.get();</span>
+<span class="fc" id="L585">            bb.get();</span>
+<span class="fc" id="L586">            bb.get();</span>
+<span class="fc" id="L587">            bb.get();</span>
+
+            // read options
+<span class="fc" id="L590">            boolean foundEndOptionsMarker = false;</span>
+<span class="fc bfc" id="L591" title="All 2 branches covered.">            while (bb.hasRemaining()) {</span>
+<span class="fc" id="L592">                final DHCPOption option = new DHCPOption();</span>
+<span class="fc" id="L593">                int code = 0xff &amp; bb.get(); // convert signed byte to int in range</span>
+                // [0,255]
+<span class="fc" id="L595">                option.setCode((byte) code);</span>
+<span class="pc bpc" id="L596" title="1 of 2 branches missed.">                if (code == 0) {</span>
+                    // skip these
+<span class="nc" id="L598">                    continue;</span>
+<span class="fc bfc" id="L599" title="All 2 branches covered.">                } else if (code != 255) {</span>
+<span class="fc bfc" id="L600" title="All 2 branches covered.">                    if (bb.hasRemaining()) {</span>
+<span class="fc" id="L601">                        final int l = 0xff &amp; bb.get(); // convert signed byte to</span>
+                        // int in range [0,255]
+<span class="fc" id="L603">                        option.setLength((byte) l);</span>
+<span class="fc bfc" id="L604" title="All 2 branches covered.">                        if (bb.remaining() &gt;= l) {</span>
+<span class="fc" id="L605">                            final byte[] optionData = new byte[l];</span>
+<span class="fc" id="L606">                            bb.get(optionData);</span>
+<span class="fc" id="L607">                            option.setData(optionData);</span>
+<span class="fc" id="L608">                            dhcp.options.add(option);</span>
+<span class="fc" id="L609">                        } else {</span>
+<span class="fc" id="L610">                            throw new DeserializationException(</span>
+                                    &quot;Buffer underflow while reading DHCP option&quot;);
+                        }
+<span class="fc" id="L613">                    }</span>
+<span class="pc bpc" id="L614" title="1 of 2 branches missed.">                } else if (code == 255) {</span>
+<span class="fc" id="L615">                    DHCPOption end = new DHCPOption();</span>
+<span class="fc" id="L616">                    end.setCode((byte) 255);</span>
+<span class="fc" id="L617">                    dhcp.options.add(end);</span>
+                    // remaining bytes are supposed to be 0, but ignore them just in
+                    // case
+<span class="fc" id="L620">                    foundEndOptionsMarker = true;</span>
+<span class="fc" id="L621">                    break;</span>
+                }
+<span class="fc" id="L623">            }</span>
+
+<span class="fc bfc" id="L625" title="All 2 branches covered.">            if (!foundEndOptionsMarker) {</span>
+<span class="fc" id="L626">                throw new DeserializationException(&quot;DHCP End options marker was missing&quot;);</span>
+            }
+
+<span class="fc" id="L629">            return dhcp;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

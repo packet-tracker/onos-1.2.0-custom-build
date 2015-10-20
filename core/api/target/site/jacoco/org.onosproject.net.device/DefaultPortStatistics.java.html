@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultPortStatistics.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.device</a> &gt; <span class="el_source">DefaultPortStatistics.java</span></div><h1>DefaultPortStatistics.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.device;
+
+import org.onosproject.net.DeviceId;
+
+/**
+ * Default implementation of immutable port statistics.
+ */
+public final class DefaultPortStatistics implements PortStatistics {
+
+    private final DeviceId deviceId;
+    private final int  port;
+    private final long packetsReceived;
+    private final long packetsSent;
+    private final long bytesReceived;
+    private final long bytesSent;
+    private final long packetsRxDropped;
+    private final long packetsTxDropped;
+    private final long packetsRxErrors;
+    private final long packetsTxErrors;
+    private final long durationSec;
+    private final long durationNano;
+
+    private DefaultPortStatistics(DeviceId deviceId,
+                                  int  port,
+                                  long packetsReceived,
+                                  long packetsSent,
+                                  long bytesReceived,
+                                  long bytesSent,
+                                  long packetsRxDropped,
+                                  long packetsTxDropped,
+                                  long packetsRxErrors,
+                                  long packetsTxErrors,
+                                  long durationSec,
+<span class="fc" id="L49">                                  long durationNano) {</span>
+<span class="fc" id="L50">        this.deviceId = deviceId;</span>
+<span class="fc" id="L51">        this.port = port;</span>
+<span class="fc" id="L52">        this.packetsReceived = packetsReceived;</span>
+<span class="fc" id="L53">        this.packetsSent = packetsSent;</span>
+<span class="fc" id="L54">        this.bytesReceived = bytesReceived;</span>
+<span class="fc" id="L55">        this.bytesSent = bytesSent;</span>
+<span class="fc" id="L56">        this.packetsRxDropped = packetsRxDropped;</span>
+<span class="fc" id="L57">        this.packetsTxDropped = packetsTxDropped;</span>
+<span class="fc" id="L58">        this.packetsRxErrors = packetsRxErrors;</span>
+<span class="fc" id="L59">        this.packetsTxErrors = packetsTxErrors;</span>
+<span class="fc" id="L60">        this.durationSec = durationSec;</span>
+<span class="fc" id="L61">        this.durationNano = durationNano;</span>
+<span class="fc" id="L62">    }</span>
+
+    // Constructor for serializer
+<span class="fc" id="L65">    private DefaultPortStatistics() {</span>
+<span class="fc" id="L66">        this.deviceId = null;</span>
+<span class="fc" id="L67">        this.port = 0;</span>
+<span class="fc" id="L68">        this.packetsReceived = 0;</span>
+<span class="fc" id="L69">        this.packetsSent = 0;</span>
+<span class="fc" id="L70">        this.bytesReceived = 0;</span>
+<span class="fc" id="L71">        this.bytesSent = 0;</span>
+<span class="fc" id="L72">        this.packetsRxDropped = 0;</span>
+<span class="fc" id="L73">        this.packetsTxDropped = 0;</span>
+<span class="fc" id="L74">        this.packetsRxErrors = 0;</span>
+<span class="fc" id="L75">        this.packetsTxErrors = 0;</span>
+<span class="fc" id="L76">        this.durationSec = 0;</span>
+<span class="fc" id="L77">        this.durationNano = 0;</span>
+<span class="fc" id="L78">    }</span>
+
+    /**
+     * Creates a builder for DefaultPortStatistics object.
+     *
+     * @return builder object for DefaultPortStatistics object
+     */
+    public static DefaultPortStatistics.Builder builder() {
+<span class="fc" id="L86">        return new Builder();</span>
+    }
+
+    @Override
+    public int port() {
+<span class="fc" id="L91">        return this.port;</span>
+    }
+
+    @Override
+    public long packetsReceived() {
+<span class="fc" id="L96">        return this.packetsReceived;</span>
+    }
+
+    @Override
+    public long packetsSent() {
+<span class="fc" id="L101">        return this.packetsSent;</span>
+    }
+
+    @Override
+    public long bytesReceived() {
+<span class="fc" id="L106">        return this.bytesReceived;</span>
+    }
+
+    @Override
+    public long bytesSent() {
+<span class="fc" id="L111">        return this.bytesSent;</span>
+    }
+
+    @Override
+    public long packetsRxDropped() {
+<span class="fc" id="L116">        return this.packetsRxDropped;</span>
+    }
+
+    @Override
+    public long packetsTxDropped() {
+<span class="fc" id="L121">        return this.packetsTxDropped;</span>
+    }
+
+    @Override
+    public long packetsRxErrors() {
+<span class="fc" id="L126">        return this.packetsRxErrors;</span>
+    }
+
+    @Override
+    public long packetsTxErrors() {
+<span class="fc" id="L131">        return this.packetsTxErrors;</span>
+    }
+
+    @Override
+    public long durationSec() {
+<span class="fc" id="L136">        return this.durationSec;</span>
+    }
+
+    @Override
+    public long durationNano() {
+<span class="fc" id="L141">        return this.durationNano;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L146">        StringBuilder sb = new StringBuilder(&quot;device: &quot; + deviceId + &quot;, &quot;);</span>
+
+<span class="fc" id="L148">        sb.append(&quot;port: &quot; + this.port + &quot;, &quot;);</span>
+<span class="fc" id="L149">        sb.append(&quot;pktRx: &quot; + this.packetsReceived + &quot;, &quot;);</span>
+<span class="fc" id="L150">        sb.append(&quot;pktTx: &quot; + this.packetsSent + &quot;, &quot;);</span>
+<span class="fc" id="L151">        sb.append(&quot;byteRx: &quot; + this.bytesReceived + &quot;, &quot;);</span>
+<span class="fc" id="L152">        sb.append(&quot;byteTx: &quot; + this.bytesSent + &quot;, &quot;);</span>
+<span class="fc" id="L153">        sb.append(&quot;pktRxErr: &quot; + this.packetsRxErrors + &quot;, &quot;);</span>
+<span class="fc" id="L154">        sb.append(&quot;pktTxErr: &quot; + this.packetsTxErrors + &quot;, &quot;);</span>
+<span class="fc" id="L155">        sb.append(&quot;pktRxDrp: &quot; + this.packetsRxDropped + &quot;, &quot;);</span>
+<span class="fc" id="L156">        sb.append(&quot;pktTxDrp: &quot; + this.packetsTxDropped);</span>
+
+<span class="fc" id="L158">        return sb.toString();</span>
+    }
+
+    public static final class Builder {
+
+        DeviceId deviceId;
+        int port;
+        long packetsReceived;
+        long packetsSent;
+        long bytesReceived;
+        long bytesSent;
+        long packetsRxDropped;
+        long packetsTxDropped;
+        long packetsRxErrors;
+        long packetsTxErrors;
+        long durationSec;
+        long durationNano;
+
+<span class="fc" id="L176">        private Builder() {</span>
+
+<span class="fc" id="L178">        }</span>
+
+        /**
+         * Sets port number.
+         *
+         * @param port port number
+         * @return builder object
+         */
+        public Builder setPort(int port) {
+<span class="fc" id="L187">            this.port = port;</span>
+
+<span class="fc" id="L189">            return this;</span>
+        }
+
+        /**
+         * Sets the device identifier.
+         *
+         * @param deviceId device identifier
+         * @return builder object
+         */
+        public Builder setDeviceId(DeviceId deviceId) {
+<span class="fc" id="L199">            this.deviceId = deviceId;</span>
+
+<span class="fc" id="L201">            return this;</span>
+        }
+
+        /**
+         * Sets the number of packet received.
+         *
+         * @param packets number of packets received
+         * @return  builder object
+         */
+        public Builder setPacketsReceived(long packets) {
+<span class="fc" id="L211">            packetsReceived = packets;</span>
+
+<span class="fc" id="L213">            return this;</span>
+        }
+
+        /**
+         * Sets the number of packets sent.
+         *
+         * @param packets number of packets sent
+         * @return  builder object
+         */
+        public Builder setPacketsSent(long packets) {
+<span class="fc" id="L223">            packetsSent = packets;</span>
+
+<span class="fc" id="L225">            return this;</span>
+        }
+
+        /**
+         * Sets the number of received bytes.
+         *
+         * @param bytes number of received bytes.
+         * @return  builder object
+         */
+        public Builder setBytesReceived(long bytes) {
+<span class="fc" id="L235">            bytesReceived = bytes;</span>
+
+<span class="fc" id="L237">            return this;</span>
+        }
+
+        /**
+         * Sets the number of sent bytes.
+         *
+         * @param bytes number of sent bytes
+         * @return builder object
+         */
+        public Builder setBytesSent(long bytes) {
+<span class="fc" id="L247">            bytesSent = bytes;</span>
+
+<span class="fc" id="L249">            return this;</span>
+        }
+
+        /**
+         * Sets the number of packets dropped by RX.
+         *
+         * @param packets  number of packets dropped by RX
+         * @return builder object
+         */
+        public Builder setPacketsRxDropped(long packets) {
+<span class="fc" id="L259">            packetsRxDropped = packets;</span>
+
+<span class="fc" id="L261">            return this;</span>
+        }
+
+        /**
+         * Sets the number of packets dropped by TX.
+         *
+         * @param packets number of packets
+         * @return builder object
+         */
+        public Builder setPacketsTxDropped(long packets) {
+<span class="fc" id="L271">            packetsTxDropped = packets;</span>
+
+<span class="fc" id="L273">            return this;</span>
+        }
+
+        /**
+         * Sets the number of receive errors.
+         *
+         * @param packets number of receive errors
+         * @return builder object
+         */
+        public Builder setPacketsRxErrors(long packets) {
+<span class="fc" id="L283">            packetsRxErrors = packets;</span>
+
+<span class="fc" id="L285">            return this;</span>
+        }
+
+        /**
+         * Sets the number of transmit errors.
+         *
+         * @param packets number of transmit errors
+         * @return builder object
+         */
+        public Builder setPacketsTxErrors(long packets) {
+<span class="fc" id="L295">            packetsTxErrors = packets;</span>
+
+<span class="fc" id="L297">            return this;</span>
+        }
+
+        /**
+         * Sets the time port has been alive in seconds.
+         *
+         * @param sec time port has been alive in seconds
+         * @return builder object
+         */
+        public Builder setDurationSec(long sec) {
+<span class="fc" id="L307">            durationSec = sec;</span>
+
+<span class="fc" id="L309">            return this;</span>
+        }
+
+        /**
+         * Sets the time port has been alive in nano seconds.
+         *
+         * @param nano time port has been alive in nano seconds
+         * @return builder object
+         */
+        public Builder setDurationNano(long nano) {
+<span class="fc" id="L319">            durationNano = nano;</span>
+
+<span class="fc" id="L321">            return this;</span>
+        }
+
+        /**
+         * Creates a PortStatistics object.
+         *
+         * @return DefaultPortStatistics object
+         */
+        public DefaultPortStatistics build() {
+<span class="fc" id="L330">            return new DefaultPortStatistics(</span>
+                    deviceId,
+                    port,
+                    packetsReceived,
+                    packetsSent,
+                    bytesReceived,
+                    bytesSent,
+                    packetsRxDropped,
+                    packetsTxDropped,
+                    packetsRxErrors,
+                    packetsTxErrors,
+                    durationSec,
+                    durationNano);
+        }
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

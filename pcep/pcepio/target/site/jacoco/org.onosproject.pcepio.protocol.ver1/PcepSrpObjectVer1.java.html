@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepSrpObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepSrpObjectVer1.java</span></div><h1>PcepSrpObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.onosproject.pcepio.types.SymbolicPathNameTlv;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP SRP obejct.
+ */
+public class PcepSrpObjectVer1 implements PcepSrpObject {
+
+    /*
+     * ref : draft-ietf-pce-stateful-pce-10, section : 7.2
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Object-Class  |   OT  |Res|P|I|   Object Length (bytes)       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                          Flags                              |R|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                        SRP-ID-number                          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    //                      Optional TLVs                          //
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+     */
+<span class="fc" id="L55">    protected static final Logger log = LoggerFactory.getLogger(PcepSrpObjectVer1.class);</span>
+
+    public static final byte SRP_OBJ_TYPE = 1;
+    public static final byte SRP_OBJ_CLASS = 33;
+    public static final byte SRP_OBJECT_VERSION = 1;
+    public static final short SRP_OBJ_MINIMUM_LENGTH = 12;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+    public static final boolean DEFAULT_RFLAG = false;
+
+<span class="fc" id="L64">    static final PcepObjectHeader DEFAULT_SRP_OBJECT_HEADER = new PcepObjectHeader(SRP_OBJ_CLASS, SRP_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, SRP_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader srpObjHeader;
+    private static int flags;
+    private boolean bRFlag;
+    private int srpId;
+
+    //Optional TLV
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+    public static final byte BBIT_SET = 1;
+    public static final byte BBIT_RESET = 0;
+
+    /**
+     * Constructor to initialize member variables.
+     *
+     * @param srpObjHeader srp object header
+     * @param bRFlag R flag
+     * @param srpID srp Id
+     * @param llOptionalTlv list of optional tlv
+     */
+    public PcepSrpObjectVer1(PcepObjectHeader srpObjHeader, boolean bRFlag, int srpID,
+<span class="fc" id="L86">            LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+
+<span class="fc" id="L88">        this.srpObjHeader = srpObjHeader;</span>
+<span class="fc" id="L89">        this.bRFlag = bRFlag;</span>
+<span class="fc" id="L90">        this.srpId = srpID;</span>
+<span class="fc" id="L91">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L92">    }</span>
+
+    /**
+     * sets the SRP object header.
+     *
+     * @param obj srp object header
+     */
+    public void setSrpObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L100">        this.srpObjHeader = obj;</span>
+<span class="nc" id="L101">    }</span>
+
+    @Override
+    public void setSrpID(int srpID) {
+<span class="nc" id="L105">        this.srpId = srpID;</span>
+<span class="nc" id="L106">    }</span>
+
+    @Override
+    public void setRFlag(boolean bRFlag) {
+<span class="nc" id="L110">        this.bRFlag = bRFlag;</span>
+<span class="nc" id="L111">    }</span>
+
+    /**
+     * Returns SRP object header.
+     *
+     * @return srpObjHeader
+     */
+    public PcepObjectHeader getSrpObjHeader() {
+<span class="nc" id="L119">        return this.srpObjHeader;</span>
+    }
+
+    @Override
+    public int getSrpID() {
+<span class="nc" id="L124">        return this.srpId;</span>
+    }
+
+    @Override
+    public boolean getRFlag() {
+<span class="fc" id="L129">        return this.bRFlag;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L134">        this.llOptionalTlv = llOptionalTlv;</span>
+
+<span class="nc" id="L136">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L140">        return this.llOptionalTlv;</span>
+    }
+
+    /**
+     * Reads from channel buffer and returns instance of PCEP SRP object.
+     *
+     * @param cb of channel buffer.
+     * @return PCEP SRP object
+     * @throws PcepParseException when srp object is not received in channel buffer
+     */
+    public static PcepSrpObject read(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L152">        log.debug(&quot;SrpObject::read&quot;);</span>
+        PcepObjectHeader srpObjHeader;
+        boolean bRFlag;
+
+        int srpID;
+        int flags;
+<span class="fc" id="L158">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L160">        srpObjHeader = PcepObjectHeader.read(cb);</span>
+
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">        if (srpObjHeader.getObjClass() != SRP_OBJ_CLASS) {</span>
+<span class="nc" id="L163">            throw new PcepParseException(&quot;SRP object expected. But received &quot; + srpObjHeader.getObjClass());</span>
+        }
+
+        //take only SrpObject buffer.
+<span class="fc" id="L167">        ChannelBuffer tempCb = cb.readBytes(srpObjHeader.getObjLen() - MINIMUM_COMMON_HEADER_LENGTH);</span>
+<span class="fc" id="L168">        flags = tempCb.readInt();</span>
+<span class="fc bfc" id="L169" title="All 2 branches covered.">        bRFlag = 0 &lt; flags;</span>
+<span class="fc" id="L170">        srpID = tempCb.readInt();</span>
+
+<span class="fc" id="L172">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+
+<span class="fc" id="L174">        return new PcepSrpObjectVer1(srpObjHeader, bRFlag, srpID, llOptionalTlv);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L180">        int objStartIndex = cb.writerIndex();</span>
+
+        //write common header
+<span class="fc" id="L183">        int objLenIndex = srpObjHeader.write(cb);</span>
+
+        //write Flags
+        byte bFlag;
+
+<span class="fc bfc" id="L188" title="All 2 branches covered.">        bFlag = (bRFlag) ? BBIT_SET : BBIT_RESET;</span>
+
+<span class="fc" id="L190">        cb.writeInt(bFlag);</span>
+
+        //write SrpId
+<span class="fc" id="L193">        cb.writeInt(srpId);</span>
+
+        // Add optional TLV
+<span class="pc bpc" id="L196" title="1 of 2 branches missed.">        if (!packOptionalTlv(cb)) {</span>
+<span class="nc" id="L197">            throw new PcepParseException(&quot;Failed to write srp tlv to channel buffer.&quot;);</span>
+        }
+
+        //now write SRP Object Length
+<span class="fc" id="L201">        cb.setShort(objLenIndex, (short) (cb.writerIndex() - objStartIndex));</span>
+
+<span class="fc" id="L203">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Parse Optional TLvs from the channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @return list of optional tlvs
+     * @throws PcepParseException when unsupported tlv is received in srp object
+     */
+    public static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L215">        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L217" title="All 2 branches covered.">        while (MINIMUM_COMMON_HEADER_LENGTH &lt;= cb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+<span class="fc" id="L220">            short hType = cb.readShort();</span>
+<span class="fc" id="L221">            short hLength = cb.readShort();</span>
+
+<span class="pc bpc" id="L223" title="1 of 2 branches missed.">            switch (hType) {</span>
+
+            case SymbolicPathNameTlv.TYPE:
+<span class="fc" id="L226">                tlv = SymbolicPathNameTlv.read(cb, hLength);</span>
+<span class="fc" id="L227">                cb.skipBytes(hLength);</span>
+<span class="fc" id="L228">                break;</span>
+
+            default:
+<span class="nc" id="L231">                throw new PcepParseException(&quot;Unsupported TLV received in SRP Object.&quot;);</span>
+            }
+
+            // Check for the padding
+<span class="fc" id="L235">            int pad = hLength % 4;</span>
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="fc" id="L237">                pad = 4 - pad;</span>
+<span class="pc bpc" id="L238" title="1 of 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L239">                    cb.skipBytes(pad);</span>
+                }
+            }
+<span class="fc" id="L242">            llOutOptionalTlv.add(tlv);</span>
+<span class="fc" id="L243">        }</span>
+
+<span class="fc" id="L245">        return llOutOptionalTlv;</span>
+    }
+
+    /**
+     * Writes optional tlvs to channel buffer.
+     *
+     * @param cb of type channel buffer
+     * @return true if writing optional tlv to channel buffer is success.
+     */
+    protected boolean packOptionalTlv(ChannelBuffer cb) {
+
+<span class="fc" id="L256">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+
+<span class="fc bfc" id="L258" title="All 2 branches covered.">        while (listIterator.hasNext()) {</span>
+<span class="fc" id="L259">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="pc bpc" id="L261" title="1 of 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L262">                log.debug(&quot;tlv is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L263">                continue;</span>
+            }
+<span class="fc" id="L265">            tlv.write(cb);</span>
+
+            // need to take care of padding
+<span class="fc" id="L268">            int pad = tlv.getLength() % 4;</span>
+
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">            if (0 != pad) {</span>
+<span class="fc" id="L271">                pad = 4 - pad;</span>
+<span class="fc bfc" id="L272" title="All 2 branches covered.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="fc" id="L273">                    cb.writeByte((byte) 0);</span>
+                }
+            }
+<span class="fc" id="L276">        }</span>
+
+<span class="fc" id="L278">        return true;</span>
+    }
+
+    /**
+     * Builder class for PCEP srp Object.
+     */
+<span class="nc" id="L284">    public static class Builder implements PcepSrpObject.Builder {</span>
+<span class="nc" id="L285">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L286">        private boolean bIsSrpIdset = false;</span>
+<span class="nc" id="L287">        private boolean bIsRFlagSet = false;</span>
+
+        private PcepObjectHeader srpObjHeader;
+        private int srpId;
+        private boolean bRFlag;
+<span class="nc" id="L292">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L294">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L297">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepSrpObject build() throws PcepParseException {
+<span class="nc bnc" id="L302" title="All 2 branches missed.">            PcepObjectHeader srpObjHeader = this.bIsHeaderSet ? this.srpObjHeader : DEFAULT_SRP_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L304" title="All 2 branches missed.">            boolean bRFlag = this.bIsRFlagSet ? this.bRFlag : DEFAULT_RFLAG;</span>
+
+<span class="nc bnc" id="L306" title="All 2 branches missed.">            if (!this.bIsSrpIdset) {</span>
+<span class="nc" id="L307">                throw new PcepParseException(&quot;SrpID not set while building SRP Object.&quot;);</span>
+            }
+
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L311">                srpObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L314" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L315">                srpObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L318">            return new PcepSrpObjectVer1(srpObjHeader, bRFlag, this.srpId, this.llOptionalTlv);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getSrpObjHeader() {
+<span class="nc" id="L323">            return this.srpObjHeader;</span>
+        }
+
+        @Override
+        public Builder setSrpObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L328">            this.srpObjHeader = obj;</span>
+<span class="nc" id="L329">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L330">            return this;</span>
+        }
+
+        @Override
+        public int getSrpID() {
+<span class="nc" id="L335">            return this.srpId;</span>
+        }
+
+        @Override
+        public Builder setSrpID(int srpID) {
+<span class="nc" id="L340">            this.srpId = srpID;</span>
+<span class="nc" id="L341">            this.bIsSrpIdset = true;</span>
+<span class="nc" id="L342">            return this;</span>
+        }
+
+        @Override
+        public boolean getRFlag() {
+<span class="nc" id="L347">            return this.bRFlag;</span>
+        }
+
+        @Override
+        public Builder setRFlag(boolean bRFlag) {
+<span class="nc" id="L352">            this.bRFlag = bRFlag;</span>
+<span class="nc" id="L353">            this.bIsRFlagSet = true;</span>
+<span class="nc" id="L354">            return this;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L359">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L360">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L365">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L370">            this.bPFlag = value;</span>
+<span class="nc" id="L371">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L372">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L377">            this.bIFlag = value;</span>
+<span class="nc" id="L378">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L379">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L386">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L387">                .add(&quot;RFlag&quot;, bRFlag)</span>
+<span class="nc" id="L388">                .add(&quot;SRPID&quot;, srpId)</span>
+<span class="nc" id="L389">                .add(&quot;OptionalTlvList&quot;, llOptionalTlv)</span>
+<span class="nc" id="L390">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

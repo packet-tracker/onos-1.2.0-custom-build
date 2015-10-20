@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TableRequestHandler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui.table</a> &gt; <span class="el_source">TableRequestHandler.java</span></div><h1>TableRequestHandler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui.table;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.onosproject.ui.JsonUtils;
+import org.onosproject.ui.RequestHandler;
+
+/**
+ * Message handler specifically for table views.
+ */
+public abstract class TableRequestHandler extends RequestHandler {
+
+    private final String respType;
+    private final String nodeName;
+
+    /**
+     * Constructs a table request handler for a specific table view. When
+     * table requests come in, the handler will generate the appropriate
+     * table rows, sort them according the the request sort parameters, and
+     * send back the response to the client.
+     *
+     * @param reqType   type of the request event
+     * @param respType  type of the response event
+     * @param nodeName  name of JSON node holding row data
+     */
+    public TableRequestHandler(String reqType, String respType, String nodeName) {
+<span class="nc" id="L42">        super(reqType);</span>
+<span class="nc" id="L43">        this.respType = respType;</span>
+<span class="nc" id="L44">        this.nodeName = nodeName;</span>
+<span class="nc" id="L45">    }</span>
+
+    @Override
+    public void process(long sid, ObjectNode payload) {
+<span class="nc" id="L49">        TableModel tm = createTableModel();</span>
+<span class="nc" id="L50">        populateTable(tm, payload);</span>
+
+<span class="nc" id="L52">        String sortCol = JsonUtils.string(payload, &quot;sortCol&quot;, defaultColumnId());</span>
+<span class="nc" id="L53">        String sortDir = JsonUtils.string(payload, &quot;sortDir&quot;, &quot;asc&quot;);</span>
+<span class="nc" id="L54">        tm.sort(sortCol, TableModel.sortDir(sortDir));</span>
+
+<span class="nc" id="L56">        ObjectNode rootNode = MAPPER.createObjectNode();</span>
+<span class="nc" id="L57">        rootNode.set(nodeName, TableUtils.generateArrayNode(tm));</span>
+<span class="nc" id="L58">        sendMessage(respType, 0, rootNode);</span>
+<span class="nc" id="L59">    }</span>
+
+    /**
+     * Creates the table model (devoid of data) using {@link #getColumnIds()}
+     * to initialize it, ready to be populated.
+     * &lt;p&gt;
+     * This default implementation returns a table model with default
+     * formatters and comparators for all columns.
+     *
+     * @return an empty table model
+     */
+    protected TableModel createTableModel() {
+<span class="nc" id="L71">        return new TableModel(getColumnIds());</span>
+    }
+
+    /**
+     * Returns the default column ID to be used when one is not supplied in
+     * the payload as the column on which to sort.
+     * &lt;p&gt;
+     * This default implementation returns &quot;id&quot;.
+     *
+     * @return default sort column identifier
+     */
+    protected String defaultColumnId() {
+<span class="nc" id="L83">        return &quot;id&quot;;</span>
+    }
+
+    /**
+     * Subclasses should return the array of column IDs with which
+     * to initialize their table model.
+     *
+     * @return the column IDs
+     */
+    protected abstract String[] getColumnIds();
+
+    /**
+     * Subclasses should populate the table model by adding
+     * {@link TableModel.Row rows}.
+     * &lt;pre&gt;
+     *     tm.addRow()
+     *         .cell(COL_ONE, ...)
+     *         .cell(COL_TWO, ...)
+     *         ... ;
+     * &lt;/pre&gt;
+     * The request payload is provided in case there are request filtering
+     * parameters (other than sort column and sort direction) that are required
+     * to generate the appropriate data.
+     *
+     * @param tm the table model
+     * @param payload request payload
+     */
+    protected abstract void populateTable(TableModel tm, ObjectNode payload);
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

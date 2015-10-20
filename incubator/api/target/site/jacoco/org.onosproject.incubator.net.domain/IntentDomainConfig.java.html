@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentDomainConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.domain</a> &gt; <span class="el_source">IntentDomainConfig.java</span></div><h1>IntentDomainConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.domain;
+
+import com.google.common.annotations.Beta;
+import com.google.common.collect.ImmutableSet;
+import org.onosproject.net.config.Config;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+
+import java.util.Set;
+
+/**
+ * Configuration for an intent domain including a name, set of internal devices,
+ * set of edge ports, and the application bound to control the domain.
+ */
+@Beta
+<span class="nc" id="L31">public class IntentDomainConfig extends Config&lt;IntentDomainId&gt; {</span>
+
+    private static final String DOMAIN_NAME = &quot;name&quot;;
+    private static final String APPLICATION_NAME = &quot;applicationName&quot;;
+    private static final String INTERNAL_DEVICES = &quot;internalDevices&quot;;
+    private static final String EDGE_PORTS = &quot;edgePorts&quot;;
+
+
+    /**
+     * Returns the friendly name for the domain.
+     *
+     * @return domain name
+     */
+    public String domainName() {
+<span class="nc" id="L45">        return get(DOMAIN_NAME, subject.toString());</span>
+    }
+
+    /**
+     * Sets the friendly name for the domain.
+     *
+     * @param domainName new name for the domain; null to clear
+     * @return self
+     */
+    public IntentDomainConfig domainName(String domainName) {
+<span class="nc" id="L55">        return (IntentDomainConfig) setOrClear(DOMAIN_NAME, domainName);</span>
+    }
+
+    /**
+     * Returns the friendly name for the domain.
+     *
+     * @return domain name
+     */
+    public String applicationName() {
+<span class="nc" id="L64">        return get(APPLICATION_NAME, &quot;FIXME&quot;); //TODO maybe not null?</span>
+    }
+
+    /**
+     * Sets the friendly name for the domain.
+     *
+     * @param applicationName new name for the domain; null to clear
+     * @return self
+     */
+    public IntentDomainConfig applicationName(String applicationName) {
+<span class="nc" id="L74">        return (IntentDomainConfig) setOrClear(APPLICATION_NAME, applicationName);</span>
+    }
+
+    /**
+     * Returns the set of internal devices.
+     *
+     * @return set of internal devices
+     */
+    public Set&lt;DeviceId&gt; internalDevices() {
+<span class="nc" id="L83">        return ImmutableSet.copyOf(getList(INTERNAL_DEVICES, DeviceId::deviceId));</span>
+    }
+
+    /**
+     * Sets the set of internal devices.
+     *
+     * @param devices set of devices; null to clear
+     * @return self
+     */
+    public IntentDomainConfig internalDevices(Set&lt;DeviceId&gt; devices) {
+<span class="nc" id="L93">        return (IntentDomainConfig) setOrClear(INTERNAL_DEVICES, devices);</span>
+    }
+
+    /**
+     * Returns the set of edge ports.
+     *
+     * @return set of edge ports
+     */
+    public Set&lt;ConnectPoint&gt; edgePorts() {
+<span class="nc" id="L102">        return ImmutableSet.copyOf(getList(EDGE_PORTS, ConnectPoint::deviceConnectPoint));</span>
+    }
+
+    /**
+     * Sets the set of edge ports.
+     *
+     * @param connectPoints set of edge ports; null to clear
+     * @return self
+     */
+    public IntentDomainConfig edgePorts(Set&lt;ConnectPoint&gt; connectPoints) {
+<span class="nc" id="L112">        return (IntentDomainConfig) setOrClear(EDGE_PORTS, connectPoints);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

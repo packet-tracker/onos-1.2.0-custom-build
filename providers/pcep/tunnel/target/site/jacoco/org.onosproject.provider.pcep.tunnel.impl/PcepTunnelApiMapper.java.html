@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepTunnelApiMapper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcep-provider-tunnel</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.pcep.tunnel.impl</a> &gt; <span class="el_source">PcepTunnelApiMapper.java</span></div><h1>PcepTunnelApiMapper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.pcep.tunnel.impl;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.commons.collections.map.MultiKeyMap;
+import org.onosproject.incubator.net.tunnel.TunnelId;
+import org.onosproject.incubator.net.tunnel.TunnelProviderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Entity to provide tunnel DB and mapping for request/response between CORE to PCEP
+ * and PCEP to PCC.
+ */
+public class PcepTunnelApiMapper {
+<span class="fc" id="L32">    protected static final Logger log = LoggerFactory.getLogger(PcepTunnelApiMapper.class);</span>
+
+    static final String PROVIDER_ID = &quot;org.onosproject.provider.tunnel.pcep&quot;;
+    // Map to store all the tunnel requests.
+    private Map&lt;Integer, PcepTunnelData&gt; tunnelRequestQueue;
+    //Map to store all core related tunnel requests.
+    private Map&lt;TunnelId, PcepTunnelData&gt; coreTunnelRequestQueue;
+    //Map to store all the created tunnels.
+    private Map&lt;Integer, PcepTunnelData&gt; tunnelDB;
+    // Map to store the tunnel ids, given by core and given by pcc.
+    private Map&lt;TunnelId, Integer&gt; tunnelIdMap;
+    //Map to store all the learnt tunnels.
+<span class="fc" id="L44">    private MultiKeyMap pccTunnelDB = new MultiKeyMap();</span>
+
+    TunnelProviderService tunnelApiMapperservice;
+
+    /**
+     * Default constructor.
+     */
+<span class="fc" id="L51">    public PcepTunnelApiMapper() {</span>
+        //TODO check if the map need to initialize
+<span class="fc" id="L53">        tunnelRequestQueue = new HashMap&lt;Integer, PcepTunnelData&gt;();</span>
+<span class="fc" id="L54">        coreTunnelRequestQueue = new HashMap&lt;TunnelId, PcepTunnelData&gt;();</span>
+<span class="fc" id="L55">        tunnelDB = new HashMap&lt;Integer, PcepTunnelData&gt;();</span>
+<span class="fc" id="L56">        tunnelIdMap = new HashMap&lt;TunnelId, Integer&gt;();</span>
+<span class="fc" id="L57">    }</span>
+
+    /**
+     * Add tunnels to tunnel Request queues.
+     *
+     * @param srpId srp id
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void addToTunnelRequestQueue(int srpId, PcepTunnelData pcepTunnelData) {
+<span class="fc" id="L66">        tunnelRequestQueue.put(new Integer(srpId), pcepTunnelData);</span>
+<span class="fc" id="L67">        log.debug(&quot;Tunnel Added to TunnelRequestQueue&quot;);</span>
+<span class="fc" id="L68">    }</span>
+
+    /**
+     * Map between Tunnel ID and pcc provided Tunnel ID.
+     *
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void addToTunnelIdMap(PcepTunnelData pcepTunnelData) {
+<span class="fc" id="L76">        int value = pcepTunnelData.statefulIpv4IndentifierTlv().getTunnelId() &amp; 0xFFFF;</span>
+<span class="fc" id="L77">        tunnelIdMap.put(pcepTunnelData.tunnel().tunnelId(), (new Integer(value)));</span>
+<span class="fc" id="L78">        log.debug(&quot;Tunnel ID Added to tunnelIdMap&quot;);</span>
+<span class="fc" id="L79">    }</span>
+
+    /**
+     * Add tunnels to core tunnel request queue.
+     *
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void addToCoreTunnelRequestQueue(PcepTunnelData pcepTunnelData) {
+<span class="fc" id="L87">        coreTunnelRequestQueue.put(pcepTunnelData.tunnel().tunnelId(), pcepTunnelData);</span>
+<span class="fc" id="L88">        log.debug(&quot;Tunnel Added to CoreTunnelRequestQueue&quot;);</span>
+<span class="fc" id="L89">    }</span>
+
+    /**
+     * Removes tunnels from the core tunnel request queue.
+     *
+     * @param tunnelId tunnel id
+     */
+    public void removeFromCoreTunnelRequestQueue(TunnelId tunnelId) {
+<span class="nc" id="L97">        coreTunnelRequestQueue.remove(tunnelId);</span>
+<span class="nc" id="L98">        log.debug(&quot;Tunnnel create response sent to core and removed from CoreTunnelRequestQueue&quot;);</span>
+<span class="nc" id="L99">    }</span>
+
+    /**
+     * Handle the report which comes after initiate message.
+     *
+     * @param srpId srp id
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void handleCreateTunnelRequestQueue(int srpId, PcepTunnelData pcepTunnelData) {
+
+<span class="fc" id="L109">        int value = tunnelIdMap.get(pcepTunnelData.tunnel().tunnelId());</span>
+<span class="fc" id="L110">        tunnelDB.put(new Integer(value), pcepTunnelData);</span>
+<span class="fc" id="L111">        tunnelRequestQueue.remove(new Integer(srpId), pcepTunnelData);</span>
+<span class="fc" id="L112">        log.debug(&quot;Tunnel Added to TunnelDBQueue and removed from TunnelRequestQueue. tunnel id {}&quot;</span>
+<span class="fc" id="L113">                + (new Integer(value)).toString());</span>
+<span class="fc" id="L114">    }</span>
+
+    /**
+     * Handle report which comes for update message.
+     *
+     * @param srpId srp id
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void handleUpdateTunnelRequestQueue(int srpId, PcepTunnelData pcepTunnelData) {
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if (pcepTunnelData.rptFlag()) {</span>
+<span class="nc" id="L124">            pcepTunnelData.setRptFlag(false);</span>
+<span class="nc" id="L125">            int value = tunnelIdMap.get(pcepTunnelData.tunnel().tunnelId());</span>
+<span class="nc" id="L126">            tunnelDB.put(new Integer(value), pcepTunnelData);</span>
+<span class="nc" id="L127">            tunnelRequestQueue.remove(new Integer(srpId), pcepTunnelData);</span>
+<span class="nc" id="L128">            log.debug(&quot;Tunnel Added to TunnelDBQueue and removed from TunnelRequestQueue. tunnel id {}&quot; ,</span>
+<span class="nc" id="L129">                      (new Integer(value)).toString());</span>
+<span class="nc" id="L130">        } else {</span>
+<span class="nc" id="L131">            pcepTunnelData.setRptFlag(true);</span>
+<span class="nc" id="L132">            tunnelRequestQueue.put(new Integer(srpId), pcepTunnelData);</span>
+<span class="nc" id="L133">            log.debug(&quot;Tunnel updated in TunnelRequestQueue&quot;);</span>
+        }
+<span class="nc" id="L135">    }</span>
+
+    /**
+     * Handle report for tunnel Release request.
+     *
+     * @param srpId srp id
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void handleRemoveFromTunnelRequestQueue(int srpId, PcepTunnelData pcepTunnelData) {
+
+<span class="nc" id="L145">        int value = tunnelIdMap.get(pcepTunnelData.tunnel().tunnelId());</span>
+<span class="nc" id="L146">        tunnelIdMap.remove(pcepTunnelData.tunnel().tunnelId());</span>
+<span class="nc" id="L147">        tunnelDB.remove(new Integer(value));</span>
+<span class="nc" id="L148">        tunnelRequestQueue.remove(srpId);</span>
+<span class="nc" id="L149">        log.debug(&quot;Tunnel removed from  TunnelDBQueue and TunnelRequestQueue&quot;);</span>
+<span class="nc" id="L150">    }</span>
+
+    /**
+     * Returns PcepTunnelData from the tunnel request queue.
+     *
+     * @param srpId srp id
+     * @return PcepTunnelData pcep tunnel data
+     */
+    public PcepTunnelData getDataFromTunnelRequestQueue(int srpId) {
+<span class="nc" id="L159">        return tunnelRequestQueue.get(new Integer(srpId));</span>
+
+    }
+
+    /**
+     * Returns PcepTunnelData from the tunnel DB.
+     *
+     * @param tunnelId tunnel id
+     * @return PcepTunnelData pcep tunnel data
+     */
+    public PcepTunnelData getDataFromTunnelDBQueue(TunnelId tunnelId) {
+<span class="fc" id="L170">        int value = tunnelIdMap.get(tunnelId);</span>
+<span class="fc" id="L171">        return tunnelDB.get((new Integer(value)));</span>
+    }
+
+    /**
+     * Checks whether the tunnel exist in tunnel request queue.
+     *
+     * @param srpId srp id
+     * @return true if tunnel exist in reuest queue, false otherwise
+     */
+    public boolean checkFromTunnelRequestQueue(int srpId) {
+<span class="nc" id="L181">        boolean retValue = tunnelRequestQueue.containsKey(srpId);</span>
+<span class="nc" id="L182">        return retValue;</span>
+    }
+
+    /**
+     * Returns whether tunnel exist in tunnel db.
+     *
+     * @param tunnelId tunnel id
+     * @return true/false if the tunnel exists in the tunnel db
+     */
+    public boolean checkFromTunnelDBQueue(TunnelId tunnelId) {
+<span class="fc" id="L192">        int value = tunnelIdMap.get(tunnelId);</span>
+<span class="fc" id="L193">        boolean retValue = tunnelDB.containsKey((new Integer(value)));</span>
+<span class="fc" id="L194">        return retValue;</span>
+    }
+
+    /**
+     * Add Learnt tunnels to pcc tunnel DB.
+     *
+     * @param pcepTunnelData pcep tunnel data
+     */
+    public void addPccTunnelDB(PcepTunnelData pcepTunnelData) {
+<span class="nc" id="L203">        pccTunnelDB.put(pcepTunnelData.statefulIpv4IndentifierTlv().getTunnelId() &amp; 0xFFFFL,</span>
+<span class="nc" id="L204">                        pcepTunnelData.statefulIpv4IndentifierTlv().getIpv4IngressAddress(), pcepTunnelData);</span>
+<span class="nc" id="L205">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

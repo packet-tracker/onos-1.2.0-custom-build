@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Leadership.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.cluster</a> &gt; <span class="el_source">Leadership.java</span></div><h1>Leadership.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.cluster;
+
+import java.util.Objects;
+import java.util.List;
+import java.util.Optional;
+
+import org.joda.time.DateTime;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableList;
+
+/**
+ * Abstract leadership concept. The information carried by this construct
+ * include the topic of contention, the {@link NodeId}s of Nodes that could
+ * become leader for the topic, the epoch when the term for a given leader
+ * began, and the system time when the term began. Note:
+ * &lt;ul&gt;
+ * &lt;li&gt;The list of NodeIds may include the current leader at index 0, and the
+ * rest in decreasing preference order.&lt;/li&gt;
+ * &lt;li&gt;The epoch is the logical age of a Leadership construct, and should be
+ * used for comparing two Leaderships, but only of the same topic.&lt;/li&gt;
+ * &lt;li&gt;The leader may be null if its accuracy can't be guaranteed. This applies
+ * to CANDIDATES_CHANGED events and candidate board contents.&lt;/li&gt;
+ * &lt;/ul&gt;
+ */
+public class Leadership {
+
+    private final String topic;
+    private final Optional&lt;NodeId&gt; leader;
+    private final List&lt;NodeId&gt; candidates;
+    private final long epoch;
+    private final long electedTime;
+
+<span class="fc" id="L49">    public Leadership(String topic, NodeId leader, long epoch, long electedTime) {</span>
+<span class="fc" id="L50">        this.topic = topic;</span>
+<span class="fc" id="L51">        this.leader = Optional.of(leader);</span>
+<span class="fc" id="L52">        this.candidates = ImmutableList.of(leader);</span>
+<span class="fc" id="L53">        this.epoch = epoch;</span>
+<span class="fc" id="L54">        this.electedTime = electedTime;</span>
+<span class="fc" id="L55">    }</span>
+
+    public Leadership(String topic, NodeId leader, List&lt;NodeId&gt; candidates,
+<span class="fc" id="L58">            long epoch, long electedTime) {</span>
+<span class="fc" id="L59">        this.topic = topic;</span>
+<span class="fc" id="L60">        this.leader = Optional.of(leader);</span>
+<span class="fc" id="L61">        this.candidates = ImmutableList.copyOf(candidates);</span>
+<span class="fc" id="L62">        this.epoch = epoch;</span>
+<span class="fc" id="L63">        this.electedTime = electedTime;</span>
+<span class="fc" id="L64">    }</span>
+
+    public Leadership(String topic, List&lt;NodeId&gt; candidates,
+<span class="fc" id="L67">            long epoch, long electedTime) {</span>
+<span class="fc" id="L68">        this.topic = topic;</span>
+<span class="fc" id="L69">        this.leader = Optional.empty();</span>
+<span class="fc" id="L70">        this.candidates = ImmutableList.copyOf(candidates);</span>
+<span class="fc" id="L71">        this.epoch = epoch;</span>
+<span class="fc" id="L72">        this.electedTime = electedTime;</span>
+<span class="fc" id="L73">    }</span>
+
+    /**
+     * The topic for which this leadership applies.
+     *
+     * @return leadership topic.
+     */
+    public String topic() {
+<span class="fc" id="L81">        return topic;</span>
+    }
+
+    /**
+     * The nodeId of leader for this topic.
+     *
+     * @return leader node.
+     */
+    // This will return Optional&lt;NodeId&gt; in the future.
+    public NodeId leader() {
+<span class="fc" id="L91">        return leader.orElse(null);</span>
+    }
+
+    /**
+     * Returns an preference-ordered list of nodes that are in the leadership
+     * race for this topic.
+     *
+     * @return a list of NodeIds in priority-order, or an empty list.
+     */
+    public List&lt;NodeId&gt; candidates() {
+<span class="fc" id="L101">        return candidates;</span>
+    }
+
+    /**
+     * The epoch when the leadership was assumed.
+     * &lt;p&gt;
+     * Comparing epochs is only appropriate for leadership events for the same
+     * topic. The system guarantees that for any given topic the epoch for a new
+     * term is higher (not necessarily by 1) than the epoch for any previous
+     * term.
+     *
+     * @return leadership epoch
+     */
+    public long epoch() {
+<span class="fc" id="L115">        return epoch;</span>
+    }
+
+    /**
+     * The system time when the term started.
+     * &lt;p&gt;
+     * The elected time is initially set on the node coordinating
+     * the leader election using its local system time. Due to possible
+     * clock skew, relying on this value for determining event ordering
+     * is discouraged. Epoch is more appropriate for determining
+     * event ordering.
+     *
+     * @return elected time.
+     */
+    public long electedTime() {
+<span class="fc" id="L130">        return electedTime;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L135">        return Objects.hash(topic, leader, candidates, epoch, electedTime);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L141">            return true;</span>
+        }
+<span class="fc bfc" id="L143" title="All 2 branches covered.">        if (obj instanceof Leadership) {</span>
+<span class="fc" id="L144">            final Leadership other = (Leadership) obj;</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">            return Objects.equals(this.topic, other.topic) &amp;&amp;</span>
+<span class="fc bfc" id="L146" title="All 2 branches covered.">                    Objects.equals(this.leader, other.leader) &amp;&amp;</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">                    Objects.equals(this.candidates, other.candidates) &amp;&amp;</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">                    Objects.equals(this.epoch, other.epoch) &amp;&amp;</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">                    Objects.equals(this.electedTime, other.electedTime);</span>
+        }
+<span class="fc" id="L151">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L156">        return MoreObjects.toStringHelper(this.getClass())</span>
+<span class="fc" id="L157">            .add(&quot;topic&quot;, topic)</span>
+<span class="fc" id="L158">            .add(&quot;leader&quot;, leader)</span>
+<span class="fc" id="L159">            .add(&quot;candidates&quot;, candidates)</span>
+<span class="fc" id="L160">            .add(&quot;epoch&quot;, epoch)</span>
+<span class="fc" id="L161">            .add(&quot;electedTime&quot;, new DateTime(electedTime))</span>
+<span class="fc" id="L162">            .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

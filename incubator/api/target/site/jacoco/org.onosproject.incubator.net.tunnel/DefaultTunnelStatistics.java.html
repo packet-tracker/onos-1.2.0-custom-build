@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultTunnelStatistics.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.tunnel</a> &gt; <span class="el_source">DefaultTunnelStatistics.java</span></div><h1>DefaultTunnelStatistics.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.incubator.net.tunnel;
+
+import com.google.common.annotations.Beta;
+
+import java.time.Duration;
+import java.util.List;
+
+/**
+ * Default implementation of immutable tunnel statistics.
+ */
+@Beta
+public final class DefaultTunnelStatistics implements TunnelStatistics {
+    private final TunnelId tunnelId;
+    private final double bwUtilization;
+    private final double packetLossRatio;
+    private final Duration flowDelay;
+    private final List&lt;String&gt; alarms;
+
+    private DefaultTunnelStatistics(TunnelId tunnelId,
+                                    double bwUtilization,
+                                    double packetLossRatio,
+                                    Duration flowDelay,
+<span class="nc" id="L39">                                    List&lt;String&gt; alarms) {</span>
+<span class="nc" id="L40">        this.tunnelId = tunnelId;</span>
+<span class="nc" id="L41">        this.bwUtilization = bwUtilization;</span>
+<span class="nc" id="L42">        this.packetLossRatio = packetLossRatio;</span>
+<span class="nc" id="L43">        this.flowDelay = flowDelay;</span>
+<span class="nc" id="L44">        this.alarms = alarms;</span>
+<span class="nc" id="L45">    }</span>
+
+<span class="nc" id="L47">    private DefaultTunnelStatistics() {</span>
+<span class="nc" id="L48">        this.tunnelId = null;</span>
+<span class="nc" id="L49">        this.bwUtilization = 0;</span>
+<span class="nc" id="L50">        this.packetLossRatio = 0;</span>
+<span class="nc" id="L51">        this.flowDelay = null;</span>
+<span class="nc" id="L52">        this.alarms = null;</span>
+<span class="nc" id="L53">    }</span>
+
+
+    @Override
+    public TunnelId id() {
+<span class="nc" id="L58">        return this.tunnelId;</span>
+    }
+
+    @Override
+    public double bandwidthUtilization() {
+<span class="nc" id="L63">        return this.bwUtilization;</span>
+    }
+
+    @Override
+    public double packetLossRate() {
+<span class="nc" id="L68">        return this.packetLossRatio;</span>
+    }
+
+    @Override
+    public Duration flowDelay() {
+<span class="nc" id="L73">        return this.flowDelay;</span>
+    }
+
+
+    @Override
+    public List&lt;String&gt; alarms() {
+<span class="nc" id="L79">        return this.alarms;</span>
+    }
+
+    /**
+     * Builder for tunnelStatistics.
+     */
+    public static final class Builder {
+        TunnelId tunnelId;
+        double bwUtilization;
+        double packetLossRatio;
+        Duration flowDelay;
+        List&lt;String&gt; alarms;
+
+<span class="nc" id="L92">        public Builder() {</span>
+
+<span class="nc" id="L94">        }</span>
+
+        /**
+         * Set tunnel id.
+         *
+         * @param tunnelId tunnel id
+         * @return builder object
+         */
+        public Builder setTunnelId(TunnelId tunnelId) {
+<span class="nc" id="L103">            this.tunnelId = tunnelId;</span>
+
+<span class="nc" id="L105">            return this;</span>
+        }
+
+        /**
+         * set bandwidth utilization.
+         *
+         * @param bwUtilization bandwidth utilization
+         * @return builder object
+         */
+        public Builder setBwUtilization(double bwUtilization) {
+<span class="nc" id="L115">            this.bwUtilization = bwUtilization;</span>
+
+<span class="nc" id="L117">            return this;</span>
+        }
+
+        /**
+         * Set packet loss ratio.
+         *
+         * @param packetLossRatio packet loss ratio
+         * @return builder object
+         */
+        public Builder setPacketLossRatio(double packetLossRatio) {
+<span class="nc" id="L127">            this.packetLossRatio = packetLossRatio;</span>
+
+<span class="nc" id="L129">            return this;</span>
+        }
+
+        /**
+         * Set flow delay.
+         *
+         * @param flowDelay flow delay
+         * @return builder object
+         */
+        public Builder setFlowDelay(Duration flowDelay) {
+<span class="nc" id="L139">            this.flowDelay = flowDelay;</span>
+
+<span class="nc" id="L141">            return this;</span>
+        }
+
+        /**
+         * Set alarms.
+         *
+         * @param alarms alarms of a tunnel
+         * @return builder object
+         */
+        public Builder setAlarms(List&lt;String&gt; alarms) {
+<span class="nc" id="L151">            this.alarms = alarms;</span>
+
+<span class="nc" id="L153">            return this;</span>
+        }
+
+        /**
+         * Creates a TunnelStatistics object.
+         *
+         * @return DefaultTunnelStatistics
+         */
+        public DefaultTunnelStatistics build() {
+<span class="nc" id="L162">            return new DefaultTunnelStatistics(tunnelId,</span>
+                                               bwUtilization,
+                                               packetLossRatio,
+                                               flowDelay,
+                                               alarms);
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

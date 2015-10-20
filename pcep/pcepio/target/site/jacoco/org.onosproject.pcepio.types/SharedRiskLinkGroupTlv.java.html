@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SharedRiskLinkGroupTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">SharedRiskLinkGroupTlv.java</span></div><h1>SharedRiskLinkGroupTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
+
+/**
+ * Provides SharedRiskLinkGroupTlv.
+ */
+public class SharedRiskLinkGroupTlv implements PcepValueType {
+
+    /*
+     * Reference :[I-D.ietf-idr- Group ls-distribution] /3.3.2.5
+     *
+     *  0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |              Type =TDB41      |             Length            |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                  Shared Risk Link Group Value                 |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     //                         ............                        //
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                  Shared Risk Link Group Value                 |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L49">    protected static final Logger log = LoggerFactory.getLogger(SharedRiskLinkGroupTlv.class);</span>
+
+    public static final short TYPE = 1096; //TODO:NEED TO HANDLE TDB41
+
+    private final short hLength;
+
+    private final int[] srlgValue;
+
+    /**
+     * Constructor to initialize SRLG value.
+     *
+     * @param srlgValue Shared Risk Link Group Value
+     * @param hLength length
+     */
+<span class="fc" id="L63">    public SharedRiskLinkGroupTlv(int[] srlgValue, short hLength) {</span>
+<span class="fc" id="L64">        this.srlgValue = srlgValue;</span>
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">        if (0 == hLength) {</span>
+<span class="nc" id="L66">            this.hLength = (short) ((srlgValue.length) * 4);</span>
+        } else {
+<span class="fc" id="L68">            this.hLength = hLength;</span>
+        }
+<span class="fc" id="L70">    }</span>
+
+    /**
+     * Returns object of SharedRiskLinkGroupTlv.
+     *
+     * @param raw value
+     * @param hLength length
+     * @return object of SharedRiskLinkGroupTlv
+     */
+    public static SharedRiskLinkGroupTlv of(final int[] raw, short hLength) {
+<span class="fc" id="L80">        return new SharedRiskLinkGroupTlv(raw, hLength);</span>
+    }
+
+    /**
+     * Returns SRLG Value.
+     *
+     * @return srlgValue
+     */
+    public int[] getValue() {
+<span class="nc" id="L89">        return srlgValue;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L94">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L99">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L104">        return hLength;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L109">        return Objects.hash(srlgValue);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L114" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L115">            return true;</span>
+        }
+<span class="fc bfc" id="L117" title="All 2 branches covered.">        if (obj instanceof SharedRiskLinkGroupTlv) {</span>
+<span class="fc" id="L118">            SharedRiskLinkGroupTlv other = (SharedRiskLinkGroupTlv) obj;</span>
+<span class="fc" id="L119">            return Objects.equals(this.srlgValue, other.srlgValue);</span>
+        }
+<span class="fc" id="L121">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L126">        int iLenStartIndex = c.writerIndex();</span>
+<span class="fc" id="L127">        c.writeShort(TYPE);</span>
+<span class="fc" id="L128">        c.writeShort(hLength);</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        for (int b : srlgValue) {</span>
+<span class="fc" id="L130">            c.writeInt(b);</span>
+        }
+<span class="fc" id="L132">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads from channel buffer and returns object of SharedRiskLinkGroupTlv.
+     *
+     * @param c input channel buffer
+     * @param hLength length
+     * @return object of SharedRiskLinkGroupTlv
+     */
+    public static PcepValueType read(ChannelBuffer c, short hLength) {
+<span class="fc" id="L143">        int iLength = hLength / 4;</span>
+<span class="fc" id="L144">        int[] iSharedRiskLinkGroup = new int[iLength];</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        for (int i = 0; i &lt; iLength; i++) {</span>
+<span class="fc" id="L146">            iSharedRiskLinkGroup[i] = c.readInt();</span>
+        }
+<span class="fc" id="L148">        return new SharedRiskLinkGroupTlv(iSharedRiskLinkGroup, hLength);</span>
+    }
+
+
+    @Override
+    public String toString() {
+<span class="fc" id="L154">        ToStringHelper toStrHelper = MoreObjects.toStringHelper(getClass());</span>
+
+<span class="fc" id="L156">        toStrHelper.add(&quot;Type&quot;, TYPE);</span>
+<span class="fc" id="L157">        toStrHelper.add(&quot;Length&quot;, hLength);</span>
+
+<span class="fc" id="L159">        StringBuffer result = new StringBuffer();</span>
+<span class="fc bfc" id="L160" title="All 2 branches covered.">        for (int b : srlgValue) {</span>
+<span class="fc" id="L161">            result.append(String.format(&quot;%02X &quot;, b));</span>
+        }
+<span class="fc" id="L163">        toStrHelper.add(&quot;Value&quot;, result);</span>
+
+<span class="fc" id="L165">        return toStrHelper.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LabelResourceRequest.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.resource.label</a> &gt; <span class="el_source">LabelResourceRequest.java</span></div><h1>LabelResourceRequest.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.resource.label;
+
+import java.util.Collection;
+import java.util.Objects;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.net.DeviceId;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableSet;
+
+/**
+ * Represents for a label request.
+ */
+@Beta
+public class LabelResourceRequest {
+
+    private final DeviceId deviceId;
+    private final Type type;
+    private final long applyNum;
+    private ImmutableSet&lt;LabelResource&gt; releaseCollection;
+
+    /**
+     * Creates LabelResourceRequest object.
+     * @param deviceId device identifier
+     * @param type request type
+     * @param applyNum apply the number of labels
+     * @param releaseCollection Set of released label
+     */
+    public LabelResourceRequest(DeviceId deviceId,
+                                Type type,
+                                long applyNum,
+<span class="fc" id="L48">                                ImmutableSet&lt;LabelResource&gt; releaseCollection) {</span>
+<span class="fc" id="L49">        this.deviceId = deviceId;</span>
+<span class="fc" id="L50">        this.type = type;</span>
+<span class="fc" id="L51">        this.applyNum = applyNum;</span>
+<span class="fc" id="L52">        this.releaseCollection = releaseCollection;</span>
+<span class="fc" id="L53">    }</span>
+    /**
+     * Returns a device id.
+     * @return DeviceId
+     */
+    public DeviceId deviceId() {
+<span class="nc" id="L59">        return deviceId;</span>
+    }
+
+    /**
+     * Returns request type.
+     * @return Type
+     */
+    public Type type() {
+<span class="nc" id="L67">        return type;</span>
+    }
+
+    /**
+     * Returns apply label number.
+     * @return label number
+     */
+    public long applyNum() {
+<span class="nc" id="L75">        return applyNum;</span>
+    }
+
+    /**
+     * Returns the collection of release labels.
+     * @return Collection of DefaultLabelResource
+     */
+    public Collection&lt;LabelResource&gt; releaseCollection() {
+<span class="nc" id="L83">        return releaseCollection;</span>
+    }
+
+    /**
+     * Request type.
+     */
+<span class="pc" id="L89">    public enum Type {</span>
+<span class="fc" id="L90">        APPLY, //apple label request</span>
+<span class="fc" id="L91">        RELEASE //release label request</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L96">        return Objects.hash(this.deviceId, this.applyNum, this.type,</span>
+                            this.releaseCollection);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L102" title="All 2 branches covered.">        if (obj instanceof LabelResourceRequest) {</span>
+<span class="fc" id="L103">            LabelResourceRequest that = (LabelResourceRequest) obj;</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">            return Objects.equals(this.deviceId, that.deviceId)</span>
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.applyNum, that.applyNum)</span>
+<span class="pc bpc" id="L106" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.type, that.type)</span>
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.releaseCollection,</span>
+                                      that.releaseCollection);
+        }
+<span class="fc" id="L110">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L115">        return MoreObjects.toStringHelper(this).add(&quot;deviceId&quot;, this.deviceId)</span>
+<span class="fc" id="L116">                .add(&quot;applyNum&quot;, this.applyNum).add(&quot;type&quot;, this.type)</span>
+<span class="fc" id="L117">                .add(&quot;releaseCollection&quot;, this.releaseCollection).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

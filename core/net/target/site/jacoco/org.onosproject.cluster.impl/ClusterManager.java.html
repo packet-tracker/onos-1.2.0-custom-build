@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ClusterManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.cluster.impl</a> &gt; <span class="el_source">ClusterManager.java</span></div><h1>ClusterManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.cluster.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.apache.karaf.system.SystemService;
+import org.joda.time.DateTime;
+import org.onlab.packet.IpAddress;
+import org.onosproject.cluster.ClusterAdminService;
+import org.onosproject.cluster.ClusterDefinitionService;
+import org.onosproject.cluster.ClusterEvent;
+import org.onosproject.cluster.ClusterEventListener;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ClusterStore;
+import org.onosproject.cluster.ClusterStoreDelegate;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.event.AbstractListenerManager;
+import org.slf4j.Logger;
+
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+
+/**
+ * Implementation of the cluster service.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L54">public class ClusterManager</span>
+        extends AbstractListenerManager&lt;ClusterEvent, ClusterEventListener&gt;
+        implements ClusterService, ClusterAdminService {
+
+    public static final String INSTANCE_ID_NULL = &quot;Instance ID cannot be null&quot;;
+<span class="nc" id="L59">    private final Logger log = getLogger(getClass());</span>
+
+<span class="nc" id="L61">    private ClusterStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterDefinitionService clusterDefinitionService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected SystemService systemService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L74">        store.setDelegate(delegate);</span>
+<span class="nc" id="L75">        eventDispatcher.addSink(ClusterEvent.class, listenerRegistry);</span>
+<span class="nc" id="L76">        clusterDefinitionService.seedNodes()</span>
+<span class="nc" id="L77">                                .forEach(node -&gt; store.addNode(node.id(), node.ip(), node.tcpPort()));</span>
+<span class="nc" id="L78">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L79">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L83">        store.unsetDelegate(delegate);</span>
+<span class="nc" id="L84">        eventDispatcher.removeSink(ClusterEvent.class);</span>
+<span class="nc" id="L85">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public ControllerNode getLocalNode() {
+<span class="nc" id="L90">        checkPermission(CLUSTER_READ);</span>
+<span class="nc" id="L91">        return store.getLocalNode();</span>
+    }
+
+    @Override
+    public Set&lt;ControllerNode&gt; getNodes() {
+<span class="nc" id="L96">        checkPermission(CLUSTER_READ);</span>
+<span class="nc" id="L97">        return store.getNodes();</span>
+    }
+
+    @Override
+    public ControllerNode getNode(NodeId nodeId) {
+<span class="nc" id="L102">        checkPermission(CLUSTER_READ);</span>
+<span class="nc" id="L103">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L104">        return store.getNode(nodeId);</span>
+    }
+
+    @Override
+    public ControllerNode.State getState(NodeId nodeId) {
+<span class="nc" id="L109">        checkPermission(CLUSTER_READ);</span>
+<span class="nc" id="L110">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L111">        return store.getState(nodeId);</span>
+    }
+
+
+    @Override
+    public DateTime getLastUpdated(NodeId nodeId) {
+<span class="nc" id="L117">        checkPermission(CLUSTER_READ);</span>
+<span class="nc" id="L118">        return store.getLastUpdated(nodeId);</span>
+    }
+
+    @Override
+    public void formCluster(Set&lt;ControllerNode&gt; nodes, String ipPrefix) {
+<span class="nc" id="L123">        checkNotNull(nodes, &quot;Nodes cannot be null&quot;);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        checkArgument(!nodes.isEmpty(), &quot;Nodes cannot be empty&quot;);</span>
+<span class="nc" id="L125">        checkNotNull(ipPrefix, &quot;IP prefix cannot be null&quot;);</span>
+<span class="nc" id="L126">        clusterDefinitionService.formCluster(nodes, ipPrefix);</span>
+        try {
+<span class="nc" id="L128">            log.warn(&quot;Shutting down container for cluster reconfiguration!&quot;);</span>
+<span class="nc" id="L129">            systemService.reboot(&quot;now&quot;, SystemService.Swipe.NONE);</span>
+<span class="nc" id="L130">        } catch (Exception e) {</span>
+<span class="nc" id="L131">            log.error(&quot;Unable to reboot container&quot;, e);</span>
+<span class="nc" id="L132">        }</span>
+<span class="nc" id="L133">    }</span>
+
+    @Override
+    public ControllerNode addNode(NodeId nodeId, IpAddress ip, int tcpPort) {
+<span class="nc" id="L137">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L138">        checkNotNull(ip, &quot;IP address cannot be null&quot;);</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        checkArgument(tcpPort &gt; 5000, &quot;TCP port must be &gt; 5000&quot;);</span>
+<span class="nc" id="L140">        return store.addNode(nodeId, ip, tcpPort);</span>
+    }
+
+    @Override
+    public void removeNode(NodeId nodeId) {
+<span class="nc" id="L145">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L146">        store.removeNode(nodeId);</span>
+<span class="nc" id="L147">    }</span>
+
+    // Store delegate to re-post events emitted from the store.
+<span class="nc" id="L150">    private class InternalStoreDelegate implements ClusterStoreDelegate {</span>
+        @Override
+        public void notify(ClusterEvent event) {
+<span class="nc" id="L153">            post(event);</span>
+<span class="nc" id="L154">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SuurballeGraphSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">SuurballeGraphSearch.java</span></div><h1>SuurballeGraphSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onlab.graph;
+
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.stream.Collectors;
+
+/**
+ * Suurballe shortest-path graph search algorithm capable of finding both
+ * a shortest path, as well as a backup shortest path, between a source and a destination
+ * such that the sum of the path lengths is minimized.
+ */
+<span class="fc" id="L32">public class SuurballeGraphSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt; extends DijkstraGraphSearch&lt;V, E&gt; {</span>
+
+    @Override
+    public Result&lt;V, E&gt; search(Graph&lt;V, E&gt; graph, V src, V dst,
+                               EdgeWeight&lt;V, E&gt; weight, int maxPaths) {
+
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        if (weight == null) {</span>
+<span class="fc" id="L39">            weight = edge -&gt; 1;</span>
+        }
+
+<span class="fc" id="L42">        List&lt;DisjointPathPair&lt;V, E&gt;&gt; dpps = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L44">        final EdgeWeight weightf = weight;</span>
+<span class="fc" id="L45">        DefaultResult firstDijkstraS = (DefaultResult) super.search(graph, src, dst, weight, ALL_PATHS);</span>
+<span class="fc" id="L46">        DefaultResult firstDijkstra = (DefaultResult) super.search(graph, src, null, weight, ALL_PATHS);</span>
+
+        //choose an arbitrary shortest path to run Suurballe on
+<span class="fc" id="L49">        Path&lt;V, E&gt; shortPath = null;</span>
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        if (firstDijkstraS.paths().size() == 0) {</span>
+<span class="fc" id="L51">            return firstDijkstraS;</span>
+        }
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        for (Path p: firstDijkstraS.paths()) {</span>
+<span class="fc" id="L54">            shortPath = p;</span>
+            //transforms the graph so tree edges have 0 weight
+<span class="fc" id="L56">            EdgeWeight&lt;V, Edge&lt;V&gt;&gt; modified = edge -&gt; {</span>
+<span class="fc bfc" id="L57" title="All 2 branches covered.">                if (classE().isInstance(edge)) {</span>
+<span class="fc" id="L58">                    return weightf.weight((E) (edge)) + firstDijkstra.cost(edge.src())</span>
+<span class="fc" id="L59">                            - firstDijkstra.cost(edge.dst());</span>
+                }
+<span class="fc" id="L61">                return 0;</span>
+            };
+<span class="fc" id="L63">            EdgeWeight&lt;V, E&gt; modified2 = edge -&gt;</span>
+<span class="nc" id="L64">                    weightf.weight(edge) + firstDijkstra.cost(edge.src()) - firstDijkstra.cost(edge.dst());</span>
+
+            //create a residual graph g' by removing all src vertices and reversing 0 length path edges
+<span class="fc" id="L67">            MutableGraph&lt;V, Edge&lt;V&gt;&gt; gt = mutableCopy(graph);</span>
+
+<span class="fc" id="L69">            Map&lt;Edge&lt;V&gt;, E&gt; revToEdge = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L70">            graph.getEdgesTo(src).forEach(gt::removeEdge);</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">            for (E edge: shortPath.edges()) {</span>
+<span class="fc" id="L72">                gt.removeEdge(edge);</span>
+<span class="fc" id="L73">                Edge&lt;V&gt; reverse = new Edge&lt;V&gt;() {</span>
+<span class="fc" id="L74">                    final Edge&lt;V&gt; orig = edge;</span>
+                    public V src() {
+<span class="fc" id="L76">                        return orig.dst();</span>
+                    }
+                    public V dst() {
+<span class="fc" id="L79">                        return orig.src();</span>
+                    }
+                    public String toString() {
+<span class="nc" id="L82">                        return &quot;ReversedEdge &quot; + &quot;src=&quot; + src() + &quot; dst=&quot; + dst();</span>
+                    }
+                };
+<span class="fc" id="L85">                revToEdge.put(reverse, edge);</span>
+<span class="fc" id="L86">                gt.addEdge(reverse);</span>
+<span class="fc" id="L87">            }</span>
+
+            //rerun dijkstra on the temporary graph to get a second path
+            Result&lt;V, Edge&lt;V&gt;&gt; secondDijkstra;
+<span class="fc" id="L91">            secondDijkstra = new DijkstraGraphSearch&lt;V, Edge&lt;V&gt;&gt;().search(gt, src, dst, modified, ALL_PATHS);</span>
+
+<span class="fc" id="L93">            Path&lt;V, Edge&lt;V&gt;&gt; residualShortPath = null;</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">            if (secondDijkstra.paths().size() == 0) {</span>
+<span class="fc" id="L95">                dpps.add(new DisjointPathPair&lt;V, E&gt;(shortPath, null));</span>
+<span class="fc" id="L96">                continue;</span>
+            }
+
+<span class="fc bfc" id="L99" title="All 2 branches covered.">            for (Path p2: secondDijkstra.paths()) {</span>
+<span class="fc" id="L100">                residualShortPath = p2;</span>
+
+<span class="fc" id="L102">                MutableGraph&lt;V, E&gt; roundTrip = mutableCopy(graph);</span>
+
+<span class="fc" id="L104">                List&lt;E&gt; tmp = roundTrip.getEdges().stream().collect(Collectors.toList());</span>
+
+<span class="fc" id="L106">                tmp.forEach(roundTrip::removeEdge);</span>
+
+<span class="fc" id="L108">                shortPath.edges().forEach(roundTrip::addEdge);</span>
+
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">                if (residualShortPath != null) {</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">                    for (Edge&lt;V&gt; edge: residualShortPath.edges()) {</span>
+<span class="fc bfc" id="L112" title="All 2 branches covered.">                        if (classE().isInstance(edge)) {</span>
+<span class="fc" id="L113">                            roundTrip.addEdge((E) edge);</span>
+                        } else {
+<span class="fc" id="L115">                            roundTrip.removeEdge(revToEdge.get(edge));</span>
+                        }
+<span class="fc" id="L117">                    }</span>
+                }
+                //Actually build the final result
+<span class="fc" id="L120">                DefaultResult lastSearch = (DefaultResult) super.search(roundTrip, src, dst, weight, ALL_PATHS);</span>
+<span class="fc" id="L121">                Path&lt;V, E&gt; path1 = lastSearch.paths().iterator().next();</span>
+<span class="fc" id="L122">                path1.edges().forEach(roundTrip::removeEdge);</span>
+
+<span class="fc" id="L124">                Set&lt;Path&lt;V, E&gt;&gt; bckpaths = super.search(roundTrip, src, dst, weight, ALL_PATHS).paths();</span>
+<span class="fc" id="L125">                Path&lt;V, E&gt; backup = null;</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">                if (bckpaths.size() != 0) {</span>
+<span class="fc" id="L127">                    backup = bckpaths.iterator().next();</span>
+                }
+
+<span class="fc" id="L130">                dpps.add(new DisjointPathPair&lt;&gt;(path1, backup));</span>
+<span class="fc" id="L131">            }</span>
+<span class="fc" id="L132">        }</span>
+
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        for (int i = dpps.size() - 1; i &gt; 0; i--) {</span>
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">            if (dpps.get(i).size() &lt;= 1) {</span>
+<span class="nc" id="L136">                dpps.remove(i);</span>
+            }
+        }
+
+<span class="fc" id="L140">        return new Result&lt;V, E&gt;() {</span>
+<span class="fc" id="L141">            final DefaultResult search = firstDijkstra;</span>
+
+            public V src() {
+<span class="nc" id="L144">                return src;</span>
+            }
+            public V dst() {
+<span class="nc" id="L147">                return dst;</span>
+            }
+            public Set&lt;Path&lt;V, E&gt;&gt; paths() {
+<span class="fc" id="L150">                Set&lt;Path&lt;V, E&gt;&gt; pathsD = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L151">                int paths = 0;</span>
+<span class="fc bfc" id="L152" title="All 2 branches covered.">                for (DisjointPathPair&lt;V, E&gt; path: dpps) {</span>
+<span class="fc" id="L153">                    pathsD.add((Path&lt;V, E&gt;) path);</span>
+<span class="fc" id="L154">                    paths++;</span>
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">                    if (paths == maxPaths) {</span>
+<span class="nc" id="L156">                        break;</span>
+                    }
+<span class="fc" id="L158">                }</span>
+<span class="fc" id="L159">                return pathsD;</span>
+            }
+            public Map&lt;V, Double&gt; costs() {
+<span class="nc" id="L162">                return search.costs();</span>
+            }
+            public Map&lt;V, Set&lt;E&gt;&gt; parents() {
+<span class="nc" id="L165">                return search.parents();</span>
+            }
+        };
+    }
+
+    private Class&lt;?&gt; clazzV;
+
+    public Class&lt;?&gt; classV() {
+<span class="nc" id="L173">        return clazzV;</span>
+    }
+
+    private Class&lt;?&gt; clazzE;
+
+    public Class&lt;?&gt; classE() {
+<span class="fc" id="L179">        return clazzE;</span>
+    }
+    /**
+     * Creates a mutable copy of an immutable graph.
+     *
+     * @param graph   immutable graph
+     * @return mutable copy
+     */
+    public MutableGraph mutableCopy(Graph&lt;V, E&gt; graph) {
+<span class="fc" id="L188">        clazzV = graph.getVertexes().iterator().next().getClass();</span>
+<span class="fc" id="L189">        clazzE = graph.getEdges().iterator().next().getClass();</span>
+<span class="fc" id="L190">        return new MutableAdjacencyListsGraph&lt;V, E&gt;(graph.getVertexes(), graph.getEdges());</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

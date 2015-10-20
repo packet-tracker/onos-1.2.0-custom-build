@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UpdateResult.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">UpdateResult.java</span></div><h1>UpdateResult.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import java.util.function.Function;
+
+import org.onosproject.store.service.MapEvent;
+import org.onosproject.store.service.Versioned;
+
+/**
+ * Result of a update operation.
+ * &lt;p&gt;
+ * Both old and new values are accessible along with a flag that indicates if the
+ * the value was updated. If flag is false, oldValue and newValue both
+ * point to the same unmodified value.
+ * @param &lt;V&gt; result type
+ */
+public class UpdateResult&lt;K, V&gt; {
+
+    private final boolean updated;
+    private final String mapName;
+    private final K key;
+    private final Versioned&lt;V&gt; oldValue;
+    private final Versioned&lt;V&gt; newValue;
+
+<span class="fc" id="L39">    public UpdateResult(boolean updated, String mapName, K key, Versioned&lt;V&gt; oldValue, Versioned&lt;V&gt; newValue) {</span>
+<span class="fc" id="L40">        this.updated = updated;</span>
+<span class="fc" id="L41">        this.mapName = mapName;</span>
+<span class="fc" id="L42">        this.key = key;</span>
+<span class="fc" id="L43">        this.oldValue = oldValue;</span>
+<span class="fc" id="L44">        this.newValue = newValue;</span>
+<span class="fc" id="L45">    }</span>
+
+    public boolean updated() {
+<span class="fc" id="L48">        return updated;</span>
+    }
+
+    public String mapName() {
+<span class="fc" id="L52">        return mapName;</span>
+    }
+
+    public K key() {
+<span class="fc" id="L56">        return key;</span>
+    }
+
+    public Versioned&lt;V&gt; oldValue() {
+<span class="fc" id="L60">        return oldValue;</span>
+    }
+
+    public Versioned&lt;V&gt; newValue() {
+<span class="fc" id="L64">        return newValue;</span>
+    }
+
+    public &lt;K1, V1&gt; UpdateResult&lt;K1, V1&gt; map(Function&lt;K, K1&gt; keyTransform, Function&lt;V, V1&gt; valueMapper) {
+<span class="fc" id="L68">        return new UpdateResult&lt;&gt;(updated,</span>
+                mapName,
+<span class="fc bfc" id="L70" title="All 2 branches covered.">                keyTransform.apply(key),</span>
+<span class="pc bpc" id="L71" title="1 of 2 branches missed.">                oldValue == null ? null : oldValue.map(valueMapper),</span>
+<span class="fc" id="L72">                newValue == null ? null : newValue.map(valueMapper));</span>
+    }
+
+    public MapEvent&lt;K, V&gt; toMapEvent() {
+<span class="fc bfc" id="L76" title="All 2 branches covered.">        if (!updated) {</span>
+<span class="fc" id="L77">            return null;</span>
+        } else {
+<span class="fc bfc" id="L79" title="All 4 branches covered.">            MapEvent.Type eventType = oldValue == null ?</span>
+                    MapEvent.Type.INSERT : newValue == null ? MapEvent.Type.REMOVE : MapEvent.Type.UPDATE;
+<span class="fc bfc" id="L81" title="All 2 branches covered.">            Versioned&lt;V&gt; eventValue = eventType == MapEvent.Type.REMOVE ? oldValue : newValue;</span>
+<span class="fc" id="L82">            return new MapEvent&lt;&gt;(mapName(), eventType, key(), eventValue);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

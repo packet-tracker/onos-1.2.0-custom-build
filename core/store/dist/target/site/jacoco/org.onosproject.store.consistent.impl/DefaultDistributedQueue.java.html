@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultDistributedQueue.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DefaultDistributedQueue.java</span></div><h1>DefaultDistributedQueue.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.Futures;
+
+import org.onlab.util.SharedExecutors;
+import org.onosproject.store.service.DistributedQueue;
+import org.onosproject.store.service.Serializer;
+
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.store.consistent.impl.StateMachineUpdate.Target.QUEUE_PUSH;
+
+/**
+ * DistributedQueue implementation that provides FIFO ordering semantics.
+ *
+ * @param &lt;E&gt; queue entry type
+ */
+public class DefaultDistributedQueue&lt;E&gt;  implements DistributedQueue&lt;E&gt; {
+
+    private final String name;
+    private final Database database;
+    private final Serializer serializer;
+<span class="nc" id="L41">    private final Set&lt;CompletableFuture&lt;E&gt;&gt; pendingFutures = Sets.newIdentityHashSet();</span>
+
+    private static final String PRIMITIVE_NAME = &quot;distributedQueue&quot;;
+    private static final String SIZE = &quot;size&quot;;
+    private static final String PUSH = &quot;push&quot;;
+    private static final String POP = &quot;pop&quot;;
+    private static final String PEEK = &quot;peek&quot;;
+
+    private static final String ERROR_NULL_ENTRY = &quot;Null entries are not allowed&quot;;
+    private final MeteringAgent monitor;
+
+    public DefaultDistributedQueue(String name,
+                                   Database database,
+                                   Serializer serializer,
+<span class="nc" id="L55">                                   boolean meteringEnabled) {</span>
+<span class="nc" id="L56">        this.name = checkNotNull(name, &quot;queue name cannot be null&quot;);</span>
+<span class="nc" id="L57">        this.database = checkNotNull(database, &quot;database cannot be null&quot;);</span>
+<span class="nc" id="L58">        this.serializer = checkNotNull(serializer, &quot;serializer cannot be null&quot;);</span>
+<span class="nc" id="L59">        this.monitor = new MeteringAgent(PRIMITIVE_NAME, name, meteringEnabled);</span>
+<span class="nc" id="L60">        this.database.registerConsumer(update -&gt; {</span>
+<span class="nc" id="L61">            SharedExecutors.getSingleThreadExecutor().execute(() -&gt; {</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">                if (update.target() == QUEUE_PUSH) {</span>
+<span class="nc" id="L63">                    List&lt;Object&gt; input = update.input();</span>
+<span class="nc" id="L64">                    String queueName = (String) input.get(0);</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">                    if (queueName.equals(name)) {</span>
+<span class="nc" id="L66">                        tryPoll();</span>
+                    }
+                }
+<span class="nc" id="L69">            });</span>
+<span class="nc" id="L70">        });</span>
+<span class="nc" id="L71">    }</span>
+
+    @Override
+    public long size() {
+<span class="nc" id="L75">        final MeteringAgent.Context timer = monitor.startTimer(SIZE);</span>
+<span class="nc" id="L76">        return Futures.getUnchecked(database.queueSize(name).whenComplete((r, e) -&gt; timer.stop(e)));</span>
+    }
+
+    @Override
+    public void push(E entry) {
+<span class="nc" id="L81">        checkNotNull(entry, ERROR_NULL_ENTRY);</span>
+<span class="nc" id="L82">        final MeteringAgent.Context timer = monitor.startTimer(PUSH);</span>
+<span class="nc" id="L83">        Futures.getUnchecked(database.queuePush(name, serializer.encode(entry))</span>
+<span class="nc" id="L84">                                     .whenComplete((r, e) -&gt; timer.stop(e)));</span>
+<span class="nc" id="L85">    }</span>
+
+    @Override
+    public CompletableFuture&lt;E&gt; pop() {
+<span class="nc" id="L89">        final MeteringAgent.Context timer = monitor.startTimer(POP);</span>
+<span class="nc" id="L90">        return database.queuePop(name)</span>
+<span class="nc" id="L91">                       .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L92">                       .thenCompose(v -&gt; {</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">                           if (v != null) {</span>
+<span class="nc" id="L94">                               return CompletableFuture.&lt;E&gt;completedFuture(serializer.decode(v));</span>
+                           }
+<span class="nc" id="L96">                           CompletableFuture&lt;E&gt; newPendingFuture = new CompletableFuture&lt;&gt;();</span>
+<span class="nc" id="L97">                           pendingFutures.add(newPendingFuture);</span>
+<span class="nc" id="L98">                           return newPendingFuture;</span>
+                       });
+
+    }
+
+    @Override
+    public E peek() {
+<span class="nc" id="L105">        final MeteringAgent.Context timer = monitor.startTimer(PEEK);</span>
+<span class="nc" id="L106">        return Futures.getUnchecked(database.queuePeek(name)</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">                                            .thenApply(v -&gt; v != null ? serializer.&lt;E&gt;decode(v) : null)</span>
+<span class="nc" id="L108">                                            .whenComplete((r, e) -&gt; timer.stop(e)));</span>
+    }
+
+    public String name() {
+<span class="nc" id="L112">        return name;</span>
+    }
+
+    protected void tryPoll() {
+<span class="nc" id="L116">        Set&lt;CompletableFuture&lt;E&gt;&gt; completedFutures = Sets.newHashSet();</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        for (CompletableFuture&lt;E&gt; future : pendingFutures) {</span>
+<span class="nc" id="L118">            E entry = Futures.getUnchecked(database.queuePop(name)</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                                                   .thenApply(v -&gt; v != null ? serializer.decode(v) : null));</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">            if (entry != null) {</span>
+<span class="nc" id="L121">                future.complete(entry);</span>
+<span class="nc" id="L122">                completedFutures.add(future);</span>
+            } else {
+                break;
+            }
+<span class="nc" id="L126">        }</span>
+<span class="nc" id="L127">        pendingFutures.removeAll(completedFutures);</span>
+<span class="nc" id="L128">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OFOpticalSwitchImplLINC13.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.handshaker</a> &gt; <span class="el_source">OFOpticalSwitchImplLINC13.java</span></div><h1>OFOpticalSwitchImplLINC13.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.handshaker;
+
+import org.onosproject.net.Device;
+import com.google.common.collect.ImmutableSet;
+import org.onosproject.openflow.controller.OpenFlowOpticalSwitch;
+import org.onosproject.openflow.controller.PortDescPropertyType;
+import org.onosproject.openflow.controller.driver.AbstractOpenFlowSwitch;
+import org.onosproject.openflow.controller.driver.SwitchDriverSubHandshakeAlreadyStarted;
+import org.onosproject.openflow.controller.driver.SwitchDriverSubHandshakeCompleted;
+import org.onosproject.openflow.controller.driver.SwitchDriverSubHandshakeNotStarted;
+import org.projectfloodlight.openflow.protocol.OFCircuitPortStatus;
+import org.projectfloodlight.openflow.protocol.OFCircuitPortsReply;
+import org.projectfloodlight.openflow.protocol.OFCircuitPortsRequest;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFObject;
+import org.projectfloodlight.openflow.protocol.OFPortDesc;
+import org.projectfloodlight.openflow.protocol.OFPortDescPropOpticalTransport;
+import org.projectfloodlight.openflow.protocol.OFPortDescStatsReply;
+import org.projectfloodlight.openflow.protocol.OFPortOptical;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsType;
+import org.projectfloodlight.openflow.types.OFPort;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * LINC-OE Optical Emulator switch class.
+ *
+ * The LINC ROADM emulator exposes two types of ports: OCh ports connect to ports in the packet layer,
+ * while OMS ports connect to an OMS port on a neighbouring ROADM.
+ *
+ * LINC sends the tap ports (OCh for our purposes) in the regular port desc stats reply,
+ * while it sends *all* ports (both tap and WDM ports, i.e., OCh and OMS) in the experimenter port desc stats reply.
+ *
+ */
+<span class="nc" id="L56">public class OFOpticalSwitchImplLINC13</span>
+ extends AbstractOpenFlowSwitch implements OpenFlowOpticalSwitch {
+
+<span class="nc" id="L59">    private final AtomicBoolean driverHandshakeComplete = new AtomicBoolean(false);</span>
+<span class="nc" id="L60">    private long barrierXidToWaitFor = -1;</span>
+
+    private List&lt;OFPortOptical&gt; opticalPorts;
+
+    @Override
+    public void startDriverHandshake() {
+<span class="nc" id="L66">        log.warn(&quot;Starting driver handshake for sw {}&quot;, getStringId());</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (startDriverHandshakeCalled) {</span>
+<span class="nc" id="L68">            throw new SwitchDriverSubHandshakeAlreadyStarted();</span>
+        }
+<span class="nc" id="L70">        startDriverHandshakeCalled = true;</span>
+        try {
+<span class="nc" id="L72">            sendHandshakeOFExperimenterPortDescRequest();</span>
+<span class="nc" id="L73">        } catch (IOException e) {</span>
+<span class="nc" id="L74">            log.error(&quot;LINC-OE exception while sending experimenter port desc:&quot;,</span>
+<span class="nc" id="L75">                     e.getMessage());</span>
+<span class="nc" id="L76">            e.printStackTrace();</span>
+<span class="nc" id="L77">        }</span>
+<span class="nc" id="L78">    }</span>
+
+    @Override
+    public boolean isDriverHandshakeComplete() {
+<span class="nc" id="L82">        return driverHandshakeComplete.get();</span>
+    }
+
+    @Override
+    public void processDriverHandshakeMessage(OFMessage m) {
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        if (!startDriverHandshakeCalled) {</span>
+<span class="nc" id="L88">            throw new SwitchDriverSubHandshakeNotStarted();</span>
+        }
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (driverHandshakeComplete.get()) {</span>
+<span class="nc" id="L91">            throw new SwitchDriverSubHandshakeCompleted(m);</span>
+        }
+
+<span class="nc bnc" id="L94" title="All 11 branches missed.">        switch (m.getType()) {</span>
+            case BARRIER_REPLY:
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                if (m.getXid() == barrierXidToWaitFor) {</span>
+<span class="nc" id="L97">                    log.debug(&quot;LINC-OE Received barrier response&quot;);</span>
+                }
+                break;
+            case ERROR:
+<span class="nc" id="L101">                log.error(&quot;Switch {} Error {}&quot;, getStringId(), m);</span>
+<span class="nc" id="L102">                break;</span>
+            case FEATURES_REPLY:
+<span class="nc" id="L104">                break;</span>
+            case FLOW_REMOVED:
+<span class="nc" id="L106">                break;</span>
+            case GET_ASYNC_REPLY:
+<span class="nc" id="L108">                break;</span>
+            case PACKET_IN:
+<span class="nc" id="L110">                break;</span>
+            case PORT_STATUS:
+<span class="nc" id="L112">                log.warn(&quot;****LINC-OE Port Status {} {}&quot;, getStringId(), m);</span>
+<span class="nc" id="L113">                processOFPortStatus((OFCircuitPortStatus) m);</span>
+<span class="nc" id="L114">                break;</span>
+            case QUEUE_GET_CONFIG_REPLY:
+<span class="nc" id="L116">                break;</span>
+            case ROLE_REPLY:
+<span class="nc" id="L118">                break;</span>
+            case STATS_REPLY:
+<span class="nc" id="L120">                OFStatsReply stats = (OFStatsReply) m;</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">                if (stats.getStatsType() == OFStatsType.EXPERIMENTER) {</span>
+<span class="nc" id="L122">                    log.warn(&quot;LINC-OE : Received stats reply message {}&quot;, m);</span>
+<span class="nc" id="L123">                    createOpticalPortList((OFCircuitPortsReply) m);</span>
+<span class="nc" id="L124">                    driverHandshakeComplete.set(true);</span>
+                }
+                break;
+            default:
+<span class="nc" id="L128">                log.warn(&quot;Received message {} during switch-driver &quot; +</span>
+                                 &quot;subhandshake &quot; + &quot;from switch {} ... &quot; +
+                                 &quot;Ignoring message&quot;, m,
+<span class="nc" id="L131">                         getStringId());</span>
+
+        }
+<span class="nc" id="L134">    }</span>
+
+    public void processOFPortStatus(OFCircuitPortStatus ps) {
+<span class="nc" id="L137">        log.debug(&quot;LINC-OE ..OF Port Status :&quot;, ps);</span>
+<span class="nc" id="L138">    }</span>
+
+    private void sendHandshakeOFExperimenterPortDescRequest() throws
+            IOException {
+        // send multi part message for port description for optical switches
+<span class="nc" id="L143">        OFCircuitPortsRequest circuitPortsRequest = factory()</span>
+<span class="nc" id="L144">                .buildCircuitPortsRequest().setXid(getNextTransactionId())</span>
+<span class="nc" id="L145">                .build();</span>
+<span class="nc" id="L146">        log.warn(&quot;LINC-OE : Sending experimented circuit port stats &quot; +</span>
+                         &quot;message &quot; +
+                         &quot;{}&quot;,
+<span class="nc" id="L149">                 circuitPortsRequest.toString());</span>
+<span class="nc" id="L150">        this.sendHandshakeMessage(circuitPortsRequest);</span>
+<span class="nc" id="L151">    }</span>
+
+    @Override
+    /**
+     * Returns a list of standard (Ethernet) ports.
+     *
+     * @return List of ports
+     */
+    public List&lt;OFPortDesc&gt; getPorts() {
+<span class="nc" id="L160">        return Collections.EMPTY_LIST;</span>
+    }
+
+
+    @Override
+    public Boolean supportNxRole() {
+<span class="nc" id="L166">        return false;</span>
+    }
+
+    @Override
+    public Device.Type deviceType() {
+<span class="nc" id="L171">        return Device.Type.ROADM;</span>
+    }
+
+    /**
+     * Checks if given port is also part of the regular port desc stats, i.e., is the port a tap port.
+     *
+     * @param port given OF port
+     * @return true if the port is a tap (OCh), false otherwise (OMS port)
+     */
+    private boolean hasPort(OFPort port) {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        for (OFPortDescStatsReply reply : this.ports) {</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            for (OFPortDesc p : reply.getEntries()) {</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                if (p.getPortNo().equals(port)) {</span>
+<span class="nc" id="L184">                    return true;</span>
+                }
+<span class="nc" id="L186">            }</span>
+<span class="nc" id="L187">        }</span>
+
+<span class="nc" id="L189">        return false;</span>
+    }
+
+    /**
+     * Creates an OpenFlow optical port based on the given port and transport type.
+     *
+     * @param port OpenFlow optical port
+     * @param type transport type
+     * @return OpenFlow optical port
+     */
+    private OFPortOptical createOpticalPort(OFPortOptical port, short type) {
+<span class="nc" id="L200">        List&lt;OFPortDescPropOpticalTransport&gt; descList = new ArrayList&lt;&gt;(port.getDesc().size());</span>
+
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        for (OFPortDescPropOpticalTransport desc : port.getDesc()) {</span>
+<span class="nc" id="L203">            OFPortDescPropOpticalTransport newDesc = desc.createBuilder()</span>
+<span class="nc" id="L204">                    .setType(desc.getType())</span>
+<span class="nc" id="L205">                    .setPortSignalType(type)</span>
+<span class="nc" id="L206">                    .setPortType(desc.getPortType())</span>
+<span class="nc" id="L207">                    .setReserved(desc.getReserved())</span>
+<span class="nc" id="L208">                    .build();</span>
+<span class="nc" id="L209">            descList.add(newDesc);</span>
+<span class="nc" id="L210">        }</span>
+
+<span class="nc" id="L212">        OFPortOptical newPort = port.createBuilder()</span>
+<span class="nc" id="L213">                .setConfig(port.getConfig())</span>
+<span class="nc" id="L214">                .setDesc(descList)</span>
+<span class="nc" id="L215">                .setHwAddr(port.getHwAddr())</span>
+<span class="nc" id="L216">                .setName(port.getName())</span>
+<span class="nc" id="L217">                .setPortNo(port.getPortNo())</span>
+<span class="nc" id="L218">                .setState(port.getState())</span>
+<span class="nc" id="L219">                .build();</span>
+
+<span class="nc" id="L221">        return newPort;</span>
+    }
+
+    /**
+     * Builds list of OFPortOptical ports based on the multi-part circuit ports reply.
+     *
+     * Ensure the optical transport port's signal type is configured correctly.
+     *
+     * @param wPorts OF reply with circuit ports
+     */
+    private void createOpticalPortList(OFCircuitPortsReply wPorts) {
+<span class="nc" id="L232">        opticalPorts = new ArrayList&lt;&gt;(wPorts.getEntries().size());</span>
+
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        for (OFPortOptical p : wPorts.getEntries()) {</span>
+            short signalType;
+
+            // FIXME: use constants once loxi has full optical extensions
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            if (hasPort(p.getPortNo())) {</span>
+<span class="nc" id="L239">                signalType = 5;      // OCH port</span>
+            } else {
+<span class="nc" id="L241">                signalType = 2;      // OMS port</span>
+            }
+
+<span class="nc" id="L244">            opticalPorts.add(createOpticalPort(p, signalType));</span>
+<span class="nc" id="L245">        }</span>
+<span class="nc" id="L246">    }</span>
+
+    @Override
+    public List&lt;? extends OFObject&gt; getPortsOf(PortDescPropertyType type) {
+<span class="nc bnc" id="L250" title="All 2 branches missed.">        if (!type.equals(PortDescPropertyType.OPTICAL_TRANSPORT)) {</span>
+<span class="nc" id="L251">            return Collections.EMPTY_LIST;</span>
+        }
+
+<span class="nc" id="L254">        return opticalPorts;</span>
+    }
+
+    @Override
+    public Set&lt;PortDescPropertyType&gt; getPortTypes() {
+<span class="nc" id="L259">        return ImmutableSet.of(PortDescPropertyType.OPTICAL_TRANSPORT);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

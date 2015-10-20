@@ -1,0 +1,1231 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepTunnelProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcep-provider-tunnel</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.pcep.tunnel.impl</a> &gt; <span class="el_source">PcepTunnelProvider.java</span></div><h1>PcepTunnelProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.pcep.tunnel.impl;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.onosproject.net.DefaultAnnotations.EMPTY;
+import static org.onlab.util.Tools.get;
+import static org.onosproject.net.DeviceId.deviceId;
+import static org.onosproject.net.PortNumber.portNumber;
+import static org.onosproject.pcep.api.PcepDpid.uri;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Dictionary;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Optional;
+
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.IpAddress;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.core.DefaultGroupId;
+import org.onosproject.incubator.net.tunnel.DefaultOpticalTunnelEndPoint;
+import org.onosproject.incubator.net.tunnel.DefaultTunnel;
+import org.onosproject.incubator.net.tunnel.DefaultTunnelDescription;
+import org.onosproject.incubator.net.tunnel.IpTunnelEndPoint;
+import org.onosproject.incubator.net.tunnel.DefaultTunnelStatistics;
+import org.onosproject.incubator.net.tunnel.OpticalLogicId;
+import org.onosproject.incubator.net.tunnel.OpticalTunnelEndPoint;
+import org.onosproject.incubator.net.tunnel.Tunnel;
+import org.onosproject.incubator.net.tunnel.TunnelDescription;
+import org.onosproject.incubator.net.tunnel.TunnelEndPoint;
+import org.onosproject.incubator.net.tunnel.TunnelId;
+import org.onosproject.incubator.net.tunnel.TunnelName;
+import org.onosproject.incubator.net.tunnel.TunnelProvider;
+import org.onosproject.incubator.net.tunnel.TunnelProviderRegistry;
+import org.onosproject.incubator.net.tunnel.TunnelProviderService;
+import org.onosproject.incubator.net.tunnel.TunnelService;
+import org.onosproject.incubator.net.tunnel.TunnelStatistics;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.DefaultLink;
+import org.onosproject.net.DefaultPath;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.IpElementId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.SparseAnnotations;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.pcep.api.PcepController;
+import org.onosproject.pcep.api.PcepDpid;
+import org.onosproject.pcep.api.PcepHopNodeDescription;
+import org.onosproject.pcep.api.PcepOperator.OperationType;
+import org.onosproject.pcep.api.PcepTunnel;
+import org.onosproject.pcep.api.PcepTunnel.PATHTYPE;
+import org.onosproject.pcep.api.PcepTunnel.PathState;
+import org.onosproject.pcep.api.PcepTunnelListener;
+import org.onosproject.pcep.api.PcepTunnelStatistics;
+import org.osgi.service.component.annotations.Modified;
+import org.onosproject.pcep.controller.PccId;
+import org.onosproject.pcep.controller.PcepClient;
+import org.onosproject.pcep.controller.PcepClientController;
+import org.onosproject.pcep.controller.PcepClientListener;
+import org.onosproject.pcep.controller.PcepEventListener;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcInitiatedLspRequest;
+import org.onosproject.pcepio.protocol.PcepAttribute;
+import org.onosproject.pcepio.protocol.PcepBandwidthObject;
+import org.onosproject.pcepio.protocol.PcepEndPointsObject;
+import org.onosproject.pcepio.protocol.PcepEroObject;
+import org.onosproject.pcepio.protocol.PcepInitiateMsg;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepMessage;
+import org.onosproject.pcepio.protocol.PcepMsgPath;
+import org.onosproject.pcepio.protocol.PcepReportMsg;
+import org.onosproject.pcepio.protocol.PcepRroObject;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.protocol.PcepStateReport;
+import org.onosproject.pcepio.protocol.PcepUpdateMsg;
+import org.onosproject.pcepio.protocol.PcepUpdateRequest;
+import org.onosproject.pcepio.types.IPv4SubObject;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.onosproject.pcepio.types.StatefulIPv4LspIdentidiersTlv;
+import org.onosproject.pcepio.types.SymbolicPathNameTlv;
+import org.slf4j.Logger;
+import org.osgi.service.component.ComponentContext;
+
+/**
+ * Provider which uses an PCEP controller to detect, update, create network
+ * tunnels.
+ */
+@Component(immediate = true)
+@Service
+public class PcepTunnelProvider extends AbstractProvider implements TunnelProvider {
+
+<span class="fc" id="L123">    private static final Logger log = getLogger(PcepTunnelProvider.class);</span>
+    private static final long MAX_BANDWIDTH = 99999744;
+    private static final long MIN_BANDWIDTH = 64;
+    private static final String BANDWIDTH_UINT = &quot;kbps&quot;;
+    static final String PROVIDER_ID = &quot;org.onosproject.provider.tunnel.pcep&quot;;
+
+    static final int POLL_INTERVAL = 10;
+<span class="fc" id="L130">    @Property(name = &quot;tunnelStatsPollFrequency&quot;, intValue = POLL_INTERVAL,</span>
+            label = &quot;Frequency (in seconds) for polling tunnel statistics&quot;)
+    private int tunnelStatsPollFrequency = POLL_INTERVAL;
+
+    private static final String TUNNLE_NOT_NULL = &quot;Create failed,The given port may be wrong or has been occupied.&quot;;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TunnelProviderRegistry tunnelProviderRegistry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PcepController controller;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PcepClientController pcepClientController;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TunnelService tunnelService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+    TunnelProviderService service;
+
+<span class="fc" id="L153">    HashMap&lt;String, TunnelId&gt; tunnelMap = new HashMap&lt;String, TunnelId&gt;();</span>
+<span class="fc" id="L154">    HashMap&lt;TunnelId, TunnelStatistics&gt; tunnelStatisticsMap = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L155">    private HashMap&lt;Long, TunnelStatsCollector&gt; collectors = Maps.newHashMap();</span>
+
+<span class="fc" id="L157">    private InnerTunnelProvider listener = new InnerTunnelProvider();</span>
+
+<span class="fc" id="L159">    protected PcepTunnelApiMapper pcepTunnelAPIMapper = new PcepTunnelApiMapper();</span>
+    private static final int DEFAULT_BANDWIDTH_VALUE = 10;
+
+    /**
+     * Creates a Tunnel provider.
+     */
+    public PcepTunnelProvider() {
+<span class="fc" id="L166">        super(new ProviderId(&quot;pcep&quot;, PROVIDER_ID));</span>
+<span class="fc" id="L167">    }</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L171">        cfgService.registerProperties(getClass());</span>
+<span class="fc" id="L172">        service = tunnelProviderRegistry.register(this);</span>
+<span class="fc" id="L173">        controller.addTunnelListener(listener);</span>
+<span class="fc" id="L174">        pcepClientController.addListener(listener);</span>
+<span class="fc" id="L175">        pcepClientController.addEventListener(listener);</span>
+<span class="fc" id="L176">        tunnelService.queryAllTunnels().forEach(tunnel -&gt; {</span>
+<span class="nc" id="L177">            String pcepTunnelId = getPCEPTunnelKey(tunnel.tunnelId());</span>
+<span class="nc" id="L178">            TunnelStatsCollector tsc = new TunnelStatsCollector(pcepTunnelId, tunnelStatsPollFrequency);</span>
+<span class="nc" id="L179">            tsc.start();</span>
+<span class="nc" id="L180">            collectors.put(tunnel.tunnelId().id(), tsc);</span>
+
+<span class="nc" id="L182">        });</span>
+
+<span class="fc" id="L184">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L185">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L189">        tunnelProviderRegistry.unregister(this);</span>
+<span class="fc" id="L190">        controller.removeTunnelListener(listener);</span>
+<span class="fc" id="L191">        collectors.values().forEach(TunnelStatsCollector::stop);</span>
+<span class="fc" id="L192">        pcepClientController.removeListener(listener);</span>
+<span class="fc" id="L193">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L194">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="nc" id="L198">        Dictionary&lt;?, ?&gt; properties = context.getProperties();</span>
+        int newTunnelStatsPollFrequency;
+        try {
+<span class="nc" id="L201">            String s = get(properties, &quot;tunnelStatsPollFrequency&quot;);</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            newTunnelStatsPollFrequency = isNullOrEmpty(s) ? tunnelStatsPollFrequency : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L204">        } catch (NumberFormatException | ClassCastException e) {</span>
+<span class="nc" id="L205">            newTunnelStatsPollFrequency = tunnelStatsPollFrequency;</span>
+<span class="nc" id="L206">        }</span>
+
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        if (newTunnelStatsPollFrequency != tunnelStatsPollFrequency) {</span>
+<span class="nc" id="L209">            tunnelStatsPollFrequency = newTunnelStatsPollFrequency;</span>
+<span class="nc" id="L210">            collectors.values().forEach(tsc -&gt; tsc.adjustPollInterval(tunnelStatsPollFrequency));</span>
+<span class="nc" id="L211">            log.info(&quot;New setting: tunnelStatsPollFrequency={}&quot;, tunnelStatsPollFrequency);</span>
+        }
+
+<span class="nc" id="L214">    }</span>
+
+    @Override
+    public void setupTunnel(Tunnel tunnel, Path path) {
+<span class="pc bpc" id="L218" title="1 of 2 branches missed.">        if (tunnel.type() != Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L219">            log.error(&quot;Tunnel Type MPLS is only supported&quot;);</span>
+<span class="nc" id="L220">            return;</span>
+        }
+
+        // check for tunnel end points
+<span class="pc bpc" id="L224" title="2 of 4 branches missed.">        if (!(tunnel.src() instanceof IpTunnelEndPoint) || !(tunnel.dst() instanceof IpTunnelEndPoint)) {</span>
+<span class="nc" id="L225">            log.error(&quot;Tunnel source or destination is not valid&quot;);</span>
+<span class="nc" id="L226">            return;</span>
+        }
+
+        // Get the pcc client
+<span class="fc" id="L230">        PcepClient pc = pcepClientController.getClient(PccId.pccId(((IpTunnelEndPoint) tunnel.src()).ip()));</span>
+
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (!(pc instanceof PcepClient)) {</span>
+<span class="nc" id="L233">            log.error(&quot;There is no PCC connected with ip addresss {}&quot;</span>
+<span class="nc" id="L234">                              + ((IpTunnelEndPoint) tunnel.src()).ip().toString());</span>
+<span class="nc" id="L235">            return;</span>
+        }
+<span class="fc" id="L237">        pcepSetupTunnel(tunnel, path, pc);</span>
+<span class="fc" id="L238">    }</span>
+
+    @Override
+    public void setupTunnel(ElementId srcElement, Tunnel tunnel, Path path) {
+
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if (tunnel.type() != Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L244">            log.error(&quot;Tunnel Type MPLS is only supported&quot;);</span>
+<span class="nc" id="L245">            return;</span>
+        }
+
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (!(srcElement instanceof IpElementId)) {</span>
+<span class="nc" id="L249">            log.error(&quot;Element id is not valid&quot;);</span>
+<span class="nc" id="L250">            return;</span>
+        }
+
+        // check for tunnel end points
+<span class="nc bnc" id="L254" title="All 4 branches missed.">        if (!(tunnel.src() instanceof IpTunnelEndPoint) || !(tunnel.dst() instanceof IpTunnelEndPoint)) {</span>
+<span class="nc" id="L255">            log.error(&quot;Tunnel source or destination is not valid&quot;);</span>
+<span class="nc" id="L256">            return;</span>
+        }
+
+<span class="nc" id="L259">        PcepClient pc = pcepClientController.getClient(PccId.pccId(((IpElementId) srcElement).ipAddress()));</span>
+
+<span class="nc bnc" id="L261" title="All 2 branches missed.">        if (!(pc instanceof PcepClient)) {</span>
+<span class="nc" id="L262">            log.error(&quot;There is no PCC connected with ip addresss {}&quot;</span>
+<span class="nc" id="L263">                    + ((IpElementId) srcElement).ipAddress().toString());</span>
+<span class="nc" id="L264">            return;</span>
+        }
+<span class="nc" id="L266">        pcepSetupTunnel(tunnel, path, pc);</span>
+<span class="nc" id="L267">    }</span>
+
+    @Override
+    public void releaseTunnel(Tunnel tunnel) {
+
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        if (tunnel.type() != Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L273">            log.error(&quot;Tunnel Type MPLS is only supported&quot;);</span>
+<span class="nc" id="L274">            return;</span>
+        }
+
+        // check for tunnel end points
+<span class="pc bpc" id="L278" title="2 of 4 branches missed.">        if (!(tunnel.src() instanceof IpTunnelEndPoint) || !(tunnel.dst() instanceof IpTunnelEndPoint)) {</span>
+<span class="nc" id="L279">            log.error(&quot;Tunnel source or destination is not valid&quot;);</span>
+<span class="nc" id="L280">            return;</span>
+        }
+
+<span class="fc" id="L283">        PcepClient pc = pcepClientController.getClient(PccId.pccId(((IpTunnelEndPoint) tunnel.src()).ip()));</span>
+
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">        if (!(pc instanceof PcepClient)) {</span>
+<span class="nc" id="L286">            log.error(&quot;There is no PCC connected with ip addresss {}&quot;</span>
+<span class="nc" id="L287">                    + ((IpTunnelEndPoint) tunnel.src()).ip().toString());</span>
+<span class="nc" id="L288">            return;</span>
+        }
+<span class="fc" id="L290">        pcepReleaseTunnel(tunnel, pc);</span>
+<span class="fc" id="L291">    }</span>
+
+    @Override
+    public void releaseTunnel(ElementId srcElement, Tunnel tunnel) {
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (tunnel.type() != Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L296">            log.error(&quot;Tunnel Type MPLS is only supported&quot;);</span>
+<span class="nc" id="L297">            return;</span>
+        }
+
+<span class="nc bnc" id="L300" title="All 2 branches missed.">        if (!(srcElement instanceof IpElementId)) {</span>
+<span class="nc" id="L301">            log.error(&quot;Element id is not valid&quot;);</span>
+<span class="nc" id="L302">            return;</span>
+        }
+
+        // check for tunnel end points
+<span class="nc bnc" id="L306" title="All 4 branches missed.">        if (!(tunnel.src() instanceof IpTunnelEndPoint) || !(tunnel.dst() instanceof IpTunnelEndPoint)) {</span>
+<span class="nc" id="L307">            log.error(&quot;Tunnel source or destination is not valid&quot;);</span>
+<span class="nc" id="L308">            return;</span>
+        }
+
+<span class="nc" id="L311">        PcepClient pc = pcepClientController.getClient(PccId.pccId(((IpElementId) srcElement).ipAddress()));</span>
+
+<span class="nc bnc" id="L313" title="All 2 branches missed.">        if (!(pc instanceof PcepClient)) {</span>
+<span class="nc" id="L314">            log.error(&quot;There is no PCC connected with ip addresss {}&quot;</span>
+<span class="nc" id="L315">                    + ((IpElementId) srcElement).ipAddress().toString());</span>
+<span class="nc" id="L316">            return;</span>
+        }
+<span class="nc" id="L318">        pcepReleaseTunnel(tunnel, pc);</span>
+<span class="nc" id="L319">    }</span>
+
+    @Override
+    public void updateTunnel(Tunnel tunnel, Path path) {
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">        if (tunnel.type() != Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L324">            log.error(&quot;Tunnel Type MPLS is only supported&quot;);</span>
+<span class="nc" id="L325">            return;</span>
+        }
+
+        // check for tunnel end points
+<span class="pc bpc" id="L329" title="2 of 4 branches missed.">        if (!(tunnel.src() instanceof IpTunnelEndPoint) || !(tunnel.dst() instanceof IpTunnelEndPoint)) {</span>
+<span class="nc" id="L330">            log.error(&quot;Tunnel source or destination is not valid&quot;);</span>
+<span class="nc" id="L331">            return;</span>
+        }
+
+<span class="fc" id="L334">        PcepClient pc = pcepClientController.getClient(PccId.pccId(((IpTunnelEndPoint) tunnel.src()).ip()));</span>
+
+<span class="pc bpc" id="L336" title="1 of 2 branches missed.">        if (!(pc instanceof PcepClient)) {</span>
+<span class="nc" id="L337">            log.error(&quot;There is no PCC connected with ip addresss {}&quot;</span>
+<span class="nc" id="L338">                    + ((IpTunnelEndPoint) tunnel.src()).ip().toString());</span>
+<span class="nc" id="L339">            return;</span>
+        }
+<span class="fc" id="L341">        pcepUpdateTunnel(tunnel, path, pc);</span>
+<span class="fc" id="L342">    }</span>
+
+    @Override
+    public void updateTunnel(ElementId srcElement, Tunnel tunnel, Path path) {
+
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        if (tunnel.type() != Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L348">            log.error(&quot;Tunnel Type MPLS is only supported&quot;);</span>
+<span class="nc" id="L349">            return;</span>
+        }
+
+<span class="nc bnc" id="L352" title="All 2 branches missed.">        if (!(srcElement instanceof IpElementId)) {</span>
+<span class="nc" id="L353">            log.error(&quot;Element id is not valid&quot;);</span>
+<span class="nc" id="L354">            return;</span>
+        }
+
+        // check for tunnel end points
+<span class="nc bnc" id="L358" title="All 4 branches missed.">        if (!(tunnel.src() instanceof IpTunnelEndPoint) || !(tunnel.dst() instanceof IpTunnelEndPoint)) {</span>
+<span class="nc" id="L359">            log.error(&quot;Tunnel source or destination is not valid&quot;);</span>
+<span class="nc" id="L360">            return;</span>
+        }
+
+<span class="nc" id="L363">        PcepClient pc = pcepClientController.getClient(PccId.pccId(((IpElementId) srcElement).ipAddress()));</span>
+
+<span class="nc bnc" id="L365" title="All 2 branches missed.">        if (!(pc instanceof PcepClient)) {</span>
+<span class="nc" id="L366">            log.error(&quot;There is no PCC connected with ip addresss {}&quot;</span>
+<span class="nc" id="L367">                    + ((IpElementId) srcElement).ipAddress().toString());</span>
+<span class="nc" id="L368">            return;</span>
+        }
+<span class="nc" id="L370">        pcepUpdateTunnel(tunnel, path, pc);</span>
+<span class="nc" id="L371">    }</span>
+
+    @Override
+    public TunnelId tunnelAdded(TunnelDescription tunnel) {
+<span class="nc bnc" id="L375" title="All 2 branches missed.">        if (tunnel.type() == Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L376">            pcepTunnelAPIMapper.removeFromCoreTunnelRequestQueue(tunnel.id());</span>
+<span class="nc" id="L377">            return service.tunnelAdded(tunnel);</span>
+        }
+
+<span class="nc" id="L380">        long bandwidth = Long</span>
+<span class="nc" id="L381">                .parseLong(tunnel.annotations().value(&quot;bandwidth&quot;));</span>
+
+<span class="nc bnc" id="L383" title="All 4 branches missed.">        if (bandwidth &lt; MIN_BANDWIDTH || bandwidth &gt; MAX_BANDWIDTH) {</span>
+<span class="nc" id="L384">            error(&quot;Update failed, invalid bandwidth.&quot;);</span>
+<span class="nc" id="L385">            return null;</span>
+        }
+
+        // endpoints
+<span class="nc" id="L389">        OpticalTunnelEndPoint src = (org.onosproject.incubator.net.tunnel.OpticalTunnelEndPoint) tunnel</span>
+<span class="nc" id="L390">                .src();</span>
+<span class="nc" id="L391">        OpticalTunnelEndPoint dst = (OpticalTunnelEndPoint) tunnel.dst();</span>
+        // devices
+<span class="nc" id="L393">        DeviceId srcId = (DeviceId) src.elementId().get();</span>
+<span class="nc" id="L394">        DeviceId dstId = (DeviceId) dst.elementId().get();</span>
+
+        // ports
+<span class="nc" id="L397">        long srcPort = src.portNumber().get().toLong();</span>
+<span class="nc" id="L398">        long dstPort = dst.portNumber().get().toLong();</span>
+
+        // type
+<span class="nc bnc" id="L401" title="All 2 branches missed.">        if (tunnel.type() != Tunnel.Type.VLAN) {</span>
+<span class="nc" id="L402">            error(&quot;Illegal tunnel type. Only support VLAN tunnel creation.&quot;);</span>
+<span class="nc" id="L403">            return null;</span>
+        }
+
+<span class="nc" id="L406">        PcepTunnel pcepTunnel = controller.applyTunnel(srcId, dstId, srcPort,</span>
+                                                       dstPort, bandwidth,
+<span class="nc" id="L408">                                                       tunnel.tunnelName()</span>
+<span class="nc" id="L409">                                                       .value());</span>
+
+<span class="nc" id="L411">        checkNotNull(pcepTunnel, TUNNLE_NOT_NULL);</span>
+<span class="nc" id="L412">        TunnelDescription tunnelAdded = buildOpticalTunnel(pcepTunnel, null);</span>
+<span class="nc" id="L413">        TunnelId tunnelId = service.tunnelAdded(tunnelAdded);</span>
+
+<span class="nc" id="L415">        tunnelMap.put(String.valueOf(pcepTunnel.id()), tunnelId);</span>
+<span class="nc" id="L416">        return tunnelId;</span>
+    }
+
+    @Override
+    public void tunnelRemoved(TunnelDescription tunnel) {
+<span class="nc bnc" id="L421" title="All 2 branches missed.">        if (tunnel.type() == Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L422">            pcepTunnelAPIMapper.removeFromCoreTunnelRequestQueue(tunnel.id());</span>
+<span class="nc" id="L423">            service.tunnelRemoved(tunnel);</span>
+        }
+
+<span class="nc" id="L426">        Tunnel tunnelOld = tunnelQueryById(tunnel.id());</span>
+<span class="nc" id="L427">        checkNotNull(tunnelOld, &quot;The tunnel id is not exsited.&quot;);</span>
+<span class="nc bnc" id="L428" title="All 2 branches missed.">        if (tunnelOld.type() != Tunnel.Type.VLAN) {</span>
+<span class="nc" id="L429">            error(&quot;Illegal tunnel type. Only support VLAN tunnel deletion.&quot;);</span>
+<span class="nc" id="L430">            return;</span>
+        }
+<span class="nc" id="L432">        String pcepTunnelId = getPCEPTunnelKey(tunnel.id());</span>
+<span class="nc" id="L433">        checkNotNull(pcepTunnelId, &quot;The tunnel id is not exsited.&quot;);</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">        if (!controller.deleteTunnel(pcepTunnelId)) {</span>
+<span class="nc" id="L435">            error(&quot;Delete tunnel failed, Maybe some devices have been disconnected.&quot;);</span>
+<span class="nc" id="L436">            return;</span>
+        }
+<span class="nc" id="L438">        tunnelMap.remove(pcepTunnelId);</span>
+<span class="nc" id="L439">        service.tunnelRemoved(tunnel);</span>
+<span class="nc" id="L440">    }</span>
+
+    @Override
+    public void tunnelUpdated(TunnelDescription tunnel) {
+<span class="nc bnc" id="L444" title="All 2 branches missed.">        if (tunnel.type() == Tunnel.Type.MPLS) {</span>
+<span class="nc" id="L445">            pcepTunnelAPIMapper.removeFromCoreTunnelRequestQueue(tunnel.id());</span>
+<span class="nc" id="L446">            service.tunnelUpdated(tunnel);</span>
+        }
+
+<span class="nc" id="L449">        Tunnel tunnelOld = tunnelQueryById(tunnel.id());</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">        if (tunnelOld.type() != Tunnel.Type.VLAN) {</span>
+<span class="nc" id="L451">            error(&quot;Illegal tunnel type. Only support VLAN tunnel update.&quot;);</span>
+<span class="nc" id="L452">            return;</span>
+        }
+<span class="nc" id="L454">        long bandwidth = Long</span>
+<span class="nc" id="L455">                .parseLong(tunnel.annotations().value(&quot;bandwidth&quot;));</span>
+<span class="nc bnc" id="L456" title="All 4 branches missed.">        if (bandwidth &lt; MIN_BANDWIDTH || bandwidth &gt; MAX_BANDWIDTH) {</span>
+<span class="nc" id="L457">            error(&quot;Update failed, invalid bandwidth.&quot;);</span>
+<span class="nc" id="L458">            return;</span>
+        }
+<span class="nc" id="L460">        String pcepTunnelId = getPCEPTunnelKey(tunnel.id());</span>
+
+<span class="nc" id="L462">        checkNotNull(pcepTunnelId, &quot;Invalid tunnel id&quot;);</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">        if (!controller.updateTunnelBandwidth(pcepTunnelId, bandwidth)) {</span>
+
+<span class="nc" id="L465">            error(&quot;Update failed,maybe invalid bandwidth.&quot;);</span>
+<span class="nc" id="L466">            return;</span>
+
+        }
+<span class="nc" id="L469">        service.tunnelUpdated(tunnel);</span>
+<span class="nc" id="L470">    }</span>
+
+    private void error(String info) {
+<span class="nc" id="L473">        System.err.println(info);</span>
+<span class="nc" id="L474">    }</span>
+
+    // Short-hand for creating a connection point.
+    private ConnectPoint connectPoint(PcepDpid id, long port) {
+<span class="nc" id="L478">        return new ConnectPoint(deviceId(uri(id)), portNumber(port));</span>
+    }
+
+    // Short-hand for creating a link.
+    private Link link(PcepDpid src, long sp, PcepDpid dst, long dp) {
+<span class="nc" id="L483">        return new DefaultLink(id(), connectPoint(src, sp), connectPoint(dst,</span>
+                                                                         dp),
+                               Link.Type.TUNNEL);
+    }
+
+    // Creates a path that leads through the given devices.
+    private Path createPath(List&lt;PcepHopNodeDescription&gt; hopList,
+                            PATHTYPE pathtype, PathState pathState) {
+<span class="nc bnc" id="L491" title="All 4 branches missed.">        if (hopList == null || hopList.size() == 0) {</span>
+<span class="nc" id="L492">            return null;</span>
+        }
+<span class="nc" id="L494">        List&lt;Link&gt; links = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L495" title="All 2 branches missed.">        for (int i = 1; i &lt; hopList.size() - 1; i = i + 2) {</span>
+<span class="nc" id="L496">            links.add(link(hopList.get(i).getDeviceId(), hopList.get(i)</span>
+<span class="nc" id="L497">                    .getPortNum(), hopList.get(i + 1).getDeviceId(), hopList</span>
+<span class="nc" id="L498">                    .get(i + 1).getPortNum()));</span>
+        }
+
+<span class="nc" id="L501">        int hopNum = hopList.size() - 2;</span>
+<span class="nc" id="L502">        DefaultAnnotations extendAnnotations = DefaultAnnotations.builder()</span>
+<span class="nc" id="L503">                .set(&quot;pathNum&quot;, String.valueOf(hopNum))</span>
+<span class="nc" id="L504">                .set(&quot;pathState&quot;, String.valueOf(pathState))</span>
+<span class="nc" id="L505">                .set(&quot;pathType&quot;, String.valueOf(pathtype)).build();</span>
+<span class="nc" id="L506">        return new DefaultPath(id(), links, hopNum, extendAnnotations);</span>
+    }
+
+    // convert the path description to a string.
+    public String pathToString(List&lt;Link&gt; links) {
+<span class="nc" id="L511">        StringBuilder builder = new StringBuilder();</span>
+<span class="nc" id="L512">        builder.append(&quot;{&quot;);</span>
+<span class="nc bnc" id="L513" title="All 2 branches missed.">        for (Link link : links) {</span>
+<span class="nc" id="L514">            builder.append(&quot;(Device:&quot; + link.src().deviceId() + &quot;  Port:&quot;</span>
+<span class="nc" id="L515">                    + link.src().port().toLong());</span>
+<span class="nc" id="L516">            builder.append(&quot; Device:&quot; + link.dst().deviceId() + &quot;  Port:&quot;</span>
+<span class="nc" id="L517">                    + link.dst().port().toLong());</span>
+<span class="nc" id="L518">            builder.append(&quot;)&quot;);</span>
+<span class="nc" id="L519">        }</span>
+<span class="nc" id="L520">        builder.append(&quot;}&quot;);</span>
+<span class="nc" id="L521">        return builder.toString();</span>
+    }
+
+    // build a TunnelDescription.
+    private TunnelDescription buildOpticalTunnel(PcepTunnel pcepTunnel,
+                                                 TunnelId tunnelId) {
+<span class="nc" id="L527">        TunnelEndPoint srcPoint = null;</span>
+<span class="nc" id="L528">        TunnelEndPoint dstPoint = null;</span>
+<span class="nc" id="L529">        Tunnel.Type tunnelType = null;</span>
+<span class="nc" id="L530">        TunnelName name = TunnelName.tunnelName(pcepTunnel.name());</span>
+
+        // add path after codes of tunnel's path merged
+<span class="nc" id="L533">        Path path = createPath(pcepTunnel.getHopList(),</span>
+<span class="nc" id="L534">                               pcepTunnel.getPathType(),</span>
+<span class="nc" id="L535">                               pcepTunnel.getPathState());</span>
+
+<span class="nc" id="L537">        OpticalTunnelEndPoint.Type endPointType = null;</span>
+<span class="nc bnc" id="L538" title="All 4 branches missed.">        switch (pcepTunnel.type()) {</span>
+        case OCH:
+<span class="nc" id="L540">            tunnelType = Tunnel.Type.OCH;</span>
+<span class="nc" id="L541">            endPointType = OpticalTunnelEndPoint.Type.LAMBDA;</span>
+<span class="nc" id="L542">            break;</span>
+
+        case OTN:
+<span class="nc" id="L545">            tunnelType = Tunnel.Type.ODUK;</span>
+<span class="nc" id="L546">            endPointType = OpticalTunnelEndPoint.Type.TIMESLOT;</span>
+<span class="nc" id="L547">            break;</span>
+
+        case UNI:
+<span class="nc" id="L550">            tunnelType = Tunnel.Type.VLAN;</span>
+<span class="nc" id="L551">            endPointType = null;</span>
+<span class="nc" id="L552">            break;</span>
+
+        default:
+            break;
+        }
+<span class="nc" id="L557">        DeviceId srcDid = deviceId(uri(pcepTunnel.srcDeviceID()));</span>
+<span class="nc" id="L558">        DeviceId dstDid = deviceId(uri(pcepTunnel.dstDeviceId()));</span>
+<span class="nc" id="L559">        PortNumber srcPort = PortNumber.portNumber(pcepTunnel.srcPort());</span>
+<span class="nc" id="L560">        PortNumber dstPort = PortNumber.portNumber(pcepTunnel.dstPort());</span>
+
+<span class="nc" id="L562">        srcPoint = new DefaultOpticalTunnelEndPoint(id(), Optional.of(srcDid),</span>
+<span class="nc" id="L563">                                                    Optional.of(srcPort), null,</span>
+                                                    endPointType,
+<span class="nc" id="L565">                                                    OpticalLogicId.logicId(0),</span>
+                                                    true);
+<span class="nc" id="L567">        dstPoint = new DefaultOpticalTunnelEndPoint(id(), Optional.of(dstDid),</span>
+<span class="nc" id="L568">                                                    Optional.of(dstPort), null,</span>
+                                                    endPointType,
+<span class="nc" id="L570">                                                    OpticalLogicId.logicId(0),</span>
+                                                    true);
+
+        // basic annotations
+        DefaultAnnotations annotations = DefaultAnnotations
+<span class="nc" id="L575">                .builder()</span>
+<span class="nc" id="L576">                .set(&quot;SLA&quot;, String.valueOf(pcepTunnel.getSla()))</span>
+<span class="nc" id="L577">                .set(&quot;bandwidth&quot;,</span>
+<span class="nc" id="L578">                     String.valueOf(pcepTunnel.bandWidth()) + BANDWIDTH_UINT)</span>
+<span class="nc" id="L579">                .set(&quot;index&quot;, String.valueOf(pcepTunnel.id())).build();</span>
+
+        // a VLAN tunnel always carry OCH tunnel, this annotation is the index
+        // of a OCH tunnel.
+<span class="nc bnc" id="L583" title="All 2 branches missed.">        if (pcepTunnel.underlayTunnelId() != 0) {</span>
+            DefaultAnnotations extendAnnotations = DefaultAnnotations
+<span class="nc" id="L585">                    .builder()</span>
+<span class="nc" id="L586">                    .set(&quot;underLayTunnelIndex&quot;,</span>
+<span class="nc" id="L587">                         String.valueOf(pcepTunnel.underlayTunnelId())).build();</span>
+<span class="nc" id="L588">            annotations = DefaultAnnotations.merge(annotations,</span>
+                                                   extendAnnotations);
+
+        }
+<span class="nc" id="L592">        TunnelDescription tunnel = new DefaultTunnelDescription(</span>
+                                                                tunnelId,
+                                                                srcPoint,
+                                                                dstPoint,
+                                                                tunnelType,
+                                                                new DefaultGroupId(
+                                                                                   0),
+<span class="nc" id="L599">                                                                id(), name,</span>
+                                                                path,
+                                                                annotations);
+<span class="nc" id="L602">        return tunnel;</span>
+
+    }
+
+    /**
+     * Get the tunnelID according to the tunnel key.
+     *
+     * @param tunnelKey tunnel key
+     * @return corresponding tunnel id of the a tunnel key.
+     */
+    private TunnelId getTunnelId(String tunnelKey) {
+<span class="nc bnc" id="L613" title="All 2 branches missed.">        for (String key : tunnelMap.keySet()) {</span>
+<span class="nc bnc" id="L614" title="All 2 branches missed.">            if (key.equals(tunnelKey)) {</span>
+<span class="nc" id="L615">                return tunnelMap.get(key);</span>
+            }
+<span class="nc" id="L617">        }</span>
+<span class="nc" id="L618">        return null;</span>
+    }
+
+    /**
+     * Get the tunnel key according to the tunnelID.
+     *
+     * @param tunnelId tunnel id
+     * @return corresponding a tunnel key of the tunnel id.
+     */
+    private String getPCEPTunnelKey(TunnelId tunnelId) {
+<span class="nc bnc" id="L628" title="All 2 branches missed.">        for (String key : tunnelMap.keySet()) {</span>
+<span class="nc bnc" id="L629" title="All 2 branches missed.">            if (tunnelMap.get(key).id() == tunnelId.id()) {</span>
+<span class="nc" id="L630">                return key;</span>
+            }
+<span class="nc" id="L632">        }</span>
+<span class="nc" id="L633">        return null;</span>
+
+    }
+
+    /**
+     * Build a DefaultTunnelStatistics from a PcepTunnelStatistics.
+     *
+     * @param statistics statistics data from a PCEP tunnel
+     * @return TunnelStatistics
+     */
+    private TunnelStatistics buildTunnelStatistics(PcepTunnelStatistics statistics) {
+<span class="nc" id="L644">        DefaultTunnelStatistics.Builder builder = new DefaultTunnelStatistics.Builder();</span>
+<span class="nc" id="L645">        DefaultTunnelStatistics tunnelStatistics =  builder.setBwUtilization(statistics.bandwidthUtilization())</span>
+<span class="nc" id="L646">                    .setPacketLossRatio(statistics.packetLossRate())</span>
+<span class="nc" id="L647">                    .setFlowDelay(statistics.flowDelay())</span>
+<span class="nc" id="L648">                    .setAlarms(statistics.alarms())</span>
+<span class="nc" id="L649">                .build();</span>
+<span class="nc" id="L650">        return tunnelStatistics;</span>
+   }
+    /**
+     * Creates list of hops for ERO object from Path.
+     *
+     * @param path network path
+     * @return list of ipv4 subobjects
+     */
+    private LinkedList&lt;PcepValueType&gt; createPcepPath(Path path) {
+<span class="fc" id="L659">        LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;PcepValueType&gt;();</span>
+<span class="fc" id="L660">        List&lt;Link&gt; listLink = path.links();</span>
+<span class="fc" id="L661">        ConnectPoint source = null;</span>
+<span class="fc" id="L662">        ConnectPoint destination = null;</span>
+<span class="fc" id="L663">        IpAddress ipDstAddress = null;</span>
+<span class="fc" id="L664">        IpAddress ipSrcAddress = null;</span>
+<span class="fc" id="L665">        PcepValueType subObj = null;</span>
+
+<span class="fc bfc" id="L667" title="All 2 branches covered.">        for (Link link : listLink) {</span>
+<span class="fc" id="L668">            source = link.src();</span>
+<span class="pc bpc" id="L669" title="1 of 2 branches missed.">            if (!(source.equals(destination))) {</span>
+                //set IPv4SubObject for ERO object
+<span class="fc" id="L671">                ipSrcAddress = source.ipElementId().ipAddress();</span>
+<span class="fc" id="L672">                subObj = new IPv4SubObject(ipSrcAddress.getIp4Address().toInt());</span>
+<span class="fc" id="L673">                llSubObjects.add(subObj);</span>
+            }
+
+<span class="fc" id="L676">            destination = link.dst();</span>
+<span class="fc" id="L677">            ipDstAddress = destination.ipElementId().ipAddress();</span>
+<span class="fc" id="L678">            subObj = new IPv4SubObject(ipDstAddress.getIp4Address().toInt());</span>
+<span class="fc" id="L679">            llSubObjects.add(subObj);</span>
+<span class="fc" id="L680">        }</span>
+<span class="fc" id="L681">        return llSubObjects;</span>
+    }
+
+    /**
+     * Creates PcInitiated lsp request list for setup tunnel.
+     *
+     * @param tunnel mpls tunnel
+     * @param path network path
+     * @param pc pcep client
+     * @param srpId unique id for pcep message
+     * @return list of PcInitiatedLspRequest
+     * @throws PcepParseException while building pcep objects fails
+     */
+    LinkedList&lt;PcInitiatedLspRequest&gt; createPcInitiatedLspReqList(Tunnel tunnel, Path path,
+                                                                  PcepClient pc, int srpId)
+                                                                          throws PcepParseException {
+        PcepValueType tlv;
+<span class="fc" id="L698">        LinkedList&lt;PcepValueType&gt; llSubObjects = createPcepPath(path);</span>
+
+<span class="pc bpc" id="L700" title="2 of 4 branches missed.">        if (llSubObjects == null || llSubObjects.size() == 0) {</span>
+<span class="nc" id="L701">            log.error(&quot;There is no link information to create tunnel&quot;);</span>
+<span class="nc" id="L702">            return null;</span>
+        }
+
+        //build SRP object
+<span class="fc" id="L706">        PcepSrpObject srpobj = pc.factory().buildSrpObject().setSrpID(srpId).setRFlag(false).build();</span>
+
+<span class="fc" id="L708">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;PcepValueType&gt;();</span>
+<span class="fc" id="L709">        LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList = new LinkedList&lt;PcInitiatedLspRequest&gt;();</span>
+        // set LSP identifiers TLV
+<span class="fc" id="L711">        tlv = new StatefulIPv4LspIdentidiersTlv((((IpTunnelEndPoint) tunnel.src()).ip().getIp4Address().toInt()),</span>
+                                                (short) 0, (short) 0, 0,
+<span class="fc" id="L713">                                                (((IpTunnelEndPoint) tunnel.dst()).ip().getIp4Address().toInt()));</span>
+<span class="fc" id="L714">        llOptionalTlv.add(tlv);</span>
+        //set SymbolicPathNameTlv of LSP object
+<span class="fc" id="L716">        tlv = new SymbolicPathNameTlv(tunnel.tunnelName().value().getBytes());</span>
+<span class="fc" id="L717">        llOptionalTlv.add(tlv);</span>
+
+        //build LSP object
+<span class="fc" id="L720">        PcepLspObject lspobj = pc.factory().buildLspObject().setAFlag(true).setOFlag((byte) 0).setPlspId(0)</span>
+<span class="fc" id="L721">                .setOptionalTlv(llOptionalTlv).build();</span>
+
+        //build ENDPOINTS object
+<span class="fc" id="L724">        PcepEndPointsObject endpointsobj = pc.factory().buildEndPointsObject()</span>
+<span class="fc" id="L725">                .setSourceIpAddress(((IpTunnelEndPoint) tunnel.src()).ip().getIp4Address().toInt())</span>
+<span class="fc" id="L726">                .setDestIpAddress(((IpTunnelEndPoint) tunnel.dst()).ip().getIp4Address().toInt())</span>
+<span class="fc" id="L727">                .setPFlag(true).build();</span>
+
+        //build ERO object
+<span class="fc" id="L730">        PcepEroObject eroobj = pc.factory().buildEroObject().setSubObjects(llSubObjects).build();</span>
+
+<span class="fc" id="L732">        int iBandwidth = DEFAULT_BANDWIDTH_VALUE;</span>
+<span class="pc bpc" id="L733" title="1 of 2 branches missed.">        if (tunnel.annotations().value(&quot;bandwidth&quot;) != null) {</span>
+<span class="nc" id="L734">            iBandwidth = Integer.parseInt(tunnel.annotations().value(&quot;bandwidth&quot;));</span>
+        }
+        // build bandwidth object
+<span class="fc" id="L737">        PcepBandwidthObject bandwidthObject = pc.factory().buildBandwidthObject().setBandwidth(iBandwidth).build();</span>
+        // build pcep attribute
+<span class="fc" id="L739">        PcepAttribute pcepAttribute = pc.factory().buildPcepAttribute().setBandwidthObject(bandwidthObject).build();</span>
+
+<span class="fc" id="L741">        PcInitiatedLspRequest initiateLspRequest = pc.factory().buildPcInitiatedLspRequest().setSrpObject(srpobj)</span>
+<span class="fc" id="L742">                .setLspObject(lspobj).setEndPointsObject(endpointsobj).setEroObject(eroobj)</span>
+<span class="fc" id="L743">                .setPcepAttribute(pcepAttribute).build();</span>
+<span class="fc" id="L744">        llPcInitiatedLspRequestList.add(initiateLspRequest);</span>
+<span class="fc" id="L745">        return llPcInitiatedLspRequestList;</span>
+    }
+
+    /**
+     * To send initiate tunnel message to pcc.
+     *
+     * @param tunnel mpls tunnel info
+     * @param path explicit route for the tunnel
+     * @param pc pcep client to send message
+     */
+    private void pcepSetupTunnel(Tunnel tunnel, Path path, PcepClient pc) {
+        try {
+<span class="fc" id="L757">            int srpId = SrpIdGenerators.create();</span>
+<span class="fc" id="L758">            PcepTunnelData pcepTunnelData = new PcepTunnelData(tunnel, path, RequestType.CREATE);</span>
+
+<span class="fc" id="L760">            pcepTunnelAPIMapper.addToCoreTunnelRequestQueue(pcepTunnelData);</span>
+
+<span class="fc" id="L762">            LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList = createPcInitiatedLspReqList(tunnel, path,</span>
+                                                                                                        pc, srpId);
+<span class="pc bpc" id="L764" title="2 of 4 branches missed.">            if (llPcInitiatedLspRequestList == null || llPcInitiatedLspRequestList.size() == 0) {</span>
+<span class="nc" id="L765">                log.error(&quot;Failed to create PcInitiatedLspRequestList&quot;);</span>
+<span class="nc" id="L766">                return;</span>
+            }
+
+            //build PCInitiate message
+<span class="fc" id="L770">            PcepInitiateMsg pcInitiateMsg = pc.factory().buildPcepInitiateMsg()</span>
+<span class="fc" id="L771">                    .setPcInitiatedLspRequestList(llPcInitiatedLspRequestList)</span>
+<span class="fc" id="L772">                    .build();</span>
+
+<span class="fc" id="L774">            pc.sendMessage(Collections.singletonList(pcInitiateMsg));</span>
+
+<span class="fc" id="L776">            pcepTunnelAPIMapper.addToTunnelRequestQueue(srpId, pcepTunnelData);</span>
+<span class="nc" id="L777">        } catch (PcepParseException e) {</span>
+<span class="nc" id="L778">            log.error(&quot;PcepParseException occurred while processing setup tunnel {}&quot;, e.getMessage());</span>
+<span class="fc" id="L779">        }</span>
+<span class="fc" id="L780">    }</span>
+
+    /**
+     * To send Release tunnel message to pcc.
+     *
+     * @param tunnel mpls tunnel info
+     * @param pc pcep client to send message
+     */
+    private void pcepReleaseTunnel(Tunnel tunnel, PcepClient pc) {
+        try {
+<span class="fc" id="L790">            PcepTunnelData pcepTunnelData = new PcepTunnelData(tunnel, RequestType.DELETE);</span>
+<span class="fc" id="L791">            pcepTunnelAPIMapper.addToCoreTunnelRequestQueue(pcepTunnelData);</span>
+<span class="fc" id="L792">            int srpId = SrpIdGenerators.create();</span>
+<span class="fc" id="L793">            TunnelId tunnelId = tunnel.tunnelId();</span>
+<span class="fc" id="L794">            int plspId = 0;</span>
+<span class="fc" id="L795">            StatefulIPv4LspIdentidiersTlv statefulIpv4IndentifierTlv = null;</span>
+
+<span class="pc bpc" id="L797" title="1 of 2 branches missed.">            if (!(pcepTunnelAPIMapper.checkFromTunnelDBQueue(tunnelId))) {</span>
+<span class="nc" id="L798">                log.error(&quot;Tunnel doesnot exists. Tunnel id {}&quot; + tunnelId.toString());</span>
+<span class="nc" id="L799">                return;</span>
+            } else {
+<span class="fc" id="L801">                PcepTunnelData pcepTunnelDbData = pcepTunnelAPIMapper.getDataFromTunnelDBQueue(tunnelId);</span>
+<span class="fc" id="L802">                plspId = pcepTunnelDbData.plspId();</span>
+<span class="fc" id="L803">                statefulIpv4IndentifierTlv = pcepTunnelDbData.statefulIpv4IndentifierTlv();</span>
+            }
+            // build srp object
+<span class="fc" id="L806">            PcepSrpObject srpobj = pc.factory().buildSrpObject().setSrpID(srpId).setRFlag(true).build();</span>
+
+            PcepValueType tlv;
+<span class="fc" id="L809">            LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;PcepValueType&gt;();</span>
+<span class="fc" id="L810">            LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList = new LinkedList&lt;PcInitiatedLspRequest&gt;();</span>
+
+<span class="pc bpc" id="L812" title="1 of 2 branches missed.">            if (statefulIpv4IndentifierTlv != null) {</span>
+<span class="fc" id="L813">                tlv = statefulIpv4IndentifierTlv;</span>
+            } else {
+<span class="nc" id="L815">                tlv = new StatefulIPv4LspIdentidiersTlv((</span>
+<span class="nc" id="L816">                        ((IpTunnelEndPoint) tunnel.src()).ip().getIp4Address().toInt()),</span>
+                        (short) 0, (short) 0, 0,
+<span class="nc" id="L818">                        (((IpTunnelEndPoint) tunnel.dst()).ip().getIp4Address().toInt()));</span>
+            }
+<span class="fc" id="L820">            llOptionalTlv.add(tlv);</span>
+<span class="fc" id="L821">            tlv = new SymbolicPathNameTlv(tunnel.tunnelName().value().getBytes());</span>
+<span class="fc" id="L822">            llOptionalTlv.add(tlv);</span>
+            // build lsp object, set r flag as false to delete the tunnel
+<span class="fc" id="L824">            PcepLspObject lspobj = pc.factory().buildLspObject().setRFlag(false).setPlspId(plspId)</span>
+<span class="fc" id="L825">                    .setOptionalTlv(llOptionalTlv).build();</span>
+
+<span class="fc" id="L827">            PcInitiatedLspRequest releaseLspRequest = pc.factory().buildPcInitiatedLspRequest().setSrpObject(srpobj)</span>
+<span class="fc" id="L828">                    .setLspObject(lspobj).build();</span>
+
+<span class="fc" id="L830">            llPcInitiatedLspRequestList.add(releaseLspRequest);</span>
+
+<span class="fc" id="L832">            PcepInitiateMsg pcInitiateMsg = pc.factory().buildPcepInitiateMsg()</span>
+<span class="fc" id="L833">                    .setPcInitiatedLspRequestList(llPcInitiatedLspRequestList).build();</span>
+
+<span class="fc" id="L835">            pc.sendMessage(Collections.singletonList(pcInitiateMsg));</span>
+
+<span class="fc" id="L837">            pcepTunnelAPIMapper.addToTunnelRequestQueue(srpId, pcepTunnelData);</span>
+<span class="nc" id="L838">        } catch (PcepParseException e) {</span>
+<span class="nc" id="L839">            log.error(&quot;PcepParseException occurred while processing release tunnel {}&quot;, e.getMessage());</span>
+<span class="fc" id="L840">        }</span>
+<span class="fc" id="L841">    }</span>
+
+    /**
+     * To send Update tunnel request message to pcc.
+     *
+     * @param tunnel mpls tunnel info
+     * @param path explicit route for the tunnel
+     * @param pc pcep client to send message
+     */
+    private void pcepUpdateTunnel(Tunnel tunnel, Path path, PcepClient pc) {
+        try {
+<span class="fc" id="L852">            PcepTunnelData pcepTunnelData = new PcepTunnelData(tunnel, path, RequestType.UPDATE);</span>
+<span class="fc" id="L853">            pcepTunnelAPIMapper.addToCoreTunnelRequestQueue(pcepTunnelData);</span>
+<span class="fc" id="L854">            int srpId = SrpIdGenerators.create();</span>
+<span class="fc" id="L855">            TunnelId tunnelId = tunnel.tunnelId();</span>
+            PcepValueType tlv;
+<span class="fc" id="L857">            int plspId = 0;</span>
+
+<span class="fc" id="L859">            LinkedList&lt;PcepValueType&gt; llSubObjects = createPcepPath(path);</span>
+<span class="fc" id="L860">            LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;PcepValueType&gt;();</span>
+<span class="fc" id="L861">            LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList = new LinkedList&lt;PcepUpdateRequest&gt;();</span>
+
+            //build SRP object
+<span class="fc" id="L864">            PcepSrpObject srpobj = pc.factory().buildSrpObject().setSrpID(srpId).setRFlag(false).build();</span>
+
+<span class="pc bpc" id="L866" title="1 of 2 branches missed.">            if (!(pcepTunnelAPIMapper.checkFromTunnelDBQueue(tunnelId))) {</span>
+<span class="nc" id="L867">                log.error(&quot;Tunnel doesnot exists in DB&quot;);</span>
+<span class="nc" id="L868">                return;</span>
+            } else {
+<span class="fc" id="L870">                PcepTunnelData pcepTunnelDBData = pcepTunnelAPIMapper.getDataFromTunnelDBQueue(tunnelId);</span>
+<span class="fc" id="L871">                plspId = pcepTunnelDBData.plspId();</span>
+            }
+
+<span class="fc" id="L874">            tlv = new StatefulIPv4LspIdentidiersTlv((((IpTunnelEndPoint) tunnel.src()).ip().getIp4Address().toInt()),</span>
+                                                    (short) 0, (short) 0, 0,
+<span class="fc" id="L876">                                                    (((IpTunnelEndPoint) tunnel.dst()).ip().getIp4Address().toInt()));</span>
+<span class="fc" id="L877">            llOptionalTlv.add(tlv);</span>
+
+<span class="pc bpc" id="L879" title="1 of 2 branches missed.">            if (tunnel.tunnelName().value() != null) {</span>
+<span class="fc" id="L880">                tlv = new SymbolicPathNameTlv(tunnel.tunnelName().value().getBytes());</span>
+<span class="fc" id="L881">                llOptionalTlv.add(tlv);</span>
+            }
+
+            // build lsp object
+<span class="fc" id="L885">            PcepLspObject lspobj = pc.factory().buildLspObject().setAFlag(true).setPlspId(plspId)</span>
+<span class="fc" id="L886">                    .setOptionalTlv(llOptionalTlv).build();</span>
+            // build ero object
+<span class="fc" id="L888">            PcepEroObject eroobj = pc.factory().buildEroObject().setSubObjects(llSubObjects).build();</span>
+
+<span class="fc" id="L890">            int iBandwidth = DEFAULT_BANDWIDTH_VALUE;</span>
+<span class="pc bpc" id="L891" title="1 of 2 branches missed.">            if (tunnel.annotations().value(&quot;bandwidth&quot;) != null) {</span>
+<span class="nc" id="L892">                iBandwidth = Integer.parseInt(tunnel.annotations().value(&quot;bandwidth&quot;));</span>
+            }
+            // build bandwidth object
+<span class="fc" id="L895">            PcepBandwidthObject bandwidthObject = pc.factory().buildBandwidthObject().setBandwidth(iBandwidth).build();</span>
+            // build pcep attribute
+<span class="fc" id="L897">            PcepAttribute pcepAttribute = pc.factory().buildPcepAttribute().setBandwidthObject(bandwidthObject).build();</span>
+            // build pcep msg path
+<span class="fc" id="L899">            PcepMsgPath msgPath = pc.factory().buildPcepMsgPath().setEroObject(eroobj).setPcepAttribute(pcepAttribute)</span>
+<span class="fc" id="L900">                    .build();</span>
+
+<span class="fc" id="L902">            PcepUpdateRequest updateRequest = pc.factory().buildPcepUpdateRequest().setSrpObject(srpobj)</span>
+<span class="fc" id="L903">                    .setLspObject(lspobj).setMsgPath(msgPath).build();</span>
+
+<span class="fc" id="L905">            llUpdateRequestList.add(updateRequest);</span>
+
+<span class="fc" id="L907">            PcepUpdateMsg pcUpdateMsg = pc.factory().buildUpdateMsg().setUpdateRequestList(llUpdateRequestList).build();</span>
+
+<span class="fc" id="L909">            pc.sendMessage(Collections.singletonList(pcUpdateMsg));</span>
+<span class="fc" id="L910">            pcepTunnelAPIMapper.addToTunnelRequestQueue(srpId, pcepTunnelData);</span>
+<span class="nc" id="L911">        } catch (PcepParseException e) {</span>
+<span class="nc" id="L912">            log.error(&quot;PcepParseException occurred while processing release tunnel {}&quot;, e.getMessage());</span>
+<span class="fc" id="L913">        }</span>
+<span class="fc" id="L914">    }</span>
+
+
+
+<span class="fc" id="L918">    private class InnerTunnelProvider implements PcepTunnelListener, PcepEventListener, PcepClientListener {</span>
+
+        @Override
+        public void handlePCEPTunnel(PcepTunnel pcepTunnel) {
+<span class="nc" id="L922">            TunnelDescription tunnel = null;</span>
+            // instance and id identify a tunnel together
+<span class="nc" id="L924">            String tunnelKey = String.valueOf(pcepTunnel.getInstance())</span>
+<span class="nc" id="L925">                    + String.valueOf(pcepTunnel.id());</span>
+
+<span class="nc bnc" id="L927" title="All 4 branches missed.">            if (tunnelKey == null || &quot;&quot;.equals(tunnelKey)) {</span>
+<span class="nc" id="L928">                log.error(&quot;Invalid PCEP tunnel&quot;);</span>
+<span class="nc" id="L929">                return;</span>
+            }
+
+<span class="nc" id="L932">            TunnelId tunnelId = getTunnelId(tunnelKey);</span>
+
+<span class="nc" id="L934">            tunnel = buildOpticalTunnel(pcepTunnel, tunnelId);</span>
+
+<span class="nc" id="L936">            OperationType operType = pcepTunnel.getOperationType();</span>
+<span class="nc bnc" id="L937" title="All 4 branches missed.">            switch (operType) {</span>
+            case ADD:
+<span class="nc" id="L939">                tunnelId = service.tunnelAdded(tunnel);</span>
+<span class="nc" id="L940">                tunnelMap.put(tunnelKey, tunnelId);</span>
+<span class="nc" id="L941">                break;</span>
+
+            case UPDATE:
+<span class="nc" id="L944">                service.tunnelUpdated(tunnel);</span>
+<span class="nc" id="L945">                break;</span>
+
+            case DELETE:
+<span class="nc" id="L948">                service.tunnelRemoved(tunnel);</span>
+<span class="nc" id="L949">                tunnelMap.remove(tunnelKey);</span>
+<span class="nc" id="L950">                break;</span>
+
+            default:
+<span class="nc" id="L953">                log.error(&quot;Invalid tunnel operation&quot;);</span>
+            }
+<span class="nc" id="L955">        }</span>
+
+        @Override
+        public void handleMessage(PccId pccId, PcepMessage msg) {
+            try {
+<span class="nc" id="L960">                log.debug(&quot;tunnel provider handle message {}&quot;, msg.getType().toString());</span>
+<span class="nc bnc" id="L961" title="All 2 branches missed.">                switch (msg.getType()) {</span>
+                case REPORT:
+<span class="nc" id="L963">                    int srpId = 0;</span>
+<span class="nc" id="L964">                    LinkedList&lt;PcepStateReport&gt; llStateReportList = null;</span>
+<span class="nc" id="L965">                    llStateReportList = ((PcepReportMsg) msg).getStateReportList();</span>
+<span class="nc" id="L966">                    ListIterator&lt;PcepStateReport&gt; listIterator = llStateReportList.listIterator();</span>
+<span class="nc" id="L967">                    PcepSrpObject srpObj = null;</span>
+<span class="nc" id="L968">                    PcepLspObject lspObj = null;</span>
+<span class="nc bnc" id="L969" title="All 2 branches missed.">                    while (listIterator.hasNext()) {</span>
+<span class="nc" id="L970">                        PcepStateReport stateRpt = listIterator.next();</span>
+<span class="nc" id="L971">                        srpObj = stateRpt.getSrpObject();</span>
+<span class="nc" id="L972">                        lspObj = stateRpt.getLspObject();</span>
+
+<span class="nc bnc" id="L974" title="All 2 branches missed.">                        if (srpObj instanceof PcepSrpObject) {</span>
+<span class="nc" id="L975">                            srpId = srpObj.getSrpID();</span>
+                        }
+
+<span class="nc" id="L978">                        log.debug(&quot;Plsp ID in handle message &quot; + lspObj.getPlspId());</span>
+<span class="nc" id="L979">                        log.debug(&quot;SRP ID in handle message &quot; + srpId);</span>
+
+<span class="nc bnc" id="L981" title="All 2 branches missed.">                        if (!(pcepTunnelAPIMapper.checkFromTunnelRequestQueue(srpId))) {</span>
+
+                            // Check the sync status
+<span class="nc bnc" id="L984" title="All 2 branches missed.">                            if (lspObj.getSFlag()) {</span>
+<span class="nc" id="L985">                                handleSyncReport(stateRpt);</span>
+<span class="nc bnc" id="L986" title="All 2 branches missed.">                            } else if (!pcepClientController.getClient(pccId).isSyncComplete()) {</span>
+                                // sync is done
+<span class="nc" id="L988">                                pcepClientController.getClient(pccId).setIsSyncComplete(true);</span>
+                            }
+                            continue;
+                        }
+
+<span class="nc" id="L993">                        handleReportMessage(srpId, lspObj);</span>
+<span class="nc" id="L994">                    }</span>
+                    break;
+
+                default:
+<span class="nc" id="L998">                    log.debug(&quot;Received unsupported message type {}&quot;, msg.getType().toString());</span>
+                }
+<span class="nc" id="L1000">            } catch (Exception e) {</span>
+<span class="nc" id="L1001">                log.error(&quot;Exception occured while processing report message {}&quot;, e.getMessage());</span>
+<span class="nc" id="L1002">            }</span>
+<span class="nc" id="L1003">        }</span>
+
+        /**
+         * Handles report message for setup/update/delete tunnel request.
+         *
+         * @param srpId unique identifier for pcep message
+         * @param lspObj lsp object
+         */
+        private void handleReportMessage(int srpId, PcepLspObject lspObj) {
+<span class="nc" id="L1012">            ProviderId providerId = new ProviderId(&quot;pcep&quot;, PROVIDER_ID);</span>
+<span class="nc" id="L1013">            PcepTunnelData pcepTunnelData = pcepTunnelAPIMapper.getDataFromTunnelRequestQueue(srpId);</span>
+<span class="nc" id="L1014">            SparseAnnotations annotations = (SparseAnnotations) pcepTunnelData.tunnel().annotations();</span>
+
+            // store the values required from report message
+<span class="nc" id="L1017">            pcepTunnelData.setPlspId(lspObj.getPlspId());</span>
+<span class="nc" id="L1018">            pcepTunnelData.setLspAFlag(lspObj.getAFlag());</span>
+<span class="nc" id="L1019">            pcepTunnelData.setLspOFlag(lspObj.getOFlag());</span>
+<span class="nc" id="L1020">            pcepTunnelData.setLspDFlag(lspObj.getDFlag());</span>
+
+<span class="nc" id="L1022">            StatefulIPv4LspIdentidiersTlv ipv4LspTlv = null;</span>
+<span class="nc" id="L1023">            ListIterator&lt;PcepValueType&gt; listTlvIterator = lspObj.getOptionalTlv().listIterator();</span>
+<span class="nc bnc" id="L1024" title="All 2 branches missed.">            while (listTlvIterator.hasNext()) {</span>
+<span class="nc" id="L1025">                PcepValueType tlv = listTlvIterator.next();</span>
+<span class="nc bnc" id="L1026" title="All 2 branches missed.">                if (tlv.getType() == StatefulIPv4LspIdentidiersTlv.TYPE) {</span>
+<span class="nc" id="L1027">                    ipv4LspTlv = (StatefulIPv4LspIdentidiersTlv) tlv;</span>
+<span class="nc" id="L1028">                    break;</span>
+                }
+<span class="nc" id="L1030">            }</span>
+<span class="nc bnc" id="L1031" title="All 2 branches missed.">            if (ipv4LspTlv != null) {</span>
+<span class="nc" id="L1032">                pcepTunnelData.setStatefulIpv4IndentifierTlv(ipv4LspTlv);</span>
+            }
+
+<span class="nc" id="L1035">            Path path = pcepTunnelData.path();</span>
+<span class="nc" id="L1036">            Tunnel tunnel = pcepTunnelData.tunnel();</span>
+<span class="nc" id="L1037">            DefaultTunnelDescription td = new DefaultTunnelDescription(tunnel.tunnelId(), tunnel.src(),</span>
+<span class="nc" id="L1038">                                                                       tunnel.dst(), tunnel.type(), tunnel.groupId(),</span>
+<span class="nc" id="L1039">                                                                       providerId, tunnel.tunnelName(), path,</span>
+                                                                       annotations);
+
+<span class="nc bnc" id="L1042" title="All 2 branches missed.">            if (RequestType.CREATE == pcepTunnelData.requestType()) {</span>
+<span class="nc" id="L1043">                log.debug(&quot;Report received for create request&quot;);</span>
+
+<span class="nc" id="L1045">                pcepTunnelAPIMapper.handleCreateTunnelRequestQueue(srpId, pcepTunnelData);</span>
+<span class="nc bnc" id="L1046" title="All 2 branches missed.">                if (0 == lspObj.getOFlag()) {</span>
+<span class="nc" id="L1047">                    log.warn(&quot;The tunnel is in down state&quot;);</span>
+                }
+<span class="nc" id="L1049">                tunnelAdded(td);</span>
+            }
+<span class="nc bnc" id="L1051" title="All 2 branches missed.">            if (RequestType.DELETE == pcepTunnelData.requestType()) {</span>
+<span class="nc" id="L1052">                log.debug(&quot;Report received for delete request&quot;);</span>
+<span class="nc" id="L1053">                pcepTunnelAPIMapper.handleRemoveFromTunnelRequestQueue(srpId, pcepTunnelData);</span>
+<span class="nc" id="L1054">                tunnelRemoved(td);</span>
+            }
+
+<span class="nc bnc" id="L1057" title="All 2 branches missed.">            if (RequestType.UPDATE == pcepTunnelData.requestType()) {</span>
+<span class="nc" id="L1058">                log.debug(&quot;Report received for update request&quot;);</span>
+<span class="nc" id="L1059">                pcepTunnelData.setRptFlag(true);</span>
+<span class="nc" id="L1060">                pcepTunnelAPIMapper.addToTunnelIdMap(pcepTunnelData);</span>
+<span class="nc" id="L1061">                pcepTunnelAPIMapper.handleUpdateTunnelRequestQueue(srpId, pcepTunnelData);</span>
+
+<span class="nc bnc" id="L1063" title="All 2 branches missed.">                if (0 == lspObj.getOFlag()) {</span>
+<span class="nc" id="L1064">                    log.warn(&quot;The tunnel is in down state&quot;);</span>
+                }
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">                if (!(pcepTunnelAPIMapper.checkFromTunnelRequestQueue(srpId))) {</span>
+<span class="nc" id="L1067">                    tunnelUpdated(td);</span>
+                }
+            }
+<span class="nc" id="L1070">        }</span>
+
+        /**
+         * Handles sync report received from pcc.
+         *
+         * @param stateRpt pcep state report
+         */
+        private void handleSyncReport(PcepStateReport stateRpt) {
+<span class="nc" id="L1078">            PcepLspObject lspObj = stateRpt.getLspObject();</span>
+<span class="nc" id="L1079">            PcepStateReport.PcepMsgPath msgPath = stateRpt.getMsgPath();</span>
+<span class="nc" id="L1080">            checkNotNull(msgPath);</span>
+<span class="nc" id="L1081">            PcepRroObject rroObj = msgPath.getRroObject();</span>
+<span class="nc bnc" id="L1082" title="All 2 branches missed.">            if (rroObj == null) {</span>
+<span class="nc" id="L1083">                log.debug(&quot;RRO object is null in sate report&quot;);</span>
+<span class="nc" id="L1084">                return;</span>
+            }
+<span class="nc" id="L1086">            int bandwidth = 0;</span>
+
+<span class="nc" id="L1088">            log.debug(&quot;Handle Sync report received from PCC.&quot;);</span>
+
+<span class="nc bnc" id="L1090" title="All 2 branches missed.">            if (0 == lspObj.getOFlag()) {</span>
+<span class="nc" id="L1091">                log.warn(&quot;The PCC reported tunnel is in down state&quot;);</span>
+            }
+<span class="nc" id="L1093">            log.debug(&quot;Sync report received&quot;);</span>
+
+<span class="nc bnc" id="L1095" title="All 2 branches missed.">            if (msgPath.getBandwidthObject() != null) {</span>
+<span class="nc" id="L1096">                bandwidth = msgPath.getBandwidthObject().getBandwidth();</span>
+            }
+
+<span class="nc" id="L1099">            buildAndStorePcepTunnelData(lspObj, rroObj, bandwidth);</span>
+<span class="nc" id="L1100">        }</span>
+
+        /**
+         * To build Path in network from RRO object.
+         *
+         * @param rroObj rro object
+         * @param providerId provider id
+         * @return path object
+         */
+        private Path buildPathFromRroObj(PcepRroObject rroObj, ProviderId providerId) {
+<span class="nc" id="L1110">            checkNotNull(rroObj);</span>
+<span class="nc" id="L1111">            List&lt;Link&gt; links = new ArrayList&lt;Link&gt;();</span>
+<span class="nc" id="L1112">            LinkedList&lt;PcepValueType&gt; llSubObj = rroObj.getSubObjects();</span>
+<span class="nc bnc" id="L1113" title="All 2 branches missed.">            if (0 == llSubObj.size()) {</span>
+<span class="nc" id="L1114">                log.error(&quot;RRO in report message does not have hop information&quot;);</span>
+            }
+<span class="nc" id="L1116">            ListIterator&lt;PcepValueType&gt; tlvIterator = llSubObj.listIterator();</span>
+
+<span class="nc" id="L1118">            ConnectPoint src = null;</span>
+<span class="nc" id="L1119">            ConnectPoint dst = null;</span>
+<span class="nc" id="L1120">            boolean isSrcSet = false;</span>
+<span class="nc bnc" id="L1121" title="All 2 branches missed.">            while (tlvIterator.hasNext()) {</span>
+<span class="nc" id="L1122">                PcepValueType subObj = tlvIterator.next();</span>
+<span class="nc bnc" id="L1123" title="All 2 branches missed.">                switch (subObj.getType()) {</span>
+
+                case IPv4SubObject.TYPE:
+
+<span class="nc" id="L1127">                    IPv4SubObject ipv4SubObj = (IPv4SubObject) subObj;</span>
+<span class="nc bnc" id="L1128" title="All 2 branches missed.">                    if (!isSrcSet) {</span>
+<span class="nc" id="L1129">                        IpAddress srcIp = IpAddress.valueOf(ipv4SubObj.getIpAddress());</span>
+<span class="nc" id="L1130">                        src = new ConnectPoint(IpElementId.ipElement(srcIp), PortNumber.portNumber(0));</span>
+<span class="nc" id="L1131">                        isSrcSet = true;</span>
+<span class="nc" id="L1132">                    } else {</span>
+<span class="nc" id="L1133">                        IpAddress dstIp = IpAddress.valueOf(ipv4SubObj.getIpAddress());</span>
+<span class="nc" id="L1134">                        dst = new ConnectPoint(IpElementId.ipElement(dstIp), PortNumber.portNumber(0));</span>
+<span class="nc" id="L1135">                        Link link = new DefaultLink(providerId, src, dst, Link.Type.DIRECT, EMPTY);</span>
+<span class="nc" id="L1136">                        links.add(link);</span>
+<span class="nc" id="L1137">                        src = dst;</span>
+                    }
+<span class="nc" id="L1139">                    break;</span>
+                default:
+                    // the other sub objects are not required
+                }
+<span class="nc" id="L1143">            }</span>
+<span class="nc" id="L1144">            return new DefaultPath(providerId, links, 0, EMPTY);</span>
+        }
+
+        /**
+         * To build pcepTunnelData and informs core about the pcc reported tunnel.
+         *
+         * @param lspObj pcep lsp object
+         * @param rroObj pcep rro object
+         * @param bandwidth bandwidth of tunnel
+         */
+        private void buildAndStorePcepTunnelData(PcepLspObject lspObj, PcepRroObject rroObj,
+                                                 int bandwidth) {
+
+<span class="nc" id="L1157">            ProviderId providerId = new ProviderId(&quot;pcep&quot;, PROVIDER_ID);</span>
+
+            // StatefulIPv4LspIdentidiersTlv in LSP object will have the source and destination address.
+<span class="nc" id="L1160">            StatefulIPv4LspIdentidiersTlv lspIdenTlv = null;</span>
+<span class="nc" id="L1161">            SymbolicPathNameTlv pathNameTlv = null;</span>
+<span class="nc" id="L1162">            LinkedList&lt;PcepValueType&gt; llOptionalTlv = lspObj.getOptionalTlv();</span>
+<span class="nc" id="L1163">            ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+<span class="nc bnc" id="L1164" title="All 2 branches missed.">            while (listIterator.hasNext()) {</span>
+<span class="nc" id="L1165">                PcepValueType tlv = listIterator.next();</span>
+<span class="nc bnc" id="L1166" title="All 3 branches missed.">                switch (tlv.getType()) {</span>
+                case StatefulIPv4LspIdentidiersTlv.TYPE:
+<span class="nc" id="L1168">                    lspIdenTlv = (StatefulIPv4LspIdentidiersTlv) tlv;</span>
+<span class="nc" id="L1169">                    break;</span>
+                case SymbolicPathNameTlv.TYPE:
+<span class="nc" id="L1171">                    pathNameTlv = (SymbolicPathNameTlv) tlv;</span>
+<span class="nc" id="L1172">                    break;</span>
+                default:
+                    // currently this tlv is not required
+                }
+<span class="nc" id="L1176">            }</span>
+
+            IpTunnelEndPoint tunnelEndPointSrc;
+<span class="nc" id="L1179">            tunnelEndPointSrc = IpTunnelEndPoint.ipTunnelPoint(IpAddress.valueOf(lspIdenTlv.getIpv4IngressAddress()));</span>
+            IpTunnelEndPoint tunnelEndPointDst;
+<span class="nc" id="L1181">            tunnelEndPointDst = IpTunnelEndPoint.ipTunnelPoint(IpAddress.valueOf(lspIdenTlv.getIpv4EgressAddress()));</span>
+
+<span class="nc" id="L1183">            Path path = buildPathFromRroObj(rroObj, providerId);</span>
+
+<span class="nc" id="L1185">            SparseAnnotations annotations = DefaultAnnotations.builder()</span>
+<span class="nc" id="L1186">                    .set(&quot;bandwidth&quot;, (new Integer(bandwidth)).toString())</span>
+<span class="nc" id="L1187">                    .build();</span>
+
+<span class="nc" id="L1189">            DefaultTunnelDescription td = new DefaultTunnelDescription(null, tunnelEndPointSrc,</span>
+                                                                       tunnelEndPointDst, Tunnel.Type.MPLS,
+                                                                       new DefaultGroupId(0), providerId,
+<span class="nc" id="L1192">                                                                       TunnelName.tunnelName(pathNameTlv.toString()),</span>
+                                                                       path, annotations);
+<span class="nc" id="L1194">            TunnelId tId = tunnelAdded(td);</span>
+
+<span class="nc" id="L1196">            Tunnel tunnel = new DefaultTunnel(providerId, tunnelEndPointSrc, tunnelEndPointDst, Tunnel.Type.MPLS,</span>
+                                              new DefaultGroupId(0), tId,
+<span class="nc" id="L1198">                                              TunnelName.tunnelName(pathNameTlv.toString()), path, annotations);</span>
+
+<span class="nc" id="L1200">            PcepTunnelData pcepTunnelData = new PcepTunnelData(tunnel, path, RequestType.LSP_STATE_RPT);</span>
+<span class="nc" id="L1201">            pcepTunnelData.setStatefulIpv4IndentifierTlv(lspIdenTlv);</span>
+<span class="nc" id="L1202">            pcepTunnelAPIMapper.addPccTunnelDB(pcepTunnelData);</span>
+<span class="nc" id="L1203">            pcepTunnelAPIMapper.addToTunnelIdMap(pcepTunnelData);</span>
+<span class="nc" id="L1204">        }</span>
+
+        @Override
+        public void clientConnected(PccId pccId) {
+            // TODO
+<span class="nc" id="L1209">        }</span>
+
+        @Override
+        public void clientDisconnected(PccId pccId) {
+            // TODO
+<span class="nc" id="L1214">        }</span>
+
+
+
+        @Override
+        public void handlePcepTunnelStatistics(PcepTunnelStatistics pcepTunnelStatistics) {
+<span class="nc" id="L1220">            TunnelId id = getTunnelId(String.valueOf(pcepTunnelStatistics.id()));</span>
+<span class="nc" id="L1221">            TunnelStatistics tunnelStatistics = buildTunnelStatistics(pcepTunnelStatistics);</span>
+<span class="nc" id="L1222">            tunnelStatisticsMap.put(id, tunnelStatistics);</span>
+<span class="nc" id="L1223">        }</span>
+    }
+
+    @Override
+    public Tunnel tunnelQueryById(TunnelId tunnelId) {
+<span class="nc" id="L1228">        return service.tunnelQueryById(tunnelId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AclRule.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-acl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.acl</a> &gt; <span class="el_source">AclRule.java</span></div><h1>AclRule.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ * Originally created by Pengfei Lu, Network and Cloud Computing Laboratory, Dalian University of Technology, China
+ * Advisers: Keqiu Li, Heng Qi and Haisheng Yu
+ * This work is supported by the State Key Program of National Natural Science of China(Grant No. 61432002)
+ * and Prospective Research Project on Future Networks in Jiangsu Future Networks Innovation Institute.
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.acl;
+
+import com.google.common.base.MoreObjects;
+import org.onlab.packet.IPv4;
+import org.onlab.packet.Ip4Prefix;
+import org.onosproject.core.IdGenerator;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
+/**
+ * ACL rule class.
+ */
+public final class AclRule {
+
+    private final RuleId id;
+
+    private final Ip4Prefix srcIp;
+    private final Ip4Prefix dstIp;
+    private final byte ipProto;
+    private final short dstTpPort;
+    private final Action action;
+
+    private static IdGenerator idGenerator;
+
+    /**
+     * Enum type for ACL rule's action.
+     */
+<span class="nc" id="L50">    public enum Action {</span>
+<span class="nc" id="L51">        DENY, ALLOW</span>
+    }
+
+    /**
+     * Constructor for serializer.
+     */
+<span class="nc" id="L57">    private AclRule() {</span>
+<span class="nc" id="L58">        this.id = null;</span>
+<span class="nc" id="L59">        this.srcIp = null;</span>
+<span class="nc" id="L60">        this.dstIp = null;</span>
+<span class="nc" id="L61">        this.ipProto = 0;</span>
+<span class="nc" id="L62">        this.dstTpPort = 0;</span>
+<span class="nc" id="L63">        this.action = null;</span>
+<span class="nc" id="L64">    }</span>
+
+    /**
+     * Create a new ACL rule.
+     *
+     * @param srcIp     source IP address
+     * @param dstIp     destination IP address
+     * @param ipProto   IP protocol
+     * @param dstTpPort destination transport layer port
+     * @param action    ACL rule's action
+     */
+    private AclRule(Ip4Prefix srcIp, Ip4Prefix dstIp, byte ipProto,
+<span class="nc" id="L76">                    short dstTpPort, Action action) {</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        checkState(idGenerator != null, &quot;Id generator is not bound.&quot;);</span>
+<span class="nc" id="L78">        this.id = RuleId.valueOf(idGenerator.getNewId());</span>
+<span class="nc" id="L79">        this.srcIp = srcIp;</span>
+<span class="nc" id="L80">        this.dstIp = dstIp;</span>
+<span class="nc" id="L81">        this.ipProto = ipProto;</span>
+<span class="nc" id="L82">        this.dstTpPort = dstTpPort;</span>
+<span class="nc" id="L83">        this.action = action;</span>
+<span class="nc" id="L84">    }</span>
+
+    /**
+     * Check if the first CIDR address is in (or the same as) the second CIDR address.
+     */
+    private boolean checkCIDRinCIDR(Ip4Prefix cidrAddr1, Ip4Prefix cidrAddr2) {
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (cidrAddr2 == null) {</span>
+<span class="nc" id="L91">            return true;</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        } else if (cidrAddr1 == null) {</span>
+<span class="nc" id="L93">            return false;</span>
+        }
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if (cidrAddr1.prefixLength() &lt; cidrAddr2.prefixLength()) {</span>
+<span class="nc" id="L96">            return false;</span>
+        }
+<span class="nc" id="L98">        int offset = 32 - cidrAddr2.prefixLength();</span>
+
+<span class="nc" id="L100">        int cidr1Prefix = cidrAddr1.address().toInt();</span>
+<span class="nc" id="L101">        int cidr2Prefix = cidrAddr2.address().toInt();</span>
+<span class="nc" id="L102">        cidr1Prefix = cidr1Prefix &gt;&gt; offset;</span>
+<span class="nc" id="L103">        cidr2Prefix = cidr2Prefix &gt;&gt; offset;</span>
+<span class="nc" id="L104">        cidr1Prefix = cidr1Prefix &lt;&lt; offset;</span>
+<span class="nc" id="L105">        cidr2Prefix = cidr2Prefix &lt;&lt; offset;</span>
+
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        return (cidr1Prefix == cidr2Prefix);</span>
+    }
+
+    /**
+     * Check if this ACL rule match the given ACL rule.
+     *
+     * @param r ACL rule to check against
+     * @return true if this ACL rule matches the given ACL ruleule.
+     */
+    public boolean checkMatch(AclRule r) {
+<span class="nc bnc" id="L117" title="All 8 branches missed.">        return (this.dstTpPort == r.dstTpPort || r.dstTpPort == 0)</span>
+                &amp;&amp; (this.ipProto == r.ipProto || r.ipProto == 0)
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                &amp;&amp; (checkCIDRinCIDR(this.srcIp(), r.srcIp()))</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">                &amp;&amp; (checkCIDRinCIDR(this.dstIp(), r.dstIp()));</span>
+    }
+
+    /**
+     * Returns a new ACL rule builder.
+     *
+     * @return ACL rule builder
+     */
+    public static Builder builder() {
+<span class="nc" id="L129">        return new Builder();</span>
+    }
+
+    /**
+     * Builder of an ACL rule.
+     */
+    public static final class Builder {
+
+<span class="nc" id="L137">        private Ip4Prefix srcIp = null;</span>
+<span class="nc" id="L138">        private Ip4Prefix dstIp = null;</span>
+<span class="nc" id="L139">        private byte ipProto = 0;</span>
+<span class="nc" id="L140">        private short dstTpPort = 0;</span>
+<span class="nc" id="L141">        private Action action = Action.DENY;</span>
+
+<span class="nc" id="L143">        private Builder() {</span>
+            // Hide constructor
+<span class="nc" id="L145">        }</span>
+
+        /**
+         * Sets the source IP address for the ACL rule that will be built.
+         *
+         * @param srcIp source IP address to use for built ACL rule
+         * @return this builder
+         */
+        public Builder srcIp(Ip4Prefix srcIp) {
+<span class="nc" id="L154">            this.srcIp = srcIp;</span>
+<span class="nc" id="L155">            return this;</span>
+        }
+
+        /**
+         * Sets the destination IP address for the ACL rule that will be built.
+         *
+         * @param dstIp destination IP address to use for built ACL rule
+         * @return this builder
+         */
+        public Builder dstIp(Ip4Prefix dstIp) {
+<span class="nc" id="L165">            this.dstIp = dstIp;</span>
+<span class="nc" id="L166">            return this;</span>
+        }
+
+        /**
+         * Sets the IP protocol for the ACL rule that will be built.
+         *
+         * @param ipProto IP protocol to use for built ACL rule
+         * @return this builder
+         */
+        public Builder ipProto(byte ipProto) {
+<span class="nc" id="L176">            this.ipProto = ipProto;</span>
+<span class="nc" id="L177">            return this;</span>
+        }
+
+        /**
+         * Sets the destination transport layer port for the ACL rule that will be built.
+         *
+         * @param dstTpPort destination transport layer port to use for built ACL rule
+         * @return this builder
+         */
+        public Builder dstTpPort(short dstTpPort) {
+<span class="nc bnc" id="L187" title="All 4 branches missed.">            if ((ipProto == IPv4.PROTOCOL_TCP || ipProto == IPv4.PROTOCOL_UDP)) {</span>
+<span class="nc" id="L188">                this.dstTpPort = dstTpPort;</span>
+            }
+<span class="nc" id="L190">            return this;</span>
+        }
+
+        /**
+         * Sets the action for the ACL rule that will be built.
+         *
+         * @param action action to use for built ACL rule
+         * @return this builder
+         */
+        public Builder action(Action action) {
+<span class="nc" id="L200">            this.action = action;</span>
+<span class="nc" id="L201">            return this;</span>
+        }
+
+        /**
+         * Builds an ACL rule from the accumulated parameters.
+         *
+         * @return ACL rule instance
+         */
+        public AclRule build() {
+<span class="nc bnc" id="L210" title="All 4 branches missed.">            checkState(srcIp != null &amp;&amp; dstIp != null, &quot;Either srcIp or dstIp must be assigned.&quot;);</span>
+<span class="nc bnc" id="L211" title="All 8 branches missed.">            checkState(ipProto == 0 || ipProto == IPv4.PROTOCOL_ICMP</span>
+                               || ipProto == IPv4.PROTOCOL_TCP || ipProto == IPv4.PROTOCOL_UDP,
+                       &quot;ipProto must be assigned to TCP, UDP, or ICMP.&quot;);
+<span class="nc" id="L214">            return new AclRule(srcIp, dstIp, ipProto, dstTpPort, action);</span>
+        }
+
+    }
+
+    /**
+     * Binds an id generator for unique ACL rule id generation.
+     * &lt;p&gt;
+     * Note: A generator cannot be bound if there is already a generator bound.
+     *
+     * @param newIdGenerator id generator
+     */
+    public static void bindIdGenerator(IdGenerator newIdGenerator) {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        checkState(idGenerator == null, &quot;Id generator is already bound.&quot;);</span>
+<span class="nc" id="L228">        idGenerator = checkNotNull(newIdGenerator);</span>
+<span class="nc" id="L229">    }</span>
+
+    public RuleId id() {
+<span class="nc" id="L232">        return id;</span>
+    }
+
+    public Ip4Prefix srcIp() {
+<span class="nc" id="L236">        return srcIp;</span>
+    }
+
+    public Ip4Prefix dstIp() {
+<span class="nc" id="L240">        return this.dstIp;</span>
+    }
+
+    public byte ipProto() {
+<span class="nc" id="L244">        return ipProto;</span>
+    }
+
+    public short dstTpPort() {
+<span class="nc" id="L248">        return dstTpPort;</span>
+    }
+
+    public Action action() {
+<span class="nc" id="L252">        return action;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L257">        return Objects.hash(action, id.fingerprint(), ipProto, srcIp, dstIp, dstTpPort);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L263">            return true;</span>
+        }
+<span class="nc bnc" id="L265" title="All 2 branches missed.">        if (obj instanceof AclRule) {</span>
+<span class="nc" id="L266">            AclRule that = (AclRule) obj;</span>
+<span class="nc bnc" id="L267" title="All 2 branches missed.">            return Objects.equals(id, that.id) &amp;&amp;</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">                    Objects.equals(srcIp, that.srcIp) &amp;&amp;</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">                    Objects.equals(dstIp, that.dstIp) &amp;&amp;</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">                    Objects.equals(ipProto, that.ipProto) &amp;&amp;</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">                    Objects.equals(dstTpPort, that.dstTpPort) &amp;&amp;</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">                    Objects.equals(action, that.action);</span>
+        }
+<span class="nc" id="L274">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L279">        return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L280">                .omitNullValues()</span>
+<span class="nc" id="L281">                .add(&quot;id&quot;, id)</span>
+<span class="nc" id="L282">                .add(&quot;srcIp&quot;, srcIp)</span>
+<span class="nc" id="L283">                .add(&quot;dstIp&quot;, dstIp)</span>
+<span class="nc" id="L284">                .add(&quot;ipProto&quot;, ipProto)</span>
+<span class="nc" id="L285">                .add(&quot;dstTpPort&quot;, dstTpPort)</span>
+<span class="nc" id="L286">                .add(&quot;action&quot;, action)</span>
+<span class="nc" id="L287">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

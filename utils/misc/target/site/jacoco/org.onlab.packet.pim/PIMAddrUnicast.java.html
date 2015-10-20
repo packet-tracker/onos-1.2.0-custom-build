@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PIMAddrUnicast.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.pim</a> &gt; <span class="el_source">PIMAddrUnicast.java</span></div><h1>PIMAddrUnicast.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.pim;
+
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.Ip6Address;
+
+import java.nio.ByteBuffer;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+public class PIMAddrUnicast {
+    private byte family;
+    private byte encType;
+    IpAddress addr;
+
+    public static final int ENC_UNICAST_IPV4_BYTE_LENGTH = 2 + Ip4Address.BYTE_LENGTH;
+    public static final int ENC_UNICAST_IPV6_BYTE_LENGTH = 2 + Ip6Address.BYTE_LENGTH;
+
+    /**
+     * PIM Encoded Source Address.
+     */
+<span class="fc" id="L38">    public PIMAddrUnicast() {</span>
+<span class="fc" id="L39">        this.family = 4;</span>
+<span class="fc" id="L40">        this.encType = 0;</span>
+<span class="fc" id="L41">    }</span>
+
+    /**
+     * PIM Encoded Source Address.
+     *
+     * @param addr IPv4 or IPv6
+     */
+<span class="fc" id="L48">    public PIMAddrUnicast(String addr) {</span>
+<span class="fc" id="L49">        this.addr = IpAddress.valueOf(addr);</span>
+<span class="pc bpc" id="L50" title="1 of 2 branches missed.">        if (this.addr.isIp4()) {</span>
+<span class="fc" id="L51">            this.family = 4;</span>
+        } else {
+<span class="nc" id="L53">            this.family = 6;</span>
+        }
+<span class="fc" id="L55">        this.encType = 0;</span>
+<span class="fc" id="L56">    }</span>
+
+    /**
+     * PIM Encoded Source Address.
+     *
+     * @param addr IPv4 or IPv6
+     */
+    public void setAddr(IpAddress addr) {
+<span class="nc" id="L64">        this.addr = addr;</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (this.addr.isIp4()) {</span>
+<span class="nc" id="L66">            this.family = 4;</span>
+        } else {
+<span class="nc" id="L68">            this.family = 6;</span>
+        }
+<span class="nc" id="L70">    }</span>
+
+    /**
+     * Get the address of this encoded address.
+     *
+     * @return source address
+     */
+    public IpAddress getAddr() {
+<span class="fc" id="L78">        return this.addr;</span>
+    }
+
+    /**
+     * Get the IP family of this address: 4 or 6.
+     *
+     * @return the IP address family
+     */
+    public int getFamily() {
+<span class="nc" id="L87">        return this.family;</span>
+    }
+
+    /**
+     * The size in bytes of a serialized address.
+     *
+     * @return the number of bytes when serialized
+     */
+    public int getByteSize() {
+<span class="fc" id="L96">        int size = 2;</span>
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">        if (addr != null) {</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">            size += addr.isIp4() ? 4 : 16;</span>
+        } else {
+<span class="nc" id="L100">            size += 4;</span>
+        }
+<span class="fc" id="L102">        return size;</span>
+    }
+
+    public byte[] serialize() {
+<span class="fc" id="L106">        int len = getByteSize();</span>
+
+<span class="fc" id="L108">        final byte[] data = new byte[len];</span>
+<span class="fc" id="L109">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L111">        bb.put(family);</span>
+<span class="fc" id="L112">        bb.put(encType);</span>
+<span class="fc" id="L113">        bb.put(addr.toOctets());</span>
+<span class="fc" id="L114">        return data;</span>
+    }
+
+    public PIMAddrUnicast deserialize(ByteBuffer bb) throws DeserializationException {
+
+        // Assume IPv4 for check length until we read the encoded family.
+<span class="fc" id="L120">        checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), ENC_UNICAST_IPV4_BYTE_LENGTH);</span>
+<span class="fc" id="L121">        this.family = bb.get();</span>
+
+        // If we have IPv6 we need to ensure we have adequate buffer space.
+<span class="pc bpc" id="L124" title="3 of 4 branches missed.">        if (this.family != 4 &amp;&amp; this.family != 6) {</span>
+<span class="nc" id="L125">            throw new DeserializationException(&quot;Invalid address family: &quot; + this.family);</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">        } else if (this.family == 6) {</span>
+            // Subtract -1 from ENC_UNICAST_IPv6 BYTE_LENGTH because we read one byte for family previously.
+<span class="nc" id="L128">            checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), ENC_UNICAST_IPV6_BYTE_LENGTH - 1);</span>
+        }
+
+<span class="fc" id="L131">        this.encType = bb.get();</span>
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if (this.family == 4) {</span>
+<span class="fc" id="L133">            this.addr = IpAddress.valueOf(bb.getInt());</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        } else if (this.family == 6) {</span>
+<span class="nc" id="L135">            this.addr = Ip6Address.valueOf(bb.array(), 2);</span>
+        }
+<span class="fc" id="L137">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L147">        final int prime = 2521;</span>
+<span class="nc" id="L148">        int result = super.hashCode();</span>
+<span class="nc" id="L149">        result = prime * result + this.family;</span>
+<span class="nc" id="L150">        result = prime * result + this.encType;</span>
+<span class="nc" id="L151">        result = prime * result + this.addr.hashCode();</span>
+<span class="nc" id="L152">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L163">            return true;</span>
+        }
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (!(obj instanceof PIMAddrUnicast)) {</span>
+<span class="nc" id="L166">            return false;</span>
+        }
+<span class="nc" id="L168">        final PIMAddrUnicast other = (PIMAddrUnicast) obj;</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (this.family != other.family) {</span>
+<span class="nc" id="L170">            return false;</span>
+        }
+
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (this.encType != other.encType) {</span>
+<span class="nc" id="L174">            return false;</span>
+        }
+
+<span class="nc bnc" id="L177" title="All 2 branches missed.">        if (!this.addr.equals(other.addr)) {</span>
+<span class="nc" id="L178">            return false;</span>
+        }
+<span class="nc" id="L180">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

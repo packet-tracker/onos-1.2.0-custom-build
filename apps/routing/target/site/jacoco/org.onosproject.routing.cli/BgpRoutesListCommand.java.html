@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpRoutesListCommand.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.cli</a> &gt; <span class="el_source">BgpRoutesListCommand.java</span></div><h1>BgpRoutesListCommand.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.cli;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.karaf.shell.commands.Command;
+import org.apache.karaf.shell.commands.Option;
+import org.onosproject.cli.AbstractShellCommand;
+import org.onosproject.routing.bgp.BgpInfoService;
+import org.onosproject.routing.bgp.BgpRouteEntry;
+import org.onosproject.routing.bgp.BgpSession;
+import org.onosproject.routing.bgp.BgpConstants;
+
+import java.util.ArrayList;
+import java.util.Collection;
+
+/**
+ * Command to show the routes learned through BGP.
+ */
+@Command(scope = &quot;onos&quot;, name = &quot;bgp-routes&quot;,
+         description = &quot;Lists all BGP best routes&quot;)
+<span class="nc" id="L38">public class BgpRoutesListCommand extends AbstractShellCommand {</span>
+<span class="nc" id="L39">    @Option(name = &quot;-s&quot;, aliases = &quot;--summary&quot;,</span>
+            description = &quot;BGP routes summary&quot;,
+            required = false, multiValued = false)
+    private boolean routesSummary = false;
+
+    @Option(name = &quot;-n&quot;, aliases = &quot;--neighbor&quot;,
+            description = &quot;Routes from a BGP neighbor&quot;,
+            required = false, multiValued = false)
+    private String bgpNeighbor;
+
+    private static final String FORMAT_SUMMARY_V4 =
+        &quot;Total BGP IPv4 routes = %d&quot;;
+    private static final String FORMAT_SUMMARY_V6 =
+        &quot;Total BGP IPv6 routes = %d&quot;;
+    private static final String FORMAT_HEADER =
+        &quot;   Network            Next Hop        Origin LocalPref       MED BGP-ID&quot;;
+    private static final String FORMAT_ROUTE_LINE1 =
+        &quot;   %-18s %-15s %6s %9s %9s %-15s&quot;;
+    private static final String FORMAT_ROUTE_LINE2 =
+        &quot;                      AsPath %s&quot;;
+
+    @Override
+    protected void execute() {
+<span class="nc" id="L62">        BgpInfoService service = AbstractShellCommand.get(BgpInfoService.class);</span>
+
+        // Print summary of the routes
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (routesSummary) {</span>
+<span class="nc" id="L66">            printSummary(service.getBgpRoutes4(), service.getBgpRoutes6());</span>
+<span class="nc" id="L67">            return;</span>
+        }
+
+<span class="nc" id="L70">        BgpSession foundBgpSession = null;</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (bgpNeighbor != null) {</span>
+            // Print the routes from a single neighbor (if found)
+<span class="nc bnc" id="L73" title="All 2 branches missed.">            for (BgpSession bgpSession : service.getBgpSessions()) {</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">                if (bgpSession.remoteInfo().bgpId().toString().equals(bgpNeighbor)) {</span>
+<span class="nc" id="L75">                    foundBgpSession = bgpSession;</span>
+<span class="nc" id="L76">                    break;</span>
+                }
+<span class="nc" id="L78">            }</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            if (foundBgpSession == null) {</span>
+<span class="nc" id="L80">                print(&quot;BGP neighbor %s not found&quot;, bgpNeighbor);</span>
+<span class="nc" id="L81">                return;</span>
+            }
+        }
+
+        // Print the routes
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (foundBgpSession != null) {</span>
+<span class="nc" id="L87">            printRoutes(foundBgpSession.getBgpRibIn4(),</span>
+<span class="nc" id="L88">                        foundBgpSession.getBgpRibIn6());</span>
+        } else {
+<span class="nc" id="L90">            printRoutes(service.getBgpRoutes4(), service.getBgpRoutes6());</span>
+        }
+<span class="nc" id="L92">    }</span>
+
+    /**
+     * Prints summary of the routes.
+     *
+     * @param routes4 the IPv4 routes
+     * @param routes6 the IPv6 routes
+     */
+    private void printSummary(Collection&lt;BgpRouteEntry&gt; routes4,
+                              Collection&lt;BgpRouteEntry&gt; routes6) {
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (outputJson()) {</span>
+<span class="nc" id="L103">            ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L104">            ObjectNode result = mapper.createObjectNode();</span>
+<span class="nc" id="L105">            result.put(&quot;totalRoutes4&quot;, routes4.size());</span>
+<span class="nc" id="L106">            result.put(&quot;totalRoutes6&quot;, routes6.size());</span>
+<span class="nc" id="L107">            print(&quot;%s&quot;, result);</span>
+<span class="nc" id="L108">        } else {</span>
+<span class="nc" id="L109">            print(FORMAT_SUMMARY_V4, routes4.size());</span>
+<span class="nc" id="L110">            print(FORMAT_SUMMARY_V6, routes6.size());</span>
+        }
+<span class="nc" id="L112">    }</span>
+
+    /**
+     * Prints all routes.
+     *
+     * @param routes4 the IPv4 routes to print
+     * @param routes6 the IPv6 routes to print
+     */
+    private void printRoutes(Collection&lt;BgpRouteEntry&gt; routes4,
+                             Collection&lt;BgpRouteEntry&gt; routes6) {
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        if (outputJson()) {</span>
+<span class="nc" id="L123">            ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L124">            ObjectNode result = mapper.createObjectNode();</span>
+<span class="nc" id="L125">            result.set(&quot;routes4&quot;, json(routes4));</span>
+<span class="nc" id="L126">            result.set(&quot;routes6&quot;, json(routes6));</span>
+<span class="nc" id="L127">            print(&quot;%s&quot;, result);</span>
+<span class="nc" id="L128">        } else {</span>
+            // The IPv4 routes
+<span class="nc" id="L130">            print(FORMAT_HEADER);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            for (BgpRouteEntry route : routes4) {</span>
+<span class="nc" id="L132">                printRoute(route);</span>
+<span class="nc" id="L133">            }</span>
+<span class="nc" id="L134">            print(FORMAT_SUMMARY_V4, routes4.size());</span>
+<span class="nc" id="L135">            print(&quot;&quot;);                  // Empty separator line</span>
+            // The IPv6 routes
+<span class="nc" id="L137">            print(FORMAT_HEADER);</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            for (BgpRouteEntry route : routes6) {</span>
+<span class="nc" id="L139">                printRoute(route);</span>
+<span class="nc" id="L140">            }</span>
+<span class="nc" id="L141">            print(FORMAT_SUMMARY_V6, routes6.size());</span>
+        }
+<span class="nc" id="L143">    }</span>
+
+    /**
+     * Prints a BGP route.
+     *
+     * @param route the route to print
+     */
+    private void printRoute(BgpRouteEntry route) {
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        if (route != null) {</span>
+<span class="nc" id="L152">            print(FORMAT_ROUTE_LINE1, route.prefix(), route.nextHop(),</span>
+<span class="nc" id="L153">                  BgpConstants.Update.Origin.typeToString(route.getOrigin()),</span>
+<span class="nc" id="L154">                  route.getLocalPref(), route.getMultiExitDisc(),</span>
+<span class="nc" id="L155">                  route.getBgpSession().remoteInfo().bgpId());</span>
+<span class="nc" id="L156">            print(FORMAT_ROUTE_LINE2, asPath4Cli(route.getAsPath()));</span>
+        }
+<span class="nc" id="L158">    }</span>
+
+    /**
+     * Formats the AS Path as a string that can be shown on the CLI.
+     *
+     * @param asPath the AS Path to format
+     * @return the AS Path as a string
+     */
+    private String asPath4Cli(BgpRouteEntry.AsPath asPath) {
+<span class="nc" id="L167">        ArrayList&lt;BgpRouteEntry.PathSegment&gt; pathSegments =</span>
+<span class="nc" id="L168">            asPath.getPathSegments();</span>
+
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if (pathSegments.isEmpty()) {</span>
+<span class="nc" id="L171">            return &quot;[none]&quot;;</span>
+        }
+
+<span class="nc" id="L174">        final StringBuilder builder = new StringBuilder();</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        for (BgpRouteEntry.PathSegment pathSegment : pathSegments) {</span>
+<span class="nc" id="L176">            String prefix = null;</span>
+<span class="nc" id="L177">            String suffix = null;</span>
+<span class="nc bnc" id="L178" title="All 5 branches missed.">            switch (pathSegment.getType()) {</span>
+            case BgpConstants.Update.AsPath.AS_SET:
+<span class="nc" id="L180">                prefix = &quot;[AS-Set&quot;;</span>
+<span class="nc" id="L181">                suffix = &quot;]&quot;;</span>
+<span class="nc" id="L182">                break;</span>
+            case BgpConstants.Update.AsPath.AS_SEQUENCE:
+<span class="nc" id="L184">                break;</span>
+            case BgpConstants.Update.AsPath.AS_CONFED_SEQUENCE:
+<span class="nc" id="L186">                prefix = &quot;[AS-Confed-Seq&quot;;</span>
+<span class="nc" id="L187">                suffix = &quot;]&quot;;</span>
+<span class="nc" id="L188">                break;</span>
+            case BgpConstants.Update.AsPath.AS_CONFED_SET:
+<span class="nc" id="L190">                prefix = &quot;[AS-Confed-Set&quot;;</span>
+<span class="nc" id="L191">                suffix = &quot;]&quot;;</span>
+<span class="nc" id="L192">                break;</span>
+            default:
+<span class="nc" id="L194">                builder.append(String.format(&quot;(type = %s)&quot;,</span>
+<span class="nc" id="L195">                        BgpConstants.Update.AsPath.typeToString(pathSegment.getType())));</span>
+                break;
+            }
+
+<span class="nc bnc" id="L199" title="All 2 branches missed.">            if (prefix != null) {</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">                if (builder.length() &gt; 0) {</span>
+<span class="nc" id="L201">                    builder.append(&quot; &quot;);        // Separator</span>
+                }
+<span class="nc" id="L203">                builder.append(prefix);</span>
+            }
+            // Print the AS numbers
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            for (Long asn : pathSegment.getSegmentAsNumbers()) {</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">                if (builder.length() &gt; 0) {</span>
+<span class="nc" id="L208">                    builder.append(&quot; &quot;);        // Separator</span>
+                }
+<span class="nc" id="L210">                builder.append(String.format(&quot;%d&quot;, asn));</span>
+<span class="nc" id="L211">            }</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            if (suffix != null) {</span>
+                // No need for separator
+<span class="nc" id="L214">                builder.append(prefix);</span>
+            }
+<span class="nc" id="L216">        }</span>
+<span class="nc" id="L217">        return builder.toString();</span>
+    }
+
+    /**
+     * Produces a JSON array of routes.
+     *
+     * @param routes the routes with the data
+     * @return JSON array with the routes
+     */
+    private JsonNode json(Collection&lt;BgpRouteEntry&gt; routes) {
+<span class="nc" id="L227">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L228">        ArrayNode result = mapper.createArrayNode();</span>
+
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        for (BgpRouteEntry route : routes) {</span>
+<span class="nc" id="L231">            result.add(json(mapper, route));</span>
+<span class="nc" id="L232">        }</span>
+<span class="nc" id="L233">        return result;</span>
+    }
+
+    /**
+     * Produces JSON object for a route.
+     *
+     * @param mapper the JSON object mapper to use
+     * @param route the route with the data
+     * @return JSON object for the route
+     */
+    private ObjectNode json(ObjectMapper mapper, BgpRouteEntry route) {
+<span class="nc" id="L244">        ObjectNode result = mapper.createObjectNode();</span>
+
+<span class="nc" id="L246">        result.put(&quot;prefix&quot;, route.prefix().toString());</span>
+<span class="nc" id="L247">        result.put(&quot;nextHop&quot;, route.nextHop().toString());</span>
+<span class="nc" id="L248">        result.put(&quot;bgpId&quot;,</span>
+<span class="nc" id="L249">                   route.getBgpSession().remoteInfo().bgpId().toString());</span>
+<span class="nc" id="L250">        result.put(&quot;origin&quot;, BgpConstants.Update.Origin.typeToString(route.getOrigin()));</span>
+<span class="nc" id="L251">        result.set(&quot;asPath&quot;, json(mapper, route.getAsPath()));</span>
+<span class="nc" id="L252">        result.put(&quot;localPref&quot;, route.getLocalPref());</span>
+<span class="nc" id="L253">        result.put(&quot;multiExitDisc&quot;, route.getMultiExitDisc());</span>
+
+<span class="nc" id="L255">        return result;</span>
+    }
+
+    /**
+     * Produces JSON object for an AS path.
+     *
+     * @param mapper the JSON object mapper to use
+     * @param asPath the AS path with the data
+     * @return JSON object for the AS path
+     */
+    private ObjectNode json(ObjectMapper mapper, BgpRouteEntry.AsPath asPath) {
+<span class="nc" id="L266">        ObjectNode result = mapper.createObjectNode();</span>
+<span class="nc" id="L267">        ArrayNode pathSegmentsJson = mapper.createArrayNode();</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        for (BgpRouteEntry.PathSegment pathSegment : asPath.getPathSegments()) {</span>
+<span class="nc" id="L269">            ObjectNode pathSegmentJson = mapper.createObjectNode();</span>
+<span class="nc" id="L270">            pathSegmentJson.put(&quot;type&quot;,</span>
+<span class="nc" id="L271">                                BgpConstants.Update.AsPath.typeToString(pathSegment.getType()));</span>
+<span class="nc" id="L272">            ArrayNode segmentAsNumbersJson = mapper.createArrayNode();</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">            for (Long asNumber : pathSegment.getSegmentAsNumbers()) {</span>
+<span class="nc" id="L274">                segmentAsNumbersJson.add(asNumber);</span>
+<span class="nc" id="L275">            }</span>
+<span class="nc" id="L276">            pathSegmentJson.set(&quot;segmentAsNumbers&quot;, segmentAsNumbersJson);</span>
+<span class="nc" id="L277">            pathSegmentsJson.add(pathSegmentJson);</span>
+<span class="nc" id="L278">        }</span>
+<span class="nc" id="L279">        result.set(&quot;pathSegments&quot;, pathSegmentsJson);</span>
+
+<span class="nc" id="L281">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

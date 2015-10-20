@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepMetricObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepMetricObjectVer1.java</span></div><h1>PcepMetricObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepMetricObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP metric object.
+ */
+public class PcepMetricObjectVer1 implements PcepMetricObject {
+
+    /*
+     METRIC Object Body Format.
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |          Reserved             |    Flags  |C|B|       T       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                          metric-value                         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+
+<span class="fc" id="L45">    protected static final Logger log = LoggerFactory.getLogger(PcepMetricObjectVer1.class);</span>
+
+    public static final byte METRIC_OBJ_TYPE = 1;
+    public static final byte METRIC_OBJ_CLASS = 6;
+    public static final byte METRIC_OBJECT_VERSION = 1;
+    public static final short METRIC_OBJ_MINIMUM_LENGTH = 12;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+    public static final int IFLAG_SHIFT_VALUE = 9;
+    public static final int BTYPE_SHIFT_VALUE = 8;
+    public static final int CFLAG_SET = 1;
+    public static final int CFLAG_RESET = 0;
+    public static final int BFLAG_SET = 1;
+    public static final int BFLAG_RESET = 0;
+    public static final byte CFLAG_CHECK = 0x02;
+
+<span class="fc" id="L60">    static final PcepObjectHeader DEFAULT_METRIC_OBJECT_HEADER = new PcepObjectHeader(METRIC_OBJ_CLASS,</span>
+            METRIC_OBJ_TYPE, PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED,
+            METRIC_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader metricObjHeader;
+    private int iMetricVal;
+    private byte yFlag; // 6-flags
+    private boolean bCFlag;
+    private boolean bBFlag;
+    private byte bType;
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L74">    public PcepMetricObjectVer1() {</span>
+<span class="nc" id="L75">        this.metricObjHeader = null;</span>
+<span class="nc" id="L76">        this.iMetricVal = 0;</span>
+<span class="nc" id="L77">        this.yFlag = 0;</span>
+<span class="nc" id="L78">        this.bCFlag = false;</span>
+<span class="nc" id="L79">        this.bBFlag = false;</span>
+<span class="nc" id="L80">        this.bType = 0;</span>
+
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * Constructor to initialize all member variables.
+     *
+     * @param metricObjHeader metric object header
+     * @param iMetricVal metric value
+     * @param yFlag Y flag
+     * @param bCFlag C flag
+     * @param bBFlag B flag
+     * @param bType Type value
+     */
+    public PcepMetricObjectVer1(PcepObjectHeader metricObjHeader, int iMetricVal, byte yFlag, boolean bCFlag,
+<span class="fc" id="L95">            boolean bBFlag, byte bType) {</span>
+
+<span class="fc" id="L97">        this.metricObjHeader = metricObjHeader;</span>
+<span class="fc" id="L98">        this.iMetricVal = iMetricVal;</span>
+<span class="fc" id="L99">        this.yFlag = yFlag;</span>
+<span class="fc" id="L100">        this.bCFlag = bCFlag;</span>
+<span class="fc" id="L101">        this.bBFlag = bBFlag;</span>
+<span class="fc" id="L102">        this.bType = bType;</span>
+
+<span class="fc" id="L104">    }</span>
+
+    @Override
+    public void setMetricVal(int value) {
+<span class="nc" id="L108">        this.iMetricVal = value;</span>
+
+<span class="nc" id="L110">    }</span>
+
+    @Override
+    public int getMetricVal() {
+<span class="nc" id="L114">        return this.iMetricVal;</span>
+    }
+
+    @Override
+    public byte getYFlag() {
+<span class="nc" id="L119">        return this.yFlag;</span>
+    }
+
+    @Override
+    public void setYFlag(byte value) {
+<span class="nc" id="L124">        this.yFlag = value;</span>
+<span class="nc" id="L125">    }</span>
+
+    @Override
+    public boolean getCFlag() {
+<span class="nc" id="L129">        return this.bCFlag;</span>
+    }
+
+    @Override
+    public void setCFlag(boolean value) {
+<span class="nc" id="L134">        this.bCFlag = value;</span>
+<span class="nc" id="L135">    }</span>
+
+    @Override
+    public boolean getBFlag() {
+<span class="nc" id="L139">        return this.bBFlag;</span>
+    }
+
+    @Override
+    public void setBFlag(boolean value) {
+<span class="nc" id="L144">        this.bBFlag = value;</span>
+<span class="nc" id="L145">    }</span>
+
+    @Override
+    public byte getBType() {
+<span class="nc" id="L149">        return this.bType;</span>
+    }
+
+    @Override
+    public void setBType(byte value) {
+<span class="nc" id="L154">        this.bType = value;</span>
+<span class="nc" id="L155">    }</span>
+
+    /**
+     * Sets metric Object Header.
+     *
+     * @param obj metric object header
+     */
+    public void setMetricObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L163">        this.metricObjHeader = obj;</span>
+<span class="nc" id="L164">    }</span>
+
+    /**
+     * Returns metric Object Header.
+     *
+     * @return metricObjHeader
+     */
+    public PcepObjectHeader getMetricObjHeader() {
+<span class="nc" id="L172">        return this.metricObjHeader;</span>
+    }
+
+    /**
+     * Reads from channel buffer and returns object of PcepMetricObject.
+     *
+     * @param cb of channel buffer.
+     * @return object of PcepMetricObject
+     * @throws PcepParseException when metric object is not present in channel buffer
+     */
+    public static PcepMetricObject read(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L184">        log.debug(&quot;MetricObject::read&quot;);</span>
+        PcepObjectHeader metricObjHeader;
+        int iMetricVal;
+        byte yFlag; // 6-flags
+        boolean bCFlag;
+        boolean bBFlag;
+        byte bType;
+
+<span class="fc" id="L192">        metricObjHeader = PcepObjectHeader.read(cb);</span>
+
+<span class="pc bpc" id="L194" title="1 of 2 branches missed.">        if (metricObjHeader.getObjClass() != METRIC_OBJ_CLASS) {</span>
+<span class="nc" id="L195">            throw new PcepParseException(&quot;This object is not a Metric Object. Object Class: &quot;</span>
+<span class="nc" id="L196">                    + metricObjHeader.getObjClass());</span>
+        }
+
+        //take only metric buffer.
+<span class="fc" id="L200">        ChannelBuffer tempCb = cb.readBytes(metricObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+
+<span class="fc" id="L202">        tempCb.readShort();</span>
+<span class="fc" id="L203">        yFlag = tempCb.readByte();</span>
+<span class="fc" id="L204">        bType = tempCb.readByte();</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        bCFlag = (yFlag &amp; CFLAG_CHECK) == CFLAG_CHECK;</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">        bBFlag = (yFlag &amp; BFLAG_SET) == BFLAG_SET;</span>
+<span class="fc" id="L207">        iMetricVal = tempCb.readInt();</span>
+
+<span class="fc" id="L209">        return new PcepMetricObjectVer1(metricObjHeader, iMetricVal, yFlag, bCFlag, bBFlag, bType);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+        //write Object header
+<span class="fc" id="L215">        int objStartIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L217">        int objLenIndex = metricObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L220">            throw new PcepParseException(&quot;Error: ObjectLength is &quot; + objLenIndex);</span>
+        }
+
+<span class="fc bfc" id="L223" title="All 2 branches covered.">        int iFlag = (bCFlag) ? CFLAG_SET : CFLAG_RESET;</span>
+<span class="fc" id="L224">        int iTemp = iFlag &lt;&lt; IFLAG_SHIFT_VALUE;</span>
+<span class="fc bfc" id="L225" title="All 2 branches covered.">        iFlag = (bBFlag) ? BFLAG_SET : BFLAG_RESET;</span>
+<span class="fc" id="L226">        iTemp = iTemp | (iFlag &lt;&lt; BTYPE_SHIFT_VALUE);</span>
+<span class="fc" id="L227">        iTemp = iTemp | bType;</span>
+<span class="fc" id="L228">        cb.writeInt(iTemp);</span>
+<span class="fc" id="L229">        cb.writeInt(iMetricVal);</span>
+
+<span class="fc" id="L231">        short hLength = (short) (cb.writerIndex() - objStartIndex);</span>
+<span class="fc" id="L232">        cb.setShort(objLenIndex, hLength);</span>
+        //will be helpful during print().
+<span class="fc" id="L234">        metricObjHeader.setObjLen(hLength);</span>
+<span class="fc" id="L235">        return hLength;</span>
+    }
+
+    /**
+     * Builder class for PCEP metric object.
+     */
+<span class="nc" id="L241">    public static class Builder implements PcepMetricObject.Builder {</span>
+
+<span class="nc" id="L243">        private boolean bIsHeaderSet = false;</span>
+        private PcepObjectHeader metricObjHeader;
+        private int iMetricVal;
+<span class="nc" id="L246">        private boolean bIsMetricValSet = false;</span>
+        private byte yFlag; // 6-flags
+        private boolean bCFlag;
+        private boolean bBFlag;
+        private byte bType;
+<span class="nc" id="L251">        private boolean bIsbTypeSet = false;</span>
+
+<span class="nc" id="L253">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L256">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepMetricObject build() throws PcepParseException {
+
+<span class="nc bnc" id="L262" title="All 2 branches missed.">            PcepObjectHeader metricObjHeader = this.bIsHeaderSet ? this.metricObjHeader : DEFAULT_METRIC_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if (!this.bIsMetricValSet) {</span>
+<span class="nc" id="L265">                throw new PcepParseException(&quot; Metric Value NOT Set while building PcepMetricObject.&quot;);</span>
+            }
+<span class="nc bnc" id="L267" title="All 2 branches missed.">            if (!this.bIsbTypeSet) {</span>
+<span class="nc" id="L268">                throw new PcepParseException(&quot; Type NOT Set while building PcepMetricObject.&quot;);</span>
+            }
+
+<span class="nc bnc" id="L271" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L272">                metricObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L275" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L276">                metricObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L279">            return new PcepMetricObjectVer1(metricObjHeader, iMetricVal, yFlag, bCFlag, bBFlag, bType);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getMetricObjHeader() {
+<span class="nc" id="L284">            return this.metricObjHeader;</span>
+        }
+
+        @Override
+        public Builder setMetricObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L289">            this.metricObjHeader = obj;</span>
+<span class="nc" id="L290">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L291">            return this;</span>
+        }
+
+        @Override
+        public int getMetricVal() {
+<span class="nc" id="L296">            return this.iMetricVal;</span>
+        }
+
+        @Override
+        public Builder setMetricVal(int value) {
+<span class="nc" id="L301">            this.iMetricVal = value;</span>
+<span class="nc" id="L302">            this.bIsMetricValSet = true;</span>
+<span class="nc" id="L303">            return this;</span>
+        }
+
+        @Override
+        public byte getYFlag() {
+<span class="nc" id="L308">            return this.yFlag;</span>
+        }
+
+        @Override
+        public Builder setYFlag(byte value) {
+<span class="nc" id="L313">            this.yFlag = value;</span>
+<span class="nc" id="L314">            return this;</span>
+        }
+
+        @Override
+        public boolean getCFlag() {
+<span class="nc" id="L319">            return this.bCFlag;</span>
+        }
+
+        @Override
+        public Builder setCFlag(boolean value) {
+<span class="nc" id="L324">            this.bCFlag = value;</span>
+<span class="nc" id="L325">            return this;</span>
+        }
+
+        @Override
+        public boolean getBFlag() {
+<span class="nc" id="L330">            return this.bBFlag;</span>
+        }
+
+        @Override
+        public Builder setBFlag(boolean value) {
+<span class="nc" id="L335">            this.bBFlag = value;</span>
+<span class="nc" id="L336">            return this;</span>
+        }
+
+        @Override
+        public byte getBType() {
+<span class="nc" id="L341">            return this.bType;</span>
+        }
+
+        @Override
+        public Builder setBType(byte value) {
+<span class="nc" id="L346">            this.bType = value;</span>
+<span class="nc" id="L347">            this.bIsbTypeSet = true;</span>
+<span class="nc" id="L348">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L353">            this.bPFlag = value;</span>
+<span class="nc" id="L354">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L355">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L360">            this.bIFlag = value;</span>
+<span class="nc" id="L361">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L362">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L369">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L370">                .add(&quot;MetricValue&quot;, iMetricVal)</span>
+<span class="nc" id="L371">                .add(&quot;BFlag&quot;, bBFlag)</span>
+<span class="nc" id="L372">                .add(&quot;CFlag&quot;, bCFlag)</span>
+<span class="nc" id="L373">                .add(&quot;BType&quot;, bType)</span>
+<span class="nc" id="L374">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpConstants.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpConstants.java</span></div><h1>BgpConstants.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+/**
+ * BGP related constants.
+ */
+public final class BgpConstants {
+    /**
+     * Default constructor.
+     * &lt;p&gt;
+     * The constructor is private to prevent creating an instance of
+     * this utility class.
+     */
+<span class="nc" id="L28">    private BgpConstants() {</span>
+<span class="nc" id="L29">    }</span>
+
+    /** BGP port number (RFC 4271). */
+    public static final int BGP_PORT = 179;
+
+    /** BGP version. */
+    public static final int BGP_VERSION = 4;
+
+    /** BGP OPEN message type. */
+    public static final int BGP_TYPE_OPEN = 1;
+
+    /** BGP UPDATE message type. */
+    public static final int BGP_TYPE_UPDATE = 2;
+
+    /** BGP NOTIFICATION message type. */
+    public static final int BGP_TYPE_NOTIFICATION = 3;
+
+    /** BGP KEEPALIVE message type. */
+    public static final int BGP_TYPE_KEEPALIVE = 4;
+
+    /** BGP Header Marker field length. */
+    public static final int BGP_HEADER_MARKER_LENGTH = 16;
+
+    /** BGP Header length. */
+    public static final int BGP_HEADER_LENGTH = 19;
+
+    /** BGP message maximum length. */
+    public static final int BGP_MESSAGE_MAX_LENGTH = 4096;
+
+    /** BGP OPEN message minimum length (BGP Header included). */
+    public static final int BGP_OPEN_MIN_LENGTH = 29;
+
+    /** BGP UPDATE message minimum length (BGP Header included). */
+    public static final int BGP_UPDATE_MIN_LENGTH = 23;
+
+    /** BGP NOTIFICATION message minimum length (BGP Header included). */
+    public static final int BGP_NOTIFICATION_MIN_LENGTH = 21;
+
+    /** BGP KEEPALIVE message expected length (BGP Header included). */
+    public static final int BGP_KEEPALIVE_EXPECTED_LENGTH = 19;
+
+    /** BGP KEEPALIVE messages transmitted per Hold interval. */
+    public static final int BGP_KEEPALIVE_PER_HOLD_INTERVAL = 3;
+
+    /** BGP KEEPALIVE messages minimum Holdtime (in seconds). */
+    public static final int BGP_KEEPALIVE_MIN_HOLDTIME = 3;
+
+    /** BGP KEEPALIVE messages minimum transmission interval (in seconds). */
+    public static final int BGP_KEEPALIVE_MIN_INTERVAL = 1;
+
+    /** BGP AS 0 (zero) value. See draft-ietf-idr-as0-06.txt Internet Draft. */
+    public static final long BGP_AS_0 = 0;
+
+    /**
+     * BGP OPEN related constants.
+     */
+    public static final class Open {
+        /**
+         * Default constructor.
+         * &lt;p&gt;
+         * The constructor is private to prevent creating an instance of
+         * this utility class.
+         */
+<span class="nc" id="L92">        private Open() {</span>
+<span class="nc" id="L93">        }</span>
+
+        /**
+         * BGP OPEN: Optional Parameters related constants.
+         */
+<span class="nc" id="L98">        public static final class OptionalParameters {</span>
+        }
+
+        /**
+         * BGP OPEN: Capabilities related constants (RFC 5492).
+         */
+<span class="nc" id="L104">        public static final class Capabilities {</span>
+            /** BGP OPEN Optional Parameter Type: Capabilities. */
+            public static final int TYPE = 2;
+
+            /** BGP OPEN Optional Parameter minimum length. */
+            public static final int MIN_LENGTH = 2;
+
+            /**
+             * BGP OPEN: Multiprotocol Extensions Capabilities (RFC 4760).
+             */
+<span class="nc" id="L114">            public static final class MultiprotocolExtensions {</span>
+                /** BGP OPEN Multiprotocol Extensions code. */
+                public static final int CODE = 1;
+
+                /** BGP OPEN Multiprotocol Extensions length. */
+                public static final int LENGTH = 4;
+
+                /** BGP OPEN Multiprotocol Extensions AFI: IPv4. */
+                public static final int AFI_IPV4 = 1;
+
+                /** BGP OPEN Multiprotocol Extensions AFI: IPv6. */
+                public static final int AFI_IPV6 = 2;
+
+                /** BGP OPEN Multiprotocol Extensions SAFI: unicast. */
+                public static final int SAFI_UNICAST = 1;
+
+                /** BGP OPEN Multiprotocol Extensions SAFI: multicast. */
+                public static final int SAFI_MULTICAST = 2;
+            }
+
+            /**
+             * BGP OPEN: Support for 4-octet AS Number Capability (RFC 6793).
+             */
+<span class="nc" id="L137">            public static final class As4Octet {</span>
+                /** BGP OPEN Support for 4-octet AS Number Capability code. */
+                public static final int CODE = 65;
+
+                /** BGP OPEN 4-octet AS Number Capability length. */
+                public static final int LENGTH = 4;
+            }
+        }
+    }
+
+    /**
+     * BGP UPDATE related constants.
+     */
+    public static final class Update {
+        /**
+         * Default constructor.
+         * &lt;p&gt;
+         * The constructor is private to prevent creating an instance of
+         * this utility class.
+         */
+<span class="nc" id="L157">        private Update() {</span>
+<span class="nc" id="L158">        }</span>
+
+        /** BGP AS length. */
+        public static final int AS_LENGTH = 2;
+
+        /** BGP 4 Octet AS length (RFC 6793). */
+        public static final int AS_4OCTET_LENGTH = 4;
+
+        /**
+         * BGP UPDATE: ORIGIN related constants.
+         */
+        public static final class Origin {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L176">            private Origin() {</span>
+<span class="nc" id="L177">            }</span>
+
+            /** BGP UPDATE Attributes Type Code ORIGIN. */
+            public static final int TYPE = 1;
+
+            /** BGP UPDATE Attributes Type Code ORIGIN length. */
+            public static final int LENGTH = 1;
+
+            /** BGP UPDATE ORIGIN: IGP. */
+            public static final int IGP = 0;
+
+            /** BGP UPDATE ORIGIN: EGP. */
+            public static final int EGP = 1;
+
+            /** BGP UPDATE ORIGIN: INCOMPLETE. */
+            public static final int INCOMPLETE = 2;
+
+            /**
+             * Gets the BGP UPDATE origin type as a string.
+             *
+             * @param type the BGP UPDATE origin type
+             * @return the BGP UPDATE origin type as a string
+             */
+            public static String typeToString(int type) {
+<span class="fc" id="L201">                String typeString = &quot;UNKNOWN&quot;;</span>
+
+<span class="pc bpc" id="L203" title="3 of 4 branches missed.">                switch (type) {</span>
+                case IGP:
+<span class="fc" id="L205">                    typeString = &quot;IGP&quot;;</span>
+<span class="fc" id="L206">                    break;</span>
+                case EGP:
+<span class="nc" id="L208">                    typeString = &quot;EGP&quot;;</span>
+<span class="nc" id="L209">                    break;</span>
+                case INCOMPLETE:
+<span class="nc" id="L211">                    typeString = &quot;INCOMPLETE&quot;;</span>
+<span class="nc" id="L212">                    break;</span>
+                default:
+                    break;
+                }
+<span class="fc" id="L216">                return typeString;</span>
+            }
+        }
+
+        /**
+         * BGP UPDATE: AS_PATH related constants.
+         */
+        public static final class AsPath {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L230">            private AsPath() {</span>
+<span class="nc" id="L231">            }</span>
+
+            /** BGP UPDATE Attributes Type Code AS_PATH. */
+            public static final int TYPE = 2;
+
+            /** BGP UPDATE AS_PATH Type: AS_SET. */
+            public static final int AS_SET = 1;
+
+            /** BGP UPDATE AS_PATH Type: AS_SEQUENCE. */
+            public static final int AS_SEQUENCE = 2;
+
+            /** BGP UPDATE AS_PATH Type: AS_CONFED_SEQUENCE. */
+            public static final int AS_CONFED_SEQUENCE = 3;
+
+            /** BGP UPDATE AS_PATH Type: AS_CONFED_SET. */
+            public static final int AS_CONFED_SET = 4;
+
+            /**
+             * Gets the BGP AS_PATH type as a string.
+             *
+             * @param type the BGP AS_PATH type
+             * @return the BGP AS_PATH type as a string
+             */
+            public static String typeToString(int type) {
+<span class="fc" id="L255">                String typeString = &quot;UNKNOWN&quot;;</span>
+
+<span class="pc bpc" id="L257" title="1 of 5 branches missed.">                switch (type) {</span>
+                case AS_SET:
+<span class="fc" id="L259">                    typeString = &quot;AS_SET&quot;;</span>
+<span class="fc" id="L260">                    break;</span>
+                case AS_SEQUENCE:
+<span class="fc" id="L262">                    typeString = &quot;AS_SEQUENCE&quot;;</span>
+<span class="fc" id="L263">                    break;</span>
+                case AS_CONFED_SEQUENCE:
+<span class="fc" id="L265">                    typeString = &quot;AS_CONFED_SEQUENCE&quot;;</span>
+<span class="fc" id="L266">                    break;</span>
+                case AS_CONFED_SET:
+<span class="fc" id="L268">                    typeString = &quot;AS_CONFED_SET&quot;;</span>
+<span class="fc" id="L269">                    break;</span>
+                default:
+                    break;
+                }
+<span class="fc" id="L273">                return typeString;</span>
+            }
+        }
+
+        /**
+         * BGP UPDATE: NEXT_HOP related constants.
+         */
+        public static final class NextHop {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L287">            private NextHop() {</span>
+<span class="nc" id="L288">            }</span>
+
+            /** BGP UPDATE Attributes Type Code NEXT_HOP. */
+            public static final int TYPE = 3;
+
+            /** BGP UPDATE Attributes Type Code NEXT_HOP length. */
+            public static final int LENGTH = 4;
+        }
+
+        /**
+         * BGP UPDATE: MULTI_EXIT_DISC related constants.
+         */
+        public static final class MultiExitDisc {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L307">            private MultiExitDisc() {</span>
+<span class="nc" id="L308">            }</span>
+
+            /** BGP UPDATE Attributes Type Code MULTI_EXIT_DISC. */
+            public static final int TYPE = 4;
+
+            /** BGP UPDATE Attributes Type Code MULTI_EXIT_DISC length. */
+            public static final int LENGTH = 4;
+
+            /** BGP UPDATE Attributes lowest MULTI_EXIT_DISC value. */
+            public static final int LOWEST_MULTI_EXIT_DISC = 0;
+        }
+
+        /**
+         * BGP UPDATE: LOCAL_PREF related constants.
+         */
+        public static final class LocalPref {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L330">            private LocalPref() {</span>
+<span class="nc" id="L331">            }</span>
+
+            /** BGP UPDATE Attributes Type Code LOCAL_PREF. */
+            public static final int TYPE = 5;
+
+            /** BGP UPDATE Attributes Type Code LOCAL_PREF length. */
+            public static final int LENGTH = 4;
+        }
+
+        /**
+         * BGP UPDATE: ATOMIC_AGGREGATE related constants.
+         */
+        public static final class AtomicAggregate {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L350">            private AtomicAggregate() {</span>
+<span class="nc" id="L351">            }</span>
+
+            /** BGP UPDATE Attributes Type Code ATOMIC_AGGREGATE. */
+            public static final int TYPE = 6;
+
+            /** BGP UPDATE Attributes Type Code ATOMIC_AGGREGATE length. */
+            public static final int LENGTH = 0;
+        }
+
+        /**
+         * BGP UPDATE: AGGREGATOR related constants.
+         */
+        public static final class Aggregator {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L370">            private Aggregator() {</span>
+<span class="nc" id="L371">            }</span>
+
+            /** BGP UPDATE Attributes Type Code AGGREGATOR. */
+            public static final int TYPE = 7;
+
+            /** BGP UPDATE Attributes Type Code AGGREGATOR length: 2 octet AS. */
+            public static final int AS2_LENGTH = 6;
+
+            /** BGP UPDATE Attributes Type Code AGGREGATOR length: 4 octet AS. */
+            public static final int AS4_LENGTH = 8;
+        }
+
+        /**
+         * BGP UPDATE: MP_REACH_NLRI related constants.
+         */
+        public static final class MpReachNlri {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L393">            private MpReachNlri() {</span>
+<span class="nc" id="L394">            }</span>
+
+            /** BGP UPDATE Attributes Type Code MP_REACH_NLRI. */
+            public static final int TYPE = 14;
+
+            /** BGP UPDATE Attributes Type Code MP_REACH_NLRI min length. */
+            public static final int MIN_LENGTH = 5;
+        }
+
+        /**
+         * BGP UPDATE: MP_UNREACH_NLRI related constants.
+         */
+        public static final class MpUnreachNlri {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L413">            private MpUnreachNlri() {</span>
+<span class="nc" id="L414">            }</span>
+
+            /** BGP UPDATE Attributes Type Code MP_UNREACH_NLRI. */
+            public static final int TYPE = 15;
+
+            /** BGP UPDATE Attributes Type Code MP_UNREACH_NLRI min length. */
+            public static final int MIN_LENGTH = 3;
+        }
+    }
+
+    /**
+     * BGP NOTIFICATION related constants.
+     */
+    public static final class Notifications {
+        /**
+         * Default constructor.
+         * &lt;p&gt;
+         * The constructor is private to prevent creating an instance of
+         * this utility class.
+         */
+<span class="nc" id="L434">        private Notifications() {</span>
+<span class="nc" id="L435">        }</span>
+
+        /**
+         * BGP NOTIFICATION: Message Header Error constants.
+         */
+        public static final class MessageHeaderError {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L447">            private MessageHeaderError() {</span>
+<span class="nc" id="L448">            }</span>
+
+            /** Message Header Error code. */
+            public static final int ERROR_CODE = 1;
+
+            /** Message Header Error subcode: Connection Not Synchronized. */
+            public static final int CONNECTION_NOT_SYNCHRONIZED = 1;
+
+            /** Message Header Error subcode: Bad Message Length. */
+            public static final int BAD_MESSAGE_LENGTH = 2;
+
+            /** Message Header Error subcode: Bad Message Type. */
+            public static final int BAD_MESSAGE_TYPE = 3;
+        }
+
+        /**
+         * BGP NOTIFICATION: OPEN Message Error constants.
+         */
+        public static final class OpenMessageError {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L473">            private OpenMessageError() {</span>
+<span class="nc" id="L474">            }</span>
+
+            /** OPEN Message Error code. */
+            public static final int ERROR_CODE = 2;
+
+            /** OPEN Message Error subcode: Unsupported Version Number. */
+            public static final int UNSUPPORTED_VERSION_NUMBER = 1;
+
+            /** OPEN Message Error subcode: Bad PEER AS. */
+            public static final int BAD_PEER_AS = 2;
+
+            /** OPEN Message Error subcode: Unacceptable Hold Time. */
+            public static final int UNACCEPTABLE_HOLD_TIME = 6;
+        }
+
+        /**
+         * BGP NOTIFICATION: UPDATE Message Error constants.
+         */
+        public static final class UpdateMessageError {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L499">            private UpdateMessageError() {</span>
+<span class="nc" id="L500">            }</span>
+
+            /** UPDATE Message Error code. */
+            public static final int ERROR_CODE = 3;
+
+            /** UPDATE Message Error subcode: Malformed Attribute List. */
+            public static final int MALFORMED_ATTRIBUTE_LIST = 1;
+
+            /** UPDATE Message Error subcode: Unrecognized Well-known Attribute. */
+            public static final int UNRECOGNIZED_WELL_KNOWN_ATTRIBUTE = 2;
+
+            /** UPDATE Message Error subcode: Missing Well-known Attribute. */
+            public static final int MISSING_WELL_KNOWN_ATTRIBUTE = 3;
+
+           /** UPDATE Message Error subcode: Attribute Flags Error. */
+            public static final int ATTRIBUTE_FLAGS_ERROR = 4;
+
+            /** UPDATE Message Error subcode: Attribute Length Error. */
+            public static final int ATTRIBUTE_LENGTH_ERROR = 5;
+
+            /** UPDATE Message Error subcode: Invalid ORIGIN Attribute. */
+            public static final int INVALID_ORIGIN_ATTRIBUTE = 6;
+
+            /** UPDATE Message Error subcode: Invalid NEXT_HOP Attribute. */
+            public static final int INVALID_NEXT_HOP_ATTRIBUTE = 8;
+
+            /** UPDATE Message Error subcode: Optional Attribute Error. Unused. */
+            public static final int OPTIONAL_ATTRIBUTE_ERROR = 9;
+
+            /** UPDATE Message Error subcode: Invalid Network Field. */
+            public static final int INVALID_NETWORK_FIELD = 10;
+
+            /** UPDATE Message Error subcode: Malformed AS_PATH. */
+            public static final int MALFORMED_AS_PATH = 11;
+        }
+
+        /**
+         * BGP NOTIFICATION: Hold Timer Expired constants.
+         */
+        public static final class HoldTimerExpired {
+            /**
+             * Default constructor.
+             * &lt;p&gt;
+             * The constructor is private to prevent creating an instance of
+             * this utility class.
+             */
+<span class="nc" id="L546">            private HoldTimerExpired() {</span>
+<span class="nc" id="L547">            }</span>
+
+            /** Hold Timer Expired code. */
+            public static final int ERROR_CODE = 4;
+        }
+
+        /** BGP NOTIFICATION message Error subcode: Unspecific. */
+        public static final int ERROR_SUBCODE_UNSPECIFIC = 0;
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

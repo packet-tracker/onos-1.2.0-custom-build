@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultAsyncConsistentMap.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DefaultAsyncConsistentMap.java</span></div><h1>DefaultAsyncConsistentMap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.consistent.impl;
+
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.collect.Maps;
+import org.onlab.util.HexString;
+import org.onlab.util.SharedExecutors;
+import org.onlab.util.Tools;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.store.service.AsyncConsistentMap;
+import org.onosproject.store.service.ConsistentMapException;
+import org.onosproject.store.service.MapEvent;
+import org.onosproject.store.service.MapEventListener;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.store.consistent.impl.StateMachineUpdate.Target.MAP_UPDATE;
+import static org.onosproject.store.consistent.impl.StateMachineUpdate.Target.TX_COMMIT;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * AsyncConsistentMap implementation that is backed by a Raft consensus
+ * based database.
+ *
+ * @param &lt;K&gt; type of key.
+ * @param &lt;V&gt; type of value.
+ */
+public class DefaultAsyncConsistentMap&lt;K, V&gt;  implements AsyncConsistentMap&lt;K, V&gt; {
+
+    private final String name;
+    private final ApplicationId applicationId;
+    private final Database database;
+    private final Serializer serializer;
+    private final boolean readOnly;
+    private final boolean purgeOnUninstall;
+
+    private static final String PRIMITIVE_NAME = &quot;consistentMap&quot;;
+    private static final String SIZE = &quot;size&quot;;
+    private static final String IS_EMPTY = &quot;isEmpty&quot;;
+    private static final String CONTAINS_KEY = &quot;containsKey&quot;;
+    private static final String CONTAINS_VALUE = &quot;containsValue&quot;;
+    private static final String GET = &quot;get&quot;;
+    private static final String COMPUTE_IF = &quot;computeIf&quot;;
+    private static final String PUT = &quot;put&quot;;
+    private static final String PUT_AND_GET = &quot;putAndGet&quot;;
+    private static final String PUT_IF_ABSENT = &quot;putIfAbsent&quot;;
+    private static final String REMOVE = &quot;remove&quot;;
+    private static final String CLEAR = &quot;clear&quot;;
+    private static final String KEY_SET = &quot;keySet&quot;;
+    private static final String VALUES = &quot;values&quot;;
+    private static final String ENTRY_SET = &quot;entrySet&quot;;
+    private static final String REPLACE = &quot;replace&quot;;
+    private static final String COMPUTE_IF_ABSENT = &quot;computeIfAbsent&quot;;
+
+<span class="nc" id="L87">    private final Set&lt;MapEventListener&lt;K, V&gt;&gt; listeners = new CopyOnWriteArraySet&lt;&gt;();</span>
+
+<span class="nc" id="L89">    private final Logger log = getLogger(getClass());</span>
+    private final MeteringAgent monitor;
+
+    private static final String ERROR_NULL_KEY = &quot;Key cannot be null&quot;;
+    private static final String ERROR_NULL_VALUE = &quot;Null values are not allowed&quot;;
+
+<span class="nc" id="L95">    private final LoadingCache&lt;K, String&gt; keyCache = CacheBuilder.newBuilder()</span>
+<span class="nc" id="L96">            .softValues()</span>
+<span class="nc" id="L97">            .build(new CacheLoader&lt;K, String&gt;() {</span>
+
+                @Override
+                public String load(K key) {
+<span class="nc" id="L101">                    return HexString.toHexString(serializer.encode(key));</span>
+                }
+            });
+
+    protected K dK(String key) {
+<span class="nc" id="L106">        return serializer.decode(HexString.fromHexString(key));</span>
+    }
+
+    public DefaultAsyncConsistentMap(String name,
+                                     ApplicationId applicationId,
+                                     Database database,
+                                     Serializer serializer,
+                                     boolean readOnly,
+                                     boolean purgeOnUninstall,
+<span class="nc" id="L115">                                     boolean meteringEnabled) {</span>
+<span class="nc" id="L116">        this.name = checkNotNull(name, &quot;map name cannot be null&quot;);</span>
+<span class="nc" id="L117">        this.applicationId = applicationId;</span>
+<span class="nc" id="L118">        this.database = checkNotNull(database, &quot;database cannot be null&quot;);</span>
+<span class="nc" id="L119">        this.serializer = checkNotNull(serializer, &quot;serializer cannot be null&quot;);</span>
+<span class="nc" id="L120">        this.readOnly = readOnly;</span>
+<span class="nc" id="L121">        this.purgeOnUninstall = purgeOnUninstall;</span>
+<span class="nc" id="L122">        this.database.registerConsumer(update -&gt; {</span>
+<span class="nc" id="L123">            SharedExecutors.getSingleThreadExecutor().execute(() -&gt; {</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">                if (listeners.isEmpty()) {</span>
+<span class="nc" id="L125">                    return;</span>
+                }
+                try {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                    if (update.target() == MAP_UPDATE) {</span>
+<span class="nc" id="L129">                        Result&lt;UpdateResult&lt;String, byte[]&gt;&gt; result = update.output();</span>
+<span class="nc bnc" id="L130" title="All 4 branches missed.">                        if (result.success() &amp;&amp; result.value().mapName().equals(name)) {</span>
+<span class="nc" id="L131">                            MapEvent&lt;K, V&gt; mapEvent = result.value()</span>
+<span class="nc" id="L132">                                                            .&lt;K, V&gt;map(this::dK,</span>
+<span class="nc" id="L133">                                                                       v -&gt; serializer.decode(Tools.copyOf(v)))</span>
+<span class="nc" id="L134">                                                            .toMapEvent();</span>
+<span class="nc" id="L135">                            notifyListeners(mapEvent);</span>
+                        }
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                    } else if (update.target() == TX_COMMIT) {</span>
+<span class="nc" id="L138">                        CommitResponse response = update.output();</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">                        if (response.success()) {</span>
+<span class="nc" id="L140">                            response.updates().forEach(u -&gt; {</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">                                if (u.mapName().equals(name)) {</span>
+<span class="nc" id="L142">                                    MapEvent&lt;K, V&gt; mapEvent =</span>
+<span class="nc" id="L143">                                            u.&lt;K, V&gt;map(this::dK,</span>
+<span class="nc" id="L144">                                                        v -&gt; serializer.decode(Tools.copyOf(v)))</span>
+<span class="nc" id="L145">                                             .toMapEvent();</span>
+<span class="nc" id="L146">                                    notifyListeners(mapEvent);</span>
+                                }
+<span class="nc" id="L148">                            });</span>
+                        }
+                    }
+<span class="nc" id="L151">                } catch (Exception e) {</span>
+<span class="nc" id="L152">                    log.warn(&quot;Error notifying listeners&quot;, e);</span>
+<span class="nc" id="L153">                }</span>
+<span class="nc" id="L154">            });</span>
+<span class="nc" id="L155">        });</span>
+<span class="nc" id="L156">        this.monitor = new MeteringAgent(PRIMITIVE_NAME, name, meteringEnabled);</span>
+<span class="nc" id="L157">    }</span>
+
+    /**
+     * Returns this map name.
+     * @return map name
+     */
+    public String name() {
+<span class="nc" id="L164">        return name;</span>
+    }
+
+    /**
+     * Returns the serializer for map entries.
+     * @return map entry serializer
+     */
+    public Serializer serializer() {
+<span class="nc" id="L172">        return serializer;</span>
+    }
+
+    /**
+     * Returns the applicationId owning this map.
+     * @return application Id
+     */
+    public ApplicationId applicationId() {
+<span class="nc" id="L180">        return applicationId;</span>
+    }
+
+    /**
+     * Returns whether the map entries should be purged when the application
+     * owning it is uninstalled.
+     * @return true is map needs to cleared on app uninstall; false otherwise
+     */
+    public boolean purgeOnUninstall() {
+<span class="nc" id="L189">        return purgeOnUninstall;</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Integer&gt; size() {
+<span class="nc" id="L194">        final MeteringAgent.Context timer = monitor.startTimer(SIZE);</span>
+<span class="nc" id="L195">        return database.mapSize(name)</span>
+<span class="nc" id="L196">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; isEmpty() {
+<span class="nc" id="L201">        final MeteringAgent.Context timer = monitor.startTimer(IS_EMPTY);</span>
+<span class="nc" id="L202">        return database.mapIsEmpty(name)</span>
+<span class="nc" id="L203">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; containsKey(K key) {
+<span class="nc" id="L208">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L209">        final MeteringAgent.Context timer = monitor.startTimer(CONTAINS_KEY);</span>
+<span class="nc" id="L210">        return database.mapContainsKey(name, keyCache.getUnchecked(key))</span>
+<span class="nc" id="L211">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; containsValue(V value) {
+<span class="nc" id="L216">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L217">        final MeteringAgent.Context timer = monitor.startTimer(CONTAINS_VALUE);</span>
+<span class="nc" id="L218">        return database.mapContainsValue(name, serializer.encode(value))</span>
+<span class="nc" id="L219">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; get(K key) {
+<span class="nc" id="L224">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L225">        final MeteringAgent.Context timer = monitor.startTimer(GET);</span>
+<span class="nc" id="L226">        return database.mapGet(name, keyCache.getUnchecked(key))</span>
+<span class="nc" id="L227">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">                .thenApply(v -&gt; v != null ? v.map(serializer::decode) : null);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; computeIfAbsent(K key,
+                                                           Function&lt;? super K, ? extends V&gt; mappingFunction) {
+<span class="nc" id="L234">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L235">        checkNotNull(mappingFunction, &quot;Mapping function cannot be null&quot;);</span>
+<span class="nc" id="L236">        final MeteringAgent.Context timer = monitor.startTimer(COMPUTE_IF_ABSENT);</span>
+<span class="nc" id="L237">        return updateAndGet(key, Match.ifNull(), Match.any(), mappingFunction.apply(key))</span>
+<span class="nc" id="L238">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L239">                .thenApply(v -&gt; v.newValue());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; computeIfPresent(K key,
+                            BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L245">        return computeIf(key, Objects::nonNull, remappingFunction);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; compute(K key,
+                                                   BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L251">        return computeIf(key, v -&gt; true, remappingFunction);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; computeIf(K key,
+                                                     Predicate&lt;? super V&gt; condition,
+                                                     BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+<span class="nc" id="L258">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L259">        checkNotNull(condition, &quot;predicate function cannot be null&quot;);</span>
+<span class="nc" id="L260">        checkNotNull(remappingFunction, &quot;Remapping function cannot be null&quot;);</span>
+<span class="nc" id="L261">        final MeteringAgent.Context timer = monitor.startTimer(COMPUTE_IF);</span>
+<span class="nc" id="L262">        return get(key).thenCompose(r1 -&gt; {</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">            V existingValue = r1 == null ? null : r1.value();</span>
+            // if the condition evaluates to false, return existing value.
+<span class="nc bnc" id="L265" title="All 2 branches missed.">            if (!condition.test(existingValue)) {</span>
+<span class="nc" id="L266">                return CompletableFuture.completedFuture(r1);</span>
+            }
+
+<span class="nc" id="L269">            AtomicReference&lt;V&gt; computedValue = new AtomicReference&lt;&gt;();</span>
+            // if remappingFunction throws an exception, return the exception.
+            try {
+<span class="nc" id="L272">                computedValue.set(remappingFunction.apply(key, existingValue));</span>
+<span class="nc" id="L273">            } catch (Exception e) {</span>
+<span class="nc" id="L274">                return Tools.exceptionalFuture(e);</span>
+<span class="nc" id="L275">            }</span>
+<span class="nc bnc" id="L276" title="All 4 branches missed.">            if (computedValue.get() == null &amp;&amp; r1 == null) {</span>
+<span class="nc" id="L277">                return CompletableFuture.completedFuture(null);</span>
+            }
+<span class="nc bnc" id="L279" title="All 2 branches missed.">            Match&lt;V&gt; valueMatcher = r1 == null ? Match.ifNull() : Match.any();</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">            Match&lt;Long&gt; versionMatcher = r1 == null ? Match.any() : Match.ifValue(r1.version());</span>
+<span class="nc" id="L281">            return updateAndGet(key, valueMatcher, versionMatcher, computedValue.get())</span>
+<span class="nc" id="L282">                    .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L283">                    .thenApply(v -&gt; {</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                        if (v.updated()) {</span>
+<span class="nc" id="L285">                            return v.newValue();</span>
+                        } else {
+<span class="nc" id="L287">                            throw new ConsistentMapException.ConcurrentModification();</span>
+                        }
+                    });
+        });
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; put(K key, V value) {
+<span class="nc" id="L295">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L296">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L297">        final MeteringAgent.Context timer = monitor.startTimer(PUT);</span>
+<span class="nc" id="L298">        return updateAndGet(key, Match.any(), Match.any(), value).thenApply(v -&gt; v.oldValue())</span>
+<span class="nc" id="L299">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; putAndGet(K key, V value) {
+<span class="nc" id="L304">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L305">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L306">        final MeteringAgent.Context timer = monitor.startTimer(PUT_AND_GET);</span>
+<span class="nc" id="L307">        return updateAndGet(key, Match.any(), Match.any(), value).thenApply(v -&gt; v.newValue())</span>
+<span class="nc" id="L308">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; remove(K key) {
+<span class="nc" id="L313">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L314">        final MeteringAgent.Context timer = monitor.startTimer(REMOVE);</span>
+<span class="nc" id="L315">        return updateAndGet(key, Match.any(), Match.any(), null).thenApply(v -&gt; v.oldValue())</span>
+<span class="nc" id="L316">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Void&gt; clear() {
+<span class="nc" id="L321">        checkIfUnmodifiable();</span>
+<span class="nc" id="L322">        final MeteringAgent.Context timer = monitor.startTimer(CLEAR);</span>
+<span class="nc" id="L323">        return database.mapClear(name).thenApply(this::unwrapResult)</span>
+<span class="nc" id="L324">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Set&lt;K&gt;&gt; keySet() {
+<span class="nc" id="L329">        final MeteringAgent.Context timer = monitor.startTimer(KEY_SET);</span>
+<span class="nc" id="L330">        return database.mapKeySet(name)</span>
+<span class="nc" id="L331">                .thenApply(s -&gt; s</span>
+<span class="nc" id="L332">                        .stream()</span>
+<span class="nc" id="L333">                        .map(this::dK)</span>
+<span class="nc" id="L334">                        .collect(Collectors.toSet()))</span>
+<span class="nc" id="L335">                .whenComplete((r, e) -&gt; timer.stop(e));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Collection&lt;Versioned&lt;V&gt;&gt;&gt; values() {
+<span class="nc" id="L340">        final MeteringAgent.Context timer = monitor.startTimer(VALUES);</span>
+<span class="nc" id="L341">        return database.mapValues(name)</span>
+<span class="nc" id="L342">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L343">                .thenApply(c -&gt; c</span>
+<span class="nc" id="L344">                        .stream()</span>
+<span class="nc" id="L345">                        .map(v -&gt; v.&lt;V&gt;map(serializer::decode))</span>
+<span class="nc" id="L346">                        .collect(Collectors.toList()));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Set&lt;Entry&lt;K, Versioned&lt;V&gt;&gt;&gt;&gt; entrySet() {
+<span class="nc" id="L351">        final MeteringAgent.Context timer = monitor.startTimer(ENTRY_SET);</span>
+<span class="nc" id="L352">        return database.mapEntrySet(name)</span>
+<span class="nc" id="L353">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L354">                .thenApply(s -&gt; s</span>
+<span class="nc" id="L355">                        .stream()</span>
+<span class="nc" id="L356">                        .map(this::mapRawEntry)</span>
+<span class="nc" id="L357">                        .collect(Collectors.toSet()));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;V&gt;&gt; putIfAbsent(K key, V value) {
+<span class="nc" id="L362">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L363">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L364">        final MeteringAgent.Context timer = monitor.startTimer(PUT_IF_ABSENT);</span>
+<span class="nc" id="L365">        return updateAndGet(key, Match.ifNull(), Match.any(), value)</span>
+<span class="nc" id="L366">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L367">                .thenApply(v -&gt; v.oldValue());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; remove(K key, V value) {
+<span class="nc" id="L372">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L373">        checkNotNull(value, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L374">        final MeteringAgent.Context timer = monitor.startTimer(REMOVE);</span>
+<span class="nc" id="L375">        return updateAndGet(key, Match.ifValue(value), Match.any(), null)</span>
+<span class="nc" id="L376">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L377">                .thenApply(v -&gt; v.updated());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; remove(K key, long version) {
+<span class="nc" id="L382">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L383">        final MeteringAgent.Context timer = monitor.startTimer(REMOVE);</span>
+<span class="nc" id="L384">        return updateAndGet(key, Match.any(), Match.ifValue(version), null)</span>
+<span class="nc" id="L385">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L386">                .thenApply(v -&gt; v.updated());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; replace(K key, V oldValue, V newValue) {
+<span class="nc" id="L391">        checkNotNull(key, ERROR_NULL_KEY);</span>
+<span class="nc" id="L392">        checkNotNull(oldValue, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L393">        checkNotNull(newValue, ERROR_NULL_VALUE);</span>
+<span class="nc" id="L394">        final MeteringAgent.Context timer = monitor.startTimer(REPLACE);</span>
+<span class="nc" id="L395">        return updateAndGet(key, Match.ifValue(oldValue), Match.any(), newValue)</span>
+<span class="nc" id="L396">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L397">                .thenApply(v -&gt; v.updated());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; replace(K key, long oldVersion, V newValue) {
+<span class="nc" id="L402">        final MeteringAgent.Context timer = monitor.startTimer(REPLACE);</span>
+<span class="nc" id="L403">        return updateAndGet(key, Match.any(), Match.ifValue(oldVersion), newValue)</span>
+<span class="nc" id="L404">                .whenComplete((r, e) -&gt; timer.stop(e))</span>
+<span class="nc" id="L405">                .thenApply(v -&gt; v.updated());</span>
+    }
+
+    private Map.Entry&lt;K, Versioned&lt;V&gt;&gt; mapRawEntry(Map.Entry&lt;String, Versioned&lt;byte[]&gt;&gt; e) {
+<span class="nc" id="L409">        return Maps.immutableEntry(dK(e.getKey()), e.getValue().&lt;V&gt;map(serializer::decode));</span>
+    }
+
+    private CompletableFuture&lt;UpdateResult&lt;K, V&gt;&gt; updateAndGet(K key,
+                                                               Match&lt;V&gt; oldValueMatch,
+                                                               Match&lt;Long&gt; oldVersionMatch,
+                                                               V value) {
+<span class="nc" id="L416">        checkIfUnmodifiable();</span>
+<span class="nc" id="L417">        return database.mapUpdate(name,</span>
+<span class="nc" id="L418">                keyCache.getUnchecked(key),</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">                oldValueMatch.map(serializer::encode),</span>
+                oldVersionMatch,
+<span class="nc" id="L421">                value == null ? null : serializer.encode(value))</span>
+<span class="nc" id="L422">                .thenApply(this::unwrapResult)</span>
+<span class="nc" id="L423">                .thenApply(r -&gt; r.&lt;K, V&gt;map(this::dK, serializer::decode));</span>
+    }
+
+    private &lt;T&gt; T unwrapResult(Result&lt;T&gt; result) {
+<span class="nc bnc" id="L427" title="All 2 branches missed.">        if (result.status() == Result.Status.LOCKED) {</span>
+<span class="nc" id="L428">            throw new ConsistentMapException.ConcurrentModification();</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">        } else if (result.success()) {</span>
+<span class="nc" id="L430">            return result.value();</span>
+        } else {
+<span class="nc" id="L432">            throw new IllegalStateException(&quot;Must not be here&quot;);</span>
+        }
+    }
+
+    private void checkIfUnmodifiable() {
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (readOnly) {</span>
+<span class="nc" id="L438">            throw new UnsupportedOperationException();</span>
+        }
+<span class="nc" id="L440">    }</span>
+
+    @Override
+    public void addListener(MapEventListener&lt;K, V&gt; listener) {
+<span class="nc" id="L444">        listeners.add(listener);</span>
+<span class="nc" id="L445">    }</span>
+
+    @Override
+    public void removeListener(MapEventListener&lt;K, V&gt; listener) {
+<span class="nc" id="L449">        listeners.remove(listener);</span>
+<span class="nc" id="L450">    }</span>
+
+    protected void notifyListeners(MapEvent&lt;K, V&gt; event) {
+<span class="nc bnc" id="L453" title="All 2 branches missed.">        if (event == null) {</span>
+<span class="nc" id="L454">            return;</span>
+        }
+<span class="nc" id="L456">        listeners.forEach(listener -&gt; {</span>
+            try {
+<span class="nc" id="L458">                listener.event(event);</span>
+<span class="nc" id="L459">            } catch (Exception e) {</span>
+<span class="nc" id="L460">                log.warn(&quot;Failure notifying listener about {}&quot;, event, e);</span>
+<span class="nc" id="L461">            }</span>
+<span class="nc" id="L462">        });</span>
+<span class="nc" id="L463">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

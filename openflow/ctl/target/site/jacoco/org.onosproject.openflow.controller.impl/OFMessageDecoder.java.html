@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OFMessageDecoder.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-ctl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.openflow.controller.impl</a> &gt; <span class="el_source">OFMessageDecoder.java</span></div><h1>OFMessageDecoder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.openflow.controller.impl;
+
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.jboss.netty.handler.codec.frame.FrameDecoder;
+import org.projectfloodlight.openflow.protocol.OFFactories;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFMessageReader;
+
+/**
+ * Decode an openflow message from a Channel, for use in a netty pipeline.
+ */
+<span class="nc" id="L31">public class OFMessageDecoder extends FrameDecoder {</span>
+
+    @Override
+    protected Object decode(ChannelHandlerContext ctx, Channel channel,
+            ChannelBuffer buffer) throws Exception {
+<span class="nc bnc" id="L36" title="All 2 branches missed.">        if (!channel.isConnected()) {</span>
+            // In testing, I see decode being called AFTER decode last.
+            // This check avoids that from reading corrupted frames
+<span class="nc" id="L39">            return null;</span>
+        }
+
+        // Note that a single call to decode results in reading a single
+        // OFMessage from the channel buffer, which is passed on to, and processed
+        // by, the controller (in OFChannelHandler).
+        // This is different from earlier behavior (with the original openflowj),
+        // where we parsed all the messages in the buffer, before passing on
+        // a list of the parsed messages to the controller.
+        // The performance *may or may not* not be as good as before.
+<span class="nc" id="L49">        OFMessageReader&lt;OFMessage&gt; reader = OFFactories.getGenericReader();</span>
+<span class="nc" id="L50">        OFMessage message = reader.readFrom(buffer);</span>
+
+<span class="nc" id="L52">        return message;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

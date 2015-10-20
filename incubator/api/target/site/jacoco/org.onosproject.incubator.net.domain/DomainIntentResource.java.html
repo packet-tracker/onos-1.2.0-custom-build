@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DomainIntentResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.domain</a> &gt; <span class="el_source">DomainIntentResource.java</span></div><h1>DomainIntentResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.incubator.net.domain;
+
+import org.onosproject.core.ApplicationId;
+import org.onosproject.incubator.net.tunnel.DomainTunnelId;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Path;
+
+/**
+ * A variant of intent resource specialized for use on the intra-domain level.  It contains a lower level path.
+ */
+public class DomainIntentResource extends IntentResource {
+
+    private final Path domainPath;
+
+    private final DomainTunnelId domainTunnelId;
+
+    private final IntentDomainId intentDomainId;
+
+    /**
+     * Constructor for a domain intent resource.
+     *
+     * @param primitive      the primitive associated with this resource
+     * @param domainTunnelId the id of this tunnel (used as a sorting mechanism)
+     * @param domainId       the ID of the intent domain containing this tunnel
+     * @param appId          the id of the application which created this tunnel
+     * @param ingress        the fist connect point associated with this tunnel (order is irrelevant as long as it is
+     *                       consistent with the path)
+     * @param egress         the second connect point associated with this tunnel (order is irrelevant as long as it is
+     *                       consistent with the path)
+     * @param path           the path followed through the domain
+     */
+    public DomainIntentResource(IntentPrimitive primitive, DomainTunnelId domainTunnelId, IntentDomainId domainId,
+                                ApplicationId appId, ConnectPoint ingress, ConnectPoint egress, Path path) {
+<span class="nc" id="L50">        super(primitive, appId, ingress, egress);</span>
+
+<span class="nc" id="L52">        this.domainPath = path;</span>
+<span class="nc" id="L53">        this.domainTunnelId = domainTunnelId;</span>
+<span class="nc" id="L54">        this.intentDomainId = domainId;</span>
+<span class="nc" id="L55">    }</span>
+
+    /**
+     * Returns the domain path associated with this resource at creation.
+     *
+     * @return this resource's domain level path or if this resource backs a network tunnel then null.
+     */
+    public Path path() {
+<span class="nc" id="L63">        return domainPath;</span>
+    }
+
+    /**
+     * Returns the tunnel ID associated with this domain at creation.
+     *
+     * @return this resource's tunnel ID.
+     */
+    public DomainTunnelId tunnelId() {
+<span class="nc" id="L72">        return domainTunnelId;</span>
+    }
+
+    /**
+     * Returns the domain ID associated with this resource at creation.
+     *
+     * @return this resource's domain ID.
+     */
+    public IntentDomainId domainId() {
+<span class="nc" id="L81">        return intentDomainId;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

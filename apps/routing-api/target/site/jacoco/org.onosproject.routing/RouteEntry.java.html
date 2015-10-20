@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RouteEntry.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing</a> &gt; <span class="el_source">RouteEntry.java</span></div><h1>RouteEntry.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing;
+
+import com.google.common.base.MoreObjects;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Represents a route entry for an IP prefix.
+ */
+public class RouteEntry {
+    private final IpPrefix prefix;              // The IP prefix
+    private final IpAddress nextHop;            // Next-hop IP address
+
+    /**
+     * Class constructor.
+     *
+     * @param prefix the IP prefix of the route
+     * @param nextHop the next hop IP address for the route
+     */
+<span class="fc" id="L39">    public RouteEntry(IpPrefix prefix, IpAddress nextHop) {</span>
+<span class="fc" id="L40">        this.prefix = checkNotNull(prefix);</span>
+<span class="fc" id="L41">        this.nextHop = checkNotNull(nextHop);</span>
+<span class="fc" id="L42">    }</span>
+
+    /**
+     * Returns the IP version of the route.
+     *
+     * @return the IP version of the route
+     */
+    public IpAddress.Version version() {
+<span class="nc" id="L50">        return nextHop.version();</span>
+    }
+
+    /**
+     * Tests whether the IP version of this address is IPv4.
+     *
+     * @return true if the IP version of this address is IPv4, otherwise false.
+     */
+    public boolean isIp4() {
+<span class="nc" id="L59">        return nextHop.isIp4();</span>
+    }
+
+    /**
+     * Tests whether the IP version of this address is IPv6.
+     *
+     * @return true if the IP version of this address is IPv6, otherwise false.
+     */
+    public boolean isIp6() {
+<span class="nc" id="L68">        return nextHop.isIp6();</span>
+    }
+
+    /**
+     * Returns the IP prefix of the route.
+     *
+     * @return the IP prefix of the route
+     */
+    public IpPrefix prefix() {
+<span class="fc" id="L77">        return prefix;</span>
+    }
+
+    /**
+     * Returns the next hop IP address for the route.
+     *
+     * @return the next hop IP address for the route
+     */
+    public IpAddress nextHop() {
+<span class="fc" id="L86">        return nextHop;</span>
+    }
+
+    /**
+     * Creates the binary string representation of an IP prefix.
+     * The prefix can be either IPv4 or IPv6.
+     * The string length is equal to the prefix length.
+     *
+     * @param ipPrefix the IP prefix to use
+     * @return the binary string representation
+     */
+    public static String createBinaryString(IpPrefix ipPrefix) {
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        if (ipPrefix.prefixLength() == 0) {</span>
+<span class="fc" id="L99">            return &quot;&quot;;</span>
+        }
+
+<span class="fc" id="L102">        byte[] octets = ipPrefix.address().toOctets();</span>
+<span class="fc" id="L103">        StringBuilder result = new StringBuilder(ipPrefix.prefixLength());</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        for (int i = 0; i &lt; ipPrefix.prefixLength(); i++) {</span>
+<span class="fc" id="L105">            int byteOffset = i / Byte.SIZE;</span>
+<span class="fc" id="L106">            int bitOffset = i % Byte.SIZE;</span>
+<span class="fc" id="L107">            int mask = 1 &lt;&lt; (Byte.SIZE - 1 - bitOffset);</span>
+<span class="fc" id="L108">            byte value = octets[byteOffset];</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            boolean isSet = ((value &amp; mask) != 0);</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">            result.append(isSet ? &quot;1&quot; : &quot;0&quot;);</span>
+        }
+<span class="fc" id="L112">        return result.toString();</span>
+    }
+
+    @Override
+    public boolean equals(Object other) {
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">        if (this == other) {</span>
+<span class="nc" id="L118">            return true;</span>
+        }
+
+        //
+        // NOTE: Subclasses are considered as change of identity, hence
+        // equals() will return false if the class type doesn't match.
+        //
+<span class="pc bpc" id="L125" title="2 of 4 branches missed.">        if (other == null || getClass() != other.getClass()) {</span>
+<span class="nc" id="L126">            return false;</span>
+        }
+
+<span class="fc" id="L129">        RouteEntry otherRoute = (RouteEntry) other;</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        return Objects.equals(this.prefix, otherRoute.prefix) &amp;&amp;</span>
+<span class="fc bfc" id="L131" title="All 2 branches covered.">            Objects.equals(this.nextHop, otherRoute.nextHop);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L136">        return Objects.hash(prefix, nextHop);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L141">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L142">            .add(&quot;prefix&quot;, prefix)</span>
+<span class="fc" id="L143">            .add(&quot;nextHop&quot;, nextHop)</span>
+<span class="fc" id="L144">            .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PathsWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">PathsWebResource.java</span></div><h1>PathsWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.HostId;
+import org.onosproject.net.topology.PathService;
+import org.onosproject.rest.AbstractWebResource;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.util.Set;
+
+/**
+ * Compute paths in the network graph.
+ */
+@Path(&quot;paths&quot;)
+<span class="fc" id="L36">public class PathsWebResource extends AbstractWebResource {</span>
+
+    /**
+     * Determines if the id appears to be the id of a host.
+     * Host id format is 00:00:00:00:00:01/-1
+     *
+     * @param id id string
+     * @return HostId if the id is valid, null otherwise
+     */
+    private HostId isHostId(String id) {
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        return id.matches(&quot;..:..:..:..:..:../.*&quot;) ? HostId.hostId(id) : null;</span>
+    }
+
+    /**
+     * Returns either host id or device id, depending on the ID format.
+     *
+     * @param id host or device id string
+     * @return element id
+     */
+    private ElementId elementId(String id) {
+<span class="fc" id="L56">        ElementId elementId = isHostId(id);</span>
+<span class="fc bfc" id="L57" title="All 2 branches covered.">        return elementId != null ? elementId : DeviceId.deviceId(id);</span>
+    }
+
+    /**
+     * Get all shortest paths between any two hosts or devices.
+     * Returns array of all shortest paths between any two elements.
+     *
+     * @param src source identifier
+     * @param dst destination identifier
+     * @return path data
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;{src}/{dst}&quot;)
+    public Response getPath(@PathParam(&quot;src&quot;) String src,
+                            @PathParam(&quot;dst&quot;) String dst) {
+<span class="fc" id="L73">        PathService pathService = get(PathService.class);</span>
+<span class="fc" id="L74">        Set&lt;org.onosproject.net.Path&gt; paths =</span>
+<span class="fc" id="L75">                pathService.getPaths(elementId(src), elementId(dst));</span>
+<span class="fc" id="L76">        return ok(encodeArray(org.onosproject.net.Path.class, &quot;paths&quot;, paths)).build();</span>
+    }
+
+    /**
+     * Get all shortest disjoint paths between any two hosts or devices.
+     * Returns array of all shortest disjoint paths between any two elements.
+     *
+     * @param src source identifier
+     * @param dst destination identifier
+     * @return path data
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;{src}/{dst}/disjoint&quot;)
+    public Response getDisjointPath(@PathParam(&quot;src&quot;) String src,
+                                    @PathParam(&quot;dst&quot;) String dst) {
+<span class="nc" id="L92">        PathService pathService = get(PathService.class);</span>
+<span class="nc" id="L93">        Set&lt;org.onosproject.net.DisjointPath&gt; paths =</span>
+<span class="nc" id="L94">                pathService.getDisjointPaths(elementId(src), elementId(dst));</span>
+<span class="nc" id="L95">        return ok(encodeArray(org.onosproject.net.DisjointPath.class, &quot;paths&quot;, paths)).build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

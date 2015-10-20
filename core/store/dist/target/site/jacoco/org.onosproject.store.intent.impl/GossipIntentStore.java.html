@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GossipIntentStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.intent.impl</a> &gt; <span class="el_source">GossipIntentStore.java</span></div><h1>GossipIntentStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.intent.impl;
+
+import com.google.common.collect.ImmutableList;
+
+import org.apache.commons.lang.math.RandomUtils;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentData;
+import org.onosproject.net.intent.IntentEvent;
+import org.onosproject.net.intent.IntentState;
+import org.onosproject.net.intent.IntentStore;
+import org.onosproject.net.intent.IntentStoreDelegate;
+import org.onosproject.net.intent.Key;
+import org.onosproject.net.intent.PartitionService;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.service.MultiValuedTimestamp;
+import org.onosproject.store.service.WallClockTimestamp;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.net.intent.IntentState.PURGE_REQ;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of Intents in a distributed data store that uses optimistic
+ * replication and gossip based techniques.
+ */
+//FIXME we should listen for leadership changes. if the local instance has just
+// ...  become a leader, scan the pending map and process those
+@Component(immediate = true, enabled = true)
+@Service
+<span class="fc" id="L67">public class GossipIntentStore</span>
+        extends AbstractStore&lt;IntentEvent, IntentStoreDelegate&gt;
+        implements IntentStore {
+
+<span class="fc" id="L71">    private final Logger log = getLogger(getClass());</span>
+
+    // Map of intent key =&gt; current intent state
+    private EventuallyConsistentMap&lt;Key, IntentData&gt; currentMap;
+
+    // Map of intent key =&gt; pending intent operation
+    private EventuallyConsistentMap&lt;Key, IntentData&gt; pendingMap;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PartitionService partitionService;
+
+<span class="fc" id="L88">    private final AtomicLong sequenceNumber = new AtomicLong(0);</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L92">        KryoNamespace.Builder intentSerializer = KryoNamespace.newBuilder()</span>
+<span class="fc" id="L93">                .register(KryoNamespaces.API)</span>
+<span class="fc" id="L94">                .register(IntentData.class)</span>
+<span class="fc" id="L95">                .register(MultiValuedTimestamp.class)</span>
+<span class="fc" id="L96">                .register(WallClockTimestamp.class);</span>
+
+<span class="fc" id="L98">        currentMap = storageService.&lt;Key, IntentData&gt;eventuallyConsistentMapBuilder()</span>
+<span class="fc" id="L99">                .withName(&quot;intent-current&quot;)</span>
+<span class="fc" id="L100">                .withSerializer(intentSerializer)</span>
+<span class="fc" id="L101">                .withTimestampProvider((key, intentData) -&gt;</span>
+<span class="nc" id="L102">                                            new MultiValuedTimestamp&lt;&gt;(intentData.version(),</span>
+<span class="nc" id="L103">                                                                       sequenceNumber.getAndIncrement()))</span>
+<span class="fc" id="L104">                .withPeerUpdateFunction((key, intentData) -&gt; getPeerNodes(key, intentData))</span>
+<span class="fc" id="L105">                .build();</span>
+
+<span class="fc" id="L107">        pendingMap = storageService.&lt;Key, IntentData&gt;eventuallyConsistentMapBuilder()</span>
+<span class="fc" id="L108">                .withName(&quot;intent-pending&quot;)</span>
+<span class="fc" id="L109">                .withSerializer(intentSerializer)</span>
+<span class="pc" id="L110">                .withTimestampProvider((key, intentData) -&gt; new MultiValuedTimestamp&lt;&gt;(intentData.version(),</span>
+<span class="nc" id="L111">                                                                                       System.nanoTime()))</span>
+<span class="fc" id="L112">                .withPeerUpdateFunction((key, intentData) -&gt; getPeerNodes(key, intentData))</span>
+<span class="fc" id="L113">                .build();</span>
+
+<span class="fc" id="L115">        currentMap.addListener(new InternalCurrentListener());</span>
+<span class="fc" id="L116">        pendingMap.addListener(new InternalPendingListener());</span>
+
+<span class="fc" id="L118">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L119">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L123">        currentMap.destroy();</span>
+<span class="fc" id="L124">        pendingMap.destroy();</span>
+
+<span class="fc" id="L126">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L127">    }</span>
+
+    @Override
+    public long getIntentCount() {
+<span class="fc" id="L131">        return currentMap.size();</span>
+    }
+
+    @Override
+    public Iterable&lt;Intent&gt; getIntents() {
+<span class="fc" id="L136">        return currentMap.values().stream()</span>
+<span class="fc" id="L137">                .map(IntentData::intent)</span>
+<span class="fc" id="L138">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public Iterable&lt;IntentData&gt; getIntentData(boolean localOnly, long olderThan) {
+<span class="pc bpc" id="L143" title="1 of 4 branches missed.">        if (localOnly || olderThan &gt; 0) {</span>
+<span class="fc" id="L144">            long now = System.currentTimeMillis();</span>
+<span class="fc" id="L145">            final WallClockTimestamp time = new WallClockTimestamp(now - olderThan);</span>
+<span class="fc" id="L146">            return currentMap.values().stream()</span>
+<span class="pc bpc" id="L147" title="2 of 4 branches missed.">                    .filter(data -&gt; data.version().isOlderThan(time) &amp;&amp;</span>
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">                            (!localOnly || isMaster(data.key())))</span>
+<span class="fc" id="L149">                    .collect(Collectors.toList());</span>
+        }
+<span class="fc" id="L151">        return currentMap.values();</span>
+    }
+
+    @Override
+    public IntentState getIntentState(Key intentKey) {
+<span class="fc" id="L156">        IntentData data = currentMap.get(intentKey);</span>
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">        if (data != null) {</span>
+<span class="fc" id="L158">            return data.state();</span>
+        }
+<span class="nc" id="L160">        return null;</span>
+    }
+
+    @Override
+    public List&lt;Intent&gt; getInstallableIntents(Key intentKey) {
+<span class="fc" id="L165">        IntentData data = currentMap.get(intentKey);</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">        if (data != null) {</span>
+<span class="fc" id="L167">            return data.installables();</span>
+        }
+<span class="nc" id="L169">        return null;</span>
+    }
+
+
+
+    @Override
+    public void write(IntentData newData) {
+<span class="fc" id="L176">        checkNotNull(newData);</span>
+
+<span class="fc" id="L178">        IntentData currentData = currentMap.get(newData.key());</span>
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">        if (IntentData.isUpdateAcceptable(currentData, newData)) {</span>
+            // Only the master is modifying the current state. Therefore assume
+            // this always succeeds
+<span class="fc bfc" id="L182" title="All 2 branches covered.">            if (newData.state() == PURGE_REQ) {</span>
+<span class="fc" id="L183">                currentMap.remove(newData.key(), currentData);</span>
+            } else {
+<span class="fc" id="L185">                currentMap.put(newData.key(), new IntentData(newData));</span>
+            }
+
+            // if current.put succeeded
+<span class="fc" id="L189">            pendingMap.remove(newData.key(), newData);</span>
+        }
+<span class="fc" id="L191">    }</span>
+
+    private Collection&lt;NodeId&gt; getPeerNodes(Key key, IntentData data) {
+<span class="fc" id="L194">        NodeId master = partitionService.getLeader(key);</span>
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">        NodeId origin = (data != null) ? data.origin() : null;</span>
+<span class="pc bpc" id="L196" title="4 of 6 branches missed.">        if (data != null &amp;&amp; (master == null || origin == null)) {</span>
+<span class="fc" id="L197">            log.debug(&quot;Intent {} missing master and/or origin; master = {}, origin = {}&quot;,</span>
+                      key, master, origin);
+        }
+
+<span class="fc" id="L201">        NodeId me = clusterService.getLocalNode().id();</span>
+<span class="fc" id="L202">        boolean isMaster = Objects.equals(master, me);</span>
+<span class="fc" id="L203">        boolean isOrigin = Objects.equals(origin, me);</span>
+<span class="pc bpc" id="L204" title="3 of 4 branches missed.">        if (isMaster &amp;&amp; isOrigin) {</span>
+<span class="nc" id="L205">            return getRandomNode();</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        } else if (isMaster) {</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            return origin != null ? ImmutableList.of(origin) : getRandomNode();</span>
+<span class="fc bfc" id="L208" title="All 2 branches covered.">        } else if (isOrigin) {</span>
+<span class="pc bpc" id="L209" title="1 of 2 branches missed.">            return master != null ? ImmutableList.of(master) : getRandomNode();</span>
+        } else {
+<span class="fc" id="L211">            log.warn(&quot;No master or origin for intent {}&quot;, key);</span>
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">            return master != null ? ImmutableList.of(master) : getRandomNode();</span>
+        }
+    }
+
+    private List&lt;NodeId&gt; getRandomNode() {
+<span class="fc" id="L217">        NodeId me = clusterService.getLocalNode().id();</span>
+<span class="fc" id="L218">        List&lt;NodeId&gt; nodes = clusterService.getNodes().stream()</span>
+<span class="fc" id="L219">                .map(ControllerNode::id)</span>
+<span class="pc bpc" id="L220" title="1 of 2 branches missed.">                .filter(node -&gt; !Objects.equals(node, me))</span>
+<span class="fc" id="L221">                .collect(Collectors.toList());</span>
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">        if (nodes.size() == 0) {</span>
+<span class="fc" id="L223">            return null;</span>
+        }
+<span class="nc" id="L225">        return ImmutableList.of(nodes.get(RandomUtils.nextInt(nodes.size())));</span>
+    }
+
+    @Override
+    public void batchWrite(Iterable&lt;IntentData&gt; updates) {
+<span class="fc" id="L230">        updates.forEach(this::write);</span>
+<span class="fc" id="L231">    }</span>
+
+    @Override
+    public Intent getIntent(Key key) {
+<span class="fc" id="L235">        IntentData data = currentMap.get(key);</span>
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        if (data != null) {</span>
+<span class="fc" id="L237">            return data.intent();</span>
+        }
+<span class="fc" id="L239">        return null;</span>
+    }
+
+    @Override
+    public IntentData getIntentData(Key key) {
+<span class="fc" id="L244">        IntentData current = currentMap.get(key);</span>
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">        if (current == null) {</span>
+<span class="nc" id="L246">            return null;</span>
+        }
+<span class="fc" id="L248">        return new IntentData(current);</span>
+    }
+
+    @Override
+    public void addPending(IntentData data) {
+<span class="fc" id="L253">        checkNotNull(data);</span>
+
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">        if (data.version() == null) {</span>
+<span class="nc" id="L256">            data.setVersion(new WallClockTimestamp());</span>
+        }
+<span class="fc" id="L258">        data.setOrigin(clusterService.getLocalNode().id());</span>
+<span class="fc" id="L259">        pendingMap.put(data.key(), new IntentData(data));</span>
+<span class="fc" id="L260">    }</span>
+
+    @Override
+    public boolean isMaster(Key intentKey) {
+<span class="fc" id="L264">        return partitionService.isMine(intentKey);</span>
+    }
+
+    @Override
+    public Iterable&lt;Intent&gt; getPending() {
+<span class="fc" id="L269">        return pendingMap.values().stream()</span>
+<span class="fc" id="L270">                .map(IntentData::intent)</span>
+<span class="fc" id="L271">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public Iterable&lt;IntentData&gt; getPendingData() {
+<span class="fc" id="L276">        return pendingMap.values();</span>
+    }
+
+    @Override
+    public Iterable&lt;IntentData&gt; getPendingData(boolean localOnly, long olderThan) {
+<span class="fc" id="L281">        long now = System.currentTimeMillis();</span>
+<span class="fc" id="L282">        final WallClockTimestamp time = new WallClockTimestamp(now - olderThan);</span>
+<span class="fc" id="L283">        return pendingMap.values().stream()</span>
+<span class="pc bpc" id="L284" title="1 of 4 branches missed.">                .filter(data -&gt; data.version().isOlderThan(time) &amp;&amp;</span>
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">                                (!localOnly || isMaster(data.key())))</span>
+<span class="fc" id="L286">                .collect(Collectors.toList());</span>
+    }
+
+    private void notifyDelegateIfNotNull(IntentEvent event) {
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">        if (event != null) {</span>
+<span class="fc" id="L291">            notifyDelegate(event);</span>
+        }
+<span class="fc" id="L293">    }</span>
+
+<span class="fc" id="L295">    private final class InternalCurrentListener implements</span>
+            EventuallyConsistentMapListener&lt;Key, IntentData&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;Key, IntentData&gt; event) {
+<span class="fc" id="L299">            IntentData intentData = event.value();</span>
+
+<span class="fc bfc" id="L301" title="All 2 branches covered.">            if (event.type() == EventuallyConsistentMapEvent.Type.PUT) {</span>
+                // The current intents map has been updated. If we are master for
+                // this intent's partition, notify the Manager that it should
+                // emit notifications about updated tracked resources.
+<span class="pc bpc" id="L305" title="3 of 4 branches missed.">                if (delegate != null &amp;&amp; isMaster(event.value().intent().key())) {</span>
+<span class="nc" id="L306">                    delegate.onUpdate(new IntentData(intentData)); // copy for safety, likely unnecessary</span>
+                }
+<span class="fc" id="L308">                notifyDelegateIfNotNull(IntentEvent.getEvent(intentData));</span>
+            }
+<span class="fc" id="L310">        }</span>
+    }
+
+<span class="fc" id="L313">    private final class InternalPendingListener implements</span>
+            EventuallyConsistentMapListener&lt;Key, IntentData&gt; {
+        @Override
+        public void event(
+                EventuallyConsistentMapEvent&lt;Key, IntentData&gt; event) {
+<span class="pc bpc" id="L318" title="1 of 2 branches missed.">            if (event.type() == EventuallyConsistentMapEvent.Type.PUT) {</span>
+                // The pending intents map has been updated. If we are master for
+                // this intent's partition, notify the Manager that it should do
+                // some work.
+<span class="pc bpc" id="L322" title="1 of 2 branches missed.">                if (isMaster(event.value().intent().key())) {</span>
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">                    if (delegate != null) {</span>
+<span class="nc" id="L324">                        delegate.process(new IntentData(event.value()));</span>
+                    }
+                }
+
+<span class="fc" id="L328">                notifyDelegateIfNotNull(IntentEvent.getEvent(event.value()));</span>
+            }
+<span class="fc" id="L330">        }</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

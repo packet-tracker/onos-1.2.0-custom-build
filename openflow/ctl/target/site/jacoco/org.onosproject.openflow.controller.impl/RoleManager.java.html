@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RoleManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-ctl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.openflow.controller.impl</a> &gt; <span class="el_source">RoleManager.java</span></div><h1>RoleManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.openflow.controller.impl;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import org.onosproject.openflow.controller.RoleState;
+import org.onosproject.openflow.controller.driver.OpenFlowSwitchDriver;
+import org.onosproject.openflow.controller.driver.RoleHandler;
+import org.onosproject.openflow.controller.driver.RoleRecvStatus;
+import org.onosproject.openflow.controller.driver.RoleReplyInfo;
+import org.onosproject.openflow.controller.driver.SwitchStateException;
+import org.projectfloodlight.openflow.protocol.OFControllerRole;
+import org.projectfloodlight.openflow.protocol.OFErrorMsg;
+import org.projectfloodlight.openflow.protocol.OFErrorType;
+import org.projectfloodlight.openflow.protocol.OFExperimenter;
+import org.projectfloodlight.openflow.protocol.OFFactories;
+import org.projectfloodlight.openflow.protocol.OFNiciraControllerRole;
+import org.projectfloodlight.openflow.protocol.OFNiciraControllerRoleReply;
+import org.projectfloodlight.openflow.protocol.OFRoleReply;
+import org.projectfloodlight.openflow.protocol.OFRoleRequest;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.errormsg.OFBadRequestErrorMsg;
+import org.projectfloodlight.openflow.protocol.errormsg.OFRoleRequestFailedErrorMsg;
+import org.projectfloodlight.openflow.types.U64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+
+
+/**
+ * A utility class to handle role requests and replies for this channel.
+ * After a role request is submitted the role changer keeps track of the
+ * pending request, collects the reply (if any) and times out the request
+ * if necessary.
+ */
+class RoleManager implements RoleHandler {
+    protected static final long NICIRA_EXPERIMENTER = 0x2320;
+
+<span class="fc" id="L55">    private static Logger log = LoggerFactory.getLogger(RoleManager.class);</span>
+
+    // The time until cached XID is evicted. Arbitrary for now.
+<span class="fc" id="L58">    private final int pendingXidTimeoutSeconds = 60;</span>
+
+    // The cache for pending expected RoleReplies keyed on expected XID
+<span class="fc" id="L61">    private Cache&lt;Integer, RoleState&gt; pendingReplies =</span>
+<span class="fc" id="L62">            CacheBuilder.newBuilder()</span>
+<span class="fc" id="L63">                .expireAfterWrite(pendingXidTimeoutSeconds, TimeUnit.SECONDS)</span>
+<span class="fc" id="L64">                .build();</span>
+
+    // the expectation set by the caller for the returned role
+    private RoleRecvStatus expectation;
+    private final OpenFlowSwitchDriver sw;
+
+
+<span class="fc" id="L71">    public RoleManager(OpenFlowSwitchDriver sw) {</span>
+<span class="fc" id="L72">        this.expectation = RoleRecvStatus.MATCHED_CURRENT_ROLE;</span>
+<span class="fc" id="L73">        this.sw = sw;</span>
+<span class="fc" id="L74">    }</span>
+
+    /**
+     * Send NX role request message to the switch requesting the specified
+     * role.
+     *
+     * @param role role to request
+     */
+    private int sendNxRoleRequest(RoleState role) throws IOException {
+        // Convert the role enum to the appropriate role to send
+<span class="fc" id="L84">        OFNiciraControllerRole roleToSend = OFNiciraControllerRole.ROLE_OTHER;</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">        switch (role) {</span>
+        case MASTER:
+<span class="fc" id="L87">            roleToSend = OFNiciraControllerRole.ROLE_MASTER;</span>
+<span class="fc" id="L88">            break;</span>
+        case SLAVE:
+        case EQUAL:
+        default:
+            // ensuring that the only two roles sent to 1.0 switches with
+            // Nicira role support, are MASTER and SLAVE
+<span class="nc" id="L94">            roleToSend = OFNiciraControllerRole.ROLE_OTHER;</span>
+<span class="nc" id="L95">            log.debug(&quot;Sending Nx Role.SLAVE to switch {}.&quot;, sw);</span>
+        }
+<span class="fc" id="L97">        int xid = sw.getNextTransactionId();</span>
+<span class="fc" id="L98">        OFExperimenter roleRequest = OFFactories.getFactory(OFVersion.OF_10)</span>
+<span class="fc" id="L99">                .buildNiciraControllerRoleRequest()</span>
+<span class="fc" id="L100">                .setXid(xid)</span>
+<span class="fc" id="L101">                .setRole(roleToSend)</span>
+<span class="fc" id="L102">                .build();</span>
+<span class="fc" id="L103">        sw.sendRoleRequest(roleRequest);</span>
+<span class="fc" id="L104">        return xid;</span>
+    }
+
+    private int sendOF13RoleRequest(RoleState role) throws IOException {
+        // Convert the role enum to the appropriate role to send
+<span class="nc" id="L109">        OFControllerRole roleToSend = OFControllerRole.ROLE_NOCHANGE;</span>
+<span class="nc bnc" id="L110" title="All 4 branches missed.">        switch (role) {</span>
+        case EQUAL:
+<span class="nc" id="L112">            roleToSend = OFControllerRole.ROLE_EQUAL;</span>
+<span class="nc" id="L113">            break;</span>
+        case MASTER:
+<span class="nc" id="L115">            roleToSend = OFControllerRole.ROLE_MASTER;</span>
+<span class="nc" id="L116">            break;</span>
+        case SLAVE:
+<span class="nc" id="L118">            roleToSend = OFControllerRole.ROLE_SLAVE;</span>
+<span class="nc" id="L119">            break;</span>
+        default:
+<span class="nc" id="L121">            log.warn(&quot;Sending default role.noChange to switch {}.&quot;</span>
+                    + &quot; Should only be used for queries.&quot;, sw);
+        }
+
+<span class="nc" id="L125">        int xid = sw.getNextTransactionId();</span>
+<span class="nc" id="L126">        OFRoleRequest rrm = OFFactories.getFactory(OFVersion.OF_13)</span>
+<span class="nc" id="L127">                .buildRoleRequest()</span>
+<span class="nc" id="L128">                .setRole(roleToSend)</span>
+<span class="nc" id="L129">                .setXid(xid)</span>
+                //FIXME fix below when we actually use generation ids
+<span class="nc" id="L131">                .setGenerationId(U64.ZERO)</span>
+<span class="nc" id="L132">                .build();</span>
+
+<span class="nc" id="L134">        sw.sendRoleRequest(rrm);</span>
+<span class="nc" id="L135">        return xid;</span>
+    }
+
+    @Override
+    public synchronized boolean sendRoleRequest(RoleState role, RoleRecvStatus exp)
+            throws IOException {
+<span class="fc" id="L141">        this.expectation = exp;</span>
+
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">        if (sw.factory().getVersion() == OFVersion.OF_10) {</span>
+<span class="fc" id="L144">            Boolean supportsNxRole = sw.supportNxRole();</span>
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">            if (!supportsNxRole) {</span>
+<span class="nc" id="L146">                log.debug(&quot;Switch driver indicates no support for Nicira &quot;</span>
+                        + &quot;role request messages. Not sending ...&quot;);
+<span class="nc" id="L148">                handleUnsentRoleMessage(role,</span>
+                        expectation);
+<span class="nc" id="L150">                return false;</span>
+            }
+            // OF1.0 switch with support for NX_ROLE_REQUEST vendor extn.
+            // make Role.EQUAL become Role.SLAVE
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">            RoleState roleToSend = (role == RoleState.EQUAL) ? RoleState.SLAVE : role;</span>
+<span class="fc" id="L155">            pendingReplies.put(sendNxRoleRequest(roleToSend), role);</span>
+<span class="fc" id="L156">        } else {</span>
+            // OF1.3 switch, use OFPT_ROLE_REQUEST message
+<span class="nc" id="L158">            pendingReplies.put(sendOF13RoleRequest(role), role);</span>
+        }
+<span class="fc" id="L160">        return true;</span>
+    }
+
+    private void handleUnsentRoleMessage(RoleState role,
+            RoleRecvStatus exp) throws IOException {
+        // typically this is triggered for a switch where role messages
+        // are not supported - we confirm that the role being set is
+        // master
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (exp != RoleRecvStatus.MATCHED_SET_ROLE) {</span>
+
+<span class="nc" id="L170">            log.error(&quot;Expected MASTER role from registry for switch &quot;</span>
+                    + &quot;which has no support for role-messages.&quot;
+                    + &quot;Received {}. It is possible that this switch &quot;
+                    + &quot;is connected to other controllers, in which &quot;
+                    + &quot;case it should support role messages - not &quot;
+                    + &quot;moving forward.&quot;, role);
+
+        }
+
+<span class="nc" id="L179">    }</span>
+
+
+    @Override
+    public synchronized RoleRecvStatus deliverRoleReply(RoleReplyInfo rri)
+            throws SwitchStateException {
+<span class="fc" id="L185">        int xid = (int) rri.getXid();</span>
+<span class="fc" id="L186">        RoleState receivedRole = rri.getRole();</span>
+<span class="fc" id="L187">        RoleState expectedRole = pendingReplies.getIfPresent(xid);</span>
+
+<span class="fc bfc" id="L189" title="All 2 branches covered.">        if (expectedRole == null) {</span>
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">            RoleState currentRole = (sw != null) ? sw.getRole() : null;</span>
+<span class="fc bfc" id="L191" title="All 2 branches covered.">            if (currentRole != null) {</span>
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">                if (currentRole == rri.getRole()) {</span>
+                    // Don't disconnect if the role reply we received is
+                    // for the same role we are already in.
+                    // FIXME: but we do from the caller anyways.
+<span class="fc" id="L196">                    log.debug(&quot;Received unexpected RoleReply from &quot;</span>
+                            + &quot;Switch: {}. &quot;
+                            + &quot;Role in reply is same as current role of this &quot;
+                            + &quot;controller for this sw. Ignoring ...&quot;,
+<span class="fc" id="L200">                            sw.getStringId());</span>
+<span class="fc" id="L201">                    return RoleRecvStatus.OTHER_EXPECTATION;</span>
+                } else {
+<span class="nc" id="L203">                    String msg = String.format(&quot;Switch: [%s], &quot;</span>
+                            + &quot;received unexpected RoleReply[%s]. &quot;
+                            + &quot;No roles are pending, and this controller's &quot;
+                            + &quot;current role:[%s] does not match reply. &quot;
+                            + &quot;Disconnecting switch ... &quot;,
+<span class="nc" id="L208">                            sw.getStringId(),</span>
+                            rri, currentRole);
+<span class="nc" id="L210">                    throw new SwitchStateException(msg);</span>
+                }
+            }
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">            log.debug(&quot;Received unexpected RoleReply {} from &quot;</span>
+                    + &quot;Switch: {}. &quot;
+                    + &quot;This controller has no current role for this sw. &quot;
+                    + &quot;Ignoring ...&quot;, new Object[] {rri,
+<span class="fc" id="L217">                            sw == null ? &quot;(null)&quot; : sw.getStringId(), });</span>
+<span class="fc" id="L218">            return RoleRecvStatus.OTHER_EXPECTATION;</span>
+        }
+
+        // XXX Should check generation id meaningfully and other cases of expectations
+        //if (pendingXid != xid) {
+        //    log.info(&quot;Received older role reply from &quot; +
+        //            &quot;switch {} ({}). Ignoring. &quot; +
+        //            &quot;Waiting for {}, xid={}&quot;,
+        //            new Object[] {sw.getStringId(), rri,
+        //            pendingRole, pendingXid });
+        //    return RoleRecvStatus.OLD_REPLY;
+        //}
+<span class="fc" id="L230">        sw.returnRoleReply(expectedRole, receivedRole);</span>
+
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (expectedRole == receivedRole) {</span>
+<span class="fc" id="L233">            log.debug(&quot;Received role reply message from {} that matched &quot;</span>
+                    + &quot;expected role-reply {} with expectations {}&quot;,
+<span class="fc" id="L235">                    new Object[] {sw.getStringId(), receivedRole, expectation});</span>
+
+            // Done with this RoleReply; Invalidate
+<span class="fc" id="L238">            pendingReplies.invalidate(xid);</span>
+<span class="pc bpc" id="L239" title="3 of 4 branches missed.">            if (expectation == RoleRecvStatus.MATCHED_CURRENT_ROLE ||</span>
+                    expectation == RoleRecvStatus.MATCHED_SET_ROLE) {
+<span class="fc" id="L241">                return expectation;</span>
+            } else {
+<span class="nc" id="L243">                return RoleRecvStatus.OTHER_EXPECTATION;</span>
+            }
+        }
+
+<span class="nc" id="L247">        pendingReplies.invalidate(xid);</span>
+        // if xids match but role's don't, perhaps its a query (OF1.3)
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        if (expectation == RoleRecvStatus.REPLY_QUERY) {</span>
+<span class="nc" id="L250">            return expectation;</span>
+        }
+
+<span class="nc" id="L253">        return RoleRecvStatus.OTHER_EXPECTATION;</span>
+    }
+
+    /**
+     * Called if we receive an  error message. If the xid matches the
+     * pending request we handle it otherwise we ignore it.
+     *
+     * Note: since we only keep the last pending request we might get
+     * error messages for earlier role requests that we won't be able
+     * to handle
+     */
+    @Override
+    public synchronized RoleRecvStatus deliverError(OFErrorMsg error)
+            throws SwitchStateException {
+<span class="nc" id="L267">        RoleState errorRole = pendingReplies.getIfPresent(error.getXid());</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        if (errorRole == null) {</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">            if (error.getErrType() == OFErrorType.ROLE_REQUEST_FAILED) {</span>
+<span class="nc" id="L270">                log.debug(&quot;Received an error msg from sw {} for a role request,&quot;</span>
+                        + &quot; but not for pending request in role-changer; &quot;
+                        + &quot; ignoring error {} ...&quot;,
+<span class="nc" id="L273">                        sw.getStringId(), error);</span>
+            } else {
+<span class="nc" id="L275">                log.debug(&quot;Received an error msg from sw {}, but no pending &quot;</span>
+                        + &quot;requests in role-changer; not handling ...&quot;,
+<span class="nc" id="L277">                        sw.getStringId());</span>
+            }
+<span class="nc" id="L279">            return RoleRecvStatus.OTHER_EXPECTATION;</span>
+        }
+        // it is an error related to a currently pending role request message
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        if (error.getErrType() == OFErrorType.BAD_REQUEST) {</span>
+<span class="nc" id="L283">            log.error(&quot;Received a error msg {} from sw {} for &quot;</span>
+                    + &quot;pending role request {}. Switch driver indicates &quot;
+                    + &quot;role-messaging is supported. Possible issues in &quot;
+                    + &quot;switch driver configuration?&quot;, new Object[] {
+<span class="nc" id="L287">                            ((OFBadRequestErrorMsg) error).toString(),</span>
+<span class="nc" id="L288">                            sw.getStringId(), errorRole</span>
+                    });
+<span class="nc" id="L290">            return RoleRecvStatus.UNSUPPORTED;</span>
+        }
+
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        if (error.getErrType() == OFErrorType.ROLE_REQUEST_FAILED) {</span>
+<span class="nc" id="L294">            OFRoleRequestFailedErrorMsg rrerr =</span>
+                    (OFRoleRequestFailedErrorMsg) error;
+<span class="pc bnc" id="L296" title="All 2 branches missed.">            switch (rrerr.getCode()) {</span>
+            case BAD_ROLE:
+                // switch says that current-role-req has bad role?
+                // for now we disconnect
+                // fall-thru
+            case STALE:
+                // switch says that current-role-req has stale gen-id?
+                // for now we disconnect
+                // fall-thru
+            case UNSUP:
+                // switch says that current-role-req has role that
+                // cannot be supported? for now we disconnect
+<span class="nc" id="L308">                String msgx = String.format(&quot;Switch: [%s], &quot;</span>
+                        + &quot;received Error to for pending role request [%s]. &quot;
+                        + &quot;Error:[%s]. Disconnecting switch ... &quot;,
+<span class="nc" id="L311">                        sw.getStringId(),</span>
+                        errorRole, rrerr);
+<span class="nc" id="L313">                throw new SwitchStateException(msgx);</span>
+            default:
+                break;
+            }
+        }
+
+        // This error message was for a role request message but we dont know
+        // how to handle errors for nicira role request messages
+<span class="nc" id="L321">        return RoleRecvStatus.OTHER_EXPECTATION;</span>
+    }
+
+    /**
+     * Extract the role from an OFVendor message.
+     *
+     * Extract the role from an OFVendor message if the message is a
+     * Nicira role reply. Otherwise return null.
+     *
+     * @param experimenterMsg message
+     * @return The role in the message if the message is a Nicira role
+     * reply, null otherwise.
+     * @throws SwitchStateException If the message is a Nicira role reply
+     * but the numeric role value is unknown.
+     */
+    @Override
+    public RoleState extractNiciraRoleReply(OFExperimenter experimenterMsg)
+            throws SwitchStateException {
+<span class="nc" id="L339">        int vendor = (int) experimenterMsg.getExperimenter();</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">        if (vendor != 0x2320) {</span>
+<span class="nc" id="L341">            return null;</span>
+        }
+<span class="nc" id="L343">        OFNiciraControllerRoleReply nrr =</span>
+                (OFNiciraControllerRoleReply) experimenterMsg;
+
+<span class="nc" id="L346">        RoleState role = null;</span>
+<span class="nc" id="L347">        OFNiciraControllerRole ncr = nrr.getRole();</span>
+<span class="pc bnc" id="L348" title="All 4 branches missed.">        switch (ncr) {</span>
+        case ROLE_MASTER:
+<span class="nc" id="L350">            role = RoleState.MASTER;</span>
+<span class="nc" id="L351">            break;</span>
+        case ROLE_OTHER:
+<span class="nc" id="L353">            role = RoleState.EQUAL;</span>
+<span class="nc" id="L354">            break;</span>
+        case ROLE_SLAVE:
+<span class="nc" id="L356">            role = RoleState.SLAVE;</span>
+<span class="nc" id="L357">            break;</span>
+        default: //handled below
+        }
+
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (role == null) {</span>
+<span class="nc" id="L362">            String msg = String.format(&quot;Switch: [%s], &quot;</span>
+                    + &quot;received NX_ROLE_REPLY with invalid role &quot;
+                    + &quot;value %s&quot;,
+<span class="nc" id="L365">                    sw.getStringId(),</span>
+<span class="nc" id="L366">                    nrr.getRole());</span>
+<span class="nc" id="L367">            throw new SwitchStateException(msg);</span>
+        }
+<span class="nc" id="L369">        return role;</span>
+    }
+
+    /**
+     * Extract the role information from an OF1.3 Role Reply Message.
+     *
+     * @param rrmsg the role message
+     * @return RoleReplyInfo object
+     * @throws SwitchStateException if the role information could not be extracted.
+     */
+    @Override
+    public RoleReplyInfo extractOFRoleReply(OFRoleReply rrmsg)
+            throws SwitchStateException {
+<span class="nc" id="L382">        OFControllerRole cr = rrmsg.getRole();</span>
+<span class="nc" id="L383">        RoleState role = null;</span>
+<span class="pc bnc" id="L384" title="All 4 branches missed.">        switch (cr) {</span>
+        case ROLE_EQUAL:
+<span class="nc" id="L386">            role = RoleState.EQUAL;</span>
+<span class="nc" id="L387">            break;</span>
+        case ROLE_MASTER:
+<span class="nc" id="L389">            role = RoleState.MASTER;</span>
+<span class="nc" id="L390">            break;</span>
+        case ROLE_SLAVE:
+<span class="nc" id="L392">            role = RoleState.SLAVE;</span>
+<span class="nc" id="L393">            break;</span>
+        case ROLE_NOCHANGE: // switch should send current role
+        default:
+<span class="nc" id="L396">            String msg = String.format(&quot;Unknown controller role %s &quot;</span>
+                    + &quot;received from switch %s&quot;, cr, sw);
+<span class="nc" id="L398">            throw new SwitchStateException(msg);</span>
+        }
+
+<span class="nc" id="L401">        return new RoleReplyInfo(role, rrmsg.getGenerationId(), rrmsg.getXid());</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

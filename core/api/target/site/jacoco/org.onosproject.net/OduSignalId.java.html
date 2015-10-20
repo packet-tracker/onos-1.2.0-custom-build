@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OduSignalId.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">OduSignalId.java</span></div><h1>OduSignalId.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+import java.util.Arrays;
+import java.util.Objects;
+
+import org.onlab.util.HexString;
+
+import com.google.common.base.MoreObjects;
+/**
+ * Implementation of ODU Signal ID.
+ *
+ * &lt;p&gt;
+ * See ITU G.709 &quot;Interfaces for the Optical Transport Network (OTN)&quot;.
+ * &lt;/p&gt;
+ */
+public class OduSignalId {
+
+    private final int tributaryPortNumber;     // Tributary Port number
+    private final int tributarySlotLength;        // Number of Tributary Slots included in tsmap
+    private final byte[] tributarySlotBitmap; // Tributary slot bitmap
+
+    public static final int TRIBUTARY_SLOT_BITMAP_SIZE = 10;
+
+    /**
+     * Creates an instance with the specified arguments.
+     *
+     * @param tributaryPortNumber   tributary port number
+     * @param tributarySlotLen      tributary slot len
+     * @param tributarySlotBitmap   tributary slot bitmap
+     */
+    public OduSignalId(int tributaryPortNumber, int tributarySlotLen,
+<span class="fc" id="L49">            byte[] tributarySlotBitmap) {</span>
+
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        checkArgument(tributaryPortNumber &lt;= 80  ,</span>
+                &quot;tributaryPortNumber %s must be &lt;= 80 &quot;,
+<span class="fc" id="L53">                 tributaryPortNumber);</span>
+
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">        checkArgument(tributarySlotBitmap.length == TRIBUTARY_SLOT_BITMAP_SIZE,</span>
+<span class="fc" id="L56">                &quot;number of elements in list &quot; + HexString.toHexString(tributarySlotBitmap)</span>
+                + &quot; must be equal to &quot; + TRIBUTARY_SLOT_BITMAP_SIZE);
+
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">        checkArgument(tributarySlotLen &lt;= 80  ,</span>
+                &quot;tributarySlotLen %s must be &lt;= 80 &quot;,
+<span class="fc" id="L61">                tributarySlotLen);</span>
+
+<span class="fc" id="L63">        this.tributaryPortNumber = tributaryPortNumber;</span>
+<span class="fc" id="L64">        this.tributarySlotLength = tributarySlotLen;</span>
+<span class="fc" id="L65">        this.tributarySlotBitmap = Arrays.copyOf(tributarySlotBitmap, tributarySlotBitmap.length);</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * Returns the OduSignalId representing the specified parameters.
+     *
+     * @param tributaryPortNumber   tributary port number
+     * @param tributarySlotLen      tributary slot len
+     * @param tributarySlotBitmap   tributary slot bitmap
+     * @return OduSignalId
+     */
+    public static OduSignalId oduSignalId(int tributaryPortNumber, int tributarySlotLen,
+            byte[] tributarySlotBitmap) {
+<span class="fc" id="L78">        return new OduSignalId(tributaryPortNumber, tributarySlotLen, tributarySlotBitmap);</span>
+    }
+
+
+    /**
+     * Returns tributary port number.
+     *
+     * @return the tributaryPortNumber
+     */
+    public int tributaryPortNumber() {
+<span class="nc" id="L88">        return tributaryPortNumber;</span>
+    }
+
+    /**
+     * Returns tributary slot length.
+     *
+     * @return the tributarySlotLen
+     */
+    public int tributarySlotLength() {
+<span class="nc" id="L97">        return tributarySlotLength;</span>
+    }
+
+    /**
+     * Returns tributary slot bitmap.
+     *
+     * @return the tributarySlotBitmap
+     */
+    public byte[] tributarySlotBitmap() {
+<span class="nc" id="L106">        return Arrays.copyOf(tributarySlotBitmap, tributarySlotBitmap.length);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L111">        return Objects.hash(tributaryPortNumber, tributarySlotLength, Arrays.hashCode(tributarySlotBitmap));</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L117">            return true;</span>
+        }
+<span class="fc bfc" id="L119" title="All 2 branches covered.">        if (!(obj instanceof OduSignalId)) {</span>
+<span class="fc" id="L120">            return false;</span>
+        }
+<span class="fc" id="L122">        final OduSignalId other = (OduSignalId) obj;</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        return   Objects.equals(this.tributaryPortNumber, other.tributaryPortNumber)</span>
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">                 &amp;&amp; Objects.equals(this.tributarySlotLength, other.tributarySlotLength)</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">                 &amp;&amp; Arrays.equals(tributarySlotBitmap, other.tributarySlotBitmap);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L130">        return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L131">                .omitNullValues()</span>
+<span class="fc" id="L132">                .add(&quot;tributaryPortNumber&quot;, tributaryPortNumber)</span>
+<span class="fc" id="L133">                .add(&quot;tributarySlotLength&quot;, tributarySlotLength)</span>
+<span class="fc" id="L134">                .add(&quot;tributarySlotBitmap&quot;, HexString.toHexString(tributarySlotBitmap))</span>
+<span class="fc" id="L135">                .toString();</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

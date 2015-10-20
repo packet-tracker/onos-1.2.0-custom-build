@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PIMJoinPrune.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.pim</a> &gt; <span class="el_source">PIMJoinPrune.java</span></div><h1>PIMJoinPrune.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.pim;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+import org.onlab.packet.IpPrefix;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+<span class="fc" id="L28">public class PIMJoinPrune extends BasePacket {</span>
+
+<span class="fc" id="L30">    private PIMAddrUnicast upstreamAddr = new PIMAddrUnicast();</span>
+<span class="fc" id="L31">    private short holdTime = (short) 0xffff;</span>
+
+    private class JoinPruneGroup {
+        protected IpPrefix group;
+<span class="fc" id="L35">        protected HashMap&lt;IpPrefix, IpPrefix&gt; joins = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L36">        protected HashMap&lt;IpPrefix, IpPrefix&gt; prunes = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L38">        public JoinPruneGroup(IpPrefix grp) {</span>
+<span class="fc" id="L39">            group = grp;</span>
+<span class="fc" id="L40">        }</span>
+    }
+<span class="fc" id="L42">    private HashMap&lt;IpPrefix, JoinPruneGroup&gt; joinPrunes = new HashMap&lt;&gt;();</span>
+
+    /**
+     * Get the J/P hold time.
+     *
+     * @return specified in seconds.
+     */
+    public short getHoldTime() {
+<span class="nc" id="L50">        return holdTime;</span>
+    }
+
+    /**
+     * Set the J/P holdtime in seconds.
+     *
+     * @param holdTime return the holdtime.
+     */
+    public void setHoldTime(short holdTime) {
+<span class="fc" id="L59">        this.holdTime = holdTime;</span>
+<span class="fc" id="L60">    }</span>
+
+    /**
+     * Get the upstreamAddr for this J/P request.
+     *
+     * @return the upstream address.
+     */
+    public PIMAddrUnicast getUpstreamAddr() {
+<span class="nc" id="L68">        return upstreamAddr;</span>
+    }
+
+    /**
+     * Set the upstream address of this PIM J/P request.
+     *
+     * @param upstr the PIM Upstream unicast address
+     */
+    public void setUpstreamAddr(PIMAddrUnicast upstr) {
+<span class="fc" id="L77">        this.upstreamAddr = upstr;</span>
+<span class="fc" id="L78">    }</span>
+
+    /**
+     * Add the specified s,g to join field.
+     *
+     * @param saddr the source address of the route
+     * @param gaddr the group address of the route
+     * @param join true for a join, false for a prune.
+     */
+    public void addJoinPrune(String saddr, String gaddr, boolean join) {
+<span class="fc" id="L88">        IpPrefix gpfx = IpPrefix.valueOf(gaddr);</span>
+<span class="fc" id="L89">        IpPrefix spfx = IpPrefix.valueOf(saddr);</span>
+<span class="fc" id="L90">        addJoinPrune(spfx, gpfx, join);</span>
+<span class="fc" id="L91">    }</span>
+
+    /**
+     * Add the specified S, G to the join field.
+     *
+     * @param spfx the source prefix of the route
+     * @param gpfx the group prefix of the route
+     * @param join true for join, false for prune
+     */
+    public void addJoinPrune(IpPrefix spfx, IpPrefix gpfx, boolean join) {
+<span class="fc" id="L101">        JoinPruneGroup jpg = joinPrunes.get(gpfx);</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">        if (jpg == null) {</span>
+<span class="fc" id="L103">            jpg = new JoinPruneGroup(gpfx);</span>
+<span class="fc" id="L104">            joinPrunes.put(gpfx, jpg);</span>
+        }
+
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        HashMap&lt;IpPrefix, IpPrefix&gt; members = (join) ? jpg.joins : jpg.prunes;</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        if (members.get(spfx) == null) {</span>
+<span class="fc" id="L109">            members.put(spfx, spfx);</span>
+        }
+<span class="fc" id="L111">    }</span>
+
+    /**
+     * Add a join given strings represending the source and group addresses.
+     *
+     * @param saddr source address
+     * @param gaddr group address
+     */
+    public void addJoin(String saddr, String gaddr) {
+<span class="fc" id="L120">        this.addJoinPrune(saddr, gaddr, true);</span>
+<span class="fc" id="L121">    }</span>
+
+    /**
+     * Add a prune given strings represending the source and group addresses.
+     *
+     * @param saddr source address
+     * @param gaddr group address
+     */
+    public void addPrune(String saddr, String gaddr) {
+<span class="fc" id="L130">        this.addJoinPrune(saddr, gaddr, false);</span>
+<span class="fc" id="L131">    }</span>
+
+    /**
+     * Sets all payloads parent packet if applicable, then serializes this
+     * packet and all payloads.
+     *
+     * @return a byte[] containing this packet and payloads
+     */
+    @Override
+    public byte[] serialize() {
+
+<span class="fc" id="L142">        byte[] data = new byte[8096];      // Come up with something better</span>
+<span class="fc" id="L143">        ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L145">        bb.put(upstreamAddr.serialize());</span>
+<span class="fc" id="L146">        bb.put((byte) 0);    // reserved</span>
+
+<span class="fc" id="L148">        int ngrps = joinPrunes.size();</span>
+<span class="fc" id="L149">        bb.put((byte) ngrps);</span>
+<span class="fc" id="L150">        bb.putShort(this.holdTime);</span>
+
+        // Walk the group list and input all groups
+<span class="fc bfc" id="L153" title="All 2 branches covered.">        for (JoinPruneGroup jpg : joinPrunes.values()) {</span>
+<span class="fc" id="L154">            PIMAddrGroup grp = new PIMAddrGroup(jpg.group);</span>
+<span class="fc" id="L155">            bb.put(grp.serialize());</span>
+
+            // put the number of joins and prunes
+<span class="fc" id="L158">            bb.putShort((short) jpg.joins.size());</span>
+<span class="fc" id="L159">            bb.putShort((short) jpg.prunes.size());</span>
+
+            // Set all of the joins
+<span class="fc bfc" id="L162" title="All 2 branches covered.">            for (IpPrefix spfx : jpg.joins.values()) {</span>
+<span class="fc" id="L163">                PIMAddrSource src = new PIMAddrSource(spfx);</span>
+<span class="fc" id="L164">                bb.put(src.serialize());</span>
+<span class="fc" id="L165">            }</span>
+
+            // Set all of the prunes
+<span class="fc bfc" id="L168" title="All 2 branches covered.">            for (IpPrefix spfx : jpg.prunes.values()) {</span>
+<span class="fc" id="L169">                PIMAddrSource src = new PIMAddrSource(spfx);</span>
+<span class="fc" id="L170">                bb.put(src.serialize());</span>
+<span class="fc" id="L171">            }</span>
+<span class="fc" id="L172">        }</span>
+
+<span class="fc" id="L174">        int len = bb.position();</span>
+<span class="fc" id="L175">        byte[] data2 = new byte[len];</span>
+<span class="fc" id="L176">        bb = ByteBuffer.wrap(data2, 0, len);</span>
+<span class="fc" id="L177">        bb.put(data, 0, len);</span>
+<span class="fc" id="L178">        return data2;</span>
+    }
+
+    // TODO: I suppose I really need to implement this?
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L185">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L186">        return this;</span>
+    }
+
+    /**
+     * Return the J/P deserializer function.
+     *
+     * @return a function that will deserialize a J/P message.
+     */
+    public static Deserializer&lt;PIMJoinPrune&gt; deserializer() {
+<span class="fc" id="L195">        return (data, offset, length) -&gt; {</span>
+
+            /*
+             * Delay buffer checks until we read enough of the packet to know how
+             * much data we will require.  Each encoded address deserializer function
+             * will ensure there is enough data for that address.
+             */
+<span class="fc" id="L202">            PIMJoinPrune jp = new PIMJoinPrune();</span>
+<span class="fc" id="L203">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+            // We must get a PIM encoded unicast address
+<span class="fc" id="L206">            PIMAddrUnicast upstream = new PIMAddrUnicast();</span>
+<span class="fc" id="L207">            upstream.deserialize(bb);</span>
+<span class="fc" id="L208">            jp.setUpstreamAddr(upstream);</span>
+
+            // Use this boolean to determine the buffer space we need according to address sizes
+<span class="fc" id="L211">            boolean ipv4 = upstream.getAddr().isIp4();</span>
+
+            // We need at minimum 4 bytes for reserved(1), ngroups(1) &amp; holdtime(2)
+<span class="fc" id="L214">            checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), 4);</span>
+
+            // get and skip the reserved byte
+<span class="fc" id="L217">            bb.get();</span>
+
+            // Get the number of groups.
+<span class="fc" id="L220">            int ngroups = bb.get();</span>
+
+            // Save the holdtime.
+<span class="fc" id="L223">            jp.setHoldTime(bb.getShort());</span>
+
+
+<span class="fc bfc" id="L226" title="All 2 branches covered.">            for (int i = 0; i &lt; ngroups; i++) {</span>
+<span class="fc" id="L227">                PIMAddrGroup grp = new PIMAddrGroup();</span>
+
+                /*
+                 * grp.deserialize will ensure the buffer has enough data to read the group address.
+                 */
+<span class="fc" id="L232">                grp.deserialize(bb);</span>
+
+<span class="fc" id="L234">                checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), 4);</span>
+<span class="fc" id="L235">                int njoins = bb.getShort();</span>
+<span class="fc" id="L236">                int nprunes = bb.getShort();</span>
+
+                /*
+                 * Now we'll verify we have enough buffer to read the next
+                 * group of join and prune addresses for this group.
+                 */
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">                int required = (njoins + nprunes) *</span>
+                        (ipv4 ? PIMAddrSource.ENC_SOURCE_IPV4_BYTE_LENGTH : PIMAddrSource.ENC_SOURCE_IPV6_BYTE_LENGTH);
+<span class="fc" id="L244">                checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), required);</span>
+
+                // Now iterate through the joins for this group
+<span class="fc bfc" id="L247" title="All 2 branches covered.">                for (; njoins &gt; 0; njoins--) {</span>
+
+<span class="fc" id="L249">                    PIMAddrSource src = new PIMAddrSource();</span>
+<span class="fc" id="L250">                    src.deserialize(bb);</span>
+
+<span class="fc" id="L252">                    jp.addJoinPrune(</span>
+<span class="fc" id="L253">                            src.getAddr().toIpPrefix(),</span>
+<span class="fc" id="L254">                            grp.getAddr().toIpPrefix(), true);</span>
+                }
+
+                // Now iterate through the prunes for this group
+<span class="fc bfc" id="L258" title="All 2 branches covered.">                for (; nprunes &gt; 0; nprunes--) {</span>
+
+<span class="fc" id="L260">                    PIMAddrSource src = new PIMAddrSource();</span>
+<span class="fc" id="L261">                    src.deserialize(bb);</span>
+<span class="fc" id="L262">                    jp.addJoinPrune(</span>
+<span class="fc" id="L263">                            src.getAddr().toIpPrefix(),</span>
+<span class="fc" id="L264">                            grp.getAddr().toIpPrefix(), false);</span>
+                }
+            }
+
+<span class="fc" id="L268">            return jp;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

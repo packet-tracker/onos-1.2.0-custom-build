@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.group.impl</a> &gt; <span class="el_source">GroupManager.java</span></div><h1>GroupManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.group.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.provider.AbstractListenerProviderRegistry;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.group.Group;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupEvent;
+import org.onosproject.net.group.GroupKey;
+import org.onosproject.net.group.GroupListener;
+import org.onosproject.net.group.GroupOperation;
+import org.onosproject.net.group.GroupOperations;
+import org.onosproject.net.group.GroupProvider;
+import org.onosproject.net.group.GroupProviderRegistry;
+import org.onosproject.net.group.GroupProviderService;
+import org.onosproject.net.group.GroupService;
+import org.onosproject.net.group.GroupStore;
+import org.onosproject.net.group.GroupStore.UpdateType;
+import org.onosproject.net.group.GroupStoreDelegate;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.Collections;
+
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+
+/**
+ * Provides implementation of the group service APIs.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L62">public class GroupManager</span>
+        extends AbstractListenerProviderRegistry&lt;GroupEvent, GroupListener,
+        GroupProvider, GroupProviderService&gt;
+        implements GroupService, GroupProviderRegistry {
+
+<span class="fc" id="L67">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L69">    private final GroupStoreDelegate delegate = new InternalGroupStoreDelegate();</span>
+<span class="fc" id="L70">    private final DeviceListener deviceListener = new InternalDeviceListener();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected GroupStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L80">        store.setDelegate(delegate);</span>
+<span class="fc" id="L81">        eventDispatcher.addSink(GroupEvent.class, listenerRegistry);</span>
+<span class="fc" id="L82">        deviceService.addListener(deviceListener);</span>
+<span class="fc" id="L83">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L84">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L88">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L89">        eventDispatcher.removeSink(GroupEvent.class);</span>
+<span class="fc" id="L90">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L91">    }</span>
+
+    /**
+     * Create a group in the specified device with the provided parameters.
+     *
+     * @param groupDesc group creation parameters
+     */
+    @Override
+    public void addGroup(GroupDescription groupDesc) {
+<span class="fc" id="L100">        checkPermission(GROUP_WRITE);</span>
+<span class="fc" id="L101">        store.storeGroupDescription(groupDesc);</span>
+<span class="fc" id="L102">    }</span>
+
+    /**
+     * Return a group object associated to an application cookie.
+     * &lt;p&gt;
+     * NOTE1: The presence of group object in the system does not
+     * guarantee that the &quot;group&quot; is actually created in device.
+     * GROUP_ADDED notification would confirm the creation of
+     * this group in data plane.
+     *
+     * @param deviceId  device identifier
+     * @param appCookie application cookie to be used for lookup
+     * @return group associated with the application cookie or
+     * NULL if Group is not found for the provided cookie
+     */
+    @Override
+    public Group getGroup(DeviceId deviceId, GroupKey appCookie) {
+<span class="fc" id="L119">        checkPermission(GROUP_READ);</span>
+<span class="fc" id="L120">        return store.getGroup(deviceId, appCookie);</span>
+    }
+
+    /**
+     * Append buckets to existing group. The caller can optionally
+     * associate a new cookie during this updation. GROUP_UPDATED or
+     * GROUP_UPDATE_FAILED notifications would be provided along with
+     * cookie depending on the result of the operation on the device.
+     *
+     * @param deviceId  device identifier
+     * @param oldCookie cookie to be used to retrieve the existing group
+     * @param buckets   immutable list of group bucket to be added
+     * @param newCookie immutable cookie to be used post update operation
+     * @param appId     Application Id
+     */
+    @Override
+    public void addBucketsToGroup(DeviceId deviceId,
+                                  GroupKey oldCookie,
+                                  GroupBuckets buckets,
+                                  GroupKey newCookie,
+                                  ApplicationId appId) {
+<span class="fc" id="L141">        checkPermission(GROUP_WRITE);</span>
+<span class="fc" id="L142">        store.updateGroupDescription(deviceId,</span>
+                                     oldCookie,
+                                     UpdateType.ADD,
+                                     buckets,
+                                     newCookie);
+<span class="fc" id="L147">    }</span>
+
+    /**
+     * Remove buckets from existing group. The caller can optionally
+     * associate a new cookie during this updation. GROUP_UPDATED or
+     * GROUP_UPDATE_FAILED notifications would be provided along with
+     * cookie depending on the result of the operation on the device.
+     *
+     * @param deviceId  device identifier
+     * @param oldCookie cookie to be used to retrieve the existing group
+     * @param buckets   immutable list of group bucket to be removed
+     * @param newCookie immutable cookie to be used post update operation
+     * @param appId     Application Id
+     */
+    @Override
+    public void removeBucketsFromGroup(DeviceId deviceId,
+                                       GroupKey oldCookie,
+                                       GroupBuckets buckets,
+                                       GroupKey newCookie,
+                                       ApplicationId appId) {
+<span class="fc" id="L167">        checkPermission(GROUP_WRITE);</span>
+<span class="fc" id="L168">        store.updateGroupDescription(deviceId,</span>
+                                     oldCookie,
+                                     UpdateType.REMOVE,
+                                     buckets,
+                                     newCookie);
+<span class="fc" id="L173">    }</span>
+
+    /**
+     * Delete a group associated to an application cookie.
+     * GROUP_DELETED or GROUP_DELETE_FAILED notifications would be
+     * provided along with cookie depending on the result of the
+     * operation on the device.
+     *
+     * @param deviceId  device identifier
+     * @param appCookie application cookie to be used for lookup
+     * @param appId     Application Id
+     */
+    @Override
+    public void removeGroup(DeviceId deviceId,
+                            GroupKey appCookie,
+                            ApplicationId appId) {
+<span class="fc" id="L189">        checkPermission(GROUP_WRITE);</span>
+<span class="fc" id="L190">        store.deleteGroupDescription(deviceId, appCookie);</span>
+<span class="fc" id="L191">    }</span>
+
+    /**
+     * Retrieve all groups created by an application in the specified device
+     * as seen by current controller instance.
+     *
+     * @param deviceId device identifier
+     * @param appId    application id
+     * @return collection of immutable group objects created by the application
+     */
+    @Override
+    public Iterable&lt;Group&gt; getGroups(DeviceId deviceId,
+                                     ApplicationId appId) {
+<span class="fc" id="L204">        checkPermission(GROUP_READ);</span>
+<span class="fc" id="L205">        return store.getGroups(deviceId);</span>
+    }
+
+    @Override
+    public Iterable&lt;Group&gt; getGroups(DeviceId deviceId) {
+<span class="nc" id="L210">        checkPermission(GROUP_READ);</span>
+<span class="nc" id="L211">        return store.getGroups(deviceId);</span>
+    }
+
+    @Override
+    protected GroupProviderService createProviderService(GroupProvider provider) {
+<span class="fc" id="L216">        return new InternalGroupProviderService(provider);</span>
+    }
+
+<span class="fc" id="L219">    private class InternalGroupStoreDelegate implements GroupStoreDelegate {</span>
+        @Override
+        public void notify(GroupEvent event) {
+<span class="fc" id="L222">            final Group group = event.subject();</span>
+<span class="fc" id="L223">            GroupProvider groupProvider =</span>
+<span class="fc" id="L224">                    getProvider(group.deviceId());</span>
+<span class="fc" id="L225">            GroupOperations groupOps = null;</span>
+<span class="pc bpc" id="L226" title="1 of 5 branches missed.">            switch (event.type()) {</span>
+                case GROUP_ADD_REQUESTED:
+<span class="fc" id="L228">                    log.debug(&quot;GROUP_ADD_REQUESTED for Group {} on device {}&quot;,</span>
+<span class="fc" id="L229">                              group.id(), group.deviceId());</span>
+<span class="fc" id="L230">                    GroupOperation groupAddOp = GroupOperation.</span>
+<span class="fc" id="L231">                            createAddGroupOperation(group.id(),</span>
+<span class="fc" id="L232">                                                    group.type(),</span>
+<span class="fc" id="L233">                                                    group.buckets());</span>
+<span class="fc" id="L234">                    groupOps = new GroupOperations(</span>
+<span class="fc" id="L235">                            Collections.singletonList(groupAddOp));</span>
+<span class="fc" id="L236">                    groupProvider.performGroupOperation(group.deviceId(), groupOps);</span>
+<span class="fc" id="L237">                    break;</span>
+
+                case GROUP_UPDATE_REQUESTED:
+<span class="fc" id="L240">                    log.debug(&quot;GROUP_UPDATE_REQUESTED for Group {} on device {}&quot;,</span>
+<span class="fc" id="L241">                              group.id(), group.deviceId());</span>
+<span class="fc" id="L242">                    GroupOperation groupModifyOp = GroupOperation.</span>
+<span class="fc" id="L243">                            createModifyGroupOperation(group.id(),</span>
+<span class="fc" id="L244">                                                       group.type(),</span>
+<span class="fc" id="L245">                                                       group.buckets());</span>
+<span class="fc" id="L246">                    groupOps = new GroupOperations(</span>
+<span class="fc" id="L247">                            Collections.singletonList(groupModifyOp));</span>
+<span class="fc" id="L248">                    groupProvider.performGroupOperation(group.deviceId(), groupOps);</span>
+<span class="fc" id="L249">                    break;</span>
+
+                case GROUP_REMOVE_REQUESTED:
+<span class="fc" id="L252">                    log.debug(&quot;GROUP_REMOVE_REQUESTED for Group {} on device {}&quot;,</span>
+<span class="fc" id="L253">                              group.id(), group.deviceId());</span>
+<span class="fc" id="L254">                    GroupOperation groupDeleteOp = GroupOperation.</span>
+<span class="fc" id="L255">                            createDeleteGroupOperation(group.id(),</span>
+<span class="fc" id="L256">                                                       group.type());</span>
+<span class="fc" id="L257">                    groupOps = new GroupOperations(</span>
+<span class="fc" id="L258">                            Collections.singletonList(groupDeleteOp));</span>
+<span class="fc" id="L259">                    groupProvider.performGroupOperation(group.deviceId(), groupOps);</span>
+<span class="fc" id="L260">                    break;</span>
+
+                case GROUP_ADDED:
+                case GROUP_UPDATED:
+                case GROUP_REMOVED:
+                case GROUP_ADD_FAILED:
+                case GROUP_UPDATE_FAILED:
+                case GROUP_REMOVE_FAILED:
+<span class="fc" id="L268">                    post(event);</span>
+<span class="fc" id="L269">                    break;</span>
+
+                default:
+                    break;
+            }
+<span class="fc" id="L274">        }</span>
+    }
+
+    private class InternalGroupProviderService
+            extends AbstractProviderService&lt;GroupProvider&gt;
+            implements GroupProviderService {
+
+<span class="fc" id="L281">        protected InternalGroupProviderService(GroupProvider provider) {</span>
+<span class="fc" id="L282">            super(provider);</span>
+<span class="fc" id="L283">        }</span>
+
+        @Override
+        public void groupOperationFailed(DeviceId deviceId, GroupOperation operation) {
+<span class="fc" id="L287">            store.groupOperationFailed(deviceId, operation);</span>
+<span class="fc" id="L288">        }</span>
+
+        @Override
+        public void pushGroupMetrics(DeviceId deviceId,
+                                     Collection&lt;Group&gt; groupEntries) {
+<span class="fc" id="L293">            log.trace(&quot;Received group metrics from device {}&quot;, deviceId);</span>
+<span class="fc" id="L294">            checkValidity();</span>
+<span class="fc" id="L295">            store.pushGroupMetrics(deviceId, groupEntries);</span>
+<span class="fc" id="L296">        }</span>
+    }
+
+<span class="fc" id="L299">    private class InternalDeviceListener implements DeviceListener {</span>
+
+        @Override
+        public void event(DeviceEvent event) {
+<span class="pc bnc" id="L303" title="All 2 branches missed.">            switch (event.type()) {</span>
+                case DEVICE_REMOVED:
+                case DEVICE_AVAILABILITY_CHANGED:
+<span class="nc bnc" id="L306" title="All 2 branches missed.">                    if (!deviceService.isAvailable(event.subject().id())) {</span>
+<span class="nc" id="L307">                        log.debug(&quot;Device {} became un available; clearing initial audit status&quot;,</span>
+<span class="nc" id="L308">                                  event.type(), event.subject().id());</span>
+<span class="nc" id="L309">                        store.deviceInitialAuditCompleted(event.subject().id(), false);</span>
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+<span class="nc" id="L316">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

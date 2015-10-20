@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultApplication.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.core</a> &gt; <span class="el_source">DefaultApplication.java</span></div><h1>DefaultApplication.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.core;
+
+import org.onosproject.security.Permission;
+
+import java.net.URI;
+import java.util.Set;
+import java.util.Optional;
+import java.util.List;
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Default implementation of network control/management application descriptor.
+ */
+public class DefaultApplication implements Application {
+
+    private final ApplicationId appId;
+    private final Version version;
+    private final String description;
+    private final String origin;
+    private final ApplicationRole role;
+    private final Set&lt;Permission&gt; permissions;
+    private final Optional&lt;URI&gt; featuresRepo;
+    private final List&lt;String&gt; features;
+
+    /**
+     * Creates a new application descriptor using the supplied data.
+     *
+     * @param appId        application identifier
+     * @param version      application version
+     * @param description  application description
+     * @param origin       origin company
+     * @param role         application role
+     * @param permissions  requested permissions
+     * @param featuresRepo optional features repo URI
+     * @param features     application features
+     */
+    public DefaultApplication(ApplicationId appId, Version version,
+                              String description, String origin,
+                              ApplicationRole role, Set&lt;Permission&gt; permissions,
+<span class="fc" id="L59">                              Optional&lt;URI&gt; featuresRepo, List&lt;String&gt; features) {</span>
+<span class="fc" id="L60">        this.appId = checkNotNull(appId, &quot;ID cannot be null&quot;);</span>
+<span class="fc" id="L61">        this.version = checkNotNull(version, &quot;Version cannot be null&quot;);</span>
+<span class="fc" id="L62">        this.description = checkNotNull(description, &quot;Description cannot be null&quot;);</span>
+<span class="fc" id="L63">        this.origin = checkNotNull(origin, &quot;Origin cannot be null&quot;);</span>
+<span class="fc" id="L64">        this.role = checkNotNull(role, &quot;Role cannot be null&quot;);</span>
+<span class="fc" id="L65">        this.permissions = checkNotNull(permissions, &quot;Permissions cannot be null&quot;);</span>
+<span class="fc" id="L66">        this.featuresRepo = checkNotNull(featuresRepo, &quot;Features repo cannot be null&quot;);</span>
+<span class="fc" id="L67">        this.features = checkNotNull(features, &quot;Features cannot be null&quot;);</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">        checkArgument(!features.isEmpty(), &quot;There must be at least one feature&quot;);</span>
+<span class="fc" id="L69">    }</span>
+
+    @Override
+    public ApplicationId id() {
+<span class="fc" id="L73">        return appId;</span>
+    }
+
+    @Override
+    public Version version() {
+<span class="fc" id="L78">        return version;</span>
+    }
+
+    @Override
+    public String description() {
+<span class="fc" id="L83">        return description;</span>
+    }
+
+    @Override
+    public String origin() {
+<span class="fc" id="L88">        return origin;</span>
+    }
+
+    @Override
+    public ApplicationRole role() {
+<span class="fc" id="L93">        return role;</span>
+    }
+
+    @Override
+    public Set&lt;Permission&gt; permissions() {
+<span class="fc" id="L98">        return permissions;</span>
+    }
+
+    @Override
+    public Optional&lt;URI&gt; featuresRepo() {
+<span class="fc" id="L103">        return featuresRepo;</span>
+    }
+
+    @Override
+    public List&lt;String&gt; features() {
+<span class="fc" id="L108">        return features;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L113">        return Objects.hash(appId, version, description, origin, role, permissions,</span>
+                            featuresRepo, features);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L119" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L120">            return true;</span>
+        }
+<span class="fc bfc" id="L122" title="All 4 branches covered.">        if (obj == null || getClass() != obj.getClass()) {</span>
+<span class="fc" id="L123">            return false;</span>
+        }
+<span class="fc" id="L125">        final DefaultApplication other = (DefaultApplication) obj;</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">        return Objects.equals(this.appId, other.appId) &amp;&amp;</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">                Objects.equals(this.version, other.version) &amp;&amp;</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">                Objects.equals(this.description, other.description) &amp;&amp;</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">                Objects.equals(this.origin, other.origin) &amp;&amp;</span>
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">                Objects.equals(this.role, other.role) &amp;&amp;</span>
+<span class="pc bpc" id="L131" title="1 of 2 branches missed.">                Objects.equals(this.permissions, other.permissions) &amp;&amp;</span>
+<span class="fc bfc" id="L132" title="All 2 branches covered.">                Objects.equals(this.featuresRepo, other.featuresRepo) &amp;&amp;</span>
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">                Objects.equals(this.features, other.features);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L138">        return toStringHelper(this)</span>
+<span class="fc" id="L139">                .add(&quot;appId&quot;, appId)</span>
+<span class="fc" id="L140">                .add(&quot;version&quot;, version)</span>
+<span class="fc" id="L141">                .add(&quot;description&quot;, description)</span>
+<span class="fc" id="L142">                .add(&quot;origin&quot;, origin)</span>
+<span class="fc" id="L143">                .add(&quot;role&quot;, role)</span>
+<span class="fc" id="L144">                .add(&quot;permissions&quot;, permissions)</span>
+<span class="fc" id="L145">                .add(&quot;featuresRepo&quot;, featuresRepo)</span>
+<span class="fc" id="L146">                .add(&quot;features&quot;, features)</span>
+<span class="fc" id="L147">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

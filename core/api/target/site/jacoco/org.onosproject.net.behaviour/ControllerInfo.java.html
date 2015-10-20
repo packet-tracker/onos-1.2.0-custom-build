@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ControllerInfo.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.behaviour</a> &gt; <span class="el_source">ControllerInfo.java</span></div><h1>ControllerInfo.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.behaviour;
+
+import com.google.common.base.Preconditions;
+import org.onlab.packet.IpAddress;
+
+import java.util.Objects;
+
+/**
+ * Represents information for a device to connect to a controller.
+ */
+public class ControllerInfo {
+
+<span class="pc" id="L28">    private IpAddress ip = IpAddress.valueOf(&quot;0.0.0.0&quot;);</span>
+<span class="pc" id="L29">    private int port = 6653;</span>
+<span class="pc" id="L30">    private String type = &quot;error&quot;;</span>
+
+    /**
+     * Information for contacting the controller.
+     *
+     * @param ip   the ip address
+     * @param port the tcp port
+     * @param type the connection type
+     */
+<span class="nc" id="L39">    public ControllerInfo(IpAddress ip, int port, String type) {</span>
+<span class="nc" id="L40">        this.ip = ip;</span>
+<span class="nc" id="L41">        this.port = port;</span>
+<span class="nc" id="L42">        this.type = type;</span>
+<span class="nc" id="L43">    }</span>
+
+    /**
+     * Information for contacting the controller, if some information
+     * is not contained in the target string because it's optional
+     * it's leaved as in the field declaration (default values).
+     *
+     * @param target column returned from ovsdb query
+     */
+<span class="fc" id="L52">    public ControllerInfo(String target) {</span>
+<span class="fc" id="L53">        String[] data = target.split(&quot;:&quot;);</span>
+<span class="fc" id="L54">        this.type = data[0];</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        Preconditions.checkArgument(!data[0].contains(&quot;unix&quot;),</span>
+                                    &quot;Unable to create controller info &quot; +
+                                            &quot;from {} because it's based &quot; +
+                                            &quot;on unix sockets&quot;, target);
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (data[0].startsWith(&quot;p&quot;)) {</span>
+<span class="fc bfc" id="L60" title="All 2 branches covered.">            if (data.length &gt;= 2) {</span>
+<span class="fc" id="L61">                this.port = Integer.parseInt(data[1]);</span>
+            }
+<span class="fc bfc" id="L63" title="All 2 branches covered.">            if (data.length == 3) {</span>
+<span class="fc" id="L64">                this.ip = IpAddress.valueOf(data[2]);</span>
+            }
+        } else {
+<span class="fc" id="L67">            this.ip = IpAddress.valueOf(data[1]);</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">            if (data.length == 3) {</span>
+<span class="fc" id="L69">                this.port = Integer.parseInt(data[2]);</span>
+            }
+        }
+<span class="fc" id="L72">    }</span>
+
+    /**
+     * Exposes the ip address of the controller.
+     *
+     * @return IpAddress ip address
+     */
+    public IpAddress ip() {
+<span class="fc" id="L80">        return ip;</span>
+    }
+
+    /**
+     * Exposes the tcp port of the controller.
+     *
+     * @return int tcp port
+     */
+    public int port() {
+<span class="fc" id="L89">        return port;</span>
+    }
+
+    /**
+     * Exposes the type of the controller connection.
+     *
+     * @return String type
+     */
+    public String type() {
+<span class="fc" id="L98">        return type;</span>
+    }
+
+    public String target() {
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (type.startsWith(&quot;p&quot;)) {</span>
+<span class="nc" id="L103">            return type + &quot;:&quot; + port + &quot;:&quot; + ip;</span>
+        } else {
+<span class="nc" id="L105">            return type + &quot;:&quot; + ip + &quot;:&quot; + port;</span>
+        }
+    }
+
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L112">        return Objects.hash(ip, port, type);</span>
+    }
+
+    @Override
+    public boolean equals(Object toBeCompared) {
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">        if (toBeCompared instanceof ControllerInfo) {</span>
+<span class="fc" id="L118">            ControllerInfo controllerInfo = (ControllerInfo) toBeCompared;</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">            if (controllerInfo.type().equals(this.type)</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">                    &amp;&amp; controllerInfo.ip().equals(this.ip())</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">                    &amp;&amp; controllerInfo.port() == this.port) {</span>
+<span class="fc" id="L122">                return true;</span>
+            }
+        }
+<span class="nc" id="L125">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

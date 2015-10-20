@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PIM.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">PIM.java</span></div><h1>PIM.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import org.onlab.packet.pim.PIMHello;
+import org.onlab.packet.pim.PIMJoinPrune;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements PIM control packet format.
+ */
+public class PIM extends BasePacket {
+
+<span class="fc" id="L32">    public static final IpAddress PIM_ADDRESS = IpAddress.valueOf(&quot;224.0.0.13&quot;);</span>
+
+    public static final byte TYPE_HELLO = 0x00;
+    public static final byte TYPE_REGISTER = 0x01;
+    public static final byte TYPE_REGISTER_STOP = 0x02;
+    public static final byte TYPE_JOIN_PRUNE_REQUEST = 0x03;
+    public static final byte TYPE_BOOTSTRAP = 0x04;
+    public static final byte TYPE_ASSERT = 0x05;
+    public static final byte TYPE_GRAFT = 0x06;
+    public static final byte TYPE_GRAFT_ACK = 0x07;
+    public static final byte TYPE_CANDIDATE_RP_ADV = 0x08;
+
+    public static final int PIM_HEADER_LEN = 4;
+
+<span class="fc" id="L46">    public static final Map&lt;Byte, Deserializer&lt;? extends IPacket&gt;&gt; PROTOCOL_DESERIALIZER_MAP =</span>
+            new HashMap&lt;&gt;();
+
+    static {
+<span class="fc" id="L50">        PIM.PROTOCOL_DESERIALIZER_MAP.put(PIM.TYPE_HELLO, PIMHello.deserializer());</span>
+<span class="fc" id="L51">        PIM.PROTOCOL_DESERIALIZER_MAP.put(PIM.TYPE_JOIN_PRUNE_REQUEST, PIMJoinPrune.deserializer());</span>
+<span class="fc" id="L52">    }</span>
+
+    /*
+     * PIM Header fields
+     */
+    protected byte version;
+    protected byte type;
+    protected byte reserved;
+    protected short checksum;
+
+    /**
+     * Default constructor.
+     */
+    public PIM() {
+<span class="fc" id="L66">        super();</span>
+<span class="fc" id="L67">        this.version = 2;</span>
+<span class="fc" id="L68">        this.reserved = 0;</span>
+<span class="fc" id="L69">    }</span>
+
+    /**
+     * Return the PIM message type.
+     *
+     * @return the pimMsgType
+     */
+    public byte getPimMsgType() {
+<span class="fc" id="L77">        return this.type;</span>
+    }
+
+    /**
+     * Set the PIM message type. Currently PIMJoinPrune and PIMHello are
+     * supported.
+     *
+     * @param type PIM message type
+     * @return PIM Header
+     */
+     public PIM setPIMType(final byte type) {
+<span class="fc" id="L88">            this.type = type;</span>
+<span class="fc" id="L89">            return this;</span>
+     }
+
+    /**
+     * Get the version of PIM.
+     *
+     * @return the PIM version.   Must be 2.
+     */
+    public byte getVersion() {
+<span class="nc" id="L98">         return version;</span>
+    }
+
+    /**
+     * Set the PIM version type. Should not change from 2.
+     *
+     * @param version PIM version
+     */
+    public void setVersion(byte version) {
+<span class="fc" id="L107">         this.version = version;</span>
+<span class="fc" id="L108">    }</span>
+
+    /**
+     * Get the reserved field.
+     *
+     * @return the reserved field.  Must be ignored.
+     */
+    public byte getReserved() {
+<span class="nc" id="L116">        return reserved;</span>
+    }
+
+    /**
+     * Set the reserved field.
+     *
+     * @param reserved should be 0
+     */
+    public void setReserved(byte reserved) {
+<span class="nc" id="L125">        this.reserved = reserved;</span>
+<span class="nc" id="L126">    }</span>
+
+    /**
+     * Get the checksum of this packet.
+     *
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="nc" id="L134">        return checksum;</span>
+    }
+
+    /**
+     * Set the checksum.
+     *
+     * @param checksum the checksum
+     */
+    public void setChecksum(short checksum) {
+<span class="fc" id="L143">        this.checksum = checksum;</span>
+<span class="fc" id="L144">    }</span>
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L153">        final int prime = 5807;</span>
+<span class="nc" id="L154">        int result = super.hashCode();</span>
+<span class="nc" id="L155">        result = prime * result + this.type;</span>
+<span class="nc" id="L156">        result = prime * result + this.version;</span>
+<span class="nc" id="L157">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L158">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L169">            return true;</span>
+        }
+<span class="pc bpc" id="L171" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L172">            return false;</span>
+        }
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">        if (!(obj instanceof PIM)) {</span>
+<span class="nc" id="L175">            return false;</span>
+        }
+<span class="fc" id="L177">        final PIM other = (PIM) obj;</span>
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">        if (this.type != other.type) {</span>
+<span class="nc" id="L179">            return false;</span>
+        }
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">        if (this.version != other.version) {</span>
+<span class="nc" id="L182">            return false;</span>
+        }
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        if (this.checksum != other.checksum) {</span>
+<span class="nc" id="L185">            return false;</span>
+        }
+<span class="fc" id="L187">        return true;</span>
+    }
+
+    /**
+     * Serializes the packet. Will compute and set the following fields if they
+     * are set to specific values at the time serialize is called: -checksum : 0
+     * -length : 0
+     *
+     * @return will return the serialized packet
+     */
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L199">        int length = 4;</span>
+<span class="fc" id="L200">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="fc" id="L202">            this.payload.setParent(this);</span>
+<span class="fc" id="L203">            payloadData = this.payload.serialize();</span>
+<span class="fc" id="L204">            length += payloadData.length;</span>
+        }
+
+<span class="fc" id="L207">        final byte[] data = new byte[length];</span>
+<span class="fc" id="L208">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L210">        bb.put((byte) ((this.version &amp; 0xf) &lt;&lt; 4 | this.type &amp; 0xf));</span>
+<span class="fc" id="L211">        bb.put(this.reserved);</span>
+<span class="fc" id="L212">        bb.putShort(this.checksum);</span>
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L214">            bb.put(payloadData);</span>
+        }
+
+<span class="pc bpc" id="L217" title="3 of 4 branches missed.">        if (this.parent != null &amp;&amp; this.parent instanceof PIM) {</span>
+<span class="nc" id="L218">            ((PIM) this.parent).setPIMType(TYPE_JOIN_PRUNE_REQUEST);</span>
+        }
+
+        // compute checksum if needed
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">        if (this.checksum == 0) {</span>
+<span class="fc" id="L223">            bb.rewind();</span>
+<span class="fc" id="L224">            int accumulation = 0;</span>
+
+<span class="fc bfc" id="L226" title="All 2 branches covered.">            for (int i = 0; i &lt; length / 2; ++i) {</span>
+<span class="fc" id="L227">                accumulation += 0xffff &amp; bb.getShort();</span>
+            }
+            // pad to an even number of shorts
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">            if (length % 2 &gt; 0) {</span>
+<span class="nc" id="L231">                accumulation += (bb.get() &amp; 0xff) &lt;&lt; 8;</span>
+            }
+
+<span class="fc" id="L234">            accumulation = (accumulation &gt;&gt; 16 &amp; 0xffff)</span>
+                    + (accumulation &amp; 0xffff);
+<span class="fc" id="L236">            this.checksum = (short) (~accumulation &amp; 0xffff);</span>
+<span class="fc" id="L237">            bb.putShort(2, this.checksum);</span>
+        }
+<span class="fc" id="L239">        return data;</span>
+    }
+
+    /**
+     * Deserialize the PIM packet.
+     *
+     * @param data bytes to deserialize.
+     * @param offset offset to start deserializing from
+     * @param length length of the data to deserialize
+     *
+     * @return the deserialized PIM packet.
+     */
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+            final int length) {
+<span class="nc" id="L254">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L255">        this.type = bb.get();</span>
+<span class="nc" id="L256">        this.version = bb.get();</span>
+<span class="nc" id="L257">        this.checksum = bb.getShort();</span>
+
+        //this.payload = new Data();
+<span class="nc" id="L260">        this.payload = this.payload.deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+<span class="nc" id="L261">        this.payload.setParent(this);</span>
+<span class="nc" id="L262">        return this;</span>
+    }
+    /**
+     * Deserializer function for IPv4 packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;PIM&gt; deserializer() {
+<span class="fc" id="L270">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L271">            checkInput(data, offset, length, PIM_HEADER_LEN);</span>
+
+<span class="fc" id="L273">            PIM pim = new PIM();</span>
+
+<span class="fc" id="L275">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+
+<span class="fc" id="L277">            byte versionByte = bb.get();</span>
+<span class="fc" id="L278">            pim.version = (byte) (versionByte &gt;&gt; 4 &amp; 0xf);</span>
+<span class="fc" id="L279">            pim.setPIMType((byte) (versionByte &amp; 0xf));</span>
+<span class="fc" id="L280">            pim.reserved = bb.get();</span>
+<span class="fc" id="L281">            pim.checksum = bb.getShort();</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L284" title="1 of 2 branches missed.">            if (PIM.PROTOCOL_DESERIALIZER_MAP.containsKey(pim.getPimMsgType())) {</span>
+<span class="fc" id="L285">                deserializer = PIM.PROTOCOL_DESERIALIZER_MAP.get(pim.getPimMsgType());</span>
+            } else {
+<span class="nc" id="L287">                deserializer = Data.deserializer();</span>
+            }
+
+<span class="fc" id="L290">            pim.payload = deserializer.deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+<span class="fc" id="L291">            pim.payload.setParent(pim);</span>
+
+<span class="fc" id="L293">            return pim;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

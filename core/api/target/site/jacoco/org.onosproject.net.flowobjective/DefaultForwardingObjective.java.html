@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultForwardingObjective.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flowobjective</a> &gt; <span class="el_source">DefaultForwardingObjective.java</span></div><h1>DefaultForwardingObjective.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flowobjective;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+
+import java.util.Objects;
+import java.util.Optional;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Default implementation of a forwarding objective.
+ */
+@Beta
+public final class DefaultForwardingObjective implements ForwardingObjective {
+
+    private final TrafficSelector selector;
+    private final Flag flag;
+    private final boolean permanent;
+    private final int timeout;
+    private final ApplicationId appId;
+    private final int priority;
+    private final Integer nextId;
+    private final TrafficTreatment treatment;
+    private final Operation op;
+    private final Optional&lt;ObjectiveContext&gt; context;
+
+    private final int id;
+
+<span class="fc" id="L48">    private DefaultForwardingObjective(Builder builder) {</span>
+<span class="fc" id="L49">        this.selector = builder.selector;</span>
+<span class="fc" id="L50">        this.flag = builder.flag;</span>
+<span class="fc" id="L51">        this.permanent = builder.permanent;</span>
+<span class="fc" id="L52">        this.timeout = builder.timeout;</span>
+<span class="fc" id="L53">        this.appId = builder.appId;</span>
+<span class="fc" id="L54">        this.priority = builder.priority;</span>
+<span class="fc" id="L55">        this.nextId = builder.nextId;</span>
+<span class="fc" id="L56">        this.treatment = builder.treatment;</span>
+<span class="fc" id="L57">        this.op = builder.op;</span>
+<span class="fc" id="L58">        this.context = Optional.ofNullable(builder.context);</span>
+
+<span class="fc" id="L60">        this.id = Objects.hash(selector, flag, permanent,</span>
+<span class="fc" id="L61">                timeout, appId, priority, nextId,</span>
+                treatment, op);
+<span class="fc" id="L63">    }</span>
+
+
+    @Override
+    public TrafficSelector selector() {
+<span class="fc" id="L68">        return selector;</span>
+    }
+
+    @Override
+    public Integer nextId() {
+<span class="fc" id="L73">        return nextId;</span>
+    }
+
+    @Override
+    public TrafficTreatment treatment() {
+<span class="fc" id="L78">        return treatment;</span>
+    }
+
+
+    @Override
+    public Flag flag() {
+<span class="fc" id="L84">        return flag;</span>
+    }
+
+    @Override
+    public int id() {
+<span class="fc" id="L89">        return id;</span>
+    }
+
+    @Override
+    public int priority() {
+<span class="fc" id="L94">        return priority;</span>
+    }
+
+    @Override
+    public ApplicationId appId() {
+<span class="fc" id="L99">        return appId;</span>
+    }
+
+    @Override
+    public int timeout() {
+<span class="fc" id="L104">        return timeout;</span>
+    }
+
+    @Override
+    public boolean permanent() {
+<span class="fc" id="L109">        return permanent;</span>
+    }
+
+    @Override
+    public Operation op() {
+<span class="fc" id="L114">        return op;</span>
+    }
+
+    @Override
+    public Optional&lt;ObjectiveContext&gt; context() {
+<span class="fc" id="L119">        return context;</span>
+    }
+
+    /**
+     * Returns a new builder.
+     *
+     * @return new builder
+     */
+    public static Builder builder() {
+<span class="fc" id="L128">        return new Builder();</span>
+    }
+
+<span class="fc" id="L131">    public static final class Builder implements ForwardingObjective.Builder {</span>
+
+        private TrafficSelector selector;
+        private Flag flag;
+<span class="fc" id="L135">        private boolean permanent = DEFAULT_PERMANENT;</span>
+<span class="fc" id="L136">        private int timeout = DEFAULT_TIMEOUT;</span>
+<span class="fc" id="L137">        private int priority = DEFAULT_PRIORITY;</span>
+        private ApplicationId appId;
+        private Integer nextId;
+        private TrafficTreatment treatment;
+        private Operation op;
+        private ObjectiveContext context;
+
+        @Override
+        public Builder withSelector(TrafficSelector selector) {
+<span class="fc" id="L146">            this.selector = selector;</span>
+<span class="fc" id="L147">            return this;</span>
+        }
+
+        @Override
+        public Builder nextStep(int nextId) {
+<span class="fc" id="L152">            this.nextId = nextId;</span>
+<span class="fc" id="L153">            return this;</span>
+        }
+
+        @Override
+        public Builder withTreatment(TrafficTreatment treatment) {
+<span class="fc" id="L158">            this.treatment = treatment;</span>
+<span class="fc" id="L159">            return this;</span>
+        }
+
+        @Override
+        public Builder withFlag(Flag flag) {
+<span class="fc" id="L164">            this.flag = flag;</span>
+<span class="fc" id="L165">            return this;</span>
+        }
+
+        @Override
+        public Builder makeTemporary(int timeout) {
+<span class="fc" id="L170">            this.timeout = timeout;</span>
+<span class="fc" id="L171">            this.permanent = false;</span>
+<span class="fc" id="L172">            return this;</span>
+        }
+
+        @Override
+        public Builder makePermanent() {
+<span class="nc" id="L177">            this.permanent = true;</span>
+<span class="nc" id="L178">            return this;</span>
+        }
+
+        @Override
+        public Builder fromApp(ApplicationId appId) {
+<span class="fc" id="L183">            this.appId = appId;</span>
+<span class="fc" id="L184">            return this;</span>
+        }
+
+        @Override
+        public Builder withPriority(int priority) {
+<span class="fc" id="L189">            this.priority = priority;</span>
+<span class="fc" id="L190">            return this;</span>
+        }
+
+        @Override
+        public ForwardingObjective add() {
+<span class="fc" id="L195">            checkNotNull(selector, &quot;Must have a selector&quot;);</span>
+<span class="fc" id="L196">            checkNotNull(flag, &quot;A flag must be set&quot;);</span>
+<span class="pc bpc" id="L197" title="3 of 4 branches missed.">            checkArgument(nextId != null || treatment != null, &quot;Must supply at &quot; +</span>
+                    &quot;least a treatment and/or a nextId&quot;);
+<span class="fc" id="L199">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L200">            op = Operation.ADD;</span>
+<span class="fc" id="L201">            return new DefaultForwardingObjective(this);</span>
+        }
+
+        @Override
+        public ForwardingObjective remove() {
+<span class="fc" id="L206">            checkNotNull(selector, &quot;Must have a selector&quot;);</span>
+<span class="fc" id="L207">            checkNotNull(flag, &quot;A flag must be set&quot;);</span>
+<span class="pc bpc" id="L208" title="3 of 4 branches missed.">            checkArgument(nextId != null || treatment != null, &quot;Must supply at &quot; +</span>
+                    &quot;least a treatment and/or a nextId&quot;);
+<span class="fc" id="L210">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L211">            op = Operation.REMOVE;</span>
+<span class="fc" id="L212">            return new DefaultForwardingObjective(this);</span>
+        }
+
+        @Override
+        public ForwardingObjective add(ObjectiveContext context) {
+<span class="fc" id="L217">            checkNotNull(selector, &quot;Must have a selector&quot;);</span>
+<span class="fc" id="L218">            checkNotNull(flag, &quot;A flag must be set&quot;);</span>
+<span class="pc bpc" id="L219" title="3 of 4 branches missed.">            checkArgument(nextId != null || treatment != null, &quot;Must supply at &quot; +</span>
+                    &quot;least a treatment and/or a nextId&quot;);
+<span class="fc" id="L221">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L222">            op = Operation.ADD;</span>
+<span class="fc" id="L223">            this.context = context;</span>
+
+<span class="fc" id="L225">            return new DefaultForwardingObjective(this);</span>
+        }
+
+        @Override
+        public ForwardingObjective remove(ObjectiveContext context) {
+<span class="fc" id="L230">            checkNotNull(selector, &quot;Must have a selector&quot;);</span>
+<span class="fc" id="L231">            checkNotNull(flag, &quot;A flag must be set&quot;);</span>
+<span class="pc bpc" id="L232" title="3 of 4 branches missed.">            checkArgument(nextId != null || treatment != null, &quot;Must supply at &quot; +</span>
+                    &quot;least a treatment and/or a nextId&quot;);
+<span class="fc" id="L234">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L235">            op = Operation.REMOVE;</span>
+<span class="fc" id="L236">            this.context = context;</span>
+
+<span class="fc" id="L238">            return new DefaultForwardingObjective(this);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

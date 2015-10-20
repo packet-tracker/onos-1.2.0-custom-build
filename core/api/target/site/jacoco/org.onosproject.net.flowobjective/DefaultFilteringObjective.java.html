@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultFilteringObjective.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flowobjective</a> &gt; <span class="el_source">DefaultFilteringObjective.java</span></div><h1>DefaultFilteringObjective.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flowobjective;
+
+import com.google.common.annotations.Beta;
+import com.google.common.collect.ImmutableList;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.criteria.Criterion;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Default implementation of a filtering objective.
+ */
+@Beta
+public final class DefaultFilteringObjective implements FilteringObjective {
+
+
+    private final Type type;
+    private final boolean permanent;
+    private final int timeout;
+    private final ApplicationId appId;
+    private final int priority;
+    private final Criterion key;
+    private final List&lt;Criterion&gt; conditions;
+    private final int id;
+    private final Operation op;
+    private final Optional&lt;ObjectiveContext&gt; context;
+
+<span class="fc" id="L50">    private DefaultFilteringObjective(Builder builder) {</span>
+<span class="fc" id="L51">        this.key = builder.key;</span>
+<span class="fc" id="L52">        this.type = builder.type;</span>
+<span class="fc" id="L53">        this.permanent = builder.permanent;</span>
+<span class="fc" id="L54">        this.timeout = builder.timeout;</span>
+<span class="fc" id="L55">        this.appId = builder.appId;</span>
+<span class="fc" id="L56">        this.priority = builder.priority;</span>
+<span class="fc" id="L57">        this.conditions = builder.conditions;</span>
+<span class="fc" id="L58">        this.op = builder.op;</span>
+<span class="fc" id="L59">        this.context = Optional.ofNullable(builder.context);</span>
+
+<span class="fc" id="L61">        this.id = Objects.hash(type, key, conditions, permanent,</span>
+<span class="fc" id="L62">                timeout, appId, priority);</span>
+<span class="fc" id="L63">    }</span>
+
+    @Override
+    public Criterion key() {
+<span class="fc" id="L67">        return key;</span>
+    }
+
+    @Override
+    public Type type() {
+<span class="fc" id="L72">        return this.type;</span>
+    }
+
+    @Override
+    public Collection&lt;Criterion&gt; conditions() {
+<span class="fc" id="L77">        return conditions;</span>
+    }
+
+    @Override
+    public int id() {
+<span class="fc" id="L82">        return id;</span>
+    }
+
+    @Override
+    public int priority() {
+<span class="fc" id="L87">        return priority;</span>
+    }
+
+    @Override
+    public ApplicationId appId() {
+<span class="fc" id="L92">        return appId;</span>
+    }
+
+    @Override
+    public int timeout() {
+<span class="fc" id="L97">        return timeout;</span>
+    }
+
+    @Override
+    public boolean permanent() {
+<span class="fc" id="L102">        return permanent;</span>
+    }
+
+    @Override
+    public Operation op() {
+<span class="fc" id="L107">        return op;</span>
+    }
+
+    @Override
+    public Optional&lt;ObjectiveContext&gt; context() {
+<span class="fc" id="L112">        return context;</span>
+    }
+
+    /**
+     * Returns a new builder.
+     *
+     * @return new builder
+     */
+    public static Builder builder() {
+<span class="fc" id="L121">        return new Builder();</span>
+    }
+
+
+<span class="fc" id="L125">    public static final class Builder implements FilteringObjective.Builder {</span>
+<span class="fc" id="L126">        private final ImmutableList.Builder&lt;Criterion&gt; listBuilder</span>
+<span class="fc" id="L127">                = ImmutableList.builder();</span>
+
+        private Type type;
+<span class="fc" id="L130">        private boolean permanent = DEFAULT_PERMANENT;</span>
+<span class="fc" id="L131">        private int timeout = DEFAULT_TIMEOUT;</span>
+        private ApplicationId appId;
+<span class="fc" id="L133">        private int priority = DEFAULT_PRIORITY;</span>
+<span class="fc" id="L134">        private Criterion key = Criteria.dummy();</span>
+        private List&lt;Criterion&gt; conditions;
+        private Operation op;
+        private ObjectiveContext context;
+
+        @Override
+        public Builder withKey(Criterion key) {
+<span class="fc" id="L141">            this.key = key;</span>
+<span class="fc" id="L142">            return this;</span>
+        }
+
+        @Override
+        public Builder addCondition(Criterion criterion) {
+<span class="fc" id="L147">            listBuilder.add(criterion);</span>
+<span class="fc" id="L148">            return this;</span>
+        }
+
+        @Override
+        public Builder permit() {
+<span class="nc" id="L153">            this.type = Type.PERMIT;</span>
+<span class="nc" id="L154">            return this;</span>
+        }
+
+        @Override
+        public Builder deny() {
+<span class="fc" id="L159">            this.type = Type.DENY;</span>
+<span class="fc" id="L160">            return this;</span>
+        }
+
+        @Override
+        public Builder makeTemporary(int timeout) {
+<span class="fc" id="L165">            this.timeout = timeout;</span>
+<span class="fc" id="L166">            permanent = false;</span>
+<span class="fc" id="L167">            return this;</span>
+        }
+
+        @Override
+        public Builder makePermanent() {
+<span class="nc" id="L172">            permanent = true;</span>
+<span class="nc" id="L173">            return this;</span>
+        }
+
+        @Override
+        public Builder fromApp(ApplicationId appId) {
+<span class="fc" id="L178">            this.appId = appId;</span>
+<span class="fc" id="L179">            return this;</span>
+        }
+
+        @Override
+        public Builder withPriority(int priority) {
+<span class="fc" id="L184">            this.priority = priority;</span>
+<span class="fc" id="L185">            return this;</span>
+        }
+
+        @Override
+        public FilteringObjective add() {
+<span class="fc" id="L190">            conditions = listBuilder.build();</span>
+<span class="fc" id="L191">            op = Operation.ADD;</span>
+<span class="fc" id="L192">            checkNotNull(type, &quot;Must have a type.&quot;);</span>
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">            checkArgument(!conditions.isEmpty(), &quot;Must have at least one condition.&quot;);</span>
+<span class="fc" id="L194">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+
+<span class="fc" id="L196">            return new DefaultFilteringObjective(this);</span>
+
+        }
+
+        @Override
+        public FilteringObjective remove() {
+<span class="fc" id="L202">            conditions = listBuilder.build();</span>
+<span class="fc" id="L203">            checkNotNull(type, &quot;Must have a type.&quot;);</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">            checkArgument(!conditions.isEmpty(), &quot;Must have at least one condition.&quot;);</span>
+<span class="fc" id="L205">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L206">            op = Operation.REMOVE;</span>
+
+<span class="fc" id="L208">            return new DefaultFilteringObjective(this);</span>
+
+        }
+
+        @Override
+        public FilteringObjective add(ObjectiveContext context) {
+<span class="fc" id="L214">            conditions = listBuilder.build();</span>
+<span class="fc" id="L215">            checkNotNull(type, &quot;Must have a type.&quot;);</span>
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">            checkArgument(!conditions.isEmpty(), &quot;Must have at least one condition.&quot;);</span>
+<span class="fc" id="L217">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L218">            op = Operation.ADD;</span>
+<span class="fc" id="L219">            this.context = context;</span>
+
+<span class="fc" id="L221">            return new DefaultFilteringObjective(this);</span>
+        }
+
+        @Override
+        public FilteringObjective remove(ObjectiveContext context) {
+<span class="fc" id="L226">            conditions = listBuilder.build();</span>
+<span class="fc" id="L227">            checkNotNull(type, &quot;Must have a type.&quot;);</span>
+<span class="pc bpc" id="L228" title="1 of 2 branches missed.">            checkArgument(!conditions.isEmpty(), &quot;Must have at least one condition.&quot;);</span>
+<span class="fc" id="L229">            checkNotNull(appId, &quot;Must supply an application id&quot;);</span>
+<span class="fc" id="L230">            op = Operation.REMOVE;</span>
+<span class="fc" id="L231">            this.context = context;</span>
+
+<span class="fc" id="L233">            return new DefaultFilteringObjective(this);</span>
+        }
+
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

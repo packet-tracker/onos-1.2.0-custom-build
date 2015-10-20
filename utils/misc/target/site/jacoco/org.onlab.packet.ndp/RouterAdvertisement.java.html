@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RouterAdvertisement.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.ndp</a> &gt; <span class="el_source">RouterAdvertisement.java</span></div><h1>RouterAdvertisement.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.ndp;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+
+import java.nio.ByteBuffer;
+import java.util.List;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements ICMPv6 Router Advertisement packet format. (RFC 4861)
+ */
+<span class="fc" id="L30">public class RouterAdvertisement extends BasePacket {</span>
+    public static final byte HEADER_LENGTH = 12; // bytes
+
+    protected byte currentHopLimit;
+    protected byte mFlag;
+    protected byte oFlag;
+    protected short routerLifetime;
+    protected int reachableTime;
+    protected int retransmitTimer;
+
+<span class="fc" id="L40">    private final NeighborDiscoveryOptions options =</span>
+        new NeighborDiscoveryOptions();
+
+    /**
+     * Gets current hop limit.
+     *
+     * @return the current hop limit
+     */
+    public byte getCurrentHopLimit() {
+<span class="fc" id="L49">        return this.currentHopLimit;</span>
+    }
+
+    /**
+     * Sets current hop limit.
+     *
+     * @param currentHopLimit the current hop limit to set
+     * @return this
+     */
+    public RouterAdvertisement setCurrentHopLimit(final byte currentHopLimit) {
+<span class="fc" id="L59">        this.currentHopLimit = currentHopLimit;</span>
+<span class="fc" id="L60">        return this;</span>
+    }
+
+    /**
+     * Gets managed address configuration flag.
+     *
+     * @return the managed address configuration flag
+     */
+    public byte getMFlag() {
+<span class="fc" id="L69">        return this.mFlag;</span>
+    }
+
+    /**
+     * Sets managed address configuration flag.
+     *
+     * @param mFlag the managed address configuration flag to set
+     * @return this
+     */
+    public RouterAdvertisement setMFlag(final byte mFlag) {
+<span class="fc" id="L79">        this.mFlag = mFlag;</span>
+<span class="fc" id="L80">        return this;</span>
+    }
+
+    /**
+     * Gets other configuration flag.
+     *
+     * @return the other configuration flag
+     */
+    public byte getOFlag() {
+<span class="fc" id="L89">        return this.oFlag;</span>
+    }
+
+    /**
+     * Sets other configuration flag.
+     *
+     * @param oFlag the other configuration flag to set
+     * @return this
+     */
+    public RouterAdvertisement setOFlag(final byte oFlag) {
+<span class="fc" id="L99">        this.oFlag = oFlag;</span>
+<span class="fc" id="L100">        return this;</span>
+    }
+
+    /**
+     * Gets router lifetime.
+     *
+     * @return the router lifetime
+     */
+    public short getRouterLifetime() {
+<span class="fc" id="L109">        return this.routerLifetime;</span>
+    }
+
+    /**
+     * Sets router lifetime.
+     *
+     * @param routerLifetime the router lifetime to set
+     * @return this
+     */
+    public RouterAdvertisement setRouterLifetime(final short routerLifetime) {
+<span class="fc" id="L119">        this.routerLifetime = routerLifetime;</span>
+<span class="fc" id="L120">        return this;</span>
+    }
+
+    /**
+     * Gets reachable time.
+     *
+     * @return the reachable time
+     */
+    public int getReachableTime() {
+<span class="fc" id="L129">        return this.reachableTime;</span>
+    }
+
+    /**
+     * Sets reachable time.
+     *
+     * @param reachableTime the reachable time to set
+     * @return this
+     */
+    public RouterAdvertisement setReachableTime(final int reachableTime) {
+<span class="fc" id="L139">        this.reachableTime = reachableTime;</span>
+<span class="fc" id="L140">        return this;</span>
+    }
+
+    /**
+     * Gets retransmission timer.
+     *
+     * @return the retransmission timer
+     */
+    public int getRetransmitTimer() {
+<span class="fc" id="L149">        return this.retransmitTimer;</span>
+    }
+
+    /**
+     * Sets retransmission timer.
+     *
+     * @param retransmitTimer the retransmission timer to set
+     * @return this
+     */
+    public RouterAdvertisement setRetransmitTimer(final int retransmitTimer) {
+<span class="fc" id="L159">        this.retransmitTimer = retransmitTimer;</span>
+<span class="fc" id="L160">        return this;</span>
+    }
+
+    /**
+     * Gets the Neighbor Discovery Protocol packet options.
+     *
+     * @return the Neighbor Discovery Protocol packet options
+     */
+    public List&lt;NeighborDiscoveryOptions.Option&gt; getOptions() {
+<span class="fc" id="L169">        return this.options.options();</span>
+    }
+
+    /**
+     * Adds a Neighbor Discovery Protocol packet option.
+     *
+     * @param type the option type
+     * @param data the option data
+     * @return this
+     */
+    public RouterAdvertisement addOption(final byte type, final byte[] data) {
+<span class="fc" id="L180">        this.options.addOption(type, data);</span>
+<span class="fc" id="L181">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L186">        byte[] optionsData = null;</span>
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">        if (this.options.hasOptions()) {</span>
+<span class="fc" id="L188">            optionsData = this.options.serialize();</span>
+        }
+
+<span class="fc" id="L191">        int optionsLength = 0;</span>
+<span class="pc bpc" id="L192" title="1 of 2 branches missed.">        if (optionsData != null) {</span>
+<span class="fc" id="L193">            optionsLength = optionsData.length;</span>
+        }
+
+<span class="fc" id="L196">        final byte[] data = new byte[HEADER_LENGTH + optionsLength];</span>
+<span class="fc" id="L197">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L199">        bb.put(this.currentHopLimit);</span>
+<span class="fc" id="L200">        bb.put((byte) ((this.mFlag &amp; 0x1) &lt;&lt; 7 | (this.oFlag &amp; 0x1) &lt;&lt; 6));</span>
+<span class="fc" id="L201">        bb.putShort(routerLifetime);</span>
+<span class="fc" id="L202">        bb.putInt(reachableTime);</span>
+<span class="fc" id="L203">        bb.putInt(retransmitTimer);</span>
+
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (optionsData != null) {</span>
+<span class="fc" id="L206">            bb.put(optionsData);</span>
+        }
+
+<span class="fc" id="L209">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L214">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+        int bscratch;
+
+<span class="nc" id="L217">        this.currentHopLimit = bb.get();</span>
+<span class="nc" id="L218">        bscratch = bb.get();</span>
+<span class="nc" id="L219">        this.mFlag = (byte) ((bscratch &gt;&gt; 7) &amp; 0x1);</span>
+<span class="nc" id="L220">        this.oFlag = (byte) ((bscratch &gt;&gt; 6) &amp; 0x1);</span>
+<span class="nc" id="L221">        this.routerLifetime = bb.getShort();</span>
+<span class="nc" id="L222">        this.reachableTime = bb.getInt();</span>
+<span class="nc" id="L223">        this.retransmitTimer = bb.getInt();</span>
+
+<span class="nc" id="L225">        this.options.deserialize(data, bb.position(),</span>
+<span class="nc" id="L226">                                 bb.limit() - bb.position());</span>
+
+<span class="nc" id="L228">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L238">        final int prime = 5807;</span>
+<span class="nc" id="L239">        int result = super.hashCode();</span>
+<span class="nc" id="L240">        result = prime * result + this.currentHopLimit;</span>
+<span class="nc" id="L241">        result = prime * result + this.mFlag;</span>
+<span class="nc" id="L242">        result = prime * result + this.oFlag;</span>
+<span class="nc" id="L243">        result = prime * result + this.routerLifetime;</span>
+<span class="nc" id="L244">        result = prime * result + this.reachableTime;</span>
+<span class="nc" id="L245">        result = prime * result + this.retransmitTimer;</span>
+<span class="nc" id="L246">        result = prime * result + this.options.hashCode();</span>
+<span class="nc" id="L247">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L258">            return true;</span>
+        }
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L261">            return false;</span>
+        }
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">        if (!(obj instanceof RouterAdvertisement)) {</span>
+<span class="nc" id="L264">            return false;</span>
+        }
+<span class="fc" id="L266">        final RouterAdvertisement other = (RouterAdvertisement) obj;</span>
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">        if (this.currentHopLimit != other.currentHopLimit) {</span>
+<span class="nc" id="L268">            return false;</span>
+        }
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">        if (this.mFlag != other.mFlag) {</span>
+<span class="fc" id="L271">            return false;</span>
+        }
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        if (this.oFlag != other.oFlag) {</span>
+<span class="nc" id="L274">            return false;</span>
+        }
+<span class="nc bnc" id="L276" title="All 2 branches missed.">        if (this.routerLifetime != other.routerLifetime) {</span>
+<span class="nc" id="L277">            return false;</span>
+        }
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (this.reachableTime != other.reachableTime) {</span>
+<span class="nc" id="L280">            return false;</span>
+        }
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        if (this.retransmitTimer != other.retransmitTimer) {</span>
+<span class="nc" id="L283">            return false;</span>
+        }
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (!this.options.equals(other.options)) {</span>
+<span class="nc" id="L286">            return false;</span>
+        }
+<span class="nc" id="L288">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for router advertisement packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;RouterAdvertisement&gt; deserializer() {
+<span class="fc" id="L297">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L298">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="fc" id="L300">            RouterAdvertisement routerAdvertisement = new RouterAdvertisement();</span>
+
+<span class="fc" id="L302">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+            int bscratch;
+
+<span class="fc" id="L305">            routerAdvertisement.currentHopLimit = bb.get();</span>
+<span class="fc" id="L306">            bscratch = bb.get();</span>
+<span class="fc" id="L307">            routerAdvertisement.mFlag = (byte) ((bscratch &gt;&gt; 7) &amp; 0x1);</span>
+<span class="fc" id="L308">            routerAdvertisement.oFlag = (byte) ((bscratch &gt;&gt; 6) &amp; 0x1);</span>
+<span class="fc" id="L309">            routerAdvertisement.routerLifetime = bb.getShort();</span>
+<span class="fc" id="L310">            routerAdvertisement.reachableTime = bb.getInt();</span>
+<span class="fc" id="L311">            routerAdvertisement.retransmitTimer = bb.getInt();</span>
+
+<span class="pc bpc" id="L313" title="1 of 2 branches missed.">            if (bb.limit() - bb.position() &gt; 0) {</span>
+<span class="fc" id="L314">                NeighborDiscoveryOptions options = NeighborDiscoveryOptions.deserializer()</span>
+<span class="fc" id="L315">                        .deserialize(data, bb.position(), bb.limit() - bb.position());</span>
+
+<span class="fc bfc" id="L317" title="All 2 branches covered.">                for (NeighborDiscoveryOptions.Option option : options.options()) {</span>
+<span class="fc" id="L318">                    routerAdvertisement.addOption(option.type(), option.data());</span>
+<span class="fc" id="L319">                }</span>
+            }
+
+<span class="fc" id="L322">            return routerAdvertisement;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

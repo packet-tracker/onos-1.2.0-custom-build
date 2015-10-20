@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepUpdateMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepUpdateMsgVer1.java</span></div><h1>PcepUpdateMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepMsgPath;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepUpdateMsg;
+import org.onosproject.pcepio.protocol.PcepUpdateRequest;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP update message.
+ */
+
+class PcepUpdateMsgVer1 implements PcepUpdateMsg {
+
+    // Pcep version: 1
+
+    /*    The format of the PCUpd message is as follows:
+     *      &lt;PCUpd Message&gt;             ::= &lt;Common Header&gt;
+     *                                       &lt;update-request-list&gt;
+     *      Where:
+     *        &lt;update-request-list&gt;     ::= &lt;update-request&gt;[&lt;update-request-list&gt;]
+     *        &lt;update-request&gt;          ::= &lt;SRP&gt;
+     *                                      &lt;LSP&gt;
+     *                                      &lt;path&gt;
+     *      Where:
+     *        &lt;path&gt;                     ::= &lt;ERO&gt;&lt;attribute-list&gt;
+     *       Where:
+     *        &lt;attribute-list&gt; is defined in [RFC5440] and extended by PCEP extensions.
+     *       where:
+     *        &lt;attribute-list&gt;            ::=[&lt;LSPA&gt;]
+     *                                      [&lt;BANDWIDTH&gt;]
+     *                                      [&lt;metric-list&gt;]
+     *                                      [&lt;IRO&gt;]
+     *        &lt;metric-list&gt;               ::=&lt;METRIC&gt;[&lt;metric-list&gt;]
+     *
+     *            0                   1                   2                   3
+     *           0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     *          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     *          | Ver |  Flags  |  Message-Type |       Message-Length          |
+     *          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     *          |                                                               |
+     *          //                  UPDATE REQUEST LIST                        //
+     *          |                                                               |
+     *          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     *
+     *          Reference:Internet-Draft-PCEP Extensions-for-Stateful-PCE-10
+     */
+
+<span class="fc" id="L78">    protected static final Logger log = LoggerFactory.getLogger(PcepUpdateMsgVer1.class);</span>
+
+    public static final byte PACKET_VERSION = 1;
+    // UpdateMsgMinLength = SrpObjMinLentgh(12)+LspObjMinLength(8)+EroObjMinLength(12)+ CommonHeaderLength(4)
+    public static final short PACKET_MINIMUM_LENGTH = 36;
+<span class="fc" id="L83">    public static final PcepType MSG_TYPE = PcepType.UPDATE;</span>
+    //Update Request List
+    private LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList;
+
+<span class="fc" id="L87">    public static final PcepUpdateMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader reads UpdateMessage from the channel.
+     */
+<span class="fc" id="L92">    static class Reader implements PcepMessageReader&lt;PcepUpdateMsg&gt; {</span>
+
+        LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList;
+
+        @Override
+        public PcepUpdateMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L100">                throw new PcepParseException(&quot;Readable bytes is less than update message minimum length&quot;);</span>
+            }
+
+<span class="fc" id="L103">            llUpdateRequestList = new LinkedList&lt;&gt;();</span>
+
+            // fixed value property version == 1
+<span class="fc" id="L106">            byte version = cb.readByte();</span>
+<span class="fc" id="L107">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L109">                throw new PcepParseException(&quot;Wrong version. Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+            }
+            // fixed value property type == 11
+<span class="fc" id="L112">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L114">                throw new PcepParseException(&quot;Wrong type. Expected=PcepType.UPDATE(11), got=&quot; + type);</span>
+            }
+<span class="fc" id="L116">            short length = cb.readShort();</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L118">                throw new PcepParseException(&quot;Wrong length. Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, was: &quot;</span>
+                        + length);
+            }
+
+<span class="fc" id="L122">            log.debug(&quot;reading update message of length &quot; + length);</span>
+
+            // parse Update Request list
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">            if (!parseUpdateRequestList(cb)) {</span>
+<span class="nc" id="L126">                throw new PcepParseException(&quot;parsing Update Request List Failed.&quot;);</span>
+            }
+
+<span class="fc" id="L129">            return new PcepUpdateMsgVer1(llUpdateRequestList);</span>
+        }
+
+        /**
+         * Parse update request list.
+         *
+         * @param cb of type channel buffer
+         * @return true after parsing Update Request List
+         * @throws PcepParseException while parsing update request list from channel buffer
+         */
+        public boolean parseUpdateRequestList(ChannelBuffer cb) throws PcepParseException {
+
+            /*                     &lt;update-request-list&gt;
+             * Where:
+             *   &lt;update-request-list&gt;     ::= &lt;update-request&gt;[&lt;update-request-list&gt;]
+             *   &lt;update-request&gt;          ::= &lt;SRP&gt;
+             *                                 &lt;LSP&gt;
+             *                                 &lt;path&gt;
+             * Where:
+             *   &lt;path&gt;                     ::= &lt;ERO&gt;&lt;attribute-list&gt;
+             * Where:
+             * &lt;attribute-list&gt; is defined in [RFC5440] and extended by PCEP extensions.
+             */
+
+<span class="fc bfc" id="L153" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+
+<span class="fc" id="L155">                PcepUpdateRequest pceUpdateReq = new PcepUpdateRequestVer1();</span>
+
+                //Read SRP Object and Store it.
+                PcepSrpObject srpObj;
+<span class="fc" id="L159">                srpObj = PcepSrpObjectVer1.read(cb);</span>
+<span class="fc" id="L160">                pceUpdateReq.setSrpObject(srpObj);</span>
+
+                //Read LSP object and Store it.
+                PcepLspObject lspObj;
+<span class="fc" id="L164">                lspObj = PcepLspObjectVer1.read(cb);</span>
+<span class="fc" id="L165">                pceUpdateReq.setLspObject(lspObj);</span>
+
+                // Read Msg Path and store it.
+<span class="fc" id="L168">                PcepMsgPath msgPath = new PcepMsgPathVer1().read(cb);</span>
+<span class="fc" id="L169">                pceUpdateReq.setMsgPath(msgPath);</span>
+
+<span class="fc" id="L171">                llUpdateRequestList.add(pceUpdateReq);</span>
+<span class="fc" id="L172">            }</span>
+<span class="fc" id="L173">            return true;</span>
+        }
+    }
+
+    /**
+     * Constructor to initialize llUpdateRequestList.
+     *
+     * @param llUpdateRequestList list of PcepUpdateRequest.
+     */
+<span class="fc" id="L182">    PcepUpdateMsgVer1(LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList) {</span>
+<span class="fc" id="L183">        this.llUpdateRequestList = llUpdateRequestList;</span>
+<span class="fc" id="L184">    }</span>
+
+    /**
+     * Builder class for PCPE update message.
+     */
+<span class="nc" id="L189">    static class Builder implements PcepUpdateMsg.Builder {</span>
+
+        // PCEP report message fields
+        LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList;
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L196">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L201">            return PcepType.UPDATE;</span>
+        }
+
+        @Override
+        public PcepUpdateMsg build() {
+<span class="nc" id="L206">            return new PcepUpdateMsgVer1(this.llUpdateRequestList);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepUpdateRequest&gt; getUpdateRequestList() {
+<span class="nc" id="L211">            return this.llUpdateRequestList;</span>
+        }
+
+        @Override
+        public Builder setUpdateRequestList(LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList) {
+<span class="nc" id="L216">            this.llUpdateRequestList = llUpdateRequestList;</span>
+<span class="nc" id="L217">            return this;</span>
+        }
+
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L224">        WRITER.write(cb, this);</span>
+<span class="fc" id="L225">    }</span>
+
+<span class="fc" id="L227">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer writes UpdateMessage to the channel buffer.
+     */
+<span class="fc" id="L232">    static class Writer implements PcepMessageWriter&lt;PcepUpdateMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepUpdateMsgVer1 message) throws PcepParseException {
+
+<span class="fc" id="L237">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="fc" id="L239">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+            // message type
+<span class="fc" id="L241">            cb.writeByte(MSG_TYPE.getType());</span>
+            /* length is length of variable message, will be updated at the end
+             * Store the position of message
+             * length in buffer
+             */
+<span class="fc" id="L246">            int msgLenIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L248">            cb.writeShort((short) 0);</span>
+<span class="fc" id="L249">            ListIterator&lt;PcepUpdateRequest&gt; listIterator = message.llUpdateRequestList.listIterator();</span>
+
+<span class="fc bfc" id="L251" title="All 2 branches covered.">            while (listIterator.hasNext()) {</span>
+
+<span class="fc" id="L253">                PcepUpdateRequest updateReq = listIterator.next();</span>
+
+                //SRP object is mandatory
+<span class="fc" id="L256">                PcepSrpObject srpObj = updateReq.getSrpObject();</span>
+<span class="fc" id="L257">                srpObj.write(cb);</span>
+
+                //LSP object is mandatory
+<span class="fc" id="L260">                PcepLspObject lspObj = updateReq.getLspObject();</span>
+<span class="fc" id="L261">                lspObj.write(cb);</span>
+
+                //PATH object is mandatory
+<span class="fc" id="L264">                PcepMsgPath msgPath = updateReq.getMsgPath();</span>
+<span class="fc" id="L265">                msgPath.write(cb);</span>
+<span class="fc" id="L266">            }</span>
+
+            // update message length field
+<span class="fc" id="L269">            int length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L270">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L271">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L276">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L281">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepUpdateRequest&gt; getUpdateRequestList() {
+<span class="nc" id="L286">        return this.llUpdateRequestList;</span>
+    }
+
+    @Override
+    public void setUpdateRequestList(LinkedList&lt;PcepUpdateRequest&gt; llUpdateRequestList) {
+<span class="nc" id="L291">        this.llUpdateRequestList = llUpdateRequestList;</span>
+<span class="nc" id="L292">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L296">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L297">                .add(&quot;UpdateRequestList&quot;, llUpdateRequestList)</span>
+<span class="nc" id="L298">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

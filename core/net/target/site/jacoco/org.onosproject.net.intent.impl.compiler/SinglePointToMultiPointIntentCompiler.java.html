@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SinglePointToMultiPointIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">SinglePointToMultiPointIntentCompiler.java</span></div><h1>SinglePointToMultiPointIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import com.google.common.collect.ImmutableSet;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.LinkCollectionIntent;
+import org.onosproject.net.intent.SinglePointToMultiPointIntent;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+@Component(immediate = true)
+<span class="nc" id="L37">public class SinglePointToMultiPointIntentCompiler</span>
+        extends ConnectivityIntentCompiler&lt;SinglePointToMultiPointIntent&gt; {
+
+    // TODO: use off-the-shell core provider ID
+<span class="nc" id="L41">    private static final ProviderId PID =</span>
+            new ProviderId(&quot;core&quot;, &quot;org.onosproject.core&quot;, true);
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L46">        intentManager.registerCompiler(SinglePointToMultiPointIntent.class,</span>
+                                       this);
+<span class="nc" id="L48">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L52">        intentManager.unregisterCompiler(SinglePointToMultiPointIntent.class);</span>
+<span class="nc" id="L53">    }</span>
+
+
+    @Override
+    public List&lt;Intent&gt; compile(SinglePointToMultiPointIntent intent,
+                                List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+<span class="nc" id="L60">        Set&lt;Link&gt; links = new HashSet&lt;&gt;();</span>
+
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        for (ConnectPoint egressPoint : intent.egressPoints()) {</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">            if (egressPoint.deviceId().equals(intent.ingressPoint().deviceId())) {</span>
+<span class="nc" id="L64">                continue;</span>
+            }
+
+<span class="nc" id="L67">            Path path = getPath(intent, intent.ingressPoint().deviceId(), egressPoint.deviceId());</span>
+<span class="nc" id="L68">            links.addAll(path.links());</span>
+<span class="nc" id="L69">        }</span>
+
+<span class="nc" id="L71">        Intent result = LinkCollectionIntent.builder()</span>
+<span class="nc" id="L72">                .appId(intent.appId())</span>
+<span class="nc" id="L73">                .key(intent.key())</span>
+<span class="nc" id="L74">                .selector(intent.selector())</span>
+<span class="nc" id="L75">                .treatment(intent.treatment())</span>
+<span class="nc" id="L76">                .links(links)</span>
+<span class="nc" id="L77">                .ingressPoints(ImmutableSet.of(intent.ingressPoint()))</span>
+<span class="nc" id="L78">                .egressPoints(intent.egressPoints())</span>
+<span class="nc" id="L79">                .priority(intent.priority())</span>
+<span class="nc" id="L80">                .constraints(intent.constraints())</span>
+<span class="nc" id="L81">                .build();</span>
+
+<span class="nc" id="L83">        return Collections.singletonList(result);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

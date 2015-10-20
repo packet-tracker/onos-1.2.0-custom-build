@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpenVSwitchPipeline.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.pipeline</a> &gt; <span class="el_source">OpenVSwitchPipeline.java</span></div><h1>OpenVSwitchPipeline.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.pipeline;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collection;
+import java.util.Collections;
+
+import org.onlab.osgi.ServiceDirectory;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.behaviour.Pipeliner;
+import org.onosproject.net.behaviour.PipelinerContext;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criterion.Type;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.flowobjective.FilteringObjective;
+import org.onosproject.net.flowobjective.FlowObjectiveStore;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.NextObjective;
+import org.onosproject.net.flowobjective.Objective;
+import org.onosproject.net.flowobjective.ObjectiveError;
+import org.slf4j.Logger;
+
+/**
+ * Driver for standard OpenVSwitch.
+ */
+<span class="nc" id="L50">public class OpenVSwitchPipeline extends DefaultSingleTablePipeline</span>
+        implements Pipeliner {
+
+    private static final String VTN_APP_ID = &quot;org.onosproject.app.vtn&quot;;
+<span class="nc" id="L54">    private final Logger log = getLogger(getClass());</span>
+    private CoreService coreService;
+    private ServiceDirectory serviceDirectory;
+    protected FlowObjectiveStore flowObjectiveStore;
+    protected DeviceId deviceId;
+    protected FlowRuleService flowRuleService;
+    protected DeviceService deviceService;
+    private static final int TIME_OUT = 0;
+    private static final int MAC_TABLE = 40;
+    private static final int PORT_TABLE = 0;
+
+    @Override
+    public void init(DeviceId deviceId, PipelinerContext context) {
+<span class="nc" id="L67">        super.init(deviceId, context);</span>
+<span class="nc" id="L68">        this.serviceDirectory = context.directory();</span>
+<span class="nc" id="L69">        this.deviceId = deviceId;</span>
+
+<span class="nc" id="L71">        coreService = serviceDirectory.get(CoreService.class);</span>
+<span class="nc" id="L72">        flowRuleService = serviceDirectory.get(FlowRuleService.class);</span>
+<span class="nc" id="L73">        flowObjectiveStore = context.store();</span>
+<span class="nc" id="L74">        coreService</span>
+<span class="nc" id="L75">                .registerApplication(&quot;org.onosproject.driver.OpenVSwitchPipeline&quot;);</span>
+
+<span class="nc" id="L77">    }</span>
+
+    @Override
+    public void filter(FilteringObjective filteringObjective) {
+<span class="nc" id="L81">        super.filter(filteringObjective);</span>
+<span class="nc" id="L82">    }</span>
+
+    @Override
+    public void forward(ForwardingObjective fwd) {
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (!VTN_APP_ID.equals(fwd.appId().name())) {</span>
+<span class="nc" id="L87">            super.forward(fwd);</span>
+<span class="nc" id="L88">            return;</span>
+        }
+        Collection&lt;FlowRule&gt; rules;
+        FlowRuleOperations.Builder flowOpsBuilder = FlowRuleOperations
+<span class="nc" id="L92">                .builder();</span>
+
+<span class="nc" id="L94">        rules = processForward(fwd);</span>
+<span class="nc bnc" id="L95" title="All 3 branches missed.">        switch (fwd.op()) {</span>
+        case ADD:
+<span class="nc bnc" id="L97" title="All 2 branches missed.">            rules.stream().filter(rule -&gt; rule != null)</span>
+<span class="nc" id="L98">                    .forEach(flowOpsBuilder::add);</span>
+<span class="nc" id="L99">            break;</span>
+        case REMOVE:
+<span class="nc bnc" id="L101" title="All 2 branches missed.">            rules.stream().filter(rule -&gt; rule != null)</span>
+<span class="nc" id="L102">                    .forEach(flowOpsBuilder::remove);</span>
+<span class="nc" id="L103">            break;</span>
+        default:
+<span class="nc" id="L105">            fail(fwd, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L106">            log.warn(&quot;Unknown forwarding type {}&quot;, fwd.op());</span>
+        }
+
+<span class="nc" id="L109">        flowRuleService.apply(flowOpsBuilder</span>
+<span class="nc" id="L110">                .build(new FlowRuleOperationsContext() {</span>
+                    @Override
+                    public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L113">                        pass(fwd);</span>
+<span class="nc" id="L114">                    }</span>
+
+                    @Override
+                    public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L118">                        fail(fwd, ObjectiveError.FLOWINSTALLATIONFAILED);</span>
+<span class="nc" id="L119">                    }</span>
+                }));
+<span class="nc" id="L121">    }</span>
+
+    @Override
+    public void next(NextObjective nextObjective) {
+<span class="nc" id="L125">        super.next(nextObjective);</span>
+<span class="nc" id="L126">    }</span>
+
+    private Collection&lt;FlowRule&gt; processForward(ForwardingObjective fwd) {
+<span class="nc bnc" id="L129" title="All 3 branches missed.">        switch (fwd.flag()) {</span>
+        case SPECIFIC:
+<span class="nc" id="L131">            return processSpecific(fwd);</span>
+        case VERSATILE:
+<span class="nc" id="L133">            return processVersatile(fwd);</span>
+        default:
+<span class="nc" id="L135">            fail(fwd, ObjectiveError.UNKNOWN);</span>
+<span class="nc" id="L136">            log.warn(&quot;Unknown forwarding flag {}&quot;, fwd.flag());</span>
+        }
+<span class="nc" id="L138">        return Collections.emptySet();</span>
+    }
+
+    private Collection&lt;FlowRule&gt; processVersatile(ForwardingObjective fwd) {
+<span class="nc" id="L142">        log.debug(&quot;Processing versatile forwarding objective&quot;);</span>
+<span class="nc" id="L143">        return Collections.emptyList();</span>
+    }
+
+    private Collection&lt;FlowRule&gt; processSpecific(ForwardingObjective fwd) {
+<span class="nc" id="L147">        log.debug(&quot;Processing specific forwarding objective&quot;);</span>
+<span class="nc" id="L148">        TrafficSelector selector = fwd.selector();</span>
+<span class="nc" id="L149">        TrafficTreatment tb = fwd.treatment();</span>
+<span class="nc" id="L150">        FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()</span>
+<span class="nc" id="L151">                .fromApp(fwd.appId()).withPriority(fwd.priority())</span>
+<span class="nc" id="L152">                .forDevice(deviceId).withSelector(selector)</span>
+<span class="nc" id="L153">                .withTreatment(tb).makeTemporary(TIME_OUT);</span>
+<span class="nc" id="L154">        ruleBuilder.withPriority(fwd.priority());</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (fwd.permanent()) {</span>
+<span class="nc" id="L156">            ruleBuilder.makePermanent();</span>
+        }
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        if (selector.getCriterion(Type.ETH_DST) != null</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">                || tb.allInstructions().contains(Instructions.createDrop())) {</span>
+<span class="nc" id="L160">            ruleBuilder.withTreatment(tb);</span>
+<span class="nc" id="L161">            ruleBuilder.forTable(MAC_TABLE);</span>
+        } else {
+<span class="nc" id="L163">            TrafficTreatment.Builder newTraffic = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L164">            tb.allInstructions().forEach(t -&gt; newTraffic.add(t));</span>
+<span class="nc" id="L165">            newTraffic.transition(MAC_TABLE);</span>
+<span class="nc" id="L166">            ruleBuilder.withTreatment(newTraffic.build());</span>
+<span class="nc" id="L167">            ruleBuilder.forTable(PORT_TABLE);</span>
+        }
+<span class="nc" id="L169">        return Collections.singletonList(ruleBuilder.build());</span>
+    }
+
+    private void fail(Objective obj, ObjectiveError error) {
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        if (obj.context().isPresent()) {</span>
+<span class="nc" id="L174">            obj.context().get().onError(obj, error);</span>
+        }
+<span class="nc" id="L176">    }</span>
+
+    private void pass(Objective obj) {
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (obj.context().isPresent()) {</span>
+<span class="nc" id="L180">            obj.context().get().onSuccess(obj);</span>
+        }
+<span class="nc" id="L182">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

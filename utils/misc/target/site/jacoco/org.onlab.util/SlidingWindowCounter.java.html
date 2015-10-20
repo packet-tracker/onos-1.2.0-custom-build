@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SlidingWindowCounter.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.util</a> &gt; <span class="el_source">SlidingWindowCounter.java</span></div><h1>SlidingWindowCounter.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.util;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * Maintains a sliding window of value counts. The sliding window counter is
+ * initialized with a number of window slots. Calls to #incrementCount() will
+ * increment the value in the current window slot. Periodically the window
+ * slides and the oldest value count is dropped. Calls to #get() will get the
+ * total count for the last N window slots.
+ */
+public final class SlidingWindowCounter {
+
+    private volatile int headSlot;
+    private final int windowSlots;
+
+    private final List&lt;AtomicLong&gt; counters;
+
+    private final ScheduledExecutorService background;
+
+    private static final int SLIDE_WINDOW_PERIOD_SECONDS = 1;
+
+    /**
+     * Creates a new sliding window counter with the given total number of
+     * window slots.
+     *
+     * @param windowSlots total number of window slots
+     */
+<span class="nc" id="L53">    public SlidingWindowCounter(int windowSlots) {</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        checkArgument(windowSlots &gt; 0, &quot;Window size must be a positive integer&quot;);</span>
+
+<span class="nc" id="L56">        this.windowSlots = windowSlots;</span>
+<span class="nc" id="L57">        this.headSlot = 0;</span>
+
+        // Initialize each item in the list to an AtomicLong of 0
+<span class="nc" id="L60">        this.counters = Collections.nCopies(windowSlots, 0)</span>
+<span class="nc" id="L61">                .stream()</span>
+<span class="nc" id="L62">                .map(AtomicLong::new)</span>
+<span class="nc" id="L63">                .collect(Collectors.toCollection(ArrayList::new));</span>
+
+<span class="nc" id="L65">        background = Executors.newSingleThreadScheduledExecutor();</span>
+<span class="nc" id="L66">        background.scheduleWithFixedDelay(this::advanceHead, 0,</span>
+                                          SLIDE_WINDOW_PERIOD_SECONDS, TimeUnit.SECONDS);
+<span class="nc" id="L68">    }</span>
+
+    /**
+     * Releases resources used by the SlidingWindowCounter.
+     */
+    public void destroy() {
+<span class="nc" id="L74">        background.shutdownNow();</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * Increments the count of the current window slot by 1.
+     */
+    public void incrementCount() {
+<span class="nc" id="L81">        incrementCount(headSlot, 1);</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * Increments the count of the current window slot by the given value.
+     *
+     * @param value value to increment by
+     */
+    public void incrementCount(long value) {
+<span class="nc" id="L90">        incrementCount(headSlot, value);</span>
+<span class="nc" id="L91">    }</span>
+
+    private void incrementCount(int slot, long value) {
+<span class="nc" id="L94">        counters.get(slot).addAndGet(value);</span>
+<span class="nc" id="L95">    }</span>
+
+    /**
+     * Gets the total count for the last N window slots.
+     *
+     * @param slots number of slots to include in the count
+     * @return total count for last N slots
+     */
+    public long get(int slots) {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        checkArgument(slots &lt;= windowSlots,</span>
+                      &quot;Requested window must be less than the total window slots&quot;);
+
+<span class="nc" id="L107">        long sum = 0;</span>
+
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        for (int i = 0; i &lt; slots; i++) {</span>
+<span class="nc" id="L110">            int currentIndex = headSlot - i;</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            if (currentIndex &lt; 0) {</span>
+<span class="nc" id="L112">                currentIndex = counters.size() + currentIndex;</span>
+            }
+<span class="nc" id="L114">            sum += counters.get(currentIndex).get();</span>
+        }
+
+<span class="nc" id="L117">        return sum;</span>
+    }
+
+    void advanceHead() {
+<span class="nc" id="L121">        counters.get(slotAfter(headSlot)).set(0);</span>
+<span class="nc" id="L122">        headSlot = slotAfter(headSlot);</span>
+<span class="nc" id="L123">    }</span>
+
+    private int slotAfter(int slot) {
+<span class="nc" id="L126">        return (slot + 1) % windowSlots;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

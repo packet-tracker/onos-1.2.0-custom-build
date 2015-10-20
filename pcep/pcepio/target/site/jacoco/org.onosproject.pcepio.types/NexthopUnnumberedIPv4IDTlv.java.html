@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NexthopUnnumberedIPv4IDTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">NexthopUnnumberedIPv4IDTlv.java</span></div><h1>NexthopUnnumberedIPv4IDTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * NexthopUnnumberedIPv4IDTlv provides the next node's ID and Interface ID.
+ */
+public class NexthopUnnumberedIPv4IDTlv implements PcepValueType {
+
+    /*
+        Reference : draft-zhao-pce-pcep-extension-for-pce-controller-01.
+
+        0 1 2 3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       | Type=TBD                      | Length = 12                   |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                          Node-ID                              |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                          Interface ID                         |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                      NEXTHOP-UNNUMBERED-IPV4-ID TLV
+
+     */
+<span class="fc" id="L49">    protected static final Logger log = LoggerFactory.getLogger(NexthopUnnumberedIPv4IDTlv.class);</span>
+
+    public static final short TYPE = 1; //to be defined
+    //Length is header + value
+    public static final short LENGTH = 12;
+
+    private final int nodeID;
+    private final int interfaceID;
+
+    /**
+     * constructor to initialize nodeID and interfaceID.
+     *
+     * @param nodeID node ID
+     * @param interfaceID interface ID
+     */
+<span class="fc" id="L64">    public NexthopUnnumberedIPv4IDTlv(int nodeID, int interfaceID) {</span>
+<span class="fc" id="L65">        this.nodeID = nodeID;</span>
+<span class="fc" id="L66">        this.interfaceID = interfaceID;</span>
+<span class="fc" id="L67">    }</span>
+
+    /**
+     * Returns new object of NexthopUnnumberedIPv4IDTlv.
+     *
+     * @param nodeID node ID
+     * @param interfaceID interface ID
+     * @return NexthopUnnumberedIPv4IDTlv
+     */
+    public static NexthopUnnumberedIPv4IDTlv of(int nodeID, int interfaceID) {
+<span class="fc" id="L77">        return new NexthopUnnumberedIPv4IDTlv(nodeID, interfaceID);</span>
+    }
+
+    /**
+     * Returns Node Id.
+     *
+     * @return node ID
+     */
+    public int getNodeID() {
+<span class="nc" id="L86">        return nodeID;</span>
+    }
+
+    /**
+     * Returns Interface Id.
+     *
+     * @return interface ID
+     */
+    public int getInterfaceID() {
+<span class="nc" id="L95">        return interfaceID;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L100">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L105">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="nc" id="L110">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L115">        return Objects.hash(nodeID, interfaceID);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L121">            return true;</span>
+        }
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (obj instanceof NexthopUnnumberedIPv4IDTlv) {</span>
+<span class="fc" id="L124">            NexthopUnnumberedIPv4IDTlv other = (NexthopUnnumberedIPv4IDTlv) obj;</span>
+<span class="pc bpc" id="L125" title="1 of 4 branches missed.">            return Objects.equals(this.nodeID, other.nodeID) &amp;&amp; Objects.equals(this.interfaceID, other.interfaceID);</span>
+        }
+<span class="fc" id="L127">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="nc" id="L132">        int iLenStartIndex = c.writerIndex();</span>
+<span class="nc" id="L133">        c.writeShort(TYPE);</span>
+<span class="nc" id="L134">        c.writeShort(LENGTH);</span>
+
+<span class="nc" id="L136">        c.writeInt(nodeID);</span>
+<span class="nc" id="L137">        c.writeInt(interfaceID);</span>
+
+<span class="nc" id="L139">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of NexthopUnnumberedIPv4IDTlv.
+     *
+     * @param cb type of channel buffer
+     * @return object of NexthopUnnumberedIPv4IDTlv
+     */
+    public static NexthopUnnumberedIPv4IDTlv read(ChannelBuffer cb) {
+<span class="nc" id="L149">        int nodeID = cb.readInt();</span>
+<span class="nc" id="L150">        int interfaceID = cb.readInt();</span>
+<span class="nc" id="L151">        return new NexthopUnnumberedIPv4IDTlv(nodeID, interfaceID);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L156">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L157">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L158">                .add(&quot;Length&quot;, LENGTH)</span>
+<span class="fc" id="L159">                .add(&quot;NodeId&quot;, nodeID)</span>
+<span class="fc" id="L160">                .add(&quot;InterfaceId&quot;, interfaceID)</span>
+<span class="fc" id="L161">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

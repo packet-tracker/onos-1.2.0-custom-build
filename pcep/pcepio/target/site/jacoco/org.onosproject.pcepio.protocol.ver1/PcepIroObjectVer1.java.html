@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepIroObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepIroObjectVer1.java</span></div><h1>PcepIroObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepIroObject;
+import org.onosproject.pcepio.types.IPv4SubObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP iro object.
+ */
+public class PcepIroObjectVer1 implements PcepIroObject {
+
+    /*
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                                                               |
+      //                      (Sub-objects)                           //
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                     The IRO Object format
+
+        Each IPV4 suboject
+
+        0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        |L|    Type     |     Length    | IPv4 address (4 bytes)        |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        | IPv4 address (continued)      | Prefix Length |      Resvd    |
+        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+<span class="nc" id="L59">    protected static final Logger log = LoggerFactory.getLogger(PcepIroObjectVer1.class);</span>
+
+    public static final byte IRO_OBJ_TYPE = 1;
+    public static final byte IRO_OBJ_CLASS = 10;
+    public static final byte IRO_OBJECT_VERSION = 1;
+    public static final short IRO_OBJ_MINIMUM_LENGTH = 12;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+    public static final int YTYPE_SHIFT_VALUE = 0x7F;
+
+<span class="nc" id="L68">    public static final PcepObjectHeader DEFAULT_IRO_OBJECT_HEADER = new PcepObjectHeader(IRO_OBJ_CLASS, IRO_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, IRO_OBJ_MINIMUM_LENGTH);
+
+<span class="nc" id="L71">    private short iroObjType = 0;</span>
+    private byte yLength;
+    private byte yPrefixLength;
+    private byte yResvd;
+    private PcepObjectHeader iroObjHeader;
+<span class="nc" id="L76">    private LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;&gt;();</span>
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L81">    public PcepIroObjectVer1() {</span>
+<span class="nc" id="L82">        this.iroObjHeader = null;</span>
+<span class="nc" id="L83">        this.iroObjType = 0;</span>
+<span class="nc" id="L84">        this.yLength = 0;</span>
+<span class="nc" id="L85">    }</span>
+
+    /**
+     * Constructor to initialize member variables.
+     *
+     * @param iroObjHeader IRO object header
+     * @param llSubObjects list of sub-objects
+     */
+<span class="nc" id="L93">    public PcepIroObjectVer1(PcepObjectHeader iroObjHeader, LinkedList&lt;PcepValueType&gt; llSubObjects) {</span>
+<span class="nc" id="L94">        this.iroObjHeader = iroObjHeader;</span>
+<span class="nc" id="L95">        this.llSubObjects = llSubObjects;</span>
+<span class="nc" id="L96">    }</span>
+
+    /**
+     * Returns object header.
+     *
+     * @return iroObjHeader IRO object header
+     */
+    public PcepObjectHeader getIroObjHeader() {
+<span class="nc" id="L104">        return this.iroObjHeader;</span>
+    }
+
+    /**
+     * Sets IRO Object Header.
+     *
+     * @param obj IRO object header
+     */
+    public void setIroObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L113">        this.iroObjHeader = obj;</span>
+<span class="nc" id="L114">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getSubObjects() {
+<span class="nc" id="L118">        return this.llSubObjects;</span>
+    }
+
+    @Override
+    public void setSubObjects(LinkedList&lt;PcepValueType&gt; llSubObjects) {
+<span class="nc" id="L123">        this.llSubObjects = llSubObjects;</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Reads from channel buffer and return object of PcepIroObject.
+     *
+     * @param cb of type channel buffer
+     * @return object of PcepIroObject
+     * @throws PcepParseException while parsing from channel buffer
+     */
+    public static PcepIroObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader iroObjHeader;
+        LinkedList&lt;PcepValueType&gt; llSubObjects;
+
+<span class="nc" id="L138">        iroObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only IroObject buffer.
+<span class="nc" id="L141">        ChannelBuffer tempCb = cb.readBytes(iroObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+<span class="nc" id="L142">        llSubObjects = parseSubObjects(tempCb);</span>
+<span class="nc" id="L143">        return new PcepIroObjectVer1(iroObjHeader, llSubObjects);</span>
+    }
+
+    /**
+     * Returns linked list of sub objects.
+     *
+     * @param cb of type channel buffer
+     * @return linked list of sub objects
+     * @throws PcepParseException while parsing subobjects from channel buffer
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseSubObjects(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L155">        LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        while (0 &lt; cb.readableBytes()) {</span>
+
+            //check the Type of the Subobjects.
+<span class="nc" id="L160">            byte yType = cb.readByte();</span>
+<span class="nc" id="L161">            yType = (byte) (yType &amp; (YTYPE_SHIFT_VALUE));</span>
+<span class="nc" id="L162">            byte hLength = cb.readByte();</span>
+
+            PcepValueType subObj;
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            switch (yType) {</span>
+
+            case IPv4SubObject.TYPE:
+<span class="nc" id="L168">                subObj = IPv4SubObject.read(cb);</span>
+<span class="nc" id="L169">                break;</span>
+
+            default:
+<span class="nc" id="L172">                throw new PcepParseException(&quot;Invalid sub object. Type: &quot; + (int) yType);</span>
+            }
+
+            // Check for the padding
+<span class="nc" id="L176">            int pad = hLength % 4;</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L178">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L180">                    cb.skipBytes(pad);</span>
+                }
+            }
+<span class="nc" id="L183">            llSubObjects.add(subObj);</span>
+<span class="nc" id="L184">        }</span>
+<span class="nc" id="L185">        return llSubObjects;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+        //write Object header
+<span class="nc" id="L191">        int objStartIndex = cb.writerIndex();</span>
+
+<span class="nc" id="L193">        int objLenIndex = iroObjHeader.write(cb);</span>
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L196">            throw new PcepParseException(&quot; ObjectLength is &quot; + objLenIndex);</span>
+        }
+
+<span class="nc" id="L199">        ListIterator&lt;PcepValueType&gt; listIterator = llSubObjects.listIterator();</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L201">            listIterator.next().write(cb);</span>
+        }
+
+        //Update object length now
+<span class="nc" id="L205">        int length = cb.writerIndex() - objStartIndex;</span>
+        //will be helpful during print().
+<span class="nc" id="L207">        iroObjHeader.setObjLen((short) length);</span>
+        // As per RFC the length of object should be
+        // multiples of 4
+<span class="nc" id="L210">        int pad = length % 4;</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        if (pad != 0) {</span>
+<span class="nc" id="L212">            pad = 4 - pad;</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            for (int i = 0; i &lt; pad; i++) {</span>
+<span class="nc" id="L214">                cb.writeByte((byte) 0);</span>
+            }
+<span class="nc" id="L216">            length = length + pad;</span>
+        }
+<span class="nc" id="L218">        cb.setShort(objLenIndex, (short) length);</span>
+<span class="nc" id="L219">        objLenIndex = cb.writerIndex();</span>
+<span class="nc" id="L220">        return objLenIndex;</span>
+    }
+
+    /**
+     * Builder class for PCEP iro object.
+     */
+<span class="nc" id="L226">    public static class Builder implements PcepIroObject.Builder {</span>
+
+<span class="nc" id="L228">        private boolean bIsHeaderSet = false;</span>
+
+        private PcepObjectHeader iroObjHeader;
+<span class="nc" id="L231">        LinkedList&lt;PcepValueType&gt; llSubObjects = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L233">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L236">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepIroObject build() {
+
+<span class="nc bnc" id="L242" title="All 2 branches missed.">            PcepObjectHeader iroObjHeader = this.bIsHeaderSet ? this.iroObjHeader : DEFAULT_IRO_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L245">                iroObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L248" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L249">                iroObjHeader.setIFlag(bIFlag);</span>
+            }
+
+<span class="nc" id="L252">            return new PcepIroObjectVer1(iroObjHeader, this.llSubObjects);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getIroObjHeader() {
+<span class="nc" id="L257">            return this.iroObjHeader;</span>
+        }
+
+        @Override
+        public Builder setIroObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L262">            this.iroObjHeader = obj;</span>
+<span class="nc" id="L263">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L264">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getSubObjects() {
+<span class="nc" id="L269">            return this.llSubObjects;</span>
+        }
+
+        @Override
+        public Builder setSubObjects(LinkedList&lt;PcepValueType&gt; llSubObjects) {
+<span class="nc" id="L274">            this.llSubObjects = llSubObjects;</span>
+<span class="nc" id="L275">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L280">            this.bPFlag = value;</span>
+<span class="nc" id="L281">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L282">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L287">            this.bIFlag = value;</span>
+<span class="nc" id="L288">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L289">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L295">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L296">                .add(&quot;IroObjectHeader&quot;, iroObjHeader)</span>
+<span class="nc" id="L297">                .add(&quot;SubObjects&quot;, llSubObjects).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

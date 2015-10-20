@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ICMP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">ICMP.java</span></div><h1>ICMP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+
+import static org.onlab.packet.PacketUtils.*;
+
+/**
+ * Implements ICMP packet format.
+ *
+ */
+<span class="fc" id="L29">public class ICMP extends BasePacket {</span>
+    protected byte icmpType;
+    protected byte icmpCode;
+    protected short checksum;
+
+    public static final byte TYPE_ECHO_REQUEST = 0x08;
+    public static final byte TYPE_ECHO_REPLY = 0x00;
+    public static final byte SUBTYPE_ECHO_REPLY = 0x00;
+
+    public static final short ICMP_HEADER_LENGTH = 4;
+
+    /**
+     * @return the icmpType
+     */
+    public byte getIcmpType() {
+<span class="fc" id="L44">        return this.icmpType;</span>
+    }
+
+    /**
+     * @param icmpType
+     *            to set
+     * @return this
+     */
+    public ICMP setIcmpType(final byte icmpType) {
+<span class="nc" id="L53">        this.icmpType = icmpType;</span>
+<span class="nc" id="L54">        return this;</span>
+    }
+
+    /**
+     * @return the icmp code
+     */
+    public byte getIcmpCode() {
+<span class="fc" id="L61">        return this.icmpCode;</span>
+    }
+
+    /**
+     * @param icmpCode
+     *            code to set
+     * @return this
+     */
+    public ICMP setIcmpCode(final byte icmpCode) {
+<span class="nc" id="L70">        this.icmpCode = icmpCode;</span>
+<span class="nc" id="L71">        return this;</span>
+    }
+
+    /**
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="fc" id="L78">        return this.checksum;</span>
+    }
+
+    /**
+     * @param checksum
+     *            the checksum to set
+     * @return this
+     */
+    public ICMP setChecksum(final short checksum) {
+<span class="nc" id="L87">        this.checksum = checksum;</span>
+<span class="nc" id="L88">        return this;</span>
+    }
+
+    /**
+     * Serializes the packet. Will compute and set the following fields if they
+     * are set to specific values at the time serialize is called: -checksum : 0
+     * -length : 0
+     */
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L98">        int length = 4;</span>
+<span class="nc" id="L99">        byte[] payloadData = null;</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        if (this.payload != null) {</span>
+<span class="nc" id="L101">            this.payload.setParent(this);</span>
+<span class="nc" id="L102">            payloadData = this.payload.serialize();</span>
+<span class="nc" id="L103">            length += payloadData.length;</span>
+        }
+
+<span class="nc" id="L106">        final byte[] data = new byte[length];</span>
+<span class="nc" id="L107">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="nc" id="L109">        bb.put(this.icmpType);</span>
+<span class="nc" id="L110">        bb.put(this.icmpCode);</span>
+<span class="nc" id="L111">        bb.putShort(this.checksum);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L113">            bb.put(payloadData);</span>
+        }
+
+<span class="nc bnc" id="L116" title="All 4 branches missed.">        if (this.parent != null &amp;&amp; this.parent instanceof IPv4) {</span>
+<span class="nc" id="L117">            ((IPv4) this.parent).setProtocol(IPv4.PROTOCOL_ICMP);</span>
+        }
+
+        // compute checksum if needed
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (this.checksum == 0) {</span>
+<span class="nc" id="L122">            bb.rewind();</span>
+<span class="nc" id="L123">            int accumulation = 0;</span>
+
+<span class="nc bnc" id="L125" title="All 2 branches missed.">            for (int i = 0; i &lt; length / 2; ++i) {</span>
+<span class="nc" id="L126">                accumulation += 0xffff &amp; bb.getShort();</span>
+            }
+            // pad to an even number of shorts
+<span class="nc bnc" id="L129" title="All 2 branches missed.">            if (length % 2 &gt; 0) {</span>
+<span class="nc" id="L130">                accumulation += (bb.get() &amp; 0xff) &lt;&lt; 8;</span>
+            }
+
+<span class="nc" id="L133">            accumulation = (accumulation &gt;&gt; 16 &amp; 0xffff)</span>
+                    + (accumulation &amp; 0xffff);
+<span class="nc" id="L135">            this.checksum = (short) (~accumulation &amp; 0xffff);</span>
+<span class="nc" id="L136">            bb.putShort(2, this.checksum);</span>
+        }
+<span class="nc" id="L138">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L144">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L145">        this.icmpType = bb.get();</span>
+<span class="nc" id="L146">        this.icmpCode = bb.get();</span>
+<span class="nc" id="L147">        this.checksum = bb.getShort();</span>
+
+<span class="nc" id="L149">        this.payload = new Data();</span>
+<span class="nc" id="L150">        this.payload = this.payload.deserialize(data, bb.position(), bb.limit()</span>
+<span class="nc" id="L151">                - bb.position());</span>
+<span class="nc" id="L152">        this.payload.setParent(this);</span>
+<span class="nc" id="L153">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L163">        final int prime = 5807;</span>
+<span class="nc" id="L164">        int result = super.hashCode();</span>
+<span class="nc" id="L165">        result = prime * result + this.icmpType;</span>
+<span class="nc" id="L166">        result = prime * result + this.icmpCode;</span>
+<span class="nc" id="L167">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L168">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L179">            return true;</span>
+        }
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L182">            return false;</span>
+        }
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (!(obj instanceof ICMP)) {</span>
+<span class="nc" id="L185">            return false;</span>
+        }
+<span class="nc" id="L187">        final ICMP other = (ICMP) obj;</span>
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (this.icmpType != other.icmpType) {</span>
+<span class="nc" id="L189">            return false;</span>
+        }
+<span class="nc bnc" id="L191" title="All 2 branches missed.">        if (this.icmpCode != other.icmpCode) {</span>
+<span class="nc" id="L192">            return false;</span>
+        }
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (this.checksum != other.checksum) {</span>
+<span class="nc" id="L195">            return false;</span>
+        }
+<span class="nc" id="L197">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for ICMP packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;ICMP&gt; deserializer() {
+<span class="fc" id="L206">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L207">            checkInput(data, offset, length, ICMP_HEADER_LENGTH);</span>
+
+<span class="fc" id="L209">            ICMP icmp = new ICMP();</span>
+
+<span class="fc" id="L211">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L212">            icmp.icmpType = bb.get();</span>
+<span class="fc" id="L213">            icmp.icmpCode = bb.get();</span>
+<span class="fc" id="L214">            icmp.checksum = bb.getShort();</span>
+
+<span class="fc" id="L216">            icmp.payload = Data.deserializer()</span>
+<span class="fc" id="L217">                    .deserialize(data, bb.position(), bb.limit()</span>
+<span class="fc" id="L218">                            - bb.position());</span>
+<span class="fc" id="L219">            icmp.payload.setParent(icmp);</span>
+<span class="fc" id="L220">            return icmp;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

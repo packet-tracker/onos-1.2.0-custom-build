@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MeterModBuilder.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-meter</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.meter.impl</a> &gt; <span class="el_source">MeterModBuilder.java</span></div><h1>MeterModBuilder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.of.meter.impl;
+
+import org.onosproject.net.meter.Band;
+import org.onosproject.net.meter.Meter;
+import org.onosproject.net.meter.MeterId;
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFMeterFlags;
+import org.projectfloodlight.openflow.protocol.OFMeterMod;
+import org.projectfloodlight.openflow.protocol.OFMeterModCommand;
+import org.projectfloodlight.openflow.protocol.meterband.OFMeterBand;
+import org.projectfloodlight.openflow.protocol.meterband.OFMeterBandDrop;
+import org.projectfloodlight.openflow.protocol.meterband.OFMeterBandDscpRemark;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Builder for a meter modification.
+ */
+public final class MeterModBuilder {
+
+<span class="nc" id="L43">    private final Logger log = getLogger(getClass());</span>
+
+    private final long xid;
+    private final OFFactory factory;
+<span class="nc" id="L47">    private Meter.Unit unit = Meter.Unit.KB_PER_SEC;</span>
+<span class="nc" id="L48">    private boolean burst = false;</span>
+    private Long id;
+    private Collection&lt;Band&gt; bands;
+
+<span class="nc" id="L52">    public MeterModBuilder(long xid, OFFactory factory) {</span>
+<span class="nc" id="L53">        this.xid = xid;</span>
+<span class="nc" id="L54">        this.factory = factory;</span>
+<span class="nc" id="L55">    }</span>
+
+    public static MeterModBuilder builder(long xid, OFFactory factory) {
+<span class="nc" id="L58">        return new MeterModBuilder(xid, factory);</span>
+    }
+
+    public MeterModBuilder withRateUnit(Meter.Unit unit) {
+<span class="nc" id="L62">        this.unit = unit;</span>
+<span class="nc" id="L63">        return this;</span>
+    }
+
+    public MeterModBuilder burst() {
+<span class="nc" id="L67">        this.burst = true;</span>
+<span class="nc" id="L68">        return this;</span>
+    }
+
+    public MeterModBuilder withId(MeterId meterId) {
+<span class="nc" id="L72">        this.id = meterId.id();</span>
+<span class="nc" id="L73">        return this;</span>
+    }
+
+    public MeterModBuilder withBands(Collection&lt;Band&gt; bands) {
+<span class="nc" id="L77">        this.bands = bands;</span>
+<span class="nc" id="L78">        return this;</span>
+    }
+
+    public OFMeterMod add() {
+<span class="nc" id="L82">        validate();</span>
+<span class="nc" id="L83">        OFMeterMod.Builder builder = builderMeterMod();</span>
+<span class="nc" id="L84">        builder.setCommand(OFMeterModCommand.ADD.ordinal());</span>
+<span class="nc" id="L85">        return builder.build();</span>
+    }
+
+    public OFMeterMod remove() {
+<span class="nc" id="L89">        validate();</span>
+<span class="nc" id="L90">        OFMeterMod.Builder builder = builderMeterMod();</span>
+<span class="nc" id="L91">        builder.setCommand(OFMeterModCommand.DELETE.ordinal());</span>
+<span class="nc" id="L92">        return builder.build();</span>
+    }
+
+    public OFMeterMod modify() {
+<span class="nc" id="L96">        validate();</span>
+<span class="nc" id="L97">        OFMeterMod.Builder builder = builderMeterMod();</span>
+<span class="nc" id="L98">        builder.setCommand(OFMeterModCommand.MODIFY.ordinal());</span>
+<span class="nc" id="L99">        return builder.build();</span>
+    }
+
+    private OFMeterMod.Builder builderMeterMod() {
+<span class="nc" id="L103">        OFMeterMod.Builder builder = factory.buildMeterMod();</span>
+<span class="nc" id="L104">        int flags = 0;</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (burst) {</span>
+            // covering loxi short comings.
+<span class="nc" id="L107">            flags |= 1 &lt;&lt; OFMeterFlags.BURST.ordinal();</span>
+        }
+<span class="nc bnc" id="L109" title="All 3 branches missed.">        switch (unit) {</span>
+            case PKTS_PER_SEC:
+<span class="nc" id="L111">                flags |= 1 &lt;&lt; OFMeterFlags.PKTPS.ordinal();</span>
+<span class="nc" id="L112">                break;</span>
+            case KB_PER_SEC:
+<span class="nc" id="L114">                flags |= 1 &lt;&lt; OFMeterFlags.KBPS.ordinal();</span>
+<span class="nc" id="L115">                break;</span>
+            default:
+<span class="nc" id="L117">                log.warn(&quot;Unknown unit type {}&quot;, unit);</span>
+        }
+        //FIXME: THIS WILL CHANGE IN OF1.4 to setBands.
+<span class="nc" id="L120">        builder.setMeters(buildBands());</span>
+<span class="nc" id="L121">        builder.setFlags(flags)</span>
+<span class="nc" id="L122">                .setMeterId(id)</span>
+<span class="nc" id="L123">                .setXid(xid);</span>
+<span class="nc" id="L124">        return builder;</span>
+    }
+
+    private List&lt;OFMeterBand&gt; buildBands() {
+<span class="nc" id="L128">        return bands.stream().map(b -&gt; {</span>
+<span class="nc bnc" id="L129" title="All 3 branches missed.">            switch (b.type()) {</span>
+                case DROP:
+<span class="nc" id="L131">                    OFMeterBandDrop.Builder dropBuilder =</span>
+<span class="nc" id="L132">                            factory.meterBands().buildDrop();</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                    if (burst) {</span>
+<span class="nc" id="L134">                        dropBuilder.setBurstSize(b.burst());</span>
+                    }
+<span class="nc" id="L136">                    dropBuilder.setRate(b.rate());</span>
+<span class="nc" id="L137">                    return dropBuilder.build();</span>
+                case REMARK:
+<span class="nc" id="L139">                    OFMeterBandDscpRemark.Builder remarkBand =</span>
+<span class="nc" id="L140">                            factory.meterBands().buildDscpRemark();</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">                    if (burst) {</span>
+<span class="nc" id="L142">                        remarkBand.setBurstSize(b.burst());</span>
+                    }
+<span class="nc" id="L144">                    remarkBand.setRate(b.rate());</span>
+<span class="nc" id="L145">                    remarkBand.setPrecLevel(b.dropPrecedence());</span>
+<span class="nc" id="L146">                    return remarkBand.build();</span>
+                default:
+<span class="nc" id="L148">                    log.warn(&quot;Unknown band type {}&quot;, b.type());</span>
+<span class="nc" id="L149">                    return null;</span>
+            }
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        }).filter(value -&gt; value != null).collect(Collectors.toList());</span>
+    }
+
+    private void validate() {
+<span class="nc" id="L155">        checkNotNull(id, &quot;id cannot be null&quot;);</span>
+<span class="nc" id="L156">        checkNotNull(bands, &quot;Must have bands&quot;);</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        checkArgument(bands.size() &gt; 0, &quot;Must have at lease one band&quot;);</span>
+<span class="nc" id="L158">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

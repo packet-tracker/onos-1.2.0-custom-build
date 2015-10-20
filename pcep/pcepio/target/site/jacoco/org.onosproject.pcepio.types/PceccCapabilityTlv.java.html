@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PceccCapabilityTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PceccCapabilityTlv.java</span></div><h1>PceccCapabilityTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PceccCapabilityTlv.
+ */
+public class PceccCapabilityTlv implements PcepValueType {
+
+    /*          PCECC CAPABILITY TLV
+     * Reference : draft-zhao-pce-pcep-extension-for-pce-controller-01, section-7.1.1
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |               Type=32         |            Length=4           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             Flags                         |G|L|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+     */
+<span class="fc" id="L43">    protected static final Logger log = LoggerFactory.getLogger(PceccCapabilityTlv.class);</span>
+
+    public static final short TYPE = 32;
+    public static final short LENGTH = 4;
+    public static final int SET = 1;
+    public static final byte LFLAG_CHECK = 0x01;
+    public static final byte GFLAG_CHECK = 0x02;
+
+    private final boolean bGFlag;
+    private final boolean bLFlag;
+
+    private final int rawValue;
+    private final boolean isRawValueSet;
+
+    /**
+     * Constructor to initialize raw Value.
+     *
+     * @param rawValue raw value
+     */
+<span class="fc" id="L62">    public PceccCapabilityTlv(final int rawValue) {</span>
+<span class="fc" id="L63">        this.rawValue = rawValue;</span>
+<span class="fc" id="L64">        this.isRawValueSet = true;</span>
+
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        bLFlag = (rawValue &amp; LFLAG_CHECK) == LFLAG_CHECK;</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">        bGFlag = (rawValue &amp; GFLAG_CHECK) == GFLAG_CHECK;</span>
+<span class="fc" id="L68">    }</span>
+
+    /**
+     * Constructor to initialize G-flag L-flag.
+     * @param bGFlag G-flag
+     * @param bLFlag L-flag
+     */
+<span class="nc" id="L75">    public PceccCapabilityTlv(boolean bGFlag, boolean bLFlag) {</span>
+<span class="nc" id="L76">        this.bGFlag = bGFlag;</span>
+<span class="nc" id="L77">        this.bLFlag = bLFlag;</span>
+<span class="nc" id="L78">        this.rawValue = 0;</span>
+<span class="nc" id="L79">        this.isRawValueSet = false;</span>
+<span class="nc" id="L80">    }</span>
+
+    /**
+     * Returns newly created PceccCapabilityTlv object.
+     *
+     * @param raw value
+     * @return object of Pcecc Capability Tlv
+     */
+    public static PceccCapabilityTlv of(final int raw) {
+<span class="fc" id="L89">        return new PceccCapabilityTlv(raw);</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L94">        return PcepVersion.PCEP_1;</span>
+    }
+
+    /**
+     * Returns G-flag.
+     * @return bGFlag G-flag
+     */
+    public boolean getGFlag() {
+<span class="nc" id="L102">        return bGFlag;</span>
+    }
+
+    /**
+     * Returns L-flag.
+     * @return bLFlag L-flag
+     */
+    public boolean getLFlag() {
+<span class="nc" id="L110">        return bLFlag;</span>
+    }
+
+    /**
+     * Returns the raw value.
+     * @return rawValue Flags
+     */
+    public int getInt() {
+<span class="nc" id="L118">        return rawValue;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L123">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L128">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (isRawValueSet) {</span>
+<span class="fc" id="L134">            return Objects.hash(rawValue);</span>
+        } else {
+<span class="nc" id="L136">            return Objects.hash(bLFlag, bGFlag);</span>
+        }
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L142" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L143">            return true;</span>
+        }
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (obj instanceof PceccCapabilityTlv) {</span>
+<span class="fc" id="L146">            PceccCapabilityTlv other = (PceccCapabilityTlv) obj;</span>
+<span class="pc bpc" id="L147" title="1 of 2 branches missed.">            if (isRawValueSet) {</span>
+<span class="fc" id="L148">                return Objects.equals(this.rawValue, other.rawValue);</span>
+            } else {
+<span class="nc bnc" id="L150" title="All 4 branches missed.">                return Objects.equals(this.bGFlag, other.bGFlag) &amp;&amp; Objects.equals(this.bLFlag, other.bLFlag);</span>
+            }
+        }
+<span class="fc" id="L153">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L158">        int iLenStartIndex = c.writerIndex();</span>
+<span class="fc" id="L159">        int temp = 0;</span>
+<span class="fc" id="L160">        c.writeShort(TYPE);</span>
+<span class="fc" id="L161">        c.writeShort(LENGTH);</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">        if (isRawValueSet) {</span>
+<span class="fc" id="L163">            c.writeInt(rawValue);</span>
+        } else {
+<span class="nc bnc" id="L165" title="All 2 branches missed.">            if (bGFlag) {</span>
+<span class="nc" id="L166">                temp = temp | GFLAG_CHECK;</span>
+            }
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            if (bLFlag) {</span>
+<span class="nc" id="L169">                temp = temp | LFLAG_CHECK;</span>
+            }
+<span class="nc" id="L171">            c.writeInt(temp);</span>
+        }
+<span class="fc" id="L173">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads channel buffer and returns object of PceccCapabilityTlv.
+     *
+     * @param c input channel buffer
+     * @return object of PceccCapabilityTlv
+     */
+    public static PceccCapabilityTlv read(ChannelBuffer c) {
+<span class="nc" id="L183">        return PceccCapabilityTlv.of(c.readInt());</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L188">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L189">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L190">                .add(&quot;Length&quot;, LENGTH)</span>
+<span class="fc" id="L191">                .add(&quot;Value&quot;, rawValue)</span>
+<span class="fc" id="L192">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

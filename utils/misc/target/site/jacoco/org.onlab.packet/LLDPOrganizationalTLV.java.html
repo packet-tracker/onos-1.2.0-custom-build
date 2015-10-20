@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LLDPOrganizationalTLV.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">LLDPOrganizationalTLV.java</span></div><h1>LLDPOrganizationalTLV.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+/**
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ **/
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.util.Arrays;
+
+/**
+ * The class representing LLDP Organizationally Specific TLV.
+ *
+ */
+public class LLDPOrganizationalTLV extends LLDPTLV {
+    public static final int OUI_LENGTH = 3;
+    public static final int SUBTYPE_LENGTH = 1;
+    public static final byte ORGANIZATIONAL_TLV_TYPE = 127;
+    public static final int MAX_INFOSTRING_LENGTH = 507;
+
+    protected byte[] oui;
+    protected byte subType;
+    private byte[] infoString;
+
+<span class="fc" id="L50">    public LLDPOrganizationalTLV() {</span>
+<span class="fc" id="L51">        this.type = LLDPOrganizationalTLV.ORGANIZATIONAL_TLV_TYPE;</span>
+<span class="fc" id="L52">    }</span>
+
+    /**
+     * Set the value of OUI.
+     *
+     * @param oui
+     *            The value of OUI to be set.
+     * @return This LLDP Organizationally Specific TLV.
+     */
+    public LLDPOrganizationalTLV setOUI(final byte[] oui) {
+<span class="pc bpc" id="L62" title="1 of 2 branches missed.">        if (oui.length != LLDPOrganizationalTLV.OUI_LENGTH) {</span>
+<span class="nc" id="L63">            throw new IllegalArgumentException(&quot;The length of OUI must be &quot;</span>
+                    + LLDPOrganizationalTLV.OUI_LENGTH + &quot;, but it is &quot;
+                    + oui.length);
+        }
+<span class="fc" id="L67">        this.oui = Arrays.copyOf(oui, oui.length);</span>
+<span class="fc" id="L68">        return this;</span>
+    }
+
+    /**
+     * Returns the value of the OUI.
+     *
+     * @return The value of the OUI .
+     */
+    public byte[] getOUI() {
+<span class="nc" id="L77">        return Arrays.copyOf(this.oui, this.oui.length);</span>
+    }
+
+    /**
+     * Set the value of sub type.
+     *
+     * @param subType
+     *            The value of sub type to be set.
+     * @return This LLDP Organizationally Specific TLV.
+     */
+    public LLDPOrganizationalTLV setSubType(final byte subType) {
+<span class="fc" id="L88">        this.subType = subType;</span>
+<span class="fc" id="L89">        return this;</span>
+    }
+
+    /**
+     * Returns the value of the sub type.
+     *
+     * @return The value of the sub type.
+     */
+    public byte getSubType() {
+<span class="nc" id="L98">        return this.subType;</span>
+    }
+
+    /**
+     * Set the value of information string.
+     *
+     * @param infoString
+     *            the byte array of the value of information string.
+     * @return This LLDP Organizationally Specific TLV.
+     */
+    public LLDPOrganizationalTLV setInfoString(final byte[] infoString) {
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        if (infoString.length &gt; LLDPOrganizationalTLV.MAX_INFOSTRING_LENGTH) {</span>
+<span class="nc" id="L110">            throw new IllegalArgumentException(</span>
+                    &quot;The length of infoString cannot exceed &quot;
+                            + LLDPOrganizationalTLV.MAX_INFOSTRING_LENGTH);
+        }
+<span class="fc" id="L114">        this.infoString = Arrays.copyOf(infoString, infoString.length);</span>
+<span class="fc" id="L115">        return this;</span>
+    }
+
+    /**
+     * Set the value of information string. The String value is automatically
+     * converted into byte array with UTF-8 encoding.
+     *
+     * @param infoString
+     *            the String value of information string.
+     * @return This LLDP Organizationally Specific TLV.
+     */
+    public LLDPOrganizationalTLV setInfoString(final String infoString) {
+<span class="nc" id="L127">        final byte[] infoStringBytes = infoString.getBytes(Charset</span>
+<span class="nc" id="L128">                .forName(&quot;UTF-8&quot;));</span>
+<span class="nc" id="L129">        return this.setInfoString(infoStringBytes);</span>
+    }
+
+    /**
+     * Returns the value of information string.
+     *
+     * @return the value of information string.
+     */
+    public byte[] getInfoString() {
+<span class="nc" id="L138">        return Arrays.copyOf(this.infoString, this.infoString.length);</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        if (this.type != LLDPOrganizationalTLV.ORGANIZATIONAL_TLV_TYPE) {</span>
+<span class="nc" id="L144">            return super.serialize();</span>
+        }
+<span class="nc" id="L146">        final int valueLength = LLDPOrganizationalTLV.OUI_LENGTH</span>
+                + LLDPOrganizationalTLV.SUBTYPE_LENGTH + this.infoString.length;
+<span class="nc" id="L148">        this.value = new byte[valueLength];</span>
+<span class="nc" id="L149">        final ByteBuffer bb = ByteBuffer.wrap(this.value);</span>
+<span class="nc" id="L150">        bb.put(this.oui);</span>
+<span class="nc" id="L151">        bb.put(this.subType);</span>
+<span class="nc" id="L152">        bb.put(this.infoString);</span>
+<span class="nc" id="L153">        return super.serialize();</span>
+    }
+
+    @Override
+    public LLDPTLV deserialize(final ByteBuffer bb) throws DeserializationException {
+<span class="fc" id="L158">        super.deserialize(bb);</span>
+<span class="fc bfc" id="L159" title="All 2 branches covered.">        if (this.getType() != LLDPOrganizationalTLV.ORGANIZATIONAL_TLV_TYPE) {</span>
+<span class="fc" id="L160">            return this;</span>
+        }
+
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">        if (this.getLength() &lt;= OUI_LENGTH + SUBTYPE_LENGTH) {</span>
+<span class="nc" id="L164">            throw new DeserializationException(</span>
+                    &quot;TLV length is less than required for organizational TLV&quot;);
+        }
+
+<span class="fc" id="L168">        final ByteBuffer optionalField = ByteBuffer.wrap(this.value);</span>
+
+<span class="fc" id="L170">        final byte[] oui = new byte[LLDPOrganizationalTLV.OUI_LENGTH];</span>
+<span class="fc" id="L171">        optionalField.get(oui);</span>
+<span class="fc" id="L172">        this.setOUI(oui);</span>
+
+<span class="fc" id="L174">        this.setSubType(optionalField.get());</span>
+
+<span class="fc" id="L176">        final byte[] infoString = new byte[this.getLength()</span>
+                                           - LLDPOrganizationalTLV.OUI_LENGTH
+                                           - LLDPOrganizationalTLV.SUBTYPE_LENGTH];
+<span class="fc" id="L179">        optionalField.get(infoString);</span>
+<span class="fc" id="L180">        this.setInfoString(infoString);</span>
+<span class="fc" id="L181">        return this;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L186">        final int prime = 1423;</span>
+<span class="nc" id="L187">        int result = 1;</span>
+<span class="nc" id="L188">        result = prime * result + this.type;</span>
+<span class="nc" id="L189">        result = prime * result + this.length;</span>
+<span class="nc" id="L190">        result = prime * result + Arrays.hashCode(this.oui);</span>
+<span class="nc" id="L191">        result = prime * result + this.subType;</span>
+<span class="nc" id="L192">        result = prime * result + Arrays.hashCode(this.infoString);</span>
+<span class="nc" id="L193">        return result;</span>
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (o == this) {</span>
+<span class="nc" id="L199">            return true;</span>
+        }
+
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if (!(o instanceof LLDPOrganizationalTLV)) {</span>
+<span class="nc" id="L203">            return false;</span>
+        }
+
+<span class="nc" id="L206">        final LLDPOrganizationalTLV other = (LLDPOrganizationalTLV) o;</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        if (this.type != other.type) {</span>
+<span class="nc" id="L208">            return false;</span>
+        }
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (this.length != other.length) {</span>
+<span class="nc" id="L211">            return false;</span>
+        }
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (!Arrays.equals(this.oui, other.oui)) {</span>
+<span class="nc" id="L214">            return false;</span>
+        }
+<span class="nc bnc" id="L216" title="All 2 branches missed.">        if (this.subType != other.subType) {</span>
+<span class="nc" id="L217">            return false;</span>
+        }
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        if (!Arrays.equals(this.infoString, other.infoString)) {</span>
+<span class="nc" id="L220">            return false;</span>
+        }
+
+<span class="nc" id="L223">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

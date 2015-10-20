@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AbstractMapper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.exceptions</a> &gt; <span class="el_source">AbstractMapper.java</span></div><h1>AbstractMapper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.exceptions;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import javax.ws.rs.core.Response;
+import javax.ws.rs.ext.ExceptionMapper;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+
+/**
+ * Base exception mapper implementation.
+ */
+<span class="fc" id="L29">public abstract class AbstractMapper&lt;E extends Throwable&gt; implements ExceptionMapper&lt;E&gt; {</span>
+
+    /**
+     * Returns the response status to be given when the exception occurs.
+     *
+     * @return response status
+     */
+    protected abstract Response.Status responseStatus();
+
+    @Override
+    public Response toResponse(E exception) {
+<span class="fc" id="L40">        return response(responseStatus(), exception).build();</span>
+    }
+
+    /**
+     * Produces a response builder primed with the supplied status code
+     * and JSON entity with the status code and exception message.
+     *
+     * @param status    response status
+     * @param exception exception to encode
+     * @return response builder
+     */
+    protected Response.ResponseBuilder response(Response.Status status,
+                                                Throwable exception) {
+<span class="fc" id="L53">        ObjectMapper mapper = new ObjectMapper();</span>
+<span class="fc" id="L54">        String message = messageFrom(exception);</span>
+<span class="fc" id="L55">        ObjectNode result = mapper.createObjectNode()</span>
+<span class="fc" id="L56">                .put(&quot;code&quot;, status.getStatusCode())</span>
+<span class="fc" id="L57">                .put(&quot;message&quot;, message);</span>
+<span class="fc" id="L58">        return Response.status(status).entity(result.toString());</span>
+    }
+
+    /**
+     * Produces a response message from the supplied exception. Either it will
+     * use the exception message, if there is one, or it will use the top
+     * stack-frame message.
+     *
+     * @param exception exception from which to produce a message
+     * @return response message
+     */
+    protected String messageFrom(Throwable exception) {
+<span class="fc bfc" id="L70" title="All 2 branches covered.">        if (isNullOrEmpty(exception.getMessage())) {</span>
+<span class="fc" id="L71">            StackTraceElement[] trace = exception.getStackTrace();</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">            return trace.length == 0 ? &quot;Unknown error&quot; : trace[0].toString();</span>
+        }
+<span class="fc" id="L74">        return exception.getMessage();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepInitiateMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepInitiateMsgVer1.java</span></div><h1>PcepInitiateMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcInitiatedLspRequest;
+import org.onosproject.pcepio.protocol.PcepAttribute;
+import org.onosproject.pcepio.protocol.PcepEndPointsObject;
+import org.onosproject.pcepio.protocol.PcepEroObject;
+import org.onosproject.pcepio.protocol.PcepInitiateMsg;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP initiate message.
+ */
+class PcepInitiateMsgVer1 implements PcepInitiateMsg {
+
+<span class="fc" id="L45">    protected static final Logger log = LoggerFactory.getLogger(PcepInitiateMsgVer1.class);</span>
+
+    // Ref : PCE initiated tunnel setup draft-ietf-pce-pce-initiated-lsp-03, section 5.1
+    /*      &lt;PCInitiate Message&gt;             ::= &lt;Common Header&gt;
+     *                                           &lt;PCE-initiated-lsp-list&gt;
+     *    Where:
+     *      &lt;PCE-initiated-lsp-list&gt;          ::= &lt;PCE-initiated-lsp-request&gt;[&lt;PCE-initiated-lsp-list&gt;]
+     *      &lt;PCE-initiated-lsp-request&gt;       ::= (&lt;PCE-initiated-lsp-instantiation&gt;|&lt;PCE-initiated-lsp-deletion&gt;)
+     *      &lt;PCE-initiated-lsp-instantiation&gt; ::= &lt;SRP&gt;
+     *                                            &lt;LSP&gt;
+     *                                            &lt;END-POINTS&gt;
+     *                                            &lt;ERO&gt;
+     *                                            [&lt;attribute-list&gt;]
+     *     &lt;PCE-initiated-lsp-deletion&gt;      ::= &lt;SRP&gt;
+     *                                           &lt;LSP&gt;
+     */
+
+    static final byte PACKET_VERSION = 1;
+    /* considering LspDelete Request PcInitiate msg will contain
+     * common header
+     * srp object
+     * lsp object
+     * so min length for this can be
+     * PACKET_MINIMUM_LENGTH = CommonHeaderLen(4)+SrpObjectMinLen(12)+LspObjectMinLen(8)
+     */
+    public static final short PACKET_MINIMUM_LENGTH = 24;
+    public static final short MINIMUM_COMMON_HEADER_LENGTH = 4;
+<span class="fc" id="L72">    public static final PcepType MSG_TYPE = PcepType.INITIATE;</span>
+    private LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList;
+<span class="fc" id="L74">    public static final PcepInitiateMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader class for reading of Pcep initiate message from channel buffer.
+     */
+<span class="fc" id="L79">    static class Reader implements PcepMessageReader&lt;PcepInitiateMsg&gt; {</span>
+
+        LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList;
+
+        @Override
+        public PcepInitiateMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L87">                return null;</span>
+            }
+
+<span class="fc" id="L90">            llPcInitiatedLspRequestList = new LinkedList&lt;&gt;();</span>
+
+<span class="fc" id="L92">            byte version = cb.readByte();</span>
+<span class="fc" id="L93">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L95">                throw new PcepParseException(&quot;Wrong version. Expected=PcepVersion.PCEP_1(1), received=&quot; + version);</span>
+            }
+<span class="fc" id="L97">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L99">                throw new PcepParseException(&quot;Wrong type. Expected=PcepType.INITIATE(12), recived=&quot; + type);</span>
+            }
+<span class="fc" id="L101">            short length = cb.readShort();</span>
+
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L104">                throw new PcepParseException(&quot;Wrong length. Initiate message length expected to be &gt;= &quot;</span>
+                        + PACKET_MINIMUM_LENGTH + &quot;, but received=&quot; + length);
+            }
+
+<span class="fc" id="L108">            log.debug(&quot;reading PcInitiate message of length &quot; + length);</span>
+
+            // parse Start initiate/deletion list
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">            if (!parsePcInitiatedLspRequestList(cb)) {</span>
+<span class="nc" id="L112">                throw new PcepParseException(&quot;Parsing PCE-initiated-lsp-Request-list failed&quot;);</span>
+            }
+
+<span class="fc" id="L115">            return new PcepInitiateMsgVer1(llPcInitiatedLspRequestList);</span>
+        }
+
+        /**
+         * To parse PcInitiatedLspRequestList from PcInitiate Message.
+         *
+         * @param cb of type channel buffer
+         * @return true if parsing PcInitiatedLspRequestList is success, false otherwise
+         * @throws PcepParseException while parsing from channel buffer
+         */
+        public boolean parsePcInitiatedLspRequestList(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L127">            boolean isDelLspRequest = false;</span>
+
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">            if (cb == null) {</span>
+<span class="nc" id="L130">                throw new PcepParseException(&quot;Channel buffer is empty&quot;);</span>
+            }
+
+<span class="fc bfc" id="L133" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+<span class="fc" id="L134">                PcInitiatedLspRequest pceInitLspReq = new PcInitiatedLspRequestVer1();</span>
+
+                //store SRP object
+                PcepSrpObject srpObj;
+<span class="fc" id="L138">                srpObj = PcepSrpObjectVer1.read(cb);</span>
+<span class="fc" id="L139">                pceInitLspReq.setSrpObject(srpObj);</span>
+<span class="fc" id="L140">                isDelLspRequest = srpObj.getRFlag();</span>
+
+                //store LSP object
+                PcepLspObject lspObj;
+<span class="fc" id="L144">                lspObj = PcepLspObjectVer1.read(cb);</span>
+<span class="fc" id="L145">                pceInitLspReq.setLspObject(lspObj);</span>
+
+                /* if R bit will be set then pcInitiate msg will contain only LSp and SRP objects
+                 * so if R bit is not set then we should read for Ero and EndPoint objects also.
+                 */
+<span class="fc bfc" id="L150" title="All 2 branches covered.">                if (!isDelLspRequest) {</span>
+
+                    //store EndPoint object
+                    PcepEndPointsObject endPointObj;
+<span class="fc" id="L154">                    endPointObj = PcepEndPointsObjectVer1.read(cb);</span>
+<span class="fc" id="L155">                    pceInitLspReq.setEndPointsObject(endPointObj);</span>
+
+                    //store ERO object
+                    PcepEroObject eroObj;
+<span class="fc" id="L159">                    eroObj = PcepEroObjectVer1.read(cb);</span>
+<span class="fc" id="L160">                    pceInitLspReq.setEroObject(eroObj);</span>
+
+<span class="fc bfc" id="L162" title="All 2 branches covered.">                    if (cb.readableBytes() &gt; MINIMUM_COMMON_HEADER_LENGTH) {</span>
+<span class="fc" id="L163">                        pceInitLspReq.setPcepAttribute(PcepAttributeVer1.read(cb));</span>
+                    }
+                }
+<span class="fc" id="L166">                llPcInitiatedLspRequestList.add(pceInitLspReq);</span>
+<span class="fc" id="L167">            }</span>
+<span class="fc" id="L168">            return true;</span>
+        }
+    }
+
+    /**
+     * Constructor to initialize PcInitiatedLspRequest.
+     *
+     * @param llPcInitiatedLspRequestList list of PcInitiatedLspRequest
+     */
+<span class="fc" id="L177">    PcepInitiateMsgVer1(LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList) {</span>
+
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">        if (llPcInitiatedLspRequestList == null) {</span>
+<span class="nc" id="L180">            throw new NullPointerException(&quot;PcInitiatedLspRequestList cannot be null.&quot;);</span>
+        }
+<span class="fc" id="L182">        this.llPcInitiatedLspRequestList = llPcInitiatedLspRequestList;</span>
+<span class="fc" id="L183">    }</span>
+
+    /**
+     * Builder class for PCEP initiate message.
+     */
+<span class="nc" id="L188">    static class Builder implements PcepInitiateMsg.Builder {</span>
+
+        // Pcep initiate message fields
+        LinkedList&lt;PcInitiatedLspRequest&gt; llPcInitiatedLspRequestList;
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L195">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L200">            return PcepType.INITIATE;</span>
+        }
+
+        @Override
+        public PcepInitiateMsg build() {
+<span class="nc" id="L205">            return new PcepInitiateMsgVer1(this.llPcInitiatedLspRequestList);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcInitiatedLspRequest&gt; getPcInitiatedLspRequestList() {
+<span class="nc" id="L210">            return this.llPcInitiatedLspRequestList;</span>
+        }
+
+        @Override
+        public Builder setPcInitiatedLspRequestList(LinkedList&lt;PcInitiatedLspRequest&gt; ll) {
+<span class="nc" id="L215">            this.llPcInitiatedLspRequestList = ll;</span>
+<span class="nc" id="L216">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L222">        WRITER.write(cb, this);</span>
+<span class="fc" id="L223">    }</span>
+
+<span class="fc" id="L225">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer class for writing pcep initiate message to channel buffer.
+     */
+<span class="fc" id="L230">    static class Writer implements PcepMessageWriter&lt;PcepInitiateMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepInitiateMsgVer1 message) throws PcepParseException {
+
+<span class="fc" id="L235">            boolean isDelLspRequest = false;</span>
+<span class="fc" id="L236">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="fc" id="L238">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+            // message type 0xC
+<span class="fc" id="L240">            cb.writeByte(MSG_TYPE.getType());</span>
+            // length is length of variable message, will be updated at the end
+            // Store the position of message
+            // length in buffer
+<span class="fc" id="L244">            int msgLenIndex = cb.writerIndex();</span>
+<span class="fc" id="L245">            cb.writeShort(0);</span>
+
+<span class="fc" id="L247">            ListIterator&lt;PcInitiatedLspRequest&gt; listIterator = message.llPcInitiatedLspRequestList.listIterator();</span>
+
+<span class="fc bfc" id="L249" title="All 2 branches covered.">            while (listIterator.hasNext()) {</span>
+
+<span class="fc" id="L251">                PcInitiatedLspRequest listReq = listIterator.next();</span>
+
+                //Srp Object is mandatory
+<span class="fc" id="L254">                PcepSrpObject srpObj = listReq.getSrpObject();</span>
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">                if (srpObj != null) {</span>
+<span class="fc" id="L256">                    isDelLspRequest = srpObj.getRFlag();</span>
+<span class="fc" id="L257">                    srpObj.write(cb);</span>
+                } else {
+<span class="nc" id="L259">                    throw new PcepParseException(&quot;SRP Object is mandatory for PcInitiate message.&quot;);</span>
+                }
+
+                //LSP Object is mandatory
+<span class="fc" id="L263">                PcepLspObject lspObj = listReq.getLspObject();</span>
+<span class="pc bpc" id="L264" title="1 of 2 branches missed.">                if (lspObj != null) {</span>
+<span class="fc" id="L265">                    lspObj.write(cb);</span>
+                } else {
+<span class="nc" id="L267">                    throw new PcepParseException(&quot;LSP Object is mandatory for PcInitiate message.&quot;);</span>
+                }
+
+                /* if R bit will be set then pcInitiate msg will contain only LSp and SRP objects
+                 * so if R bit is not set then we should read for Ero and EndPoint objects also.
+                 */
+
+<span class="fc bfc" id="L274" title="All 2 branches covered.">                if (!isDelLspRequest) {</span>
+
+                    //EndPoints object is mandatory
+<span class="fc" id="L277">                    PcepEndPointsObject endPointObj = listReq.getEndPointsObject();</span>
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">                    if (endPointObj != null) {</span>
+<span class="fc" id="L279">                        endPointObj.write(cb);</span>
+                    } else {
+<span class="nc" id="L281">                        throw new PcepParseException(&quot;End points Object is mandatory for PcInitiate message.&quot;);</span>
+                    }
+
+                    //Ero object is mandatory
+<span class="fc" id="L285">                    PcepEroObject eroObj = listReq.getEroObject();</span>
+<span class="pc bpc" id="L286" title="1 of 2 branches missed.">                    if (eroObj != null) {</span>
+<span class="fc" id="L287">                        eroObj.write(cb);</span>
+                    } else {
+<span class="nc" id="L289">                        throw new PcepParseException(&quot;ERO Object is mandatory for PcInitiate message.&quot;);</span>
+                    }
+
+                    //PcepAttribute is optional
+<span class="fc" id="L293">                    PcepAttribute pcepAttribute = listReq.getPcepAttribute();</span>
+<span class="fc bfc" id="L294" title="All 2 branches covered.">                    if (pcepAttribute != null) {</span>
+<span class="fc" id="L295">                        pcepAttribute.write(cb);</span>
+                    }
+                }
+<span class="fc" id="L298">            }</span>
+
+            // PCInitiate message length field
+<span class="fc" id="L301">            int length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L302">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L303">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L308">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L313">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcInitiatedLspRequest&gt; getPcInitiatedLspRequestList() {
+<span class="nc" id="L318">        return this.llPcInitiatedLspRequestList;</span>
+    }
+
+    @Override
+    public void setPcInitiatedLspRequestList(LinkedList&lt;PcInitiatedLspRequest&gt; ll) {
+<span class="nc" id="L323">        this.llPcInitiatedLspRequestList = ll;</span>
+<span class="nc" id="L324">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L328">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L329">                .add(&quot;PcInitiaitedLspRequestList&quot;, llPcInitiatedLspRequestList)</span>
+<span class="nc" id="L330">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

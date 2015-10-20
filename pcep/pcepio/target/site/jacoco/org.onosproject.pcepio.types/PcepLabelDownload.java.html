@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelDownload.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepLabelDownload.java</span></div><h1>PcepLabelDownload.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.LinkedList;
+
+import org.onosproject.pcepio.protocol.PcepLabelObject;
+import org.onosproject.pcepio.protocol.PcepLspObject;
+import org.onosproject.pcepio.protocol.PcepSrpObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Label.
+ * REference :draft-zhao-pce-pcep-extension-for-pce-controller-01.
+ */
+<span class="fc" id="L32">public class PcepLabelDownload {</span>
+
+<span class="fc" id="L34">    protected static final Logger log = LoggerFactory.getLogger(PcepLabelDownload.class);</span>
+
+    //PCEP SPR Object
+    private PcepSrpObject srpObject;
+    //PCEP LSP Object
+    private PcepLspObject lspObject;
+    //LinkList of Labels
+    private LinkedList&lt;PcepLabelObject&gt; llLabelList;
+
+    /**
+     * Returns SRP Object.
+     *
+     * @return PCEP SRP Object
+     */
+    public PcepSrpObject getSrpObject() {
+<span class="fc" id="L49">        return srpObject;</span>
+    }
+
+    /**
+     * Sets the Pcep SRP Object.
+     *
+     * @param srpobj PCEP SRP Object
+     */
+    public void setSrpObject(PcepSrpObject srpobj) {
+<span class="fc" id="L58">        this.srpObject = srpobj;</span>
+<span class="fc" id="L59">    }</span>
+
+    /**
+     * Returns LSP Object.
+     *
+     * @return PCEP LSP Object
+     */
+    public PcepLspObject getLspObject() {
+<span class="fc" id="L67">        return lspObject;</span>
+    }
+
+    /**
+     * Sets the Pcep LSP Object.
+     *
+     * @param lspObject PCEP LSP Object
+     */
+    public void setLspObject(PcepLspObject lspObject) {
+<span class="fc" id="L76">        this.lspObject = lspObject;</span>
+<span class="fc" id="L77">    }</span>
+
+    /**
+     * Returns a list of labels.
+     *
+     * @return llLabelList list of pcep label objects
+     */
+    public LinkedList&lt;PcepLabelObject&gt; getLabelList() {
+<span class="fc" id="L85">        return llLabelList;</span>
+    }
+
+    /**
+     * set the llLabelList list of type PcepLableObject.
+     *
+     * @param llLabelList list of pcep label objects
+     */
+    public void setLabelList(LinkedList&lt;PcepLabelObject&gt; llLabelList) {
+<span class="fc" id="L94">        this.llLabelList = llLabelList;</span>
+<span class="fc" id="L95">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L99">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L100">                .add(&quot;SrpObject&quot;, srpObject)</span>
+<span class="nc" id="L101">                .add(&quot;LspObject&quot;, lspObject)</span>
+<span class="nc" id="L102">                .add(&quot;LabelObjectList&quot;, llLabelList)</span>
+<span class="nc" id="L103">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

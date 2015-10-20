@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OchSignal.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">OchSignal.java</span></div><h1>OchSignal.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import com.google.common.base.MoreObjects;
+import org.onlab.util.Frequency;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Implementation of Lambda representing OCh (Optical Channel) Signal.
+ *
+ * &lt;p&gt;
+ * See ITU G.709 &quot;Interfaces for the Optical Transport Network (OTN)&quot;.
+ * &lt;/p&gt;
+ */
+public class OchSignal implements Lambda {
+
+<span class="fc" id="L35">    public static final Frequency CENTER_FREQUENCY = Frequency.ofTHz(193.1);</span>
+<span class="fc" id="L36">    public static final Frequency FLEX_GRID_SLOT = Frequency.ofGHz(12.5);</span>
+<span class="fc" id="L37">    private static final GridType DEFAULT_OCH_GRIDTYPE = GridType.DWDM;</span>
+<span class="fc" id="L38">    private static final ChannelSpacing DEFAULT_CHANNEL_SPACING = ChannelSpacing.CHL_50GHZ;</span>
+
+
+    private final GridType gridType;
+    private final ChannelSpacing channelSpacing;
+    // Frequency = 193.1 THz + spacingMultiplier * channelSpacing
+    private final int spacingMultiplier;
+    // Slot width = slotGranularity * 12.5 GHz
+    private final int slotGranularity;
+
+    /**
+     * Creates an instance with the specified arguments.
+     * It it recommended to use {@link Lambda#ochSignal(GridType, ChannelSpacing, int, int)}
+     * unless you want to use the concrete type, OchSignal, directly.
+     *
+     * @param gridType          grid type
+     * @param channelSpacing    channel spacing
+     * @param spacingMultiplier channel spacing multiplier
+     * @param slotGranularity   slot width granularity
+     */
+    public OchSignal(GridType gridType, ChannelSpacing channelSpacing,
+<span class="fc" id="L59">              int spacingMultiplier, int slotGranularity) {</span>
+<span class="fc" id="L60">        this.gridType = checkNotNull(gridType);</span>
+<span class="fc" id="L61">        this.channelSpacing = checkNotNull(channelSpacing);</span>
+        // Negative values are permitted for spacingMultiplier
+<span class="fc" id="L63">        this.spacingMultiplier = spacingMultiplier;</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        checkArgument(slotGranularity &gt; 0, &quot;slotGranularity must be larger than 0, received %s&quot;, slotGranularity);</span>
+<span class="fc" id="L65">        this.slotGranularity = slotGranularity;</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * Create OCh signal from channel number.
+     *
+     * @param channel channel number
+     * @param maxFrequency maximum frequency
+     * @param grid grid spacing frequency
+     */
+<span class="nc" id="L75">    public OchSignal(int channel, Frequency maxFrequency, Frequency grid) {</span>
+        // Calculate center frequency
+<span class="nc" id="L77">        Frequency centerFrequency = maxFrequency.subtract(grid.multiply(channel - 1));</span>
+
+<span class="nc" id="L79">        this.gridType = DEFAULT_OCH_GRIDTYPE;</span>
+<span class="nc" id="L80">        this.channelSpacing = DEFAULT_CHANNEL_SPACING;</span>
+<span class="nc" id="L81">        this.spacingMultiplier = (int) (centerFrequency.subtract(OchSignal.CENTER_FREQUENCY).asHz() / grid.asHz());</span>
+<span class="nc" id="L82">        this.slotGranularity = (int) Math.round((double) grid.asHz() / ChannelSpacing.CHL_12P5GHZ.frequency().asHz());</span>
+<span class="nc" id="L83">    }</span>
+
+<span class="nc" id="L85">    public OchSignal(Frequency centerFrequency, ChannelSpacing channelSpacing, int slotGranularity) {</span>
+<span class="nc" id="L86">        this.gridType = DEFAULT_OCH_GRIDTYPE;</span>
+<span class="nc" id="L87">        this.channelSpacing = channelSpacing;</span>
+<span class="nc" id="L88">        this.spacingMultiplier = (int) Math.round((double) centerFrequency.</span>
+<span class="nc" id="L89">                subtract(OchSignal.CENTER_FREQUENCY).asHz() / channelSpacing().frequency().asHz());</span>
+<span class="nc" id="L90">        this.slotGranularity = slotGranularity;</span>
+<span class="nc" id="L91">    }</span>
+
+    /**
+     * Returns grid type.
+     *
+     * @return grid type
+     */
+    public GridType gridType() {
+<span class="nc" id="L99">        return gridType;</span>
+    }
+
+    /**
+     * Returns channel spacing.
+     *
+     * @return channel spacing
+     */
+    public ChannelSpacing channelSpacing() {
+<span class="nc" id="L108">        return channelSpacing;</span>
+    }
+
+    /**
+     * Returns spacing multiplier.
+     *
+     * @return spacing multiplier
+     */
+    public int spacingMultiplier() {
+<span class="nc" id="L117">        return spacingMultiplier;</span>
+    }
+
+    /**
+     * Returns slow width granularity.
+     *
+     * @return slow width granularity
+     */
+    public int slotGranularity() {
+<span class="nc" id="L126">        return slotGranularity;</span>
+    }
+
+    /**
+     * Returns central frequency in MHz.
+     *
+     * @return frequency in MHz
+     */
+    public Frequency centralFrequency() {
+<span class="nc" id="L135">        return CENTER_FREQUENCY.add(channelSpacing().frequency().multiply(spacingMultiplier));</span>
+    }
+
+    /**
+     * Returns slot width.
+     *
+     * @return slot width
+     */
+    public Frequency slotWidth() {
+<span class="nc" id="L144">        return FLEX_GRID_SLOT.multiply(slotGranularity);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L149">        return Objects.hash(gridType, channelSpacing, spacingMultiplier, slotGranularity);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L155">            return true;</span>
+        }
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (!(obj instanceof OchSignal)) {</span>
+<span class="fc" id="L158">            return false;</span>
+        }
+<span class="fc" id="L160">        final OchSignal other = (OchSignal) obj;</span>
+<span class="fc bfc" id="L161" title="All 2 branches covered.">        return Objects.equals(this.gridType, other.gridType)</span>
+<span class="fc bfc" id="L162" title="All 2 branches covered.">                &amp;&amp; Objects.equals(this.channelSpacing, other.channelSpacing)</span>
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">                &amp;&amp; Objects.equals(this.spacingMultiplier, other.spacingMultiplier)</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">                &amp;&amp; Objects.equals(this.slotGranularity, other.slotGranularity);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L169">        return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L170">                .add(&quot;gridType&quot;, gridType)</span>
+<span class="fc" id="L171">                .add(&quot;channelSpacing&quot;, channelSpacing)</span>
+<span class="fc" id="L172">                .add(&quot;spacingMultiplier&quot;, spacingMultiplier)</span>
+<span class="fc" id="L173">                .add(&quot;slotGranularity&quot;, slotGranularity)</span>
+<span class="fc" id="L174">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

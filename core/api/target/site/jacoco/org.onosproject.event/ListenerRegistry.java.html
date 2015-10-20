@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ListenerRegistry.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.event</a> &gt; <span class="el_source">ListenerRegistry.java</span></div><h1>ListenerRegistry.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.event;
+
+import org.slf4j.Logger;
+
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Base implementation of an event sink and a registry capable of tracking
+ * listeners and dispatching events to them as part of event sink processing.
+ */
+<span class="fc" id="L30">public class ListenerRegistry&lt;E extends Event, L extends EventListener&lt;E&gt;&gt;</span>
+        implements ListenerService&lt;E, L&gt;, EventSink&lt;E&gt; {
+
+    private static final long LIMIT = 1_800; // ms
+
+<span class="fc" id="L35">    private final Logger log = getLogger(getClass());</span>
+
+    private long lastStart;
+    private L lastListener;
+
+    /**
+     * Set of listeners that have registered.
+     */
+<span class="fc" id="L43">    protected final Set&lt;L&gt; listeners = new CopyOnWriteArraySet&lt;&gt;();</span>
+
+    @Override
+    public void addListener(L listener) {
+<span class="fc" id="L47">        checkNotNull(listener, &quot;Listener cannot be null&quot;);</span>
+<span class="fc" id="L48">        listeners.add(listener);</span>
+<span class="fc" id="L49">    }</span>
+
+    @Override
+    public void removeListener(L listener) {
+<span class="fc" id="L53">        checkNotNull(listener, &quot;Listener cannot be null&quot;);</span>
+<span class="pc bpc" id="L54" title="1 of 2 branches missed.">        if (!listeners.remove(listener)) {</span>
+<span class="nc" id="L55">            log.warn(&quot;Listener {} not registered&quot;, listener);</span>
+        }
+<span class="fc" id="L57">    }</span>
+
+    @Override
+    public void process(E event) {
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        for (L listener : listeners) {</span>
+            try {
+<span class="fc" id="L63">                lastListener = listener;</span>
+<span class="fc" id="L64">                lastStart = System.currentTimeMillis();</span>
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">                if (listener.isRelevant(event)) {</span>
+<span class="fc" id="L66">                    listener.event(event);</span>
+                }
+<span class="fc" id="L68">                lastStart = 0;</span>
+<span class="fc" id="L69">            } catch (Exception error) {</span>
+<span class="fc" id="L70">                reportProblem(event, error);</span>
+<span class="fc" id="L71">            }</span>
+<span class="fc" id="L72">        }</span>
+<span class="fc" id="L73">    }</span>
+
+    @Override
+    public void onProcessLimit() {
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (lastStart &gt; 0) {</span>
+<span class="nc" id="L78">            long duration = System.currentTimeMillis() - lastStart;</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            if (duration &gt; LIMIT) {</span>
+<span class="nc" id="L80">                log.error(&quot;Listener {} exceeded execution time limit: {} ms; ejected&quot;,</span>
+<span class="nc" id="L81">                          lastListener.getClass().getName(),</span>
+<span class="nc" id="L82">                          duration);</span>
+<span class="nc" id="L83">                removeListener(lastListener);</span>
+            }
+<span class="nc" id="L85">            lastStart = 0;</span>
+        }
+<span class="nc" id="L87">    }</span>
+
+    /**
+     * Reports a problem encountered while processing an event.
+     *
+     * @param event event being processed
+     * @param error error encountered while processing
+     */
+    protected void reportProblem(E event, Throwable error) {
+<span class="fc" id="L96">        log.warn(&quot;Exception encountered while processing event &quot; + event, error);</span>
+<span class="fc" id="L97">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

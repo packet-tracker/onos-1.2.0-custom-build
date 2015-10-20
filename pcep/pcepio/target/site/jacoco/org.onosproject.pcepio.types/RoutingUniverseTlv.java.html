@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RoutingUniverseTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">RoutingUniverseTlv.java</span></div><h1>RoutingUniverseTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides RoutingUniverseTLV identifiers.
+ */
+public class RoutingUniverseTlv implements PcepValueType {
+
+    /*
+     * Reference : draft-dhodylee-pce-pcep-te-data-extn-02, section 9.2.1.
+     *  0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |           Type=[TBD7]         |           Length=8            |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                           Identifier                          |
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+     *
+     *
+     *             +------------+---------------------+
+                   | Identifier | Routing Universe    |
+                   +------------+---------------------+
+                   |     0      | L3 packet topology  |
+                   |     1      | L1 optical topology |
+                   +------------+---------------------+
+     */
+
+<span class="fc" id="L53">    protected static final Logger log = LoggerFactory.getLogger(RoutingUniverseTlv.class);</span>
+
+    public static final short TYPE = 14; // TODO:need to change TBD7
+    public static final short LENGTH = 8;
+
+    private final long rawValue;
+
+    /**
+     * Constructor to initialize raw value.
+     *
+     * @param rawValue raw value
+     */
+<span class="fc" id="L65">    public RoutingUniverseTlv(long rawValue) {</span>
+<span class="fc" id="L66">        this.rawValue = rawValue;</span>
+<span class="fc" id="L67">    }</span>
+
+    /**
+     * Returns object of RoutingUniverseTLV.
+     *
+     * @param raw value
+     * @return object of RoutingUniverseTLV
+     */
+    public static RoutingUniverseTlv of(final long raw) {
+<span class="fc" id="L76">        return new RoutingUniverseTlv(raw);</span>
+    }
+
+    /**
+     * Returns raw value as Identifier.
+     *
+     * @return rawValue Identifier
+     */
+    public long getLong() {
+<span class="nc" id="L85">        return rawValue;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L90">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L95">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L100">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L105">        return Objects.hash(rawValue);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L111">            return true;</span>
+        }
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        if (obj instanceof RoutingUniverseTlv) {</span>
+<span class="fc" id="L114">            RoutingUniverseTlv other = (RoutingUniverseTlv) obj;</span>
+<span class="fc" id="L115">            return Objects.equals(this.rawValue, other.rawValue);</span>
+        }
+<span class="fc" id="L117">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L122">        int iLenStartIndex = c.writerIndex();</span>
+<span class="fc" id="L123">        c.writeShort(TYPE);</span>
+<span class="fc" id="L124">        c.writeShort(LENGTH);</span>
+<span class="fc" id="L125">        c.writeLong(rawValue);</span>
+<span class="fc" id="L126">        return c.writerIndex() - iLenStartIndex;</span>
+    }
+
+    /**
+     * Reads from channel buffer and returns object of RoutingUniverseTLV.
+     *
+     * @param c input channel buffer
+     * @return object of RoutingUniverseTLV
+     */
+    public static RoutingUniverseTlv read(ChannelBuffer c) {
+<span class="nc" id="L136">        return RoutingUniverseTlv.of(c.readLong());</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L141">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L142">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="fc" id="L143">                .add(&quot;Length&quot;, LENGTH)</span>
+<span class="fc" id="L144">                .add(&quot;Value&quot;, rawValue)</span>
+<span class="fc" id="L145">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

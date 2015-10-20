@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalCircuitIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">OpticalCircuitIntentCompiler.java</span></div><h1>OpticalCircuitIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import org.apache.commons.lang3.tuple.Pair;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.util.Tools;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.OchPort;
+import org.onosproject.net.OduCltPort;
+import org.onosproject.net.OduSignalType;
+import org.onosproject.net.Port;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.intent.FlowRuleIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentCompiler;
+import org.onosproject.net.intent.IntentExtensionService;
+import org.onosproject.net.intent.IntentId;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.net.intent.OpticalCircuitIntent;
+import org.onosproject.net.intent.OpticalConnectivityIntent;
+import org.onosproject.net.intent.impl.IntentCompilationException;
+import org.onosproject.net.newresource.ResourceAllocation;
+import org.onosproject.net.newresource.ResourcePath;
+import org.onosproject.net.newresource.ResourceService;
+import org.onosproject.net.resource.device.IntentSetMultimap;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
+import java.util.Dictionary;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * An intent compiler for {@link org.onosproject.net.intent.OpticalCircuitIntent}.
+ */
+// For now, remove component designation until dependency on the new resource manager is available.
+// @Component(immediate = true)
+<span class="nc" id="L74">public class OpticalCircuitIntentCompiler implements IntentCompiler&lt;OpticalCircuitIntent&gt; {</span>
+
+<span class="nc" id="L76">    private static final Logger log = LoggerFactory.getLogger(OpticalCircuitIntentCompiler.class);</span>
+
+    private static final int DEFAULT_MAX_CAPACITY = 10;
+
+<span class="nc" id="L80">    @Property(name = &quot;maxCapacity&quot;, intValue = DEFAULT_MAX_CAPACITY,</span>
+            label = &quot;Maximum utilization of an optical connection.&quot;)
+
+    private int maxCapacity = DEFAULT_MAX_CAPACITY;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentExtensionService intentManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ResourceService resourceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentSetMultimap intentSetMultimap;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentService intentService;
+
+    private ApplicationId appId;
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="nc" id="L110">        Dictionary properties = context.getProperties();</span>
+
+        //TODO for reduction check if the new capacity is smaller than the size of the current mapping
+<span class="nc" id="L113">        String propertyString = Tools.get(properties, &quot;maxCapacity&quot;);</span>
+
+        //Ignore if propertyString is empty
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (!propertyString.isEmpty()) {</span>
+            try {
+<span class="nc" id="L118">                int temp = Integer.parseInt(propertyString);</span>
+                //Ensure value is non-negative but allow zero as a way to shutdown the link
+<span class="nc bnc" id="L120" title="All 2 branches missed.">                if (temp &gt;= 0) {</span>
+<span class="nc" id="L121">                    maxCapacity = temp;</span>
+                }
+<span class="nc" id="L123">            } catch (NumberFormatException e) {</span>
+                //Malformed arguments lead to no change of value (user should be notified of error)
+<span class="nc" id="L125">              log.error(&quot;The value '{}' for maxCapacity was not parsable as an integer.&quot;, propertyString, e);</span>
+<span class="nc" id="L126">            }</span>
+        } else {
+            //Notify of empty value but do not return (other properties will also go in this function)
+<span class="nc" id="L129">            log.error(&quot;The value for maxCapacity was set to an empty value.&quot;);</span>
+        }
+
+<span class="nc" id="L132">    }</span>
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="nc" id="L136">        appId = coreService.registerApplication(&quot;org.onosproject.net.intent&quot;);</span>
+<span class="nc" id="L137">        intentManager.registerCompiler(OpticalCircuitIntent.class, this);</span>
+<span class="nc" id="L138">        cfgService.registerProperties(getClass());</span>
+<span class="nc" id="L139">        modified(context);</span>
+<span class="nc" id="L140">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L144">        intentManager.unregisterCompiler(OpticalCircuitIntent.class);</span>
+<span class="nc" id="L145">        cfgService.unregisterProperties(getClass(), false);</span>
+<span class="nc" id="L146">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(OpticalCircuitIntent intent, List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+        // Check if ports are OduClt ports
+<span class="nc" id="L152">        ConnectPoint src = intent.getSrc();</span>
+<span class="nc" id="L153">        ConnectPoint dst = intent.getDst();</span>
+<span class="nc" id="L154">        Port srcPort = deviceService.getPort(src.deviceId(), src.port());</span>
+<span class="nc" id="L155">        Port dstPort = deviceService.getPort(dst.deviceId(), dst.port());</span>
+<span class="nc" id="L156">        checkArgument(srcPort instanceof OduCltPort);</span>
+<span class="nc" id="L157">        checkArgument(dstPort instanceof OduCltPort);</span>
+
+<span class="nc" id="L159">        log.debug(&quot;Compiling optical circuit intent between {} and {}&quot;, src, dst);</span>
+
+        // Reserve OduClt ports
+<span class="nc" id="L162">        ResourcePath srcPortPath = new ResourcePath(src.deviceId(), src.port());</span>
+<span class="nc" id="L163">        ResourcePath dstPortPath = new ResourcePath(dst.deviceId(), dst.port());</span>
+<span class="nc" id="L164">        List&lt;ResourceAllocation&gt; allocation = resourceService.allocate(intent.id(), srcPortPath, dstPortPath);</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if (allocation.isEmpty()) {</span>
+<span class="nc" id="L166">            throw new IntentCompilationException(&quot;Unable to reserve ports for intent &quot; + intent);</span>
+        }
+
+<span class="nc" id="L169">        LinkedList&lt;Intent&gt; intents = new LinkedList&lt;&gt;();</span>
+
+        FlowRuleIntent circuitIntent;
+<span class="nc" id="L172">        OpticalConnectivityIntent connIntent = findOpticalConnectivityIntent(intent);</span>
+
+        // Create optical connectivity intent if needed
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (connIntent == null) {</span>
+            // Find OCh ports with available resources
+<span class="nc" id="L177">            Pair&lt;OchPort, OchPort&gt; ochPorts = findPorts(intent);</span>
+
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            if (ochPorts == null) {</span>
+<span class="nc" id="L180">                return Collections.emptyList();</span>
+            }
+
+            // Create optical connectivity intent
+<span class="nc" id="L184">            ConnectPoint srcCP = new ConnectPoint(src.elementId(), ochPorts.getLeft().number());</span>
+<span class="nc" id="L185">            ConnectPoint dstCP = new ConnectPoint(dst.elementId(), ochPorts.getRight().number());</span>
+            // FIXME: hardcoded ODU signal type
+<span class="nc" id="L187">            connIntent = OpticalConnectivityIntent.builder()</span>
+<span class="nc" id="L188">                    .appId(appId)</span>
+<span class="nc" id="L189">                    .src(srcCP)</span>
+<span class="nc" id="L190">                    .dst(dstCP)</span>
+<span class="nc" id="L191">                    .signalType(OduSignalType.ODU4)</span>
+<span class="nc" id="L192">                    .bidirectional(intent.isBidirectional())</span>
+<span class="nc" id="L193">                    .build();</span>
+<span class="nc" id="L194">            intentService.submit(connIntent);</span>
+        }
+
+        // Create optical circuit intent
+<span class="nc" id="L198">        List&lt;FlowRule&gt; rules = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L199">        rules.add(connectPorts(src, connIntent.getSrc(), intent.priority()));</span>
+<span class="nc" id="L200">        rules.add(connectPorts(connIntent.getDst(), dst, intent.priority()));</span>
+
+        // Create flow rules for reverse path
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (intent.isBidirectional()) {</span>
+<span class="nc" id="L204">            rules.add(connectPorts(connIntent.getSrc(), src, intent.priority()));</span>
+<span class="nc" id="L205">            rules.add(connectPorts(dst, connIntent.getDst(), intent.priority()));</span>
+        }
+
+<span class="nc" id="L208">        circuitIntent = new FlowRuleIntent(appId, rules, intent.resources());</span>
+
+        // Save circuit to connectivity intent mapping
+<span class="nc" id="L211">        intentSetMultimap.allocateMapping(connIntent.id(), intent.id());</span>
+<span class="nc" id="L212">        intents.add(circuitIntent);</span>
+
+<span class="nc" id="L214">        return intents;</span>
+    }
+
+    /**
+     * Checks if current allocations on given resource can satisfy request.
+     * If the resource is null, return true.
+     *
+     * @param resource the resource on which to map the intent
+     * @return true if the resource can accept the request, false otherwise
+     */
+    private boolean isAvailable(IntentId resource) {
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (resource == null) {</span>
+<span class="nc" id="L226">            return true;</span>
+        }
+
+<span class="nc" id="L229">        Set&lt;IntentId&gt; mapping = intentSetMultimap.getMapping(resource);</span>
+
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        if (mapping == null) {</span>
+<span class="nc" id="L232">            return true;</span>
+        }
+
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        return mapping.size() &lt; maxCapacity;</span>
+    }
+
+    private boolean isAllowed(OpticalCircuitIntent circuitIntent, OpticalConnectivityIntent connIntent) {
+<span class="nc" id="L239">        ConnectPoint srcStaticPort = staticPort(circuitIntent.getSrc());</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (srcStaticPort != null) {</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">            if (!srcStaticPort.equals(connIntent.getSrc())) {</span>
+<span class="nc" id="L242">                return false;</span>
+            }
+        }
+
+<span class="nc" id="L246">        ConnectPoint dstStaticPort = staticPort(circuitIntent.getDst());</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if (dstStaticPort != null) {</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">            if (!dstStaticPort.equals(connIntent.getDst())) {</span>
+<span class="nc" id="L249">                return false;</span>
+            }
+        }
+
+<span class="nc" id="L253">        return true;</span>
+    }
+
+    /**
+     * Returns existing and available optical connectivity intent that matches the given circuit intent.
+     *
+     * @param circuitIntent optical circuit intent
+     * @return existing optical connectivity intent, null otherwise.
+     */
+    private OpticalConnectivityIntent findOpticalConnectivityIntent(OpticalCircuitIntent circuitIntent) {
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        for (Intent intent : intentService.getIntents()) {</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if (!(intent instanceof OpticalConnectivityIntent)) {</span>
+<span class="nc" id="L265">                continue;</span>
+            }
+
+<span class="nc" id="L268">            OpticalConnectivityIntent connIntent = (OpticalConnectivityIntent) intent;</span>
+
+<span class="nc" id="L270">            ConnectPoint src = circuitIntent.getSrc();</span>
+<span class="nc" id="L271">            ConnectPoint dst = circuitIntent.getDst();</span>
+            // Ignore if the intents don't have identical src and dst devices
+<span class="nc bnc" id="L273" title="All 2 branches missed.">            if (!src.deviceId().equals(connIntent.getSrc().deviceId()) &amp;&amp;</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">                    !dst.deviceId().equals(connIntent.getDst().deviceId())) {</span>
+<span class="nc" id="L275">                continue;</span>
+            }
+
+<span class="nc bnc" id="L278" title="All 2 branches missed.">            if (!isAllowed(circuitIntent, connIntent)) {</span>
+<span class="nc" id="L279">                continue;</span>
+            }
+
+<span class="nc bnc" id="L282" title="All 2 branches missed.">            if (isAvailable(connIntent.id())) {</span>
+<span class="nc" id="L283">                return connIntent;</span>
+            }
+<span class="nc" id="L285">        }</span>
+
+<span class="nc" id="L287">        return null;</span>
+    }
+
+    private ConnectPoint staticPort(ConnectPoint connectPoint) {
+<span class="nc" id="L291">        Port port = deviceService.getPort(connectPoint.deviceId(), connectPoint.port());</span>
+
+<span class="nc" id="L293">        String staticPort = port.annotations().value(AnnotationKeys.STATIC_PORT);</span>
+
+        // FIXME: need a better way to match the port
+<span class="nc bnc" id="L296" title="All 2 branches missed.">        if (staticPort != null) {</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">            for (Port p : deviceService.getPorts(connectPoint.deviceId())) {</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">                if (staticPort.equals(p.number().name())) {</span>
+<span class="nc" id="L299">                    return new ConnectPoint(p.element().id(), p.number());</span>
+                }
+<span class="nc" id="L301">            }</span>
+        }
+
+<span class="nc" id="L304">        return null;</span>
+    }
+
+    private OchPort findAvailableOchPort(ConnectPoint oduPort) {
+        // First see if the port mappings are constrained
+<span class="nc" id="L309">        ConnectPoint ochCP = staticPort(oduPort);</span>
+
+<span class="nc bnc" id="L311" title="All 2 branches missed.">        if (ochCP != null) {</span>
+<span class="nc" id="L312">            OchPort ochPort = (OchPort) deviceService.getPort(ochCP.deviceId(), ochCP.port());</span>
+<span class="nc" id="L313">            Optional&lt;IntentId&gt; intentId =</span>
+<span class="nc" id="L314">                    resourceService.getResourceAllocation(new ResourcePath(ochCP.deviceId(), ochCP.port()))</span>
+<span class="nc" id="L315">                            .map(ResourceAllocation::consumer)</span>
+<span class="nc" id="L316">                            .filter(x -&gt; x instanceof IntentId)</span>
+<span class="nc" id="L317">                            .map(x -&gt; (IntentId) x);</span>
+
+<span class="nc bnc" id="L319" title="All 2 branches missed.">            if (isAvailable(intentId.orElse(null))) {</span>
+<span class="nc" id="L320">                return ochPort;</span>
+            }
+        }
+
+        // No port constraints, so find any port that works
+<span class="nc" id="L325">        List&lt;Port&gt; ports = deviceService.getPorts(oduPort.deviceId());</span>
+
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        for (Port port : ports) {</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">            if (!(port instanceof OchPort)) {</span>
+<span class="nc" id="L329">                continue;</span>
+            }
+
+<span class="nc" id="L332">            Optional&lt;IntentId&gt; intentId =</span>
+<span class="nc" id="L333">                    resourceService.getResourceAllocation(new ResourcePath(oduPort.deviceId(), port.number()))</span>
+<span class="nc" id="L334">                            .map(ResourceAllocation::consumer)</span>
+<span class="nc" id="L335">                            .filter(x -&gt; x instanceof IntentId)</span>
+<span class="nc" id="L336">                            .map(x -&gt; (IntentId) x);</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (isAvailable(intentId.orElse(null))) {</span>
+<span class="nc" id="L338">                return (OchPort) port;</span>
+            }
+<span class="nc" id="L340">        }</span>
+
+<span class="nc" id="L342">        return null;</span>
+    }
+
+    private Pair&lt;OchPort, OchPort&gt; findPorts(OpticalCircuitIntent intent) {
+
+<span class="nc" id="L347">        OchPort srcPort = findAvailableOchPort(intent.getSrc());</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">        if (srcPort == null) {</span>
+<span class="nc" id="L349">            return null;</span>
+        }
+
+<span class="nc" id="L352">        OchPort dstPort = findAvailableOchPort(intent.getDst());</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        if (dstPort == null) {</span>
+<span class="nc" id="L354">            return null;</span>
+        }
+
+<span class="nc" id="L357">        return Pair.of(srcPort, dstPort);</span>
+    }
+
+    /**
+     * Builds flow rule for mapping between two ports.
+     *
+     * @param src source port
+     * @param dst destination port
+     * @return flow rules
+     */
+    private FlowRule connectPorts(ConnectPoint src, ConnectPoint dst, int priority) {
+<span class="nc" id="L368">        checkArgument(src.deviceId().equals(dst.deviceId()));</span>
+
+<span class="nc" id="L370">        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L371">        TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment.builder();</span>
+
+<span class="nc" id="L373">        selectorBuilder.matchInPort(src.port());</span>
+        //selectorBuilder.add(Criteria.matchCltSignalType)
+<span class="nc" id="L375">        treatmentBuilder.setOutput(dst.port());</span>
+        //treatmentBuilder.add(Instructions.modL1OduSignalType)
+
+<span class="nc" id="L378">        FlowRule flowRule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L379">                .forDevice(src.deviceId())</span>
+<span class="nc" id="L380">                .withSelector(selectorBuilder.build())</span>
+<span class="nc" id="L381">                .withTreatment(treatmentBuilder.build())</span>
+<span class="nc" id="L382">                .withPriority(priority)</span>
+<span class="nc" id="L383">                .fromApp(appId)</span>
+<span class="nc" id="L384">                .makePermanent()</span>
+<span class="nc" id="L385">                .build();</span>
+
+<span class="nc" id="L387">        return flowRule;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

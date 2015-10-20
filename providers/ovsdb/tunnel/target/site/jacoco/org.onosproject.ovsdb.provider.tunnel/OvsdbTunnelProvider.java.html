@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OvsdbTunnelProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-ovsdb-provider-tunnel</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ovsdb.provider.tunnel</a> &gt; <span class="el_source">OvsdbTunnelProvider.java</span></div><h1>OvsdbTunnelProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.ovsdb.provider.tunnel;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.incubator.net.tunnel.Tunnel;
+import org.onosproject.incubator.net.tunnel.TunnelDescription;
+import org.onosproject.incubator.net.tunnel.TunnelId;
+import org.onosproject.incubator.net.tunnel.TunnelProvider;
+import org.onosproject.incubator.net.tunnel.TunnelProviderRegistry;
+import org.onosproject.incubator.net.tunnel.TunnelProviderService;
+import org.onosproject.incubator.net.tunnel.TunnelService;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.Path;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.slf4j.Logger;
+
+/**
+ * Provider which uses when tunnel added/removed.
+ */
+@Component(immediate = true)
+@Service
+public class OvsdbTunnelProvider extends AbstractProvider
+        implements TunnelProvider {
+<span class="fc" id="L46">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TunnelProviderRegistry providerRegistry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TunnelService tunnelService;
+
+    private TunnelProviderService providerService;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L58">        providerService = providerRegistry.register(this);</span>
+<span class="fc" id="L59">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L60">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L64">        providerRegistry.unregister(this);</span>
+<span class="fc" id="L65">        providerService = null;</span>
+<span class="fc" id="L66">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L67">    }</span>
+
+    public OvsdbTunnelProvider() {
+<span class="fc" id="L70">        super(new ProviderId(&quot;ovsdb&quot;, &quot;org.onosproject.ovsdb.provider.tunnel&quot;));</span>
+<span class="fc" id="L71">    }</span>
+
+    @Override
+    public void setupTunnel(Tunnel tunnel, Path path) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L76">    }</span>
+
+    @Override
+    public void setupTunnel(ElementId srcElement, Tunnel tunnel, Path path) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L81">    }</span>
+
+    @Override
+    public void releaseTunnel(Tunnel tunnel) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public void releaseTunnel(ElementId srcElement, Tunnel tunnel) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L91">    }</span>
+
+    @Override
+    public void updateTunnel(Tunnel tunnel, Path path) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L96">    }</span>
+
+    @Override
+    public void updateTunnel(ElementId srcElement, Tunnel tunnel, Path path) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L101">    }</span>
+
+    @Override
+    public TunnelId tunnelAdded(TunnelDescription tunnel) {
+<span class="fc" id="L105">        return providerService.tunnelAdded(tunnel);</span>
+    }
+
+    @Override
+    public void tunnelRemoved(TunnelDescription tunnel) {
+<span class="fc" id="L110">        providerService.tunnelRemoved(tunnel);</span>
+<span class="fc" id="L111">    }</span>
+
+    @Override
+    public void tunnelUpdated(TunnelDescription tunnel) {
+<span class="nc" id="L115">        providerService.tunnelUpdated(tunnel);</span>
+<span class="nc" id="L116">    }</span>
+
+    @Override
+    public Tunnel tunnelQueryById(TunnelId tunnelId) {
+        // TODO: This will be implemented later.
+<span class="nc" id="L121">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

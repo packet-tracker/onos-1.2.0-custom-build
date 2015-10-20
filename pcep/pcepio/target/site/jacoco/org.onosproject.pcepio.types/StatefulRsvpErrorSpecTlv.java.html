@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>StatefulRsvpErrorSpecTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">StatefulRsvpErrorSpecTlv.java</span></div><h1>StatefulRsvpErrorSpecTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides StatefulRsvpErrorSpecTlv.
+ */
+public class StatefulRsvpErrorSpecTlv implements PcepValueType {
+
+<span class="fc" id="L34">    protected static final Logger log = LoggerFactory.getLogger(StatefulRsvpErrorSpecTlv.class);</span>
+
+    /*                  RSVP-ERROR-SPEC TLV format
+     * Reference :PCEP Extensions for Stateful PCE draft-ietf-pce-stateful-pce-10
+     *
+     *
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |           Type=21             |            Length (variable)  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                RSVP ERROR_SPEC or USER_ERROR_SPEC Object      +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        0             1              2             3
+    +-------------+-------------+-------------+-------------+
+    |       Length (bytes)      |  Class-Num  |   C-Type    |
+    +-------------+-------------+-------------+-------------+
+    |                                                       |
+    //                  (Object contents)                   //
+    |                                                       |
+    +-------------+-------------+-------------+-------------+
+
+    Ref :  ERROR_SPEC @ RFC2205
+
+    IPv4 ERROR_SPEC object: Class = 6, C-Type = 1
+    +-------------+-------------+-------------+-------------+
+    |            IPv4 Error Node Address (4 bytes)          |
+    +-------------+-------------+-------------+-------------+
+    |    Flags    |  Error Code |        Error Value        |
+    +-------------+-------------+-------------+-------------+
+
+
+    IPv6 ERROR_SPEC object: Class = 6, C-Type = 2
+    +-------------+-------------+-------------+-------------+
+    |                                                       |
+    +                                                       +
+    |                                                       |
+    +           IPv6 Error Node Address (16 bytes)          +
+    |                                                       |
+    +                                                       +
+    |                                                       |
+    +-------------+-------------+-------------+-------------+
+    |    Flags    |  Error Code |        Error Value        |
+    +-------------+-------------+-------------+-------------+
+
+
+    Ref : USER_ERROR_SPEC @ RFC5284
+    USER_ERROR_SPEC object: Class = 194, C-Type = 1
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +---------------+---------------+---------------+---------------+
+    |                       Enterprise Number                       |
+    +---------------+---------------+---------------+---------------+
+    |    Sub Org    |  Err Desc Len |        User Error Value       |
+    +---------------+---------------+---------------+---------------+
+    |                                                               |
+    ~                       Error Description                       ~
+    |                                                               |
+    +---------------+---------------+---------------+---------------+
+    |                                                               |
+    ~                     User-Defined Subobjects                   ~
+    |                                                               |
+    +---------------+---------------+---------------+---------------+
+
+     */
+
+    public static final short TYPE = 21;
+    public static final int OBJECT_HEADER_LENGTH = 4;
+    private short hLength;
+
+    private final PcepRsvpErrorSpec rsvpErrSpecObj;
+    private final boolean isErrSpceObjSet;
+
+    /**
+     * Constructor to initialize errSpecObj.
+     *
+     * @param rsvpErrSpecObj Rsvp error spec object
+     */
+<span class="fc" id="L116">    public StatefulRsvpErrorSpecTlv(PcepRsvpErrorSpec rsvpErrSpecObj) {</span>
+<span class="fc" id="L117">        this.rsvpErrSpecObj = rsvpErrSpecObj;</span>
+<span class="fc" id="L118">        this.isErrSpceObjSet = true;</span>
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * Returns PcepRsvpErrorSpecObject.
+     *
+     * @return rsvpErrSpecObj
+     */
+    public PcepRsvpErrorSpec getPcepRsvpErrorSpec() {
+<span class="nc" id="L127">        return this.rsvpErrSpecObj;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L132">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L137">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="fc" id="L142">        return hLength;</span>
+    }
+
+    /**
+     * Reads channel buffer and returns object of StatefulRsvpErrorSpecTlv.
+     *
+     * @param cb of type channel buffer
+     * @return object of StatefulRsvpErrorSpecTlv
+     * @throws PcepParseException while parsing this tlv from channel buffer
+     */
+    public static PcepValueType read(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L154">        PcepRsvpErrorSpec rsvpErrSpecObj = null;</span>
+        PcepRsvpSpecObjHeader rsvpErrSpecObjHeader;
+
+<span class="fc" id="L157">        cb.markReaderIndex();</span>
+<span class="fc" id="L158">        rsvpErrSpecObjHeader = PcepRsvpSpecObjHeader.read(cb);</span>
+<span class="fc" id="L159">        cb.resetReaderIndex();</span>
+
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if (PcepRsvpIpv4ErrorSpec.CLASS_NUM == rsvpErrSpecObjHeader.getObjClassNum()</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">                &amp;&amp; PcepRsvpIpv4ErrorSpec.CLASS_TYPE == rsvpErrSpecObjHeader.getObjClassType()) {</span>
+<span class="fc" id="L163">            rsvpErrSpecObj = PcepRsvpIpv4ErrorSpec.read(cb);</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        } else if (PcepRsvpIpv6ErrorSpec.CLASS_NUM == rsvpErrSpecObjHeader.getObjClassNum()</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                &amp;&amp; PcepRsvpIpv6ErrorSpec.CLASS_TYPE == rsvpErrSpecObjHeader.getObjClassType()) {</span>
+<span class="nc" id="L166">            rsvpErrSpecObj = PcepRsvpIpv6ErrorSpec.read(cb);</span>
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        } else if (PcepRsvpUserErrorSpec.CLASS_NUM == rsvpErrSpecObjHeader.getObjClassNum()</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">                &amp;&amp; PcepRsvpUserErrorSpec.CLASS_TYPE == rsvpErrSpecObjHeader.getObjClassType()) {</span>
+<span class="nc" id="L169">            rsvpErrSpecObj = PcepRsvpUserErrorSpec.read(cb);</span>
+        }
+<span class="fc" id="L171">        return new StatefulRsvpErrorSpecTlv(rsvpErrSpecObj);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L176">        return Objects.hash(rsvpErrSpecObj.hashCode());</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L182">            return true;</span>
+        }
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (obj instanceof StatefulRsvpErrorSpecTlv) {</span>
+<span class="nc" id="L185">            StatefulRsvpErrorSpecTlv other = (StatefulRsvpErrorSpecTlv) obj;</span>
+<span class="nc" id="L186">            return Objects.equals(this.rsvpErrSpecObj, other.rsvpErrSpecObj);</span>
+        }
+<span class="nc" id="L188">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="fc" id="L193">        int iStartIndex = c.writerIndex();</span>
+<span class="fc" id="L194">        c.writeShort(TYPE);</span>
+<span class="fc" id="L195">        int tlvLenIndex = c.writerIndex();</span>
+<span class="fc" id="L196">        hLength = 0;</span>
+<span class="fc" id="L197">        c.writeShort(hLength);</span>
+<span class="pc bpc" id="L198" title="1 of 2 branches missed.">        if (isErrSpceObjSet) {</span>
+<span class="fc" id="L199">            rsvpErrSpecObj.write(c);</span>
+        }
+<span class="fc" id="L201">        hLength = (short) (c.writerIndex() - iStartIndex);</span>
+<span class="fc" id="L202">        c.setShort(tlvLenIndex, (hLength - OBJECT_HEADER_LENGTH));</span>
+
+<span class="fc" id="L204">        return c.writerIndex() - iStartIndex;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L209">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L210">                .omitNullValues()</span>
+<span class="nc" id="L211">                .add(&quot;Type&quot;, TYPE)</span>
+<span class="nc" id="L212">                .add(&quot;Length&quot;, hLength)</span>
+<span class="nc" id="L213">                .add(&quot;RSVPErrorSpecObject&quot;, rsvpErrSpecObj)</span>
+<span class="nc" id="L214">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DeviceId.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">DeviceId.java</span></div><h1>DeviceId.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import java.net.URI;
+import java.util.Objects;
+
+/**
+ * Immutable representation of a device identity.
+ */
+public final class DeviceId extends ElementId {
+
+    /**
+     * Represents either no device, or an unspecified device.
+     */
+<span class="fc" id="L29">    public static final DeviceId NONE = deviceId(&quot;none:none&quot;);</span>
+
+    private final URI uri;
+    private final String str;
+
+    // Public construction is prohibited
+<span class="fc" id="L35">    private DeviceId(URI uri) {</span>
+<span class="fc" id="L36">        this.uri = uri;</span>
+<span class="fc" id="L37">        this.str = uri.toString().toLowerCase();</span>
+<span class="fc" id="L38">    }</span>
+
+
+    // Default constructor for serialization
+<span class="nc" id="L42">    protected DeviceId() {</span>
+<span class="nc" id="L43">        this.uri = null;</span>
+<span class="nc" id="L44">        this.str = null;</span>
+<span class="nc" id="L45">    }</span>
+
+    /**
+     * Creates a device id using the supplied URI.
+     *
+     * @param uri device URI
+     * @return DeviceId
+     */
+    public static DeviceId deviceId(URI uri) {
+<span class="fc" id="L54">        return new DeviceId(uri);</span>
+    }
+
+    /**
+     * Creates a device id using the supplied URI string.
+     *
+     * @param string device URI string
+     * @return DeviceId
+     */
+    public static DeviceId deviceId(String string) {
+<span class="fc" id="L64">        return deviceId(URI.create(string));</span>
+    }
+
+    /**
+     * Returns the backing URI.
+     *
+     * @return backing URI
+     */
+    public URI uri() {
+<span class="nc" id="L73">        return uri;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L78">        return Objects.hash(str);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L84">            return true;</span>
+        }
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        if (obj instanceof DeviceId) {</span>
+<span class="fc" id="L87">            final DeviceId that = (DeviceId) obj;</span>
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">            return this.getClass() == that.getClass() &amp;&amp;</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">                    Objects.equals(this.str, that.str);</span>
+        }
+<span class="fc" id="L91">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L96">        return str;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

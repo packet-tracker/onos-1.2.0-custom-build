@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TransactionManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">TransactionManager.java</span></div><h1>TransactionManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
+import org.onlab.util.KryoNamespace;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.AsyncConsistentMap;
+import org.onosproject.store.service.ConsistentMapBuilder;
+import org.onosproject.store.service.DatabaseUpdate;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.Transaction;
+import org.onosproject.store.service.Versioned;
+import org.onosproject.store.service.Transaction.State;
+
+import com.google.common.collect.ImmutableList;
+
+/**
+ * Agent that runs the two phase commit protocol.
+ */
+public class TransactionManager {
+
+<span class="nc" id="L42">    private static final KryoNamespace KRYO_NAMESPACE = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L43">            .register(KryoNamespaces.BASIC)</span>
+<span class="nc" id="L44">            .nextId(KryoNamespace.FLOATING_ID)</span>
+<span class="nc" id="L45">            .register(Versioned.class)</span>
+<span class="nc" id="L46">            .register(DatabaseUpdate.class)</span>
+<span class="nc" id="L47">            .register(DatabaseUpdate.Type.class)</span>
+<span class="nc" id="L48">            .register(DefaultTransaction.class)</span>
+<span class="nc" id="L49">            .register(Transaction.State.class)</span>
+<span class="nc" id="L50">            .build();</span>
+
+<span class="nc" id="L52">    private final Serializer serializer = Serializer.using(Arrays.asList(KRYO_NAMESPACE));</span>
+    private final Database database;
+    private final AsyncConsistentMap&lt;Long, Transaction&gt; transactions;
+
+    /**
+     * Constructs a new TransactionManager for the specified database instance.
+     *
+     * @param database database
+     * @param mapBuilder builder for ConsistentMap instances
+     */
+<span class="nc" id="L62">    public TransactionManager(Database database, ConsistentMapBuilder&lt;Long, Transaction&gt; mapBuilder) {</span>
+<span class="nc" id="L63">        this.database = checkNotNull(database, &quot;database cannot be null&quot;);</span>
+<span class="nc" id="L64">        this.transactions = mapBuilder.withName(&quot;onos-transactions&quot;)</span>
+<span class="nc" id="L65">                                      .withSerializer(serializer)</span>
+<span class="nc" id="L66">                                      .buildAsyncMap();</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Executes the specified transaction by employing a two phase commit protocol.
+     *
+     * @param transaction transaction to commit
+     * @return transaction result. Result value true indicates a successful commit, false
+     * indicates abort
+     */
+    public CompletableFuture&lt;CommitResponse&gt; execute(Transaction transaction) {
+        // clean up if this transaction in already in a terminal state.
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (transaction.state() == Transaction.State.COMMITTED ||</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">                transaction.state() == Transaction.State.ROLLEDBACK) {</span>
+<span class="nc" id="L80">            return transactions.remove(transaction.id()).thenApply(v -&gt; CommitResponse.success(ImmutableList.of()));</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        } else if (transaction.state() == Transaction.State.COMMITTING) {</span>
+<span class="nc" id="L82">            return commit(transaction);</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        } else if (transaction.state() == Transaction.State.ROLLINGBACK) {</span>
+<span class="nc" id="L84">            return rollback(transaction).thenApply(v -&gt; CommitResponse.success(ImmutableList.of()));</span>
+        } else {
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            return prepare(transaction).thenCompose(v -&gt; v ? commit(transaction) : rollback(transaction));</span>
+        }
+    }
+
+
+    /**
+     * Returns all transactions in the system.
+     *
+     * @return future for a collection of transactions
+     */
+    public CompletableFuture&lt;Collection&lt;Transaction&gt;&gt; getTransactions() {
+<span class="nc" id="L97">        return transactions.values().thenApply(c -&gt; {</span>
+<span class="nc" id="L98">            Collection&lt;Transaction&gt; txns = c.stream().map(v -&gt; v.value()).collect(Collectors.toList());</span>
+<span class="nc" id="L99">            return txns;</span>
+        });
+    }
+
+    private CompletableFuture&lt;Boolean&gt; prepare(Transaction transaction) {
+<span class="nc" id="L104">        return transactions.put(transaction.id(), transaction)</span>
+<span class="nc" id="L105">                .thenCompose(v -&gt; database.prepare(transaction))</span>
+<span class="nc" id="L106">                .thenCompose(status -&gt; transactions.put(</span>
+<span class="nc" id="L107">                            transaction.id(),</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                            transaction.transition(status ? State.COMMITTING : State.ROLLINGBACK))</span>
+<span class="nc" id="L109">                .thenApply(v -&gt; status));</span>
+    }
+
+    private CompletableFuture&lt;CommitResponse&gt; commit(Transaction transaction) {
+<span class="nc" id="L113">        return database.commit(transaction)</span>
+<span class="nc" id="L114">                .whenComplete((r, e) -&gt; transactions.put(</span>
+<span class="nc" id="L115">                            transaction.id(),</span>
+<span class="nc" id="L116">                            transaction.transition(Transaction.State.COMMITTED)));</span>
+    }
+
+    private CompletableFuture&lt;CommitResponse&gt; rollback(Transaction transaction) {
+<span class="nc" id="L120">        return database.rollback(transaction)</span>
+<span class="nc" id="L121">                .thenCompose(v -&gt; transactions.put(</span>
+<span class="nc" id="L122">                            transaction.id(),</span>
+<span class="nc" id="L123">                            transaction.transition(Transaction.State.ROLLEDBACK)))</span>
+<span class="nc" id="L124">                .thenApply(v -&gt; CommitResponse.failure());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OmsPortDescription.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.device</a> &gt; <span class="el_source">OmsPortDescription.java</span></div><h1>OmsPortDescription.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.device;
+
+import com.google.common.base.MoreObjects;
+import org.onlab.util.Frequency;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.SparseAnnotations;
+
+/**
+ * Default implementation of immutable OMS port description.
+ */
+public class OmsPortDescription extends DefaultPortDescription {
+
+    private final Frequency minFrequency;
+    private final Frequency maxFrequency;
+    private final Frequency grid;
+
+    /**
+     * Creates OMS port description based on the supplied information.
+     *
+     * @param number        port number
+     * @param isEnabled     port enabled state
+     * @param minFrequency  minimum frequency
+     * @param maxFrequency  maximum frequency
+     * @param grid          grid spacing frequency
+     * @param annotations   optional key/value annotations map
+     */
+    public OmsPortDescription(PortNumber number, boolean isEnabled, Frequency minFrequency, Frequency maxFrequency,
+                              Frequency grid, SparseAnnotations... annotations) {
+<span class="nc" id="L45">        super(number, isEnabled, Port.Type.OMS, 0, annotations);</span>
+<span class="nc" id="L46">        this.minFrequency = minFrequency;</span>
+<span class="nc" id="L47">        this.maxFrequency = maxFrequency;</span>
+<span class="nc" id="L48">        this.grid = grid;</span>
+<span class="nc" id="L49">    }</span>
+
+    /**
+     * Creates OMS port description based on the supplied information.
+     *
+     * @param base          PortDescription to get basic information from
+     * @param minFrequency  minimum frequency
+     * @param maxFrequency  maximum frequency
+     * @param grid          grid spacing frequency
+     * @param annotations   optional key/value annotations map
+     */
+    public OmsPortDescription(PortDescription base, Frequency minFrequency, Frequency maxFrequency,
+                              Frequency grid, SparseAnnotations annotations) {
+<span class="nc" id="L62">        super(base, annotations);</span>
+<span class="nc" id="L63">        this.minFrequency = minFrequency;</span>
+<span class="nc" id="L64">        this.maxFrequency = maxFrequency;</span>
+<span class="nc" id="L65">        this.grid = grid;</span>
+<span class="nc" id="L66">    }</span>
+
+    /**
+     * Returns minimum frequency.
+     *
+     * @return minimum frequency
+     */
+    public Frequency minFrequency() {
+<span class="nc" id="L74">        return minFrequency;</span>
+    }
+
+    /**
+     * Returns maximum frequency.
+     *
+     * @return maximum frequency
+     */
+    public Frequency maxFrequency() {
+<span class="nc" id="L83">        return maxFrequency;</span>
+    }
+
+    /**
+     * Returns grid spacing frequency.
+     *
+     * @return grid spacing frequency
+     */
+    public Frequency grid() {
+<span class="nc" id="L92">        return grid;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L97">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L98">                .add(&quot;number&quot;, portNumber())</span>
+<span class="nc" id="L99">                .add(&quot;isEnabled&quot;, isEnabled())</span>
+<span class="nc" id="L100">                .add(&quot;type&quot;, type())</span>
+<span class="nc" id="L101">                .add(&quot;minFrequency&quot;, minFrequency)</span>
+<span class="nc" id="L102">                .add(&quot;maxFrequency&quot;, maxFrequency)</span>
+<span class="nc" id="L103">                .add(&quot;grid&quot;, grid)</span>
+<span class="nc" id="L104">                .add(&quot;annotations&quot;, annotations())</span>
+<span class="nc" id="L105">                .toString();</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

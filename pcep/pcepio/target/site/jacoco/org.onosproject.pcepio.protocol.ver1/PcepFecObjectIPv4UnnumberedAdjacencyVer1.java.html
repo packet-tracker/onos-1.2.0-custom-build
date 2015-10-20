@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepFecObjectIPv4UnnumberedAdjacencyVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepFecObjectIPv4UnnumberedAdjacencyVer1.java</span></div><h1>PcepFecObjectIPv4UnnumberedAdjacencyVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepFecObjectIPv4UnnumberedAdjacency;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides Pcep Fec Object IPv4 Unnumbered Adjacency object.
+ */
+public class PcepFecObjectIPv4UnnumberedAdjacencyVer1 implements PcepFecObjectIPv4UnnumberedAdjacency {
+
+    /*
+     * ref : draft-zhao-pce-pcep-extension-for-pce-controller-01 , section : 7.5
+     *
+        0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                       Local Node-ID                           |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                       Local Interface ID                      |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                       Remote Node-ID                          |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                       Remote Interface ID                     |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+             FEC Object-Type is 5, Unnumbered Adjacency with IPv4 NodeIDs
+     */
+<span class="nc" id="L51">    protected static final Logger log = LoggerFactory.getLogger(PcepFecObjectIPv4UnnumberedAdjacencyVer1.class);</span>
+
+    public static final byte FEC_OBJ_TYPE = 5;
+    public static final byte FEC_OBJ_CLASS = 63; //to be defined
+    public static final byte FEC_OBJECT_VERSION = 1;
+    public static final short FEC_OBJ_MINIMUM_LENGTH = 20;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+
+<span class="nc" id="L59">    static final PcepObjectHeader DEFAULT_FEC_OBJECT_HEADER = new PcepObjectHeader(FEC_OBJ_CLASS, FEC_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, FEC_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader fecObjHeader;
+    private int localNodeID;
+    private int localInterfaceID;
+    private int remoteNodeID;
+    private int remoteInterfaceID;
+
+    /**
+     * Constructor to initialize parameter for PCEP fec object.
+     *
+     * @param fecObjHeader fec object header
+     * @param localNodeID local node ID
+     * @param localInterfaceID local interface ID
+     * @param remoteNodeID remote node ID
+     * @param remoteInterfaceID remote interface ID
+     */
+    public PcepFecObjectIPv4UnnumberedAdjacencyVer1(PcepObjectHeader fecObjHeader, int localNodeID,
+<span class="nc" id="L78">            int localInterfaceID, int remoteNodeID, int remoteInterfaceID) {</span>
+<span class="nc" id="L79">        this.fecObjHeader = fecObjHeader;</span>
+<span class="nc" id="L80">        this.localNodeID = localNodeID;</span>
+<span class="nc" id="L81">        this.localInterfaceID = localInterfaceID;</span>
+<span class="nc" id="L82">        this.remoteNodeID = remoteNodeID;</span>
+<span class="nc" id="L83">        this.remoteInterfaceID = remoteInterfaceID;</span>
+<span class="nc" id="L84">    }</span>
+
+    /**
+     * Sets Object Header.
+     *
+     * @param obj object header
+     */
+    public void setFecIpv4UnnumberedAdjacencyObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L92">        this.fecObjHeader = obj;</span>
+<span class="nc" id="L93">    }</span>
+
+    @Override
+    public void setLocalNodeID(int localNodeID) {
+<span class="nc" id="L97">        this.localNodeID = localNodeID;</span>
+<span class="nc" id="L98">    }</span>
+
+    /**
+     * Returns Object Header.
+     *
+     * @return fecObjHeader fec object header
+     */
+    public PcepObjectHeader getFecIpv4UnnumberedAdjacencyObjHeader() {
+<span class="nc" id="L106">        return this.fecObjHeader;</span>
+    }
+
+    @Override
+    public int getLocalNodeID() {
+<span class="nc" id="L111">        return this.localNodeID;</span>
+    }
+
+    @Override
+    public int getLocalInterfaceID() {
+<span class="nc" id="L116">        return this.localInterfaceID;</span>
+    }
+
+    @Override
+    public void setLocalInterfaceID(int localInterfaceID) {
+<span class="nc" id="L121">        this.localInterfaceID = localInterfaceID;</span>
+<span class="nc" id="L122">    }</span>
+
+    @Override
+    public int getRemoteNodeID() {
+<span class="nc" id="L126">        return this.remoteNodeID;</span>
+    }
+
+    @Override
+    public void setRemoteNodeID(int remoteNodeID) {
+<span class="nc" id="L131">        this.remoteNodeID = remoteNodeID;</span>
+<span class="nc" id="L132">    }</span>
+
+    @Override
+    public int getRemoteInterfaceID() {
+<span class="nc" id="L136">        return this.remoteInterfaceID;</span>
+    }
+
+    @Override
+    public void setRemoteInterfaceID(int remoteInterfaceID) {
+<span class="nc" id="L141">        this.remoteInterfaceID = remoteInterfaceID;</span>
+<span class="nc" id="L142">    }</span>
+
+    /**
+     * Reads from channel buffer and returns object of PcepFecObjectIPv4UnnumberedAdjacency.
+     *
+     * @param cb of channel buffer
+     * @return object of PcepFecObjectIPv4UnnumberedAdjacency
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepFecObjectIPv4UnnumberedAdjacency read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader fecObjHeader;
+        int localNodeID;
+        int localInterfaceID;
+        int remoteNodeID;
+        int remoteInterfaceID;
+
+<span class="nc" id="L159">        fecObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only FEC IPv4 Unnumbered Adjacency Object buffer.
+<span class="nc" id="L162">        ChannelBuffer tempCb = cb.readBytes(fecObjHeader.getObjLen() - MINIMUM_COMMON_HEADER_LENGTH);</span>
+<span class="nc" id="L163">        localNodeID = tempCb.readInt();</span>
+<span class="nc" id="L164">        localInterfaceID = tempCb.readInt();</span>
+<span class="nc" id="L165">        remoteNodeID = tempCb.readInt();</span>
+<span class="nc" id="L166">        remoteInterfaceID = tempCb.readInt();</span>
+
+<span class="nc" id="L168">        return new PcepFecObjectIPv4UnnumberedAdjacencyVer1(fecObjHeader, localNodeID, localInterfaceID, remoteNodeID,</span>
+                remoteInterfaceID);
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L175">        int objStartIndex = cb.writerIndex();</span>
+
+        //Write common header
+<span class="nc" id="L178">        int objLenIndex = fecObjHeader.write(cb);</span>
+<span class="nc" id="L179">        cb.writeInt(localNodeID);</span>
+<span class="nc" id="L180">        cb.writeInt(localInterfaceID);</span>
+<span class="nc" id="L181">        cb.writeInt(remoteNodeID);</span>
+<span class="nc" id="L182">        cb.writeInt(remoteInterfaceID);</span>
+
+        //Now write FEC IPv4 Unnumbered Adjacency Object Length
+<span class="nc" id="L185">        cb.setShort(objLenIndex, (short) (cb.writerIndex() - objStartIndex));</span>
+
+<span class="nc" id="L187">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Builder class for PCEP Fec object IPv4 unnumbered Adjacency.
+     */
+<span class="nc" id="L193">    public static class Builder implements PcepFecObjectIPv4UnnumberedAdjacency.Builder {</span>
+<span class="nc" id="L194">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L195">        private boolean bIsLocalNodeIDset = false;</span>
+<span class="nc" id="L196">        private boolean bIsLocalInterfaceIDset = false;</span>
+<span class="nc" id="L197">        private boolean bIsRemoteNodeIDset = false;</span>
+<span class="nc" id="L198">        private boolean bIsRemoteInterfaceIDset = false;</span>
+
+        private PcepObjectHeader fecObjHeader;
+        private int localNodeID;
+        private int localInterfaceID;
+        private int remoteNodeID;
+        private int remoteInterfaceID;
+
+<span class="nc" id="L206">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L209">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepFecObjectIPv4UnnumberedAdjacency build() throws PcepParseException {
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            PcepObjectHeader fecObjHeader = this.bIsHeaderSet ? this.fecObjHeader : DEFAULT_FEC_OBJECT_HEADER;</span>
+
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if (!this.bIsLocalNodeIDset) {</span>
+<span class="nc" id="L217">                throw new PcepParseException(</span>
+                        &quot; Local Node ID not set while building PcepFecObjectIPv4UnnumberedAdjacency object.&quot;);
+            }
+<span class="nc bnc" id="L220" title="All 2 branches missed.">            if (!this.bIsLocalInterfaceIDset) {</span>
+<span class="nc" id="L221">                throw new PcepParseException(</span>
+                        &quot; Local Interface ID not set while building PcepFecObjectIPv4UnnumberedAdjacency object.&quot;);
+            }
+<span class="nc bnc" id="L224" title="All 2 branches missed.">            if (!this.bIsRemoteNodeIDset) {</span>
+<span class="nc" id="L225">                throw new PcepParseException(</span>
+                        &quot; Remote Node ID not set while building PcepFecObjectIPv4UnnumberedAdjacency object.&quot;);
+            }
+<span class="nc bnc" id="L228" title="All 2 branches missed.">            if (!this.bIsRemoteInterfaceIDset) {</span>
+<span class="nc" id="L229">                throw new PcepParseException(</span>
+                        &quot; Remote Interface ID not set while building PcepFecObjectIPv4UnnumberedAdjacency object.&quot;);
+            }
+<span class="nc bnc" id="L232" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L233">                fecObjHeader.setPFlag(bPFlag);</span>
+            }
+<span class="nc bnc" id="L235" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L236">                fecObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L238">            return new PcepFecObjectIPv4UnnumberedAdjacencyVer1(fecObjHeader, this.localNodeID, this.localInterfaceID,</span>
+                    this.remoteNodeID, this.remoteInterfaceID);
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L244">            this.bPFlag = value;</span>
+<span class="nc" id="L245">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L246">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L251">            this.bIFlag = value;</span>
+<span class="nc" id="L252">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L253">            return this;</span>
+        }
+
+        @Override
+        public PcepObjectHeader getFecIpv4UnnumberedAdjacencyObjHeader() {
+<span class="nc" id="L258">            return this.fecObjHeader;</span>
+        }
+
+        @Override
+        public Builder setFecIpv4UnnumberedAdjacencyObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L263">            this.fecObjHeader = obj;</span>
+<span class="nc" id="L264">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L265">            return this;</span>
+        }
+
+        @Override
+        public int getLocalNodeID() {
+<span class="nc" id="L270">            return this.localNodeID;</span>
+        }
+
+        @Override
+        public Builder setLocalNodeID(int value) {
+<span class="nc" id="L275">            this.localNodeID = value;</span>
+<span class="nc" id="L276">            this.bIsLocalNodeIDset = true;</span>
+<span class="nc" id="L277">            return this;</span>
+        }
+
+        @Override
+        public int getLocalInterfaceID() {
+<span class="nc" id="L282">            return this.localInterfaceID;</span>
+        }
+
+        @Override
+        public Builder setLocalInterfaceID(int value) {
+<span class="nc" id="L287">            this.localInterfaceID = value;</span>
+<span class="nc" id="L288">            this.bIsLocalInterfaceIDset = true;</span>
+<span class="nc" id="L289">            return this;</span>
+        }
+
+        @Override
+        public int getRemoteNodeID() {
+<span class="nc" id="L294">            return this.remoteNodeID;</span>
+        }
+
+        @Override
+        public Builder setRemoteNodeID(int value) {
+<span class="nc" id="L299">            this.remoteNodeID = value;</span>
+<span class="nc" id="L300">            this.bIsRemoteNodeIDset = true;</span>
+<span class="nc" id="L301">            return this;</span>
+        }
+
+        @Override
+        public int getRemoteInterfaceID() {
+<span class="nc" id="L306">            return this.remoteInterfaceID;</span>
+        }
+
+        @Override
+        public Builder setRemoteInterfaceID(int value) {
+<span class="nc" id="L311">            this.remoteInterfaceID = value;</span>
+<span class="nc" id="L312">            this.bIsRemoteInterfaceIDset = true;</span>
+<span class="nc" id="L313">            return this;</span>
+        }
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L319">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public int getType() {
+<span class="nc" id="L324">        return FEC_OBJ_TYPE;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L329">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L330">                .add(&quot;LocalNodeID: &quot;, localNodeID)</span>
+<span class="nc" id="L331">                .add(&quot;LocalInterfaceID: &quot;, localInterfaceID).add(&quot;RemoteNodeID: &quot;, remoteNodeID)</span>
+<span class="nc" id="L332">                .add(&quot;RemoteInterfaceID: &quot;, remoteInterfaceID).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

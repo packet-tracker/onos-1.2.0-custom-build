@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GroupStatsCollector.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-group</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.group.impl</a> &gt; <span class="el_source">GroupStatsCollector.java</span></div><h1>GroupStatsCollector.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.provider.of.group.impl;
+
+import org.jboss.netty.util.HashedWheelTimer;
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.util.Timer;
+import org.onosproject.openflow.controller.OpenFlowSwitch;
+import org.onosproject.openflow.controller.RoleState;
+import org.projectfloodlight.openflow.protocol.OFGroupDescStatsRequest;
+import org.projectfloodlight.openflow.protocol.OFGroupStatsRequest;
+import org.projectfloodlight.openflow.types.OFGroup;
+import org.slf4j.Logger;
+
+import java.util.concurrent.TimeUnit;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/*
+ * Sends Group Stats Request and collect the group statistics with a time interval.
+ */
+public class GroupStatsCollector implements TimerTask {
+
+<span class="fc" id="L39">    private final HashedWheelTimer timer = Timer.getTimer();</span>
+    private final OpenFlowSwitch sw;
+<span class="fc" id="L41">    private final Logger log = getLogger(getClass());</span>
+    private final int refreshInterval;
+
+    private Timeout timeout;
+
+<span class="fc" id="L46">    private boolean stopTimer = false;</span>
+
+    /**
+     * Creates a GroupStatsCollector object.
+     *
+     * @param sw Open Flow switch
+     * @param interval time interval for collecting group statistic
+     */
+<span class="fc" id="L54">    public GroupStatsCollector(OpenFlowSwitch sw, int interval) {</span>
+<span class="fc" id="L55">        this.sw = sw;</span>
+<span class="fc" id="L56">        this.refreshInterval = interval;</span>
+<span class="fc" id="L57">    }</span>
+
+    @Override
+    public void run(Timeout timeout) throws Exception {
+<span class="nc" id="L61">        log.trace(&quot;Collecting stats for {}&quot;, sw.getStringId());</span>
+
+<span class="nc" id="L63">        sendGroupStatistic();</span>
+
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (!this.stopTimer) {</span>
+<span class="nc" id="L66">            log.trace(&quot;Scheduling stats collection in {} seconds for {}&quot;,</span>
+<span class="nc" id="L67">                    this.refreshInterval, this.sw.getStringId());</span>
+<span class="nc" id="L68">            timeout.getTimer().newTimeout(this, refreshInterval,</span>
+                    TimeUnit.SECONDS);
+        }
+<span class="nc" id="L71">    }</span>
+
+    private void sendGroupStatistic() {
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L75">            log.trace(&quot;sendGroupStatistics {}:{}&quot;, sw.getStringId(), sw.getRole());</span>
+        }
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (sw.getRole() != RoleState.MASTER) {</span>
+<span class="nc" id="L78">            return;</span>
+        }
+<span class="nc" id="L80">        Long statsXid = OpenFlowGroupProvider.getXidAndAdd(2);</span>
+<span class="nc" id="L81">        OFGroupStatsRequest statsRequest = sw.factory().buildGroupStatsRequest()</span>
+<span class="nc" id="L82">                .setGroup(OFGroup.ALL)</span>
+<span class="nc" id="L83">                .setXid(statsXid)</span>
+<span class="nc" id="L84">                .build();</span>
+<span class="nc" id="L85">        sw.sendMsg(statsRequest);</span>
+
+<span class="nc" id="L87">        Long descXid = statsXid + 1;</span>
+<span class="nc" id="L88">        OFGroupDescStatsRequest descStatsRequest =</span>
+<span class="nc" id="L89">                sw.factory().buildGroupDescStatsRequest()</span>
+<span class="nc" id="L90">                        .setXid(descXid)</span>
+<span class="nc" id="L91">                        .build();</span>
+<span class="nc" id="L92">        sw.sendMsg(descStatsRequest);</span>
+<span class="nc" id="L93">    }</span>
+
+    /**
+     * Starts the collector.
+     */
+    public void start() {
+<span class="fc" id="L99">        log.info(&quot;Starting Group Stats collection thread for {}&quot;, sw.getStringId());</span>
+<span class="fc" id="L100">        timeout = timer.newTimeout(this, 1, TimeUnit.SECONDS);</span>
+<span class="fc" id="L101">    }</span>
+
+    /**
+     * Stops the collector.
+     */
+    public void stop() {
+<span class="nc" id="L107">        log.info(&quot;Stopping Group Stats collection thread for {}&quot;, sw.getStringId());</span>
+<span class="nc" id="L108">        this.stopTimer = true;</span>
+<span class="nc" id="L109">        timeout.cancel();</span>
+<span class="nc" id="L110">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

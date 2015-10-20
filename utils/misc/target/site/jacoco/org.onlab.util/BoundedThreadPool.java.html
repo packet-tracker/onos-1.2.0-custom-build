@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BoundedThreadPool.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.util</a> &gt; <span class="el_source">BoundedThreadPool.java</span></div><h1>BoundedThreadPool.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.util;
+
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * Implementation of ThreadPoolExecutor that bounds the work queue.
+ * &lt;p&gt;
+ * When a new job would exceed the queue bound, the job is run on the caller's
+ * thread rather than on a thread from the pool.
+ * &lt;/p&gt;
+ */
+public final class BoundedThreadPool extends ThreadPoolExecutor {
+
+<span class="fc" id="L38">    private static final org.slf4j.Logger log = LoggerFactory.getLogger(BoundedThreadPool.class);</span>
+
+<span class="fc" id="L40">    protected static int maxQueueSize = 80_000; //TODO tune this value</span>
+    //private static final RejectedExecutionHandler DEFAULT_HANDLER = new CallerFeedbackPolicy();
+    private static final long STATS_INTERVAL = 5_000; //ms
+
+    private final BlockingBoolean underHighLoad;
+
+    private BoundedThreadPool(int numberOfThreads,
+                              ThreadFactory threadFactory) {
+<span class="fc" id="L48">        super(numberOfThreads, numberOfThreads,</span>
+              0L, TimeUnit.MILLISECONDS,
+              new LinkedBlockingQueue&lt;&gt;(maxQueueSize),
+              threadFactory,
+              new CallerFeedbackPolicy());
+<span class="fc" id="L53">        underHighLoad = ((CallerFeedbackPolicy) getRejectedExecutionHandler()).load();</span>
+<span class="fc" id="L54">    }</span>
+
+    /**
+     * Returns a single-thread, bounded executor service.
+     *
+     * @param threadFactory thread factory for the worker thread.
+     * @return the bounded thread pool
+     */
+    public static BoundedThreadPool newSingleThreadExecutor(ThreadFactory threadFactory) {
+<span class="fc" id="L63">        return new BoundedThreadPool(1, threadFactory);</span>
+    }
+
+    /**
+     * Returns a fixed-size, bounded executor service.
+     *
+     * @param numberOfThreads number of threads in the pool
+     * @param threadFactory   thread factory for the worker threads.
+     * @return the bounded thread pool
+     */
+    public static BoundedThreadPool newFixedThreadPool(int numberOfThreads, ThreadFactory threadFactory) {
+<span class="fc" id="L74">        return new BoundedThreadPool(numberOfThreads, threadFactory);</span>
+    }
+
+    //TODO Might want to switch these to use Metrics class Meter and/or Gauge instead.
+<span class="fc" id="L78">    private final Counter submitted = new Counter();</span>
+<span class="fc" id="L79">    private final Counter taken = new Counter();</span>
+
+    @Override
+    public Future&lt;?&gt; submit(Runnable task) {
+<span class="fc" id="L83">        submitted.add(1);</span>
+<span class="fc" id="L84">        return super.submit(task);</span>
+    }
+
+    @Override
+    public &lt;T&gt; Future&lt;T&gt; submit(Runnable task, T result) {
+<span class="nc" id="L89">        submitted.add(1);</span>
+<span class="nc" id="L90">        return super.submit(task, result);</span>
+    }
+
+    @Override
+    public void execute(Runnable command) {
+<span class="fc" id="L95">        submitted.add(1);</span>
+<span class="fc" id="L96">        super.execute(command);</span>
+<span class="fc" id="L97">    }</span>
+
+    @Override
+    public &lt;T&gt; Future&lt;T&gt; submit(Callable&lt;T&gt; task) {
+<span class="fc" id="L101">        submitted.add(1);</span>
+<span class="fc" id="L102">        return super.submit(task);</span>
+    }
+
+
+    @Override
+    protected void beforeExecute(Thread t, Runnable r) {
+<span class="fc" id="L108">        super.beforeExecute(t, r);</span>
+<span class="fc" id="L109">        taken.add(1);</span>
+<span class="fc" id="L110">        periodicallyPrintStats();</span>
+<span class="fc" id="L111">        updateLoad();</span>
+<span class="fc" id="L112">    }</span>
+
+    // TODO schedule this with a fixed delay from a scheduled executor
+<span class="fc" id="L115">    private final AtomicLong lastPrinted = new AtomicLong(0L);</span>
+
+    private void periodicallyPrintStats() {
+<span class="fc" id="L118">        long now = System.currentTimeMillis();</span>
+<span class="fc" id="L119">        long prev = lastPrinted.get();</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (now - prev &gt; STATS_INTERVAL) {</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">            if (lastPrinted.compareAndSet(prev, now)) {</span>
+<span class="fc" id="L122">                log.debug(&quot;queue size: {} jobs, submitted: {} jobs/s, taken: {} jobs/s&quot;,</span>
+<span class="fc" id="L123">                         getQueue().size(),</span>
+<span class="fc" id="L124">                         submitted.throughput(), taken.throughput());</span>
+<span class="fc" id="L125">                submitted.reset();</span>
+<span class="fc" id="L126">                taken.reset();</span>
+            }
+        }
+<span class="fc" id="L129">    }</span>
+
+    // TODO consider updating load whenever queue changes
+    private void updateLoad() {
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        underHighLoad.set(getQueue().remainingCapacity() / (double) maxQueueSize &lt; 0.2);</span>
+<span class="fc" id="L134">    }</span>
+
+    /**
+     * Feedback policy that delays the caller's thread until the executor's work
+     * queue falls below a threshold, then runs the job on the caller's thread.
+     */
+<span class="fc" id="L140">    private static final class CallerFeedbackPolicy implements RejectedExecutionHandler {</span>
+
+<span class="fc" id="L142">        private final BlockingBoolean underLoad = new BlockingBoolean(false);</span>
+
+        public BlockingBoolean load() {
+<span class="fc" id="L145">            return underLoad;</span>
+        }
+
+        /**
+         * Executes task r in the caller's thread, unless the executor
+         * has been shut down, in which case the task is discarded.
+         *
+         * @param r the runnable task requested to be executed
+         * @param e the executor attempting to execute this task
+         */
+        public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">            if (!e.isShutdown()) {</span>
+                // Wait for up to 1 second while the queue drains...
+<span class="fc" id="L158">                boolean notified = false;</span>
+                try {
+<span class="fc" id="L160">                    notified = underLoad.await(false, 1, TimeUnit.SECONDS);</span>
+<span class="nc" id="L161">                } catch (InterruptedException exception) {</span>
+<span class="nc" id="L162">                    log.debug(&quot;Got exception waiting for notification:&quot;, exception);</span>
+                } finally {
+<span class="pc bpc" id="L164" title="4 of 6 branches missed.">                    if (!notified) {</span>
+<span class="pc" id="L165">                        log.info(&quot;Waited for 1 second on {}. Proceeding with work...&quot;,</span>
+<span class="pc" id="L166">                                 Thread.currentThread().getName());</span>
+                    } else {
+<span class="pc" id="L168">                        log.info(&quot;FIXME we got a notice&quot;);</span>
+                    }
+<span class="pc" id="L170">                }</span>
+                // Do the work on the submitter's thread
+<span class="fc" id="L172">                r.run();</span>
+            }
+<span class="fc" id="L174">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

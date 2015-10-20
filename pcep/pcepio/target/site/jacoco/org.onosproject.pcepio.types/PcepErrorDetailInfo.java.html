@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepErrorDetailInfo.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">PcepErrorDetailInfo.java</span></div><h1>PcepErrorDetailInfo.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+/**
+ * Provide the PCEP Error Info Details.
+ */
+public final class PcepErrorDetailInfo {
+
+<span class="nc" id="L24">    private PcepErrorDetailInfo() {</span>
+<span class="nc" id="L25">    }</span>
+
+    // Error Types
+    /**
+    Error-  Meaning                                           Reference:RFC 5440
+    Type
+    1     PCEP session establishment failure
+        Error-value=1: reception of an invalid Open message or a non Open message.
+        Error-value=2: no Open message received before the expiration of the OpenWait timer
+        Error-value=3: unacceptable and non-negotiable session characteristics
+        Error-value=4: unacceptable but negotiable session characteristics
+        Error-value=5: reception of a second Open message with still unacceptable session characteristics
+        Error-value=6: reception of a PCErr message proposing unacceptable session characteristics
+        Error-value=7: No Keepalive or PCErr message received before the expiration of the KeepWait timer
+        Error-value=8: PCEP version not supported
+    2     Capability not supported
+    3     Unknown Object
+         Error-value=1: Unrecognized object class
+         Error-value=2: Unrecognized object Type
+    4     Not supported object
+         Error-value=1: Not supported object class
+         Error-value=2: Not supported object Type
+    5     Policy violation
+         Error-value=1: C bit of the METRIC object set (request rejected)
+         Error-value=2: O bit of the RP object cleared (request rejected)
+    6     Mandatory Object missing
+         Error-value=1: RP object missing
+         Error-value=2: RRO missing for a re-optimization request (R bit of the RP object set)
+         Error-value=3: END-POINTS object missing
+    7     Synchronized path computation request missing
+    8     Unknown request reference
+    9     Attempt to establish a second PCEP session
+    10     Reception of an invalid object
+         Error-value=1: reception of an object with P flag not set although the P flag must be
+                        set according to this specification.
+     */
+    public static final byte ERROR_TYPE_1 = 1;
+    public static final byte ERROR_TYPE_2 = 2;
+    public static final byte ERROR_TYPE_3 = 3;
+    public static final byte ERROR_TYPE_4 = 4;
+    public static final byte ERROR_TYPE_5 = 5;
+    public static final byte ERROR_TYPE_6 = 6;
+    public static final byte ERROR_TYPE_7 = 7;
+    public static final byte ERROR_TYPE_8 = 8;
+    public static final byte ERROR_TYPE_9 = 9;
+    public static final byte ERROR_TYPE_10 = 10;
+
+    // Error Values
+    public static final byte ERROR_VALUE_1 = 1;
+    public static final byte ERROR_VALUE_2 = 2;
+    public static final byte ERROR_VALUE_3 = 3;
+    public static final byte ERROR_VALUE_4 = 4;
+    public static final byte ERROR_VALUE_5 = 5;
+    public static final byte ERROR_VALUE_6 = 6;
+    public static final byte ERROR_VALUE_7 = 7;
+    public static final byte ERROR_VALUE_8 = 8;
+    public static final byte ERROR_VALUE_9 = 9;
+    public static final byte ERROR_VALUE_10 = 10;
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ImmutableClassChecker.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-junit</a> &gt; <a href="index.source.html" class="el_package">org.onlab.junit</a> &gt; <span class="el_source">ImmutableClassChecker.java</span></div><h1>ImmutableClassChecker.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.junit;
+
+import org.hamcrest.Description;
+import org.hamcrest.StringDescription;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+
+/**
+ * Hamcrest style class for verifying that a class follows the
+ * accepted rules for immutable classes.
+ *
+ * The rules that are enforced for immutable classes:
+ *    - the class must be declared final
+ *    - all data members of the class must be declared private and final
+ *    - the class must not define any setter methods
+ */
+
+<span class="fc" id="L35">public class ImmutableClassChecker {</span>
+
+<span class="fc" id="L37">    private String failureReason = &quot;&quot;;</span>
+
+    /**
+     * Method to determine if a given class is a properly specified
+     * immutable class.
+     *
+     * @param clazz the class to check
+     * @return true if the given class is a properly specified immutable class.
+     */
+    private boolean isImmutableClass(Class&lt;?&gt; clazz, boolean allowNonFinalClass) {
+        // class must be declared final
+<span class="pc bpc" id="L48" title="1 of 4 branches missed.">        if (!allowNonFinalClass &amp;&amp; !Modifier.isFinal(clazz.getModifiers())) {</span>
+<span class="fc" id="L49">            failureReason = &quot;a class that is not final&quot;;</span>
+<span class="fc" id="L50">            return false;</span>
+        }
+
+        // class must have only final and private data members
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        for (final Field field : clazz.getDeclaredFields()) {</span>
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">            if (field.getName().startsWith(&quot;_&quot;) ||</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">                field.getName().startsWith(&quot;$&quot;)) {</span>
+                //  eclipse generated code may insert switch table - ignore
+                //  cobertura sticks these fields into classes - ignore them
+<span class="fc" id="L59">                continue;</span>
+            }
+<span class="fc bfc" id="L61" title="All 2 branches covered.">            if (!Modifier.isFinal(field.getModifiers())) {</span>
+<span class="fc" id="L62">                failureReason = &quot;a field named '&quot; + field.getName() +</span>
+                                &quot;' that is not final&quot;;
+<span class="fc" id="L64">                return false;</span>
+            }
+<span class="fc bfc" id="L66" title="All 2 branches covered.">            if (!Modifier.isPrivate(field.getModifiers())) {</span>
+                //
+                // NOTE: We relax the recommended rules for defining immutable
+                // objects and allow &quot;static final&quot; fields that are not
+                // private. The &quot;final&quot; check was already done above so we
+                // don't repeat it here.
+                //
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">                if (!Modifier.isStatic(field.getModifiers())) {</span>
+<span class="fc" id="L74">                    failureReason = &quot;a field named '&quot; + field.getName() +</span>
+                                &quot;' that is not private and is not static&quot;;
+<span class="fc" id="L76">                    return false;</span>
+                }
+            }
+        }
+
+        //  class must not define any setters
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">        for (final Method method : clazz.getMethods()) {</span>
+<span class="pc bpc" id="L83" title="1 of 2 branches missed.">            if (method.getDeclaringClass().equals(clazz)) {</span>
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">                if (method.getName().startsWith(&quot;set&quot;)) {</span>
+<span class="fc" id="L85">                    failureReason = &quot;a class with a setter named '&quot; + method.getName() + &quot;'&quot;;</span>
+<span class="fc" id="L86">                    return false;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L91">        return true;</span>
+    }
+
+    /**
+     * Describe why an error was reported.  Uses Hamcrest style Description
+     * interfaces.
+     *
+     * @param description the Description object to use for reporting the
+     *                    mismatch
+     */
+    public void describeMismatch(Description description) {
+<span class="fc" id="L102">        description.appendText(failureReason);</span>
+<span class="fc" id="L103">    }</span>
+
+    /**
+     * Describe the source object that caused an error, using a Hamcrest
+     * Matcher style interface.  In this case, it always returns
+     * that we are looking for a properly defined utility class.
+     *
+     * @param description the Description object to use to report the &quot;to&quot;
+     *                    object
+     */
+    public void describeTo(Description description) {
+<span class="fc" id="L114">        description.appendText(&quot;a properly defined immutable class&quot;);</span>
+<span class="fc" id="L115">    }</span>
+
+    /**
+     * Assert that the given class adheres to the immutable class rules.
+     *
+     * @param clazz the class to check
+     *
+     * @throws java.lang.AssertionError if the class is not an
+     *         immutable class
+     */
+    public static void assertThatClassIsImmutable(Class&lt;?&gt; clazz) {
+<span class="fc" id="L126">        final ImmutableClassChecker checker = new ImmutableClassChecker();</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">        if (!checker.isImmutableClass(clazz, false)) {</span>
+<span class="fc" id="L128">            final Description toDescription = new StringDescription();</span>
+<span class="fc" id="L129">            final Description mismatchDescription = new StringDescription();</span>
+
+<span class="fc" id="L131">            checker.describeTo(toDescription);</span>
+<span class="fc" id="L132">            checker.describeMismatch(mismatchDescription);</span>
+<span class="fc" id="L133">            final String reason =</span>
+                    &quot;\n&quot; +
+<span class="fc" id="L135">                    &quot;Expected: is \&quot;&quot; + toDescription.toString() + &quot;\&quot;\n&quot; +</span>
+<span class="fc" id="L136">                    &quot;    but : was \&quot;&quot; + mismatchDescription.toString() + &quot;\&quot;&quot;;</span>
+
+<span class="fc" id="L138">            throw new AssertionError(reason);</span>
+        }
+<span class="nc" id="L140">    }</span>
+
+    /**
+     * Assert that the given class adheres to the immutable class rules, but
+     * is not declared final.  Classes that need to be inherited from cannot be
+     * declared final.
+     *
+     * @param clazz the class to check
+     *
+     * @throws java.lang.AssertionError if the class is not an
+     *         immutable class
+     */
+    public static void assertThatClassIsImmutableBaseClass(Class&lt;?&gt; clazz) {
+<span class="nc" id="L153">        final ImmutableClassChecker checker = new ImmutableClassChecker();</span>
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        if (!checker.isImmutableClass(clazz, true)) {</span>
+<span class="nc" id="L155">            final Description toDescription = new StringDescription();</span>
+<span class="nc" id="L156">            final Description mismatchDescription = new StringDescription();</span>
+
+<span class="nc" id="L158">            checker.describeTo(toDescription);</span>
+<span class="nc" id="L159">            checker.describeMismatch(mismatchDescription);</span>
+<span class="nc" id="L160">            final String reason =</span>
+                    &quot;\n&quot; +
+<span class="nc" id="L162">                            &quot;Expected: is \&quot;&quot; + toDescription.toString() + &quot;\&quot;\n&quot; +</span>
+<span class="nc" id="L163">                            &quot;    but : was \&quot;&quot; + mismatchDescription.toString() + &quot;\&quot;&quot;;</span>
+
+<span class="nc" id="L165">            throw new AssertionError(reason);</span>
+        }
+<span class="nc" id="L167">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

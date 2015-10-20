@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LinkManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.link.impl</a> &gt; <span class="el_source">LinkManager.java</span></div><h1>LinkManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.link.impl;
+
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.Sets;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.provider.AbstractListenerProviderRegistry;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.config.basics.BasicLinkConfig;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Link.State;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.link.LinkAdminService;
+import org.onosproject.net.link.LinkDescription;
+import org.onosproject.net.link.LinkEvent;
+import org.onosproject.net.link.LinkListener;
+import org.onosproject.net.link.LinkProvider;
+import org.onosproject.net.link.LinkProviderRegistry;
+import org.onosproject.net.link.LinkProviderService;
+import org.onosproject.net.link.LinkService;
+import org.onosproject.net.link.LinkStore;
+import org.onosproject.net.link.LinkStoreDelegate;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.slf4j.Logger;
+
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.net.LinkKey.linkKey;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Provides basic implementation of the link SB &amp;amp; NB APIs.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L69">public class LinkManager</span>
+        extends AbstractListenerProviderRegistry&lt;LinkEvent, LinkListener, LinkProvider, LinkProviderService&gt;
+        implements LinkService, LinkAdminService, LinkProviderRegistry {
+
+    private static final String DEVICE_ID_NULL = &quot;Device ID cannot be null&quot;;
+    private static final String LINK_DESC_NULL = &quot;Link description cannot be null&quot;;
+    private static final String CONNECT_POINT_NULL = &quot;Connection point cannot be null&quot;;
+
+<span class="fc" id="L77">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L79">    private final LinkStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+<span class="fc" id="L81">    private final DeviceListener deviceListener = new InternalDeviceListener();</span>
+
+<span class="fc" id="L83">    private final NetworkConfigListener networkConfigListener = new InternalNetworkConfigListener();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService networkConfigService;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L96">        store.setDelegate(delegate);</span>
+<span class="fc" id="L97">        eventDispatcher.addSink(LinkEvent.class, listenerRegistry);</span>
+<span class="fc" id="L98">        deviceService.addListener(deviceListener);</span>
+<span class="fc" id="L99">        networkConfigService.addListener(networkConfigListener);</span>
+<span class="fc" id="L100">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L101">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L105">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L106">        eventDispatcher.removeSink(LinkEvent.class);</span>
+<span class="fc" id="L107">        deviceService.removeListener(deviceListener);</span>
+<span class="fc" id="L108">        networkConfigService.removeListener(networkConfigListener);</span>
+<span class="fc" id="L109">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L110">    }</span>
+
+    @Override
+    public int getLinkCount() {
+<span class="fc" id="L114">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L115">        return store.getLinkCount();</span>
+    }
+
+    @Override
+    public Iterable&lt;Link&gt; getLinks() {
+<span class="fc" id="L120">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L121">        return store.getLinks();</span>
+    }
+
+    @Override
+    public Iterable&lt;Link&gt; getActiveLinks() {
+<span class="nc" id="L126">        checkPermission(LINK_READ);</span>
+<span class="nc" id="L127">        return FluentIterable.from(getLinks())</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                .filter(input -&gt; input.state() == State.ACTIVE);</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceLinks(DeviceId deviceId) {
+<span class="fc" id="L133">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L134">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L135">        return Sets.union(store.getDeviceEgressLinks(deviceId),</span>
+<span class="fc" id="L136">                          store.getDeviceIngressLinks(deviceId));</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceEgressLinks(DeviceId deviceId) {
+<span class="fc" id="L141">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L142">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L143">        return store.getDeviceEgressLinks(deviceId);</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getDeviceIngressLinks(DeviceId deviceId) {
+<span class="fc" id="L148">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L149">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L150">        return store.getDeviceIngressLinks(deviceId);</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getLinks(ConnectPoint connectPoint) {
+<span class="fc" id="L155">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L156">        checkNotNull(connectPoint, CONNECT_POINT_NULL);</span>
+<span class="fc" id="L157">        return Sets.union(store.getEgressLinks(connectPoint),</span>
+<span class="fc" id="L158">                          store.getIngressLinks(connectPoint));</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getEgressLinks(ConnectPoint connectPoint) {
+<span class="fc" id="L163">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L164">        checkNotNull(connectPoint, CONNECT_POINT_NULL);</span>
+<span class="fc" id="L165">        return store.getEgressLinks(connectPoint);</span>
+    }
+
+    @Override
+    public Set&lt;Link&gt; getIngressLinks(ConnectPoint connectPoint) {
+<span class="fc" id="L170">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L171">        checkNotNull(connectPoint, CONNECT_POINT_NULL);</span>
+<span class="fc" id="L172">        return store.getIngressLinks(connectPoint);</span>
+    }
+
+    @Override
+    public Link getLink(ConnectPoint src, ConnectPoint dst) {
+<span class="fc" id="L177">        checkPermission(LINK_READ);</span>
+<span class="fc" id="L178">        checkNotNull(src, CONNECT_POINT_NULL);</span>
+<span class="fc" id="L179">        checkNotNull(dst, CONNECT_POINT_NULL);</span>
+<span class="fc" id="L180">        return store.getLink(src, dst);</span>
+    }
+
+    @Override
+    public void removeLinks(ConnectPoint connectPoint) {
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (deviceService.getRole(connectPoint.deviceId()) != MastershipRole.MASTER) {</span>
+<span class="nc" id="L186">            return;</span>
+        }
+<span class="fc" id="L188">        removeLinks(getLinks(connectPoint), false);</span>
+<span class="fc" id="L189">    }</span>
+
+    @Override
+    public void removeLinks(DeviceId deviceId) {
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">        if (deviceService.getRole(deviceId) != MastershipRole.MASTER) {</span>
+<span class="nc" id="L194">            return;</span>
+        }
+<span class="fc" id="L196">        removeLinks(getDeviceLinks(deviceId), false);</span>
+<span class="fc" id="L197">    }</span>
+
+    @Override
+    public void removeLink(ConnectPoint src, ConnectPoint dst) {
+<span class="nc" id="L201">        post(store.removeLink(src, dst));</span>
+<span class="nc" id="L202">    }</span>
+
+    private boolean isAllowed(BasicLinkConfig cfg) {
+<span class="pc bpc" id="L205" title="3 of 4 branches missed.">        return (cfg == null || cfg.isAllowed());</span>
+    }
+
+    // Auxiliary interceptor for device remove events to prune links that
+    // are associated with the removed device or its port.
+<span class="fc" id="L210">    private class InternalDeviceListener implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            if (event.type() == DeviceEvent.Type.DEVICE_REMOVED) {</span>
+<span class="nc" id="L214">                removeLinks(event.subject().id());</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">            } else if (event.type() == DeviceEvent.Type.PORT_REMOVED) {</span>
+<span class="nc" id="L216">                removeLinks(new ConnectPoint(event.subject().id(),</span>
+<span class="nc" id="L217">                        event.port().number()));</span>
+            }
+<span class="nc" id="L219">        }</span>
+    }
+
+    @Override
+    protected LinkProviderService createProviderService(LinkProvider provider) {
+<span class="fc" id="L224">        return new InternalLinkProviderService(provider);</span>
+    }
+
+    // Personalized link provider service issued to the supplied provider.
+    private class InternalLinkProviderService
+            extends AbstractProviderService&lt;LinkProvider&gt;
+            implements LinkProviderService {
+
+<span class="fc" id="L232">        InternalLinkProviderService(LinkProvider provider) {</span>
+<span class="fc" id="L233">            super(provider);</span>
+<span class="fc" id="L234">        }</span>
+
+        @Override
+        public void linkDetected(LinkDescription linkDescription) {
+<span class="fc" id="L238">            checkNotNull(linkDescription, LINK_DESC_NULL);</span>
+<span class="fc" id="L239">            checkValidity();</span>
+<span class="fc" id="L240">            linkDescription = validateLink(linkDescription);</span>
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">            if (linkDescription != null) {</span>
+<span class="fc" id="L242">                LinkEvent event = store.createOrUpdateLink(provider().id(), linkDescription);</span>
+<span class="fc bfc" id="L243" title="All 2 branches covered.">                if (event != null) {</span>
+<span class="fc" id="L244">                    log.info(&quot;Link {} detected&quot;, linkDescription);</span>
+<span class="fc" id="L245">                    post(event);</span>
+                }
+            }
+<span class="fc" id="L248">        }</span>
+
+        // returns a LinkDescription made from the union of the BasicLinkConfig
+        // annotations if it exists
+        private LinkDescription validateLink(LinkDescription linkDescription) {
+            // TODO Investigate whether this can be made more efficient
+<span class="fc" id="L254">            BasicLinkConfig cfg = networkConfigService.getConfig(linkKey(linkDescription.src(),</span>
+<span class="fc" id="L255">                                                                         linkDescription.dst()),</span>
+                                                                 BasicLinkConfig.class);
+<span class="fc" id="L257">            BasicLinkConfig cfgTwo = networkConfigService.getConfig(linkKey(linkDescription.dst(),</span>
+<span class="fc" id="L258">                                                                            linkDescription.src()),</span>
+                                                                    BasicLinkConfig.class);
+<span class="pc bpc" id="L260" title="2 of 4 branches missed.">            if (isAllowed(cfg) &amp;&amp; isAllowed(cfgTwo)) {</span>
+<span class="fc" id="L261">                return BasicLinkOperator.combine(cfg, linkDescription);</span>
+            } else {
+<span class="nc" id="L263">                log.trace(&quot;Link &quot; + linkDescription.toString() + &quot; is not allowed&quot;);</span>
+<span class="nc" id="L264">                return null;</span>
+            }
+        }
+
+        @Override
+        public void linkVanished(LinkDescription linkDescription) {
+<span class="fc" id="L270">            checkNotNull(linkDescription, LINK_DESC_NULL);</span>
+<span class="fc" id="L271">            checkValidity();</span>
+
+<span class="fc" id="L273">            ConnectPoint src = linkDescription.src();</span>
+<span class="fc" id="L274">            ConnectPoint dst = linkDescription.dst();</span>
+
+<span class="fc" id="L276">            LinkEvent event = store.removeOrDownLink(src, dst);</span>
+<span class="fc bfc" id="L277" title="All 2 branches covered.">            if (event != null) {</span>
+<span class="fc" id="L278">                log.info(&quot;Link {} vanished&quot;, linkDescription);</span>
+<span class="fc" id="L279">                post(event);</span>
+            }
+<span class="fc" id="L281">        }</span>
+
+        @Override
+        public void linksVanished(ConnectPoint connectPoint) {
+<span class="fc" id="L285">            checkNotNull(connectPoint, &quot;Connect point cannot be null&quot;);</span>
+<span class="fc" id="L286">            checkValidity();</span>
+
+<span class="fc" id="L288">            log.debug(&quot;Links for connection point {} vanished&quot;, connectPoint);</span>
+            // FIXME: This will remove links registered by other providers
+<span class="fc" id="L290">            removeLinks(getLinks(connectPoint), true);</span>
+<span class="fc" id="L291">        }</span>
+
+        @Override
+        public void linksVanished(DeviceId deviceId) {
+<span class="fc" id="L295">            checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L296">            checkValidity();</span>
+
+<span class="fc" id="L298">            log.debug(&quot;Links for device {} vanished&quot;, deviceId);</span>
+<span class="fc" id="L299">            removeLinks(getDeviceLinks(deviceId), true);</span>
+<span class="fc" id="L300">        }</span>
+    }
+
+    // Removes all links in the specified set and emits appropriate events.
+    private void removeLinks(Set&lt;Link&gt; links, boolean isSoftRemove) {
+<span class="fc bfc" id="L305" title="All 2 branches covered.">        for (Link link : links) {</span>
+<span class="fc bfc" id="L306" title="All 2 branches covered.">            LinkEvent event = isSoftRemove ?</span>
+<span class="fc" id="L307">                    store.removeOrDownLink(link.src(), link.dst()) :</span>
+<span class="fc" id="L308">                    store.removeLink(link.src(), link.dst());</span>
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">            if (event != null) {</span>
+<span class="fc" id="L310">                log.info(&quot;Link {} removed/vanished&quot;, event.subject());</span>
+<span class="fc" id="L311">                post(event);</span>
+            }
+<span class="fc" id="L313">        }</span>
+<span class="fc" id="L314">    }</span>
+
+    // Store delegate to re-post events emitted from the store.
+<span class="fc" id="L317">    private class InternalStoreDelegate implements LinkStoreDelegate {</span>
+        @Override
+        public void notify(LinkEvent event) {
+<span class="nc" id="L320">            post(event);</span>
+<span class="nc" id="L321">        }</span>
+    }
+
+    // listens for NetworkConfigEvents of type BasicLinkConfig and removes
+    // links that the config does not allow
+<span class="fc" id="L326">    private class InternalNetworkConfigListener implements NetworkConfigListener {</span>
+
+        @Override
+        public boolean isRelevant(NetworkConfigEvent event) {
+<span class="nc bnc" id="L330" title="All 2 branches missed.">            return event.configClass().equals(BasicLinkConfig.class)</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">                    &amp;&amp; (event.type() == NetworkConfigEvent.Type.CONFIG_ADDED</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">                        || event.type() == NetworkConfigEvent.Type.CONFIG_UPDATED);</span>
+        }
+
+        @Override
+        public void event(NetworkConfigEvent event) {
+<span class="nc" id="L337">            LinkKey lk = (LinkKey) event.subject();</span>
+<span class="nc" id="L338">            BasicLinkConfig cfg = networkConfigService.getConfig(lk, BasicLinkConfig.class);</span>
+
+<span class="nc bnc" id="L340" title="All 2 branches missed.">            if (!isAllowed(cfg)) {</span>
+<span class="nc" id="L341">                log.info(&quot;Kicking out links between {} and {}&quot;, lk.src(), lk.dst());</span>
+<span class="nc" id="L342">                removeLink(lk.src(), lk.dst());</span>
+<span class="nc" id="L343">                removeLink(lk.dst(), lk.src());</span>
+<span class="nc" id="L344">                return;</span>
+            }
+<span class="nc" id="L346">            Link link = getLink(lk.src(), lk.dst());</span>
+            LinkDescription fldesc;
+            LinkDescription rldesc;
+<span class="nc bnc" id="L349" title="All 2 branches missed.">            if (link == null) {</span>
+<span class="nc" id="L350">                fldesc = BasicLinkOperator.descriptionOf(lk.src(), lk.dst(), cfg);</span>
+<span class="nc" id="L351">                rldesc = BasicLinkOperator.descriptionOf(lk.dst(), lk.src(), cfg);</span>
+            } else {
+<span class="nc" id="L353">                fldesc = BasicLinkOperator.combine(cfg,</span>
+<span class="nc" id="L354">                            BasicLinkOperator.descriptionOf(lk.src(), lk.dst(), link));</span>
+<span class="nc" id="L355">                rldesc = BasicLinkOperator.combine(cfg,</span>
+<span class="nc" id="L356">                            BasicLinkOperator.descriptionOf(lk.dst(), lk.src(), link));</span>
+            }
+            // XXX think of sane way to fetch the LinkProvider
+<span class="nc" id="L359">            store.createOrUpdateLink(ProviderId.NONE, fldesc);</span>
+<span class="nc" id="L360">            store.createOrUpdateLink(ProviderId.NONE, rldesc);</span>
+<span class="nc" id="L361">        }</span>
+
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

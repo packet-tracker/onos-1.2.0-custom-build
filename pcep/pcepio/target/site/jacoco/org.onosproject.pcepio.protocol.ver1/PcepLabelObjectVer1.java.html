@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLabelObjectVer1.java</span></div><h1>PcepLabelObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLabelObject;
+import org.onosproject.pcepio.types.NexthopIPv4addressTlv;
+import org.onosproject.pcepio.types.NexthopIPv6addressTlv;
+import org.onosproject.pcepio.types.NexthopUnnumberedIPv4IDTlv;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP label object.
+ */
+public class PcepLabelObjectVer1 implements PcepLabelObject {
+
+    /*
+     *   ref : draft-zhao-pce-pcep-extension-for-pce-controller-01 , section : 7.4.
+
+        0                   1                   2                   3
+           0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       | Reserved                      | Flags                       |O|
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                            Label                              |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                                                               |
+       //                        Optional TLV                          //
+       |                                                               |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                     The LABEL Object format
+     */
+<span class="fc" id="L56">    protected static final Logger log = LoggerFactory.getLogger(PcepLspObjectVer1.class);</span>
+
+    public static final byte LABEL_OBJ_TYPE = 1;
+    public static final byte LABEL_OBJ_CLASS = 35; //TBD : to be defined
+    public static final byte LABEL_OBJECT_VERSION = 1;
+    public static final byte OBJECT_HEADER_LENGTH = 4;
+    public static final boolean DEFAULT_OFLAG = false;
+
+    // LSP_OBJ_MINIMUM_LENGTH = CommonHeaderLen(4)+ LspObjectHeaderLen(8)
+    public static final short LABEL_OBJ_MINIMUM_LENGTH = 12;
+
+    public static final int OFLAG_SET = 1;
+    public static final int OFLAG_RESET = 0;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+
+<span class="fc" id="L71">    static final PcepObjectHeader DEFAULT_LABEL_OBJECT_HEADER = new PcepObjectHeader(LABEL_OBJ_CLASS, LABEL_OBJ_TYPE,</span>
+            PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED, LABEL_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader labelObjHeader;
+    private boolean bOFlag;
+    private int label;
+    // Optional TLV
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+    /**
+     * Constructor to initialize parameters for PCEP label object.
+     *
+     * @param labelObjHeader label object header
+     * @param bOFlag O flag
+     * @param label label
+     * @param llOptionalTlv list of optional tlvs
+     */
+    public PcepLabelObjectVer1(PcepObjectHeader labelObjHeader, boolean bOFlag, int label,
+<span class="fc" id="L89">            LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+<span class="fc" id="L90">        this.labelObjHeader = labelObjHeader;</span>
+<span class="fc" id="L91">        this.bOFlag = bOFlag;</span>
+<span class="fc" id="L92">        this.label = label;</span>
+<span class="fc" id="L93">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="fc" id="L94">    }</span>
+
+    @Override
+    public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L98">        return this.llOptionalTlv;</span>
+    }
+
+    @Override
+    public void setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L103">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L104">    }</span>
+
+    @Override
+    public boolean getOFlag() {
+<span class="nc" id="L108">        return this.bOFlag;</span>
+    }
+
+    @Override
+    public void setOFlag(boolean value) {
+<span class="nc" id="L113">        this.bOFlag = value;</span>
+<span class="nc" id="L114">    }</span>
+
+    @Override
+    public int getLabel() {
+<span class="nc" id="L118">        return this.label;</span>
+    }
+
+    @Override
+    public void setLabel(int value) {
+<span class="nc" id="L123">        this.label = value;</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     * Reads form channel buffer and returns objects of PcepLabelObject.
+     *
+     * @param cb of type channel buffer
+     * @return objects of PcepLabelObject
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepLabelObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader labelObjHeader;
+
+        boolean bOFlag;
+        int label;
+
+        // Optional TLV
+<span class="fc" id="L141">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+<span class="fc" id="L142">        labelObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only LspObject buffer.
+<span class="fc" id="L145">        ChannelBuffer tempCb = cb.readBytes(labelObjHeader.getObjLen() - OBJECT_HEADER_LENGTH);</span>
+
+<span class="fc" id="L147">        int iTemp = tempCb.readInt();</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        bOFlag = (iTemp &amp; (byte) 0x01) == 1;</span>
+<span class="fc" id="L149">        label = tempCb.readInt();</span>
+
+        // parse optional TLV
+<span class="fc" id="L152">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+<span class="fc" id="L153">        return new PcepLabelObjectVer1(labelObjHeader, bOFlag, label, llOptionalTlv);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+        //write Object header
+<span class="fc" id="L160">        int objStartIndex = cb.writerIndex();</span>
+<span class="fc" id="L161">        int objLenIndex = labelObjHeader.write(cb);</span>
+
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">        if (objLenIndex &lt;= 0) {</span>
+<span class="nc" id="L164">            throw new PcepParseException(&quot; ObjectLength Index is &quot; + objLenIndex);</span>
+        }
+
+        byte oFlag;
+
+<span class="fc bfc" id="L169" title="All 2 branches covered.">        oFlag = (byte) ((bOFlag) ? OFLAG_SET : OFLAG_RESET);</span>
+<span class="fc" id="L170">        cb.writeInt(oFlag);</span>
+<span class="fc" id="L171">        cb.writeInt(label);</span>
+
+        // Add optional TLV
+<span class="fc" id="L174">        packOptionalTlv(cb);</span>
+
+        //Update object length now
+<span class="fc" id="L177">        int length = cb.writerIndex() - objStartIndex;</span>
+
+        //will be helpful during print().
+<span class="fc" id="L180">        labelObjHeader.setObjLen((short) length);</span>
+<span class="fc" id="L181">        cb.setShort(objLenIndex, (short) length);</span>
+<span class="fc" id="L182">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Returns list of optional tlvs.
+     *
+     * @param cb of type channel buffer
+     * @return list of optional tlvs.
+     * @throws PcepParseException when fails to parse list of optional tlvs
+     */
+    protected static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+<span class="fc" id="L194">        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="pc bpc" id="L196" title="1 of 2 branches missed.">        while (MINIMUM_COMMON_HEADER_LENGTH &lt;= cb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+<span class="nc" id="L199">            short hType = cb.readShort();</span>
+<span class="nc" id="L200">            short hLength = cb.readShort();</span>
+<span class="nc" id="L201">            int iValue = 0;</span>
+
+<span class="nc bnc" id="L203" title="All 4 branches missed.">            switch (hType) {</span>
+
+            case NexthopIPv4addressTlv.TYPE:
+<span class="nc" id="L206">                iValue = cb.readInt();</span>
+<span class="nc" id="L207">                tlv = new NexthopIPv4addressTlv(iValue);</span>
+<span class="nc" id="L208">                break;</span>
+            case NexthopIPv6addressTlv.TYPE:
+<span class="nc" id="L210">                byte[] ipv6Value = new byte[NexthopIPv6addressTlv.VALUE_LENGTH];</span>
+<span class="nc" id="L211">                cb.readBytes(ipv6Value, 0, NexthopIPv6addressTlv.VALUE_LENGTH);</span>
+<span class="nc" id="L212">                tlv = new NexthopIPv6addressTlv(ipv6Value);</span>
+<span class="nc" id="L213">                break;</span>
+            case NexthopUnnumberedIPv4IDTlv.TYPE:
+<span class="nc" id="L215">                tlv = NexthopUnnumberedIPv4IDTlv.read(cb);</span>
+<span class="nc" id="L216">                break;</span>
+            default:
+<span class="nc" id="L218">                throw new PcepParseException(&quot;Unsupported TLV type :&quot; + hType);</span>
+            }
+
+            // Check for the padding
+<span class="nc" id="L222">            int pad = hLength % 4;</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L224">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L226">                    cb.skipBytes(pad);</span>
+                }
+            }
+
+<span class="nc" id="L230">            llOutOptionalTlv.add(tlv);</span>
+<span class="nc" id="L231">        }</span>
+
+<span class="pc bpc" id="L233" title="1 of 2 branches missed.">        if (0 &lt; cb.readableBytes()) {</span>
+
+<span class="nc" id="L235">            throw new PcepParseException(&quot;Optional Tlv parsing error. Extra bytes received.&quot;);</span>
+        }
+<span class="fc" id="L237">        return llOutOptionalTlv;</span>
+    }
+
+    /**
+     * Returns the writer index.
+     *
+     * @param cb of channel buffer.
+     * @return writer index
+     */
+    protected int packOptionalTlv(ChannelBuffer cb) {
+
+<span class="fc" id="L248">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+
+<span class="pc bpc" id="L250" title="1 of 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L251">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="nc bnc" id="L253" title="All 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L254">                log.debug(&quot;tlv is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L255">                continue;</span>
+            }
+<span class="nc" id="L257">            tlv.write(cb);</span>
+<span class="nc" id="L258">        }</span>
+<span class="fc" id="L259">        return cb.writerIndex();</span>
+    }
+
+    /**
+     * Builder class for PCEP label object.
+     */
+<span class="nc" id="L265">    public static class Builder implements PcepLabelObject.Builder {</span>
+
+<span class="nc" id="L267">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L268">        private boolean bIsOFlagSet = false;</span>
+<span class="nc" id="L269">        private boolean bIsLabelSet = false;</span>
+
+        private PcepObjectHeader labelObjHeader;
+        private boolean bOFlag;
+        private int label;
+
+<span class="nc" id="L275">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L277">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L280">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+
+        @Override
+        public PcepLabelObject build() throws PcepParseException {
+<span class="nc bnc" id="L285" title="All 2 branches missed.">            PcepObjectHeader labelObjHeader = this.bIsHeaderSet ? this.labelObjHeader : DEFAULT_LABEL_OBJECT_HEADER;</span>
+<span class="nc bnc" id="L286" title="All 2 branches missed.">            boolean bOFlag = this.bIsOFlagSet ? this.bOFlag : DEFAULT_OFLAG;</span>
+
+<span class="nc bnc" id="L288" title="All 2 branches missed.">            if (!this.bIsLabelSet) {</span>
+<span class="nc" id="L289">                throw new PcepParseException(&quot; Label NOT Set while building PcepLabelObject.&quot;);</span>
+            }
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L292">                labelObjHeader.setPFlag(bPFlag);</span>
+            }
+<span class="nc bnc" id="L294" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L295">                labelObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L297">            return new PcepLabelObjectVer1(labelObjHeader, bOFlag, this.label, this.llOptionalTlv);</span>
+        }
+
+        @Override
+        public PcepObjectHeader getLabelObjHeader() {
+<span class="nc" id="L302">            return this.labelObjHeader;</span>
+        }
+
+        @Override
+        public Builder setLabelObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L307">            this.labelObjHeader = obj;</span>
+<span class="nc" id="L308">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L309">            return this;</span>
+        }
+
+        @Override
+        public boolean getOFlag() {
+<span class="nc" id="L314">            return this.bOFlag;</span>
+        }
+
+        @Override
+        public Builder setOFlag(boolean value) {
+<span class="nc" id="L319">            this.bOFlag = value;</span>
+<span class="nc" id="L320">            this.bIsOFlagSet = true;</span>
+<span class="nc" id="L321">            return this;</span>
+        }
+
+        @Override
+        public int getLabel() {
+<span class="nc" id="L326">            return this.label;</span>
+        }
+
+        @Override
+        public Builder setLabel(int value) {
+<span class="nc" id="L331">            this.label = value;</span>
+<span class="nc" id="L332">            this.bIsLabelSet = true;</span>
+<span class="nc" id="L333">            return this;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepValueType&gt; getOptionalTlv() {
+<span class="nc" id="L338">            return this.llOptionalTlv;</span>
+        }
+
+        @Override
+        public Builder setOptionalTlv(LinkedList&lt;PcepValueType&gt; llOptionalTlv) {
+<span class="nc" id="L343">            this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L344">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L349">            this.bPFlag = value;</span>
+<span class="nc" id="L350">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L351">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L356">            this.bIFlag = value;</span>
+<span class="nc" id="L357">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L358">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L364">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L365">                .add(&quot;OFlag&quot;, bOFlag)</span>
+<span class="nc" id="L366">                .add(&quot;label&quot;, label)</span>
+<span class="nc" id="L367">                .add(&quot;OptionalTlvList&quot;, llOptionalTlv)</span>
+<span class="nc" id="L368">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

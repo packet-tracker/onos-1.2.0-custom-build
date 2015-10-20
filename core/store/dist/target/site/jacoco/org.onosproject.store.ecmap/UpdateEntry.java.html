@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UpdateEntry.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.ecmap</a> &gt; <span class="el_source">UpdateEntry.java</span></div><h1>UpdateEntry.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.ecmap;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Describes a single update event in an EventuallyConsistentMap.
+ */
+final class UpdateEntry&lt;K, V&gt; {
+    private final K key;
+    private final MapValue&lt;V&gt; value;
+
+    /**
+     * Creates a new update entry.
+     *
+     * @param key key of the entry
+     * @param value value of the entry
+     */
+<span class="fc" id="L35">    public UpdateEntry(K key, MapValue&lt;V&gt; value) {</span>
+<span class="fc" id="L36">        this.key = checkNotNull(key);</span>
+<span class="fc" id="L37">        this.value = value;</span>
+<span class="fc" id="L38">    }</span>
+
+    /**
+     * Returns the key.
+     *
+     * @return the key
+     */
+    public K key() {
+<span class="fc" id="L46">        return key;</span>
+    }
+
+    /**
+     * Returns the value of the entry.
+     *
+     * @return the value
+     */
+    public MapValue&lt;V&gt; value() {
+<span class="fc" id="L55">        return value;</span>
+    }
+
+    /**
+     * Returns if this entry is newer than other entry.
+     * @param other other entry
+     * @return true if this entry is newer; false otherwise
+     */
+    public boolean isNewerThan(UpdateEntry&lt;K, V&gt; other) {
+<span class="nc bnc" id="L64" title="All 8 branches missed.">        return other == null || other.value == null || (value != null &amp;&amp; value.isNewerThan(other.value));</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L69">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L70">                .add(&quot;key&quot;, key())</span>
+<span class="nc" id="L71">                .add(&quot;value&quot;, value)</span>
+<span class="nc" id="L72">                .toString();</span>
+    }
+
+    @SuppressWarnings(&quot;unused&quot;)
+<span class="nc" id="L76">    private UpdateEntry() {</span>
+<span class="nc" id="L77">        this.key = null;</span>
+<span class="nc" id="L78">        this.value = null;</span>
+<span class="nc" id="L79">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Monitor.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-stc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.stc</a> &gt; <span class="el_source">Monitor.java</span></div><h1>Monitor.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.stc;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Maps;
+import org.onlab.stc.MonitorLayout.Box;
+
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.Map;
+
+import static org.onlab.stc.Coordinator.Status.IN_PROGRESS;
+
+/**
+ * Scenario test monitor.
+ */
+public class Monitor implements StepProcessListener {
+
+<span class="nc" id="L36">    private final ObjectMapper mapper = new ObjectMapper();</span>
+
+    private final Coordinator coordinator;
+    private final Compiler compiler;
+    private final MonitorLayout layout;
+
+    private MonitorDelegate delegate;
+
+<span class="nc" id="L44">    private Map&lt;Step, Box&gt; boxes = Maps.newHashMap();</span>
+
+    /**
+     * Creates a new shared process flow monitor.
+     *
+     * @param coordinator process flow coordinator
+     * @param compiler    scenario compiler
+     */
+<span class="nc" id="L52">    Monitor(Coordinator coordinator, Compiler compiler) {</span>
+<span class="nc" id="L53">        this.coordinator = coordinator;</span>
+<span class="nc" id="L54">        this.compiler = compiler;</span>
+<span class="nc" id="L55">        this.layout = new MonitorLayout(compiler);</span>
+<span class="nc" id="L56">        coordinator.addListener(this);</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Sets the process monitor delegate.
+     *
+     * @param delegate process monitor delegate
+     */
+    void setDelegate(MonitorDelegate delegate) {
+<span class="nc" id="L65">        this.delegate = delegate;</span>
+<span class="nc" id="L66">    }</span>
+
+    /**
+     * Notifies the process monitor delegate with the specified event.
+     *
+     * @param event JSON event data
+     */
+    public void notify(ObjectNode event) {
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (delegate != null) {</span>
+<span class="nc" id="L75">            delegate.notify(event);</span>
+        }
+<span class="nc" id="L77">    }</span>
+
+    /**
+     * Returns the scenario process flow as JSON data.
+     *
+     * @return scenario process flow data
+     */
+    ObjectNode scenarioData() {
+<span class="nc" id="L85">        ObjectNode root = mapper.createObjectNode();</span>
+<span class="nc" id="L86">        ArrayNode steps = mapper.createArrayNode();</span>
+<span class="nc" id="L87">        ArrayNode requirements = mapper.createArrayNode();</span>
+
+<span class="nc" id="L89">        ProcessFlow pf = compiler.processFlow();</span>
+<span class="nc" id="L90">        pf.getVertexes().forEach(step -&gt; add(step, steps));</span>
+<span class="nc" id="L91">        pf.getEdges().forEach(requirement -&gt; add(requirement, requirements));</span>
+
+<span class="nc" id="L93">        root.set(&quot;steps&quot;, steps);</span>
+<span class="nc" id="L94">        root.set(&quot;requirements&quot;, requirements);</span>
+
+<span class="nc" id="L96">        try (FileWriter fw = new FileWriter(&quot;/tmp/data.json&quot;);</span>
+<span class="nc" id="L97">             PrintWriter pw = new PrintWriter(fw)) {</span>
+<span class="nc" id="L98">            pw.println(root.toString());</span>
+<span class="nc bnc" id="L99" title="All 16 branches missed.">        } catch (IOException e) {</span>
+<span class="nc" id="L100">            e.printStackTrace();</span>
+<span class="nc" id="L101">        }</span>
+<span class="nc" id="L102">        return root;</span>
+    }
+
+
+    private void add(Step step, ArrayNode steps) {
+<span class="nc" id="L107">        Box box = layout.get(step);</span>
+<span class="nc" id="L108">        ObjectNode sn = mapper.createObjectNode()</span>
+<span class="nc" id="L109">                .put(&quot;name&quot;, step.name())</span>
+<span class="nc" id="L110">                .put(&quot;isGroup&quot;, step instanceof Group)</span>
+<span class="nc" id="L111">                .put(&quot;status&quot;, status(coordinator.getStatus(step)))</span>
+<span class="nc" id="L112">                .put(&quot;tier&quot;, box.tier())</span>
+<span class="nc" id="L113">                .put(&quot;depth&quot;, box.depth());</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if (step.group() != null) {</span>
+<span class="nc" id="L115">            sn.put(&quot;group&quot;, step.group().name());</span>
+        }
+<span class="nc" id="L117">        steps.add(sn);</span>
+<span class="nc" id="L118">    }</span>
+
+    private String status(Coordinator.Status status) {
+<span class="nc" id="L121">        return status.toString().toLowerCase();</span>
+    }
+
+    private void add(Dependency requirement, ArrayNode requirements) {
+<span class="nc" id="L125">        ObjectNode rn = mapper.createObjectNode();</span>
+<span class="nc" id="L126">        rn.put(&quot;src&quot;, requirement.src().name())</span>
+<span class="nc" id="L127">                .put(&quot;dst&quot;, requirement.dst().name())</span>
+<span class="nc" id="L128">                .put(&quot;isSoft&quot;, requirement.isSoft());</span>
+<span class="nc" id="L129">        requirements.add(rn);</span>
+<span class="nc" id="L130">    }</span>
+
+    @Override
+    public void onStart(Step step, String command) {
+<span class="nc" id="L134">        notify(event(step, status(IN_PROGRESS)));</span>
+<span class="nc" id="L135">    }</span>
+
+    @Override
+    public void onCompletion(Step step, Coordinator.Status status) {
+<span class="nc" id="L139">        notify(event(step, status(status)));</span>
+<span class="nc" id="L140">    }</span>
+
+    @Override
+    public void onOutput(Step step, String line) {
+
+<span class="nc" id="L145">    }</span>
+
+    private ObjectNode event(Step step, String status) {
+<span class="nc" id="L148">        ObjectNode event = mapper.createObjectNode()</span>
+<span class="nc" id="L149">                .put(&quot;name&quot;, step.name())</span>
+<span class="nc" id="L150">                .put(&quot;status&quot;, status);</span>
+<span class="nc" id="L151">        return event;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

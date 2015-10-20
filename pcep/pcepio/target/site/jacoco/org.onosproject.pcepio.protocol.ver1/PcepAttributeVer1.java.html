@@ -1,0 +1,432 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepAttributeVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepAttributeVer1.java</span></div><h1>PcepAttributeVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepAttribute;
+import org.onosproject.pcepio.protocol.PcepBandwidthObject;
+import org.onosproject.pcepio.protocol.PcepIroObject;
+import org.onosproject.pcepio.protocol.PcepLspaObject;
+import org.onosproject.pcepio.protocol.PcepMetricObject;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP Attribute List.
+ */
+public class PcepAttributeVer1 implements PcepAttribute {
+
+    /* Reference : RFC5440
+     *  where:
+     *      &lt;attribute-list&gt;                  ::=[&lt;LSPA&gt;]
+     *                                           [&lt;BANDWIDTH&gt;]
+     *                                           [&lt;metric-list&gt;]
+     *                                           [&lt;IRO&gt;]
+     *
+     *      &lt;metric-list&gt;                     ::=&lt;METRIC&gt;[&lt;metric-list&gt;]
+     */
+<span class="fc" id="L49">    protected static final Logger log = LoggerFactory.getLogger(PcepAttributeVer1.class);</span>
+
+    public static final int OBJECT_HEADER_LENGTH = 4;
+
+    //PCEP LSPA Object
+    private PcepLspaObject lspaObject;
+    private boolean isLspaObjectSet;
+
+    //PCEP Bandwidth Object
+    private PcepBandwidthObject bandwidthObject;
+    private boolean isBandwidthObjectSet;
+
+    //PCEP Metric list
+    private LinkedList&lt;PcepMetricObject&gt; llMetricList;
+    private boolean isMetricListSet;
+
+    //PCEP IRO object
+    private PcepIroObject iroObject;
+    private boolean isIroObjectSet;
+
+    /**
+     * Default constructor to initialize member variables.
+     */
+<span class="fc" id="L72">    public PcepAttributeVer1() {</span>
+
+<span class="fc" id="L74">        lspaObject = null;</span>
+<span class="fc" id="L75">        bandwidthObject = null;</span>
+<span class="fc" id="L76">        llMetricList = null;</span>
+<span class="fc" id="L77">        iroObject = null;</span>
+<span class="fc" id="L78">        this.isLspaObjectSet = false;</span>
+<span class="fc" id="L79">        this.isBandwidthObjectSet = false;</span>
+<span class="fc" id="L80">        this.isMetricListSet = false;</span>
+<span class="fc" id="L81">        this.isIroObjectSet = false;</span>
+<span class="fc" id="L82">    }</span>
+
+    /**
+     * Constructor to initialize all parameters for PCEP attribute.
+     *
+     * @param lspaObject         PCEP lspa Object.
+     * @param bandwidthObject    PCEP bandwidth object.
+     * @param llMetricList       list of PCEP metric objects.
+     * @param iroObject          PCEP iro object.
+     */
+    public PcepAttributeVer1(PcepLspaObject lspaObject, PcepBandwidthObject bandwidthObject,
+<span class="fc" id="L93">            LinkedList&lt;PcepMetricObject&gt; llMetricList, PcepIroObject iroObject) {</span>
+
+<span class="fc" id="L95">        this.lspaObject = lspaObject;</span>
+<span class="fc" id="L96">        this.bandwidthObject = bandwidthObject;</span>
+<span class="fc" id="L97">        this.llMetricList = llMetricList;</span>
+<span class="fc" id="L98">        this.iroObject = iroObject;</span>
+<span class="fc bfc" id="L99" title="All 2 branches covered.">        if (lspaObject == null) {</span>
+<span class="fc" id="L100">            this.isLspaObjectSet = false;</span>
+        } else {
+<span class="fc" id="L102">            this.isLspaObjectSet = true;</span>
+        }
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if (bandwidthObject == null) {</span>
+<span class="fc" id="L105">            this.isBandwidthObjectSet = false;</span>
+        } else {
+<span class="fc" id="L107">            this.isBandwidthObjectSet = true;</span>
+        }
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        if (llMetricList == null) {</span>
+<span class="fc" id="L110">            this.isMetricListSet = false;</span>
+        } else {
+<span class="fc" id="L112">            this.isMetricListSet = true;</span>
+        }
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">        if (iroObject == null) {</span>
+<span class="fc" id="L115">            this.isIroObjectSet = false;</span>
+        } else {
+<span class="nc" id="L117">            this.isIroObjectSet = true;</span>
+        }
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * constructor to initialize bandwidthObject.
+     *
+     * @param bandwidthObject bandwidth object
+     */
+<span class="nc" id="L126">    public PcepAttributeVer1(PcepBandwidthObject bandwidthObject) {</span>
+<span class="nc" id="L127">        this.isLspaObjectSet = false;</span>
+
+<span class="nc" id="L129">        this.bandwidthObject = bandwidthObject;</span>
+<span class="nc" id="L130">        this.isBandwidthObjectSet = true;</span>
+
+<span class="nc" id="L132">        this.isMetricListSet = false;</span>
+
+<span class="nc" id="L134">        this.isIroObjectSet = false;</span>
+<span class="nc" id="L135">    }</span>
+
+    /**
+     * Parse list for MeticObject.
+     *
+     * @param cb of type channel buffer
+     * @return true if parsing metric list is success
+     * @throws PcepParseException when a non metric object is received
+     */
+    public boolean parseMetricList(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L146" title="1 of 2 branches missed.">        if (llMetricList == null) {</span>
+<span class="fc" id="L147">            llMetricList = new LinkedList&lt;&gt;();</span>
+        }
+
+        PcepMetricObject metriclist;
+
+        //caller should verify for metric object
+<span class="fc" id="L153">        byte yObjClass = PcepMetricObjectVer1.METRIC_OBJ_CLASS;</span>
+<span class="fc" id="L154">        byte yObjType = PcepMetricObjectVer1.METRIC_OBJ_TYPE;</span>
+
+<span class="pc bpc" id="L156" title="1 of 4 branches missed.">        while ((yObjClass == PcepMetricObjectVer1.METRIC_OBJ_CLASS)</span>
+                &amp;&amp; (yObjType == PcepMetricObjectVer1.METRIC_OBJ_TYPE)) {
+
+<span class="fc" id="L159">            metriclist = PcepMetricObjectVer1.read(cb);</span>
+<span class="fc" id="L160">            llMetricList.add(metriclist);</span>
+<span class="fc" id="L161">            yObjClass = 0;</span>
+<span class="fc" id="L162">            yObjType = 0;</span>
+
+<span class="fc bfc" id="L164" title="All 2 branches covered.">            if (cb.readableBytes() &gt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L165">                cb.markReaderIndex();</span>
+<span class="fc" id="L166">                PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L167">                cb.resetReaderIndex();</span>
+<span class="fc" id="L168">                yObjClass = tempObjHeader.getObjClass();</span>
+<span class="fc" id="L169">                yObjType = tempObjHeader.getObjType();</span>
+<span class="fc" id="L170">            }</span>
+        }
+<span class="fc" id="L172">        return true;</span>
+    }
+
+    /**
+     * Reads lspa , bandwidth , Metriclist and Iro objects and sets the objects.
+     *
+     * @param cb of type channel buffer
+     * @return instance of Pcep Attribute
+     * @throws PcepParseException while parsing Pcep Attributes from channel buffer
+     */
+
+    public static PcepAttribute read(ChannelBuffer cb) throws PcepParseException {
+<span class="fc bfc" id="L184" title="All 2 branches covered.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L185">            return null;</span>
+        }
+        //check whether any pcep attribute is present
+<span class="fc" id="L188">        cb.markReaderIndex();</span>
+<span class="fc" id="L189">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L190">        cb.resetReaderIndex();</span>
+<span class="fc" id="L191">        byte yObjClass = tempObjHeader.getObjClass();</span>
+
+<span class="pc bpc" id="L193" title="1 of 8 branches missed.">        if (PcepLspaObjectVer1.LSPA_OBJ_CLASS != yObjClass &amp;&amp; PcepBandwidthObjectVer1.BANDWIDTH_OBJ_CLASS != yObjClass</span>
+                &amp;&amp; PcepMetricObjectVer1.METRIC_OBJ_CLASS != yObjClass &amp;&amp; PcepIroObjectVer1.IRO_OBJ_CLASS != yObjClass) {
+            //No PCEP attribute is present
+<span class="fc" id="L196">            return null;</span>
+        }
+
+<span class="fc" id="L199">        PcepAttributeVer1 pcepAttribute = new PcepAttributeVer1();</span>
+
+        //If LSPA present then store it.LSPA is optional
+<span class="fc bfc" id="L202" title="All 2 branches covered.">        if (yObjClass == PcepLspaObjectVer1.LSPA_OBJ_CLASS) {</span>
+<span class="fc" id="L203">            pcepAttribute.setLspaObject(PcepLspaObjectVer1.read(cb));</span>
+<span class="fc" id="L204">            yObjClass = checkNextObject(cb);</span>
+        }
+
+        //If BANDWIDTH present then store it.BANDWIDTH is optional
+<span class="fc bfc" id="L208" title="All 2 branches covered.">        if (yObjClass == PcepBandwidthObjectVer1.BANDWIDTH_OBJ_CLASS) {</span>
+<span class="fc" id="L209">            pcepAttribute.setBandwidthObject(PcepBandwidthObjectVer1.read(cb));</span>
+<span class="fc" id="L210">            yObjClass = checkNextObject(cb);</span>
+        }
+
+        //If Metric list present then store it.MetricList is optional
+<span class="fc bfc" id="L214" title="All 2 branches covered.">        if (yObjClass == PcepMetricObjectVer1.METRIC_OBJ_CLASS) {</span>
+<span class="fc" id="L215">            pcepAttribute.parseMetricList(cb);</span>
+<span class="fc" id="L216">            yObjClass = checkNextObject(cb);</span>
+        }
+
+        //If IRO present then store it.IRO is optional
+<span class="pc bpc" id="L220" title="1 of 2 branches missed.">        if (yObjClass == PcepIroObjectVer1.IRO_OBJ_CLASS) {</span>
+<span class="nc" id="L221">            pcepAttribute.setIroObject(PcepIroObjectVer1.read(cb));</span>
+        }
+
+<span class="fc" id="L224">        PcepLspaObject lspaObject = pcepAttribute.getLspaObject();</span>
+<span class="fc" id="L225">        PcepBandwidthObject bandwidthObject = pcepAttribute.getBandwidthObject();</span>
+<span class="fc" id="L226">        LinkedList&lt;PcepMetricObject&gt; metriclist = pcepAttribute.llMetricList;</span>
+<span class="fc" id="L227">        PcepIroObject iroObject = pcepAttribute.getIroObject();</span>
+
+<span class="fc" id="L229">        return new PcepAttributeVer1(lspaObject, bandwidthObject, metriclist, iroObject);</span>
+    }
+
+    /**
+     * Checks whether there is a more object or not.
+     *
+     * @param cb of type channel buffer
+     * @return instance of object header
+     */
+    private static byte checkNextObject(ChannelBuffer cb) {
+<span class="fc bfc" id="L239" title="All 2 branches covered.">        if (cb.readableBytes() &lt; OBJECT_HEADER_LENGTH) {</span>
+<span class="fc" id="L240">            return 0;</span>
+        }
+<span class="fc" id="L242">        cb.markReaderIndex();</span>
+<span class="fc" id="L243">        PcepObjectHeader tempObjHeader = PcepObjectHeader.read(cb);</span>
+<span class="fc" id="L244">        cb.resetReaderIndex();</span>
+<span class="fc" id="L245">        return tempObjHeader.getObjClass();</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L250">        int iLenStartIndex = cb.writerIndex();</span>
+        //PCEP LSPA object is optional
+<span class="fc bfc" id="L252" title="All 2 branches covered.">        if (this.isLspaObjectSet) {</span>
+<span class="fc" id="L253">            this.lspaObject.write(cb);</span>
+        }
+
+        //PCEP BANDWIDTH object is optional
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        if (this.isBandwidthObjectSet) {</span>
+<span class="fc" id="L258">            this.bandwidthObject.write(cb);</span>
+        }
+
+        //PCEP Metric list is optional
+<span class="fc bfc" id="L262" title="All 2 branches covered.">        if (this.isMetricListSet) {</span>
+<span class="fc" id="L263">            ListIterator&lt;PcepMetricObject&gt; listIterator = this.llMetricList.listIterator();</span>
+<span class="fc bfc" id="L264" title="All 2 branches covered.">            while (listIterator.hasNext()) {</span>
+<span class="fc" id="L265">                listIterator.next().write(cb);</span>
+            }
+        }
+
+        //PCEP  IRO object is optional
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">        if (this.isIroObjectSet) {</span>
+<span class="nc" id="L271">            this.iroObject.write(cb);</span>
+        }
+<span class="fc" id="L273">        return cb.writerIndex() - iLenStartIndex;</span>
+    }
+
+    @Override
+    public PcepLspaObject getLspaObject() {
+<span class="fc" id="L278">        return lspaObject;</span>
+    }
+
+    @Override
+    public PcepBandwidthObject getBandwidthObject() {
+<span class="fc" id="L283">        return bandwidthObject;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepMetricObject&gt; getMetricObjectList() {
+<span class="nc" id="L288">        return llMetricList;</span>
+    }
+
+    @Override
+    public PcepIroObject getIroObject() {
+<span class="fc" id="L293">        return iroObject;</span>
+    }
+
+    @Override
+    public void setBandwidthObject(PcepBandwidthObject bandwidthObject) {
+<span class="fc" id="L298">        this.isBandwidthObjectSet = true;</span>
+<span class="fc" id="L299">        this.bandwidthObject = bandwidthObject;</span>
+<span class="fc" id="L300">    }</span>
+
+    @Override
+    public void setMetricObjectList(LinkedList&lt;PcepMetricObject&gt; llMetricList) {
+<span class="nc" id="L304">        this.isMetricListSet = true;</span>
+<span class="nc" id="L305">        this.llMetricList = llMetricList;</span>
+
+<span class="nc" id="L307">    }</span>
+
+    @Override
+    public void setLspaObject(PcepLspaObject lspaObject) {
+<span class="fc" id="L311">        this.isLspaObjectSet = true;</span>
+<span class="fc" id="L312">        this.lspaObject = lspaObject;</span>
+<span class="fc" id="L313">    }</span>
+
+    @Override
+    public void setIroObject(PcepIroObject iroObject) {
+<span class="nc" id="L317">        this.isIroObjectSet = true;</span>
+<span class="nc" id="L318">        this.iroObject = iroObject;</span>
+<span class="nc" id="L319">    }</span>
+
+    /**
+     * Builder class for PCEP attributes.
+     */
+<span class="nc" id="L324">    public static class Builder implements PcepAttribute.Builder {</span>
+
+        //PCEP LSPA Object
+        private PcepLspaObject lspaObject;
+        private boolean isLspaObjectSet;
+
+        //PCEP BANDWIDTH Object
+        private PcepBandwidthObject bandwidthObject;
+        private boolean isBandwidthObjectSet;
+
+        //PCEP Metric list
+        private LinkedList&lt;PcepMetricObject&gt; llMetricList;
+        private boolean isMetricListSet;
+
+        //PCEP IRO object
+        private PcepIroObject iroObject;
+        private boolean isIroObjectSet;
+
+        @Override
+        public PcepAttribute build() {
+
+            //PCEP LSPA Object
+<span class="nc" id="L346">            PcepLspaObject lspaObject = null;</span>
+
+            //PCEP BANDWIDTH Object
+<span class="nc" id="L349">            PcepBandwidthObject bandwidthObject = null;</span>
+
+            //PCEP Metric list
+<span class="nc" id="L352">            LinkedList&lt;PcepMetricObject&gt; llMetricList = null;</span>
+
+            //PCEP IRO object
+<span class="nc" id="L355">            PcepIroObject iroObject = null;</span>
+
+<span class="nc bnc" id="L357" title="All 2 branches missed.">            if (this.isLspaObjectSet) {</span>
+<span class="nc" id="L358">                lspaObject = this.lspaObject;</span>
+            }
+<span class="nc bnc" id="L360" title="All 2 branches missed.">            if (this.isBandwidthObjectSet) {</span>
+<span class="nc" id="L361">                bandwidthObject = this.bandwidthObject;</span>
+            }
+<span class="nc bnc" id="L363" title="All 2 branches missed.">            if (this.isMetricListSet) {</span>
+<span class="nc" id="L364">                llMetricList = this.llMetricList;</span>
+            }
+<span class="nc bnc" id="L366" title="All 2 branches missed.">            if (this.isIroObjectSet) {</span>
+<span class="nc" id="L367">                iroObject = this.iroObject;</span>
+            }
+<span class="nc" id="L369">            return new PcepAttributeVer1(lspaObject, bandwidthObject, llMetricList, iroObject);</span>
+        }
+
+        @Override
+        public PcepLspaObject getLspaObject() {
+<span class="nc" id="L374">            return this.lspaObject;</span>
+        }
+
+        @Override
+        public PcepBandwidthObject getBandwidthObject() {
+<span class="nc" id="L379">            return this.bandwidthObject;</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepMetricObject&gt; getMetricObjectList() {
+<span class="nc" id="L384">            return this.llMetricList;</span>
+        }
+
+        @Override
+        public PcepIroObject getIroObject() {
+<span class="nc" id="L389">            return this.iroObject;</span>
+        }
+
+        @Override
+        public Builder setBandwidthObject(PcepBandwidthObject bandwidthObject) {
+<span class="nc" id="L394">            this.isBandwidthObjectSet = true;</span>
+<span class="nc" id="L395">            this.bandwidthObject = bandwidthObject;</span>
+<span class="nc" id="L396">            return this;</span>
+        }
+
+        @Override
+        public Builder setMetricObjectList(LinkedList&lt;PcepMetricObject&gt; llMetricList) {
+<span class="nc" id="L401">            this.isMetricListSet = true;</span>
+<span class="nc" id="L402">            this.llMetricList = llMetricList;</span>
+<span class="nc" id="L403">            return this;</span>
+        }
+
+        @Override
+        public Builder setLspaObject(PcepLspaObject lspaObject) {
+<span class="nc" id="L408">            this.isLspaObjectSet = true;</span>
+<span class="nc" id="L409">            this.lspaObject = lspaObject;</span>
+<span class="nc" id="L410">            return this;</span>
+        }
+
+        @Override
+        public Builder setIroObject(PcepIroObject iroObject) {
+<span class="nc" id="L415">            this.isIroObjectSet = true;</span>
+<span class="nc" id="L416">            this.iroObject = iroObject;</span>
+<span class="nc" id="L417">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L423">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L424">                .omitNullValues()</span>
+<span class="nc" id="L425">                .add(&quot;lspaObject&quot;, lspaObject)</span>
+<span class="nc" id="L426">                .add(&quot;bandwidthObject&quot;, bandwidthObject)</span>
+<span class="nc" id="L427">                .add(&quot;MetricObjectList&quot;, llMetricList)</span>
+<span class="nc" id="L428">                .add(&quot;IroObject&quot;, iroObject)</span>
+<span class="nc" id="L429">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

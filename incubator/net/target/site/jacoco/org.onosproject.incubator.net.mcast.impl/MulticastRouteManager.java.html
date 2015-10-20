@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MulticastRouteManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.mcast.impl</a> &gt; <span class="el_source">MulticastRouteManager.java</span></div><h1>MulticastRouteManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.mcast.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.IpPrefix;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.event.AbstractListenerManager;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.mcast.McastEvent;
+import org.onosproject.net.mcast.McastListener;
+import org.onosproject.net.mcast.McastRoute;
+import org.onosproject.net.mcast.MulticastRouteService;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * An implementation of a multicast route table.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L50">public class MulticastRouteManager</span>
+        extends AbstractListenerManager&lt;McastEvent, McastListener&gt;
+        implements MulticastRouteService {
+    //TODO: add MulticastRouteAdminService
+
+    private static final String MCASTRIB = &quot;mcast-rib-table&quot;;
+
+<span class="fc" id="L57">    private Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private CoreService coreService;
+
+
+    protected ApplicationId appId;
+    protected ConsistentMap&lt;McastRoute, MulticastData&gt; mcastRoutes;
+
+    @Activate
+    public void activate() {
+
+<span class="fc" id="L72">        eventDispatcher.addSink(McastEvent.class, listenerRegistry);</span>
+
+<span class="fc" id="L74">        appId = coreService.registerApplication(&quot;org.onosproject.mcastrib&quot;);</span>
+
+<span class="fc" id="L76">        mcastRoutes = storageService.&lt;McastRoute, MulticastData&gt;consistentMapBuilder()</span>
+<span class="fc" id="L77">                .withApplicationId(appId)</span>
+<span class="fc" id="L78">                .withName(MCASTRIB)</span>
+<span class="fc" id="L79">                .withSerializer(Serializer.using(KryoNamespace.newBuilder().register(</span>
+                        MulticastData.class,
+                        McastRoute.class,
+                        McastRoute.Type.class,
+                        IpPrefix.class,
+                        List.class,
+                        ConnectPoint.class
+<span class="fc" id="L86">                ).build())).build();</span>
+
+<span class="fc" id="L88">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L89">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L93">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L94">    }</span>
+
+    @Override
+    public void add(McastRoute route) {
+<span class="fc" id="L98">        mcastRoutes.put(route, MulticastData.empty());</span>
+<span class="fc" id="L99">        post(new McastEvent(McastEvent.Type.ROUTE_ADDED, route, null, null));</span>
+<span class="fc" id="L100">    }</span>
+
+    @Override
+    public void remove(McastRoute route) {
+<span class="fc" id="L104">        mcastRoutes.remove(route);</span>
+<span class="fc" id="L105">        post(new McastEvent(McastEvent.Type.ROUTE_REMOVED, route, null, null));</span>
+<span class="fc" id="L106">    }</span>
+
+    @Override
+    public void addSource(McastRoute route, ConnectPoint connectPoint) {
+<span class="fc" id="L110">        Versioned&lt;MulticastData&gt; d = mcastRoutes.compute(route, (k, v) -&gt; {</span>
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">            if (v.isEmpty()) {</span>
+<span class="fc" id="L112">                return new MulticastData(connectPoint);</span>
+            } else {
+<span class="nc" id="L114">                log.warn(&quot;Route {} is already in use.&quot;, route);</span>
+<span class="nc" id="L115">                return v;</span>
+            }
+        });
+
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">        if (d != null) {</span>
+<span class="fc" id="L120">            post(new McastEvent(McastEvent.Type.SOURCE_ADDED,</span>
+                                route, null, connectPoint));
+        }
+<span class="fc" id="L123">    }</span>
+
+    @Override
+    public void addSink(McastRoute route, ConnectPoint connectPoint) {
+<span class="fc" id="L127">        AtomicReference&lt;ConnectPoint&gt; source = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L128">        mcastRoutes.compute(route, (k, v) -&gt; {</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">            if (!v.isEmpty()) {</span>
+<span class="fc" id="L130">                v.appendSink(connectPoint);</span>
+<span class="fc" id="L131">                source.set(v.source());</span>
+            } else {
+<span class="nc" id="L133">                log.warn(&quot;Route {} does not exist&quot;);</span>
+            }
+<span class="fc" id="L135">            return v;</span>
+        });
+
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">        if (source.get() != null) {</span>
+<span class="fc" id="L139">            post(new McastEvent(McastEvent.Type.SINK_ADDED, route,</span>
+<span class="fc" id="L140">                                connectPoint, source.get()));</span>
+        }
+<span class="fc" id="L142">    }</span>
+
+
+    @Override
+    public void removeSink(McastRoute route, ConnectPoint connectPoint) {
+<span class="fc" id="L147">        AtomicReference&lt;ConnectPoint&gt; source = new AtomicReference&lt;&gt;();</span>
+<span class="fc" id="L148">        mcastRoutes.compute(route, (k, v) -&gt; {</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">            if (v.removeSink(connectPoint)) {</span>
+<span class="fc" id="L150">                source.set(v.source());</span>
+            }
+<span class="fc" id="L152">            return v;</span>
+        });
+
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">        if (source.get() != null) {</span>
+<span class="fc" id="L156">            post(new McastEvent(McastEvent.Type.SINK_REMOVED, route,</span>
+<span class="fc" id="L157">                                connectPoint, source.get()));</span>
+        }
+<span class="fc" id="L159">    }</span>
+
+    @Override
+    public ConnectPoint fetchSource(McastRoute route) {
+<span class="fc" id="L163">        MulticastData d = mcastRoutes.asJavaMap().getOrDefault(route,</span>
+<span class="fc" id="L164">                                                               MulticastData.empty());</span>
+<span class="fc" id="L165">        return d.source();</span>
+    }
+
+    @Override
+    public List&lt;ConnectPoint&gt; fetchSinks(McastRoute route) {
+<span class="fc" id="L170">        MulticastData d = mcastRoutes.asJavaMap().getOrDefault(route,</span>
+<span class="fc" id="L171">                                                               MulticastData.empty());</span>
+<span class="fc" id="L172">        return d.sinks();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

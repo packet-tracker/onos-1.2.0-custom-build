@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DeviceClockManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.device.impl</a> &gt; <span class="el_source">DeviceClockManager.java</span></div><h1>DeviceClockManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.device.impl;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipTerm;
+import org.onosproject.mastership.MastershipTermService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceClockService;
+import org.onosproject.store.Timestamp;
+import org.onosproject.store.impl.MastershipBasedTimestamp;
+import org.slf4j.Logger;
+
+/**
+ * Clock service to issue Timestamp based on Device Mastership.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L43">public class DeviceClockManager implements DeviceClockService {</span>
+
+<span class="nc" id="L45">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipTermService mastershipTermService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    protected NodeId localNodeId;
+
+<span class="nc" id="L55">    private final AtomicLong ticker = new AtomicLong(0);</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L59">        localNodeId = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L60">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L61">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L65">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L66">    }</span>
+
+    @Override
+    public Timestamp getTimestamp(DeviceId deviceId) {
+<span class="nc" id="L70">        MastershipTerm term = mastershipTermService.getMastershipTerm(deviceId);</span>
+<span class="nc bnc" id="L71" title="All 4 branches missed.">        if (term == null || !localNodeId.equals(term.master())) {</span>
+<span class="nc" id="L72">            throw new IllegalStateException(&quot;Requesting timestamp for &quot; + deviceId + &quot; without mastership&quot;);</span>
+        }
+<span class="nc" id="L74">        return new MastershipBasedTimestamp(term.termNumber(), ticker.incrementAndGet());</span>
+    }
+
+    @Override
+    public boolean isTimestampAvailable(DeviceId deviceId) {
+<span class="nc" id="L79">        MastershipTerm term = mastershipTermService.getMastershipTerm(deviceId);</span>
+<span class="nc bnc" id="L80" title="All 4 branches missed.">        return term != null &amp;&amp; localNodeId.equals(term.master());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

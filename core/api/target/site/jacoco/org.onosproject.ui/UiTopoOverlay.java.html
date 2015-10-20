@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>UiTopoOverlay.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.ui</a> &gt; <span class="el_source">UiTopoOverlay.java</span></div><h1>UiTopoOverlay.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.ui;
+
+import org.onosproject.ui.topo.PropertyPanel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Represents user interface topology view overlay.
+ */
+public class UiTopoOverlay {
+
+    /**
+     * Logger for this overlay.
+     */
+<span class="nc" id="L31">    protected final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private final String id;
+
+<span class="nc" id="L35">    private boolean isActive = false;</span>
+
+    /**
+     * Creates a new user interface topology view overlay descriptor.
+     *
+     * @param id overlay identifier
+     */
+<span class="nc" id="L42">    public UiTopoOverlay(String id) {</span>
+<span class="nc" id="L43">        this.id = id;</span>
+<span class="nc" id="L44">    }</span>
+
+    /**
+     * Returns the identifier for this overlay.
+     *
+     * @return the identifier
+     */
+    public String id() {
+<span class="nc" id="L52">        return id;</span>
+    }
+
+    /**
+     * Callback invoked to initialize this overlay, soon after creation.
+     * This default implementation does nothing.
+     */
+    public void init() {
+<span class="nc" id="L60">    }</span>
+
+    /**
+     * Callback invoked when this overlay is activated.
+     */
+    public void activate() {
+<span class="nc" id="L66">        isActive = true;</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Callback invoked when this overlay is deactivated.
+     */
+    public void deactivate() {
+<span class="nc" id="L73">        isActive = false;</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     * Returns true if this overlay is currently active.
+     *
+     * @return true if overlay active
+     */
+    public boolean isActive() {
+<span class="nc" id="L82">        return isActive;</span>
+    }
+
+    /**
+     * Callback invoked to destroy this instance by cleaning up any
+     * internal state ready for garbage collection.
+     * This default implementation holds no state and does nothing.
+     */
+    public void destroy() {
+<span class="nc" id="L91">    }</span>
+
+    /**
+     * Callback to modify the contents of the summary panel.
+     * This default implementation does nothing.
+     *
+     * @param pp property panel model of summary data
+     */
+    public void modifySummary(PropertyPanel pp) {
+<span class="nc" id="L100">    }</span>
+
+    /**
+     * Callback to modify the contents of the details panel for
+     * a selected device.
+     * This default implementation does nothing.
+     *
+     * @param pp property panel model of summary data
+     */
+    public void modifyDeviceDetails(PropertyPanel pp) {
+<span class="nc" id="L110">    }</span>
+
+    /**
+     * Callback to modify the contents of the details panel for
+     * a selected host.
+     * This default implementation does nothing.
+     *
+     * @param pp property panel model of summary data
+     */
+    public void modifyHostDetails(PropertyPanel pp) {
+<span class="nc" id="L120">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

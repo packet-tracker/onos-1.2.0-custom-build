@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultLinkResourceAllocations.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.resource.link</a> &gt; <span class="el_source">DefaultLinkResourceAllocations.java</span></div><h1>DefaultLinkResourceAllocations.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.resource.link;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+
+import org.onosproject.net.Link;
+import org.onosproject.net.intent.IntentId;
+import org.onosproject.net.resource.ResourceAllocation;
+import org.onosproject.net.resource.ResourceRequest;
+import org.onosproject.net.resource.ResourceType;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Map.Entry;
+import java.util.Set;
+
+/**
+ * Implementation of {@link LinkResourceAllocations}.
+ */
+public class DefaultLinkResourceAllocations implements LinkResourceAllocations {
+    private final LinkResourceRequest request;
+    // TODO: probably should be using LinkKey instead
+    private final Map&lt;Link, Set&lt;ResourceAllocation&gt;&gt; allocations;
+
+    /**
+     * Creates a new link resource allocations.
+     *
+     * @param request     requested resources
+     * @param allocations allocated resources
+     */
+    public DefaultLinkResourceAllocations(LinkResourceRequest request,
+<span class="nc" id="L52">                                   Map&lt;Link, Set&lt;ResourceAllocation&gt;&gt; allocations) {</span>
+<span class="nc" id="L53">        this.request = checkNotNull(request);</span>
+        ImmutableMap.Builder&lt;Link, Set&lt;ResourceAllocation&gt;&gt; builder
+<span class="nc" id="L55">            = ImmutableMap.builder();</span>
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        for (Entry&lt;Link, Set&lt;ResourceAllocation&gt;&gt; e : allocations.entrySet()) {</span>
+<span class="nc" id="L57">            builder.put(e.getKey(), ImmutableSet.copyOf(e.getValue()));</span>
+<span class="nc" id="L58">        }</span>
+<span class="nc" id="L59">        this.allocations = builder.build();</span>
+<span class="nc" id="L60">    }</span>
+
+    public IntentId intentId() {
+<span class="nc" id="L63">        return request.intentId();</span>
+    }
+
+    public Collection&lt;Link&gt; links() {
+<span class="nc" id="L67">        return request.links();</span>
+    }
+
+    public Set&lt;ResourceRequest&gt; resources() {
+<span class="nc" id="L71">        return request.resources();</span>
+    }
+
+    @Override
+    public ResourceType type() {
+<span class="nc" id="L76">        return null;</span>
+    }
+
+    @Override
+    public Set&lt;ResourceAllocation&gt; getResourceAllocation(Link link) {
+<span class="nc" id="L81">        Set&lt;ResourceAllocation&gt; result = allocations.get(link);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (result == null) {</span>
+<span class="nc" id="L83">            result = Collections.emptySet();</span>
+        }
+<span class="nc" id="L85">        return result;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L90">        return Objects.hash(request, allocations);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L96">            return true;</span>
+        }
+<span class="nc bnc" id="L98" title="All 4 branches missed.">        if (obj == null || getClass() != obj.getClass()) {</span>
+<span class="nc" id="L99">            return false;</span>
+        }
+<span class="nc" id="L101">        final DefaultLinkResourceAllocations other = (DefaultLinkResourceAllocations) obj;</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        return Objects.equals(this.request, other.request)</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                &amp;&amp; Objects.equals(this.allocations, other.allocations);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L108">        return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L109">                .add(&quot;allocations&quot;, allocations)</span>
+<span class="nc" id="L110">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

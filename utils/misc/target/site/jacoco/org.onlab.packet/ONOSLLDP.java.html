@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ONOSLLDP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">ONOSLLDP.java</span></div><h1>ONOSLLDP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import com.google.common.collect.Lists;
+import org.apache.commons.lang.ArrayUtils;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
+/**
+ *  ONOS LLDP containing organizational TLV for ONOS device dicovery.
+ */
+public class ONOSLLDP extends LLDP {
+
+<span class="nc" id="L29">    public static final byte[] ONLAB_OUI = {(byte) 0xa4, 0x23, 0x05};</span>
+    public static final String DEFAULT_DEVICE = &quot;INVALID&quot;;
+    public static final String DEFAULT_NAME = &quot;ONOS Discovery&quot;;
+
+<span class="nc" id="L33">    public static final byte[] LLDP_NICIRA = {0x01, 0x23, 0x20, 0x00, 0x00,</span>
+            0x01};
+<span class="nc" id="L35">    public static final byte[] LLDP_MULTICAST = {0x01, (byte) 0x80,</span>
+            (byte) 0xc2, 0x00, 0x00, 0x0e};
+<span class="nc" id="L37">    public static final byte[] BDDP_MULTICAST = {(byte) 0xff, (byte) 0xff,</span>
+            (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff};
+
+    private static final byte NAME_SUBTYPE = 1;
+    private static final byte DEVICE_SUBTYPE = 2;
+    private static final short NAME_LENGTH = 4; //1 for subtype + 3 for OUI
+    private static final short DEVICE_LENGTH = 4; //1 for subtype + 3 for OUI
+<span class="nc" id="L44">    private final LLDPOrganizationalTLV nameTLV = new LLDPOrganizationalTLV();</span>
+<span class="nc" id="L45">    private final LLDPOrganizationalTLV deviceTLV =  new LLDPOrganizationalTLV();</span>
+
+    // TLV constants: type, size and subtype
+    // Organizationally specific TLV also have packet offset and contents of TLV
+    // header
+    private static final byte CHASSIS_TLV_TYPE = 1;
+    private static final byte CHASSIS_TLV_SIZE = 7;
+    private static final byte CHASSIS_TLV_SUBTYPE = 4;
+
+    private static final byte PORT_TLV_TYPE = 2;
+    private static final byte PORT_TLV_SIZE = 5;
+    private static final byte PORT_TLV_SUBTYPE = 2;
+
+    private static final byte TTL_TLV_TYPE = 3;
+
+
+<span class="nc" id="L61">    private final byte[] ttlValue = new byte[] {0, 0x78};</span>
+
+    public ONOSLLDP() {
+<span class="nc" id="L64">        super();</span>
+<span class="nc" id="L65">        setName(DEFAULT_NAME);</span>
+<span class="nc" id="L66">        setDevice(DEFAULT_DEVICE);</span>
+<span class="nc" id="L67">        setOptionalTLVList(Lists.&lt;LLDPTLV&gt;newArrayList(nameTLV, deviceTLV));</span>
+<span class="nc" id="L68">        setTtl(new LLDPTLV().setType(TTL_TLV_TYPE)</span>
+<span class="nc" id="L69">                       .setLength((short) ttlValue.length)</span>
+<span class="nc" id="L70">                       .setValue(ttlValue));</span>
+
+<span class="nc" id="L72">    }</span>
+
+<span class="nc" id="L74">    private ONOSLLDP(LLDP lldp) {</span>
+<span class="nc" id="L75">        this.portId = lldp.getPortId();</span>
+<span class="nc" id="L76">        this.chassisId = lldp.getChassisId();</span>
+<span class="nc" id="L77">        this.ttl = lldp.getTtl();</span>
+<span class="nc" id="L78">        this.optionalTLVList = lldp.getOptionalTLVList();</span>
+<span class="nc" id="L79">    }</span>
+
+    public void setName(String name) {
+<span class="nc" id="L82">        nameTLV.setLength((short) (name.length() + NAME_LENGTH));</span>
+<span class="nc" id="L83">        nameTLV.setInfoString(name);</span>
+<span class="nc" id="L84">        nameTLV.setSubType(NAME_SUBTYPE);</span>
+<span class="nc" id="L85">        nameTLV.setOUI(ONLAB_OUI);</span>
+<span class="nc" id="L86">    }</span>
+
+    public void setDevice(String device) {
+<span class="nc" id="L89">        deviceTLV.setInfoString(device);</span>
+<span class="nc" id="L90">        deviceTLV.setLength((short) (device.length() + DEVICE_LENGTH));</span>
+<span class="nc" id="L91">        deviceTLV.setSubType(DEVICE_SUBTYPE);</span>
+<span class="nc" id="L92">        deviceTLV.setOUI(ONLAB_OUI);</span>
+<span class="nc" id="L93">    }</span>
+
+    public void setChassisId(final ChassisId chassisId) {
+<span class="nc" id="L96">        MacAddress chassisMac = MacAddress.valueOf(chassisId.value());</span>
+<span class="nc" id="L97">        byte[] chassis = ArrayUtils.addAll(new byte[] {CHASSIS_TLV_SUBTYPE},</span>
+<span class="nc" id="L98">                                           chassisMac.toBytes());</span>
+
+<span class="nc" id="L100">        LLDPTLV chassisTLV = new LLDPTLV();</span>
+<span class="nc" id="L101">        chassisTLV.setLength(CHASSIS_TLV_SIZE);</span>
+<span class="nc" id="L102">        chassisTLV.setType(CHASSIS_TLV_TYPE);</span>
+<span class="nc" id="L103">        chassisTLV.setValue(chassis);</span>
+<span class="nc" id="L104">        this.setChassisId(chassisTLV);</span>
+<span class="nc" id="L105">    }</span>
+
+    public void setPortId(final int portNumber) {
+<span class="nc" id="L108">        byte[] port = ArrayUtils.addAll(new byte[] {PORT_TLV_SUBTYPE},</span>
+<span class="nc" id="L109">                                        ByteBuffer.allocate(4).putInt(portNumber).array());</span>
+
+<span class="nc" id="L111">        LLDPTLV portTLV = new LLDPTLV();</span>
+<span class="nc" id="L112">        portTLV.setLength(PORT_TLV_SIZE);</span>
+<span class="nc" id="L113">        portTLV.setType(PORT_TLV_TYPE);</span>
+<span class="nc" id="L114">        portTLV.setValue(port);</span>
+<span class="nc" id="L115">        this.setPortId(portTLV);</span>
+<span class="nc" id="L116">    }</span>
+
+    public LLDPOrganizationalTLV getNameTLV() {
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        for (LLDPTLV tlv : this.getOptionalTLVList()) {</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">            if (tlv.getType() == LLDPOrganizationalTLV.ORGANIZATIONAL_TLV_TYPE) {</span>
+<span class="nc" id="L121">                LLDPOrganizationalTLV orgTLV =  (LLDPOrganizationalTLV) tlv;</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">                if (orgTLV.getSubType() == NAME_SUBTYPE) {</span>
+<span class="nc" id="L123">                    return orgTLV;</span>
+                }
+            }
+<span class="nc" id="L126">        }</span>
+<span class="nc" id="L127">        return null;</span>
+    }
+
+    public LLDPOrganizationalTLV getDeviceTLV() {
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        for (LLDPTLV tlv : this.getOptionalTLVList()) {</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">            if (tlv.getType() == LLDPOrganizationalTLV.ORGANIZATIONAL_TLV_TYPE) {</span>
+<span class="nc" id="L133">                LLDPOrganizationalTLV orgTLV =  (LLDPOrganizationalTLV) tlv;</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">                if (orgTLV.getSubType() == DEVICE_SUBTYPE) {</span>
+<span class="nc" id="L135">                    return orgTLV;</span>
+                }
+            }
+<span class="nc" id="L138">        }</span>
+<span class="nc" id="L139">        return null;</span>
+    }
+
+    public String getNameString() {
+<span class="nc" id="L143">        LLDPOrganizationalTLV tlv = getNameTLV();</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (tlv != null) {</span>
+<span class="nc" id="L145">            return new String(tlv.getInfoString(), StandardCharsets.UTF_8);</span>
+        }
+<span class="nc" id="L147">        return null;</span>
+    }
+
+    public String getDeviceString() {
+<span class="nc" id="L151">        LLDPOrganizationalTLV tlv = getDeviceTLV();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        if (tlv != null) {</span>
+<span class="nc" id="L153">            return new String(tlv.getInfoString(), StandardCharsets.UTF_8);</span>
+        }
+<span class="nc" id="L155">        return null;</span>
+    }
+
+    public Integer getPort() {
+<span class="nc" id="L159">        ByteBuffer portBB = ByteBuffer.wrap(this.getPortId().getValue());</span>
+<span class="nc" id="L160">        portBB.position(1);</span>
+<span class="nc" id="L161">        return portBB.getInt();</span>
+    }
+
+    /**
+     * Given an ethernet packet, determines if this is an LLDP from
+     * ONOS and returns the device the LLDP came from.
+     * @param eth an ethernet packet
+     * @return a the lldp packet or null
+     */
+    public static ONOSLLDP parseONOSLLDP(Ethernet eth) {
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        if (eth.getEtherType() == Ethernet.TYPE_LLDP ||</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                eth.getEtherType() == Ethernet.TYPE_BSN) {</span>
+<span class="nc" id="L173">           ONOSLLDP onosLldp = new ONOSLLDP((LLDP) eth.getPayload()); //(ONOSLLDP) eth.getPayload();</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">           if (ONOSLLDP.DEFAULT_NAME.equals(onosLldp.getNameString())) {</span>
+<span class="nc" id="L175">               return onosLldp;</span>
+           }
+        }
+<span class="nc" id="L178">        return null;</span>
+    }
+
+
+
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

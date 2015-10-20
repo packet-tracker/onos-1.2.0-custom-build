@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OmsPort.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">OmsPort.java</span></div><h1>OmsPort.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import org.onlab.util.Frequency;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Implementation of OMS port (Optical Multiplexing Section).
+ * Also referred to as a WDM port or W-port.
+ * See ITU G.709 &quot;Interfaces for the Optical Transport Network (OTN)&quot;
+ *
+ * Assumes we only support fixed grid for now.
+ */
+public class OmsPort extends DefaultPort {
+
+    private final Frequency minFrequency;     // Minimum frequency
+    private final Frequency maxFrequency;     // Maximum frequency
+    private final Frequency grid;             // Grid spacing frequency
+
+
+    /**
+     * Creates an OMS port in the specified network element.
+     *
+     * @param element       parent network element
+     * @param number        port number
+     * @param isEnabled     port enabled state
+     * @param minFrequency  minimum frequency
+     * @param maxFrequency  maximum frequency
+     * @param grid          grid spacing frequency
+     * @param annotations   optional key/value annotations
+     */
+    public OmsPort(Element element, PortNumber number, boolean isEnabled,
+                   Frequency minFrequency, Frequency maxFrequency, Frequency grid, Annotations... annotations) {
+<span class="nc" id="L51">        super(element, number, isEnabled, Type.OMS, 0, annotations);</span>
+<span class="nc" id="L52">        this.minFrequency = minFrequency;</span>
+<span class="nc" id="L53">        this.maxFrequency = maxFrequency;</span>
+<span class="nc" id="L54">        this.grid = grid;</span>
+<span class="nc" id="L55">    }</span>
+
+    /**
+     * Returns the total number of channels on the port.
+     *
+     * @return total number of channels
+     */
+    public short totalChannels() {
+<span class="nc" id="L63">        Frequency diff = maxFrequency.subtract(minFrequency);</span>
+<span class="nc" id="L64">        return (short) (diff.asHz() / (grid.asHz() + 1));</span>
+    }
+
+    /**
+     * Returns the minimum frequency.
+     *
+     * @return minimum frequency
+     */
+    public Frequency minFrequency() {
+<span class="nc" id="L73">        return minFrequency;</span>
+    }
+
+    /**
+     * Returns the maximum frequency.
+     *
+     * @return maximum frequency
+     */
+    public Frequency maxFrequency() {
+<span class="nc" id="L82">        return maxFrequency;</span>
+    }
+
+    /**
+     * Returns the grid spacing frequency.
+     *
+     * @return grid spacing frequency
+     */
+    public Frequency grid() {
+<span class="nc" id="L91">        return grid;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L96">        return Objects.hash(number(), isEnabled(), type(),</span>
+<span class="nc" id="L97">                minFrequency, maxFrequency, grid, annotations());</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L103">            return true;</span>
+        }
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (obj instanceof OmsPort) {</span>
+<span class="nc" id="L106">            final OmsPort other = (OmsPort) obj;</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            return Objects.equals(this.element().id(), other.element().id()) &amp;&amp;</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                    Objects.equals(this.number(), other.number()) &amp;&amp;</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">                    Objects.equals(this.isEnabled(), other.isEnabled()) &amp;&amp;</span>
+<span class="nc bnc" id="L110" title="All 2 branches missed.">                    Objects.equals(this.minFrequency, other.minFrequency) &amp;&amp;</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">                    Objects.equals(this.maxFrequency, other.maxFrequency) &amp;&amp;</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                    Objects.equals(this.grid, other.grid) &amp;&amp;</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                    Objects.equals(this.annotations(), other.annotations());</span>
+        }
+<span class="nc" id="L115">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L120">        return toStringHelper(this)</span>
+<span class="nc" id="L121">                .add(&quot;element&quot;, element().id())</span>
+<span class="nc" id="L122">                .add(&quot;number&quot;, number())</span>
+<span class="nc" id="L123">                .add(&quot;isEnabled&quot;, isEnabled())</span>
+<span class="nc" id="L124">                .add(&quot;type&quot;, type())</span>
+<span class="nc" id="L125">                .add(&quot;minFrequency&quot;, minFrequency)</span>
+<span class="nc" id="L126">                .add(&quot;maxFrequency&quot;, maxFrequency)</span>
+<span class="nc" id="L127">                .add(&quot;grid&quot;, grid)</span>
+<span class="nc" id="L128">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

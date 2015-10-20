@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowEntry.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow</a> &gt; <span class="el_source">FlowEntry.java</span></div><h1>FlowEntry.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow;
+
+
+/**
+ * Represents a generalized match &amp;amp; action pair to be applied to
+ * an infrastucture device.
+ */
+public interface FlowEntry extends FlowRule {
+
+
+<span class="pc" id="L26">    enum FlowEntryState {</span>
+
+        /**
+         * Indicates that this rule has been submitted for addition.
+         * Not necessarily in the flow table.
+         */
+<span class="fc" id="L32">        PENDING_ADD,</span>
+
+        /**
+         * Rule has been added which means it is in the flow table.
+         */
+<span class="fc" id="L37">        ADDED,</span>
+
+        /**
+         * Flow has been marked for removal, might still be in flow table.
+         */
+<span class="fc" id="L42">        PENDING_REMOVE,</span>
+
+        /**
+         * Flow has been removed from flow table and can be purged.
+         */
+<span class="fc" id="L47">        REMOVED,</span>
+
+        /**
+         * Indicates that the installation of this flow has failed.
+         */
+<span class="fc" id="L52">        FAILED</span>
+    }
+
+    /**
+     * Returns the flow entry state.
+     *
+     * @return flow entry state
+     */
+    FlowEntryState state();
+
+    /**
+     * Returns the number of milliseconds this flow rule has been applied.
+     *
+     * @return number of millis
+     */
+    long life();
+
+    /**
+     * Returns the number of packets this flow rule has matched.
+     *
+     * @return number of packets
+     */
+    long packets();
+
+    /**
+     * Returns the number of bytes this flow rule has matched.
+     *
+     * @return number of bytes
+     */
+    long bytes();
+
+    // TODO: consider removing this attribute
+    /**
+     * When this flow entry was last deemed active.
+     * @return epoch time of last activity
+     */
+    long lastSeen();
+
+    /**
+     * Indicates the error type.
+     * @return an integer value of the error
+     */
+    int errType();
+
+    /**
+     * Indicates the error code.
+     * @return an integer value of the error
+     */
+    int errCode();
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultMessage.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-nio</a> &gt; <a href="index.source.html" class="el_package">org.onlab.nio.service</a> &gt; <span class="el_source">DefaultMessage.java</span></div><h1>DefaultMessage.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.nio.service;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import org.onlab.nio.AbstractMessage;
+import org.onlab.packet.IpAddress;
+import org.onlab.util.ByteArraySizeHashPrinter;
+import org.onosproject.store.cluster.messaging.Endpoint;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.MoreObjects;
+
+/**
+ * Default message.
+ */
+public class DefaultMessage extends AbstractMessage {
+
+    private long id;
+    private Endpoint sender;
+    private String type;
+    private byte[] payload;
+
+    /**
+     * Creates a new message with the specified data.
+     *
+     * @param id message id
+     * @param type message type
+     * @param sender sender endpoint
+     * @param payload message payload
+     */
+<span class="nc" id="L46">    DefaultMessage(long id, Endpoint sender, String type, byte[] payload) {</span>
+<span class="nc" id="L47">        this.id = id;</span>
+<span class="nc" id="L48">        this.type = checkNotNull(type, &quot;Type cannot be null&quot;);</span>
+<span class="nc" id="L49">        this.sender = checkNotNull(sender, &quot;Sender cannot be null&quot;);</span>
+<span class="nc" id="L50">        this.payload = checkNotNull(payload, &quot;Payload cannot be null&quot;);</span>
+
+<span class="nc" id="L52">        byte[] messageTypeBytes = type.getBytes(Charsets.UTF_8);</span>
+<span class="nc" id="L53">        IpAddress senderIp = sender.host();</span>
+<span class="nc" id="L54">        byte[] ipOctets = senderIp.toOctets();</span>
+
+<span class="nc" id="L56">        length = 25 + ipOctets.length + messageTypeBytes.length + payload.length;</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Returns message id.
+     *
+     * @return message id
+     */
+    public long id() {
+<span class="nc" id="L65">        return id;</span>
+    }
+
+    /**
+     * Returns message sender.
+     *
+     * @return message sender
+     */
+    public Endpoint sender() {
+<span class="nc" id="L74">        return sender;</span>
+    }
+
+    /**
+     * Returns message type.
+     *
+     * @return message type
+     */
+    public String type() {
+<span class="nc" id="L83">        return type;</span>
+    }
+
+    /**
+     * Returns message payload.
+     *
+     * @return payload
+     */
+    public byte[] payload() {
+<span class="nc" id="L92">        return payload;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L97">        return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L98">                .add(&quot;id&quot;, id)</span>
+<span class="nc" id="L99">                .add(&quot;type&quot;, type)</span>
+<span class="nc" id="L100">                .add(&quot;sender&quot;, sender)</span>
+<span class="nc" id="L101">                .add(&quot;payload&quot;, ByteArraySizeHashPrinter.of(payload))</span>
+<span class="nc" id="L102">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

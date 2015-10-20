@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ComponentConfigManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.cfg.impl</a> &gt; <span class="el_source">ComponentConfigManager.java</span></div><h1>ComponentConfigManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.cfg.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.AbstractAccumulator;
+import org.onlab.util.Accumulator;
+import org.onlab.util.SharedExecutors;
+import org.onosproject.cfg.ComponentConfigEvent;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.cfg.ComponentConfigStore;
+import org.onosproject.cfg.ComponentConfigStoreDelegate;
+import org.onosproject.cfg.ConfigProperty;
+import org.osgi.service.cm.Configuration;
+import org.osgi.service.cm.ConfigurationAdmin;
+import org.slf4j.Logger;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Dictionary;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Implementation of the centralized component configuration service.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L60">public class ComponentConfigManager implements ComponentConfigService {</span>
+
+    private static final String COMPONENT_NULL = &quot;Component name cannot be null&quot;;
+    private static final String PROPERTY_NULL = &quot;Property name cannot be null&quot;;
+    private static final String COMPONENT_MISSING = &quot;Component %s is not registered&quot;;
+    private static final String PROPERTY_MISSING = &quot;Property %s does not exist for %s&quot;;
+
+
+    //Symbolic constants for use with the accumulator
+    private static final int MAX_ITEMS = 100;
+    private static final int MAX_BATCH_MILLIS = 1000;
+    private static final int MAX_IDLE_MILLIS = 250;
+
+    private static final String RESOURCE_EXT = &quot;.cfgdef&quot;;
+
+<span class="nc" id="L75">    private final Logger log = getLogger(getClass());</span>
+
+<span class="nc" id="L77">    private final ComponentConfigStoreDelegate delegate = new InternalStoreDelegate();</span>
+<span class="nc" id="L78">    private final InternalAccumulator accumulator = new InternalAccumulator();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ConfigurationAdmin cfgAdmin;
+
+    // Locally maintained catalog of definitions.
+<span class="nc" id="L87">    private final Map&lt;String, Map&lt;String, ConfigProperty&gt;&gt;  properties =</span>
+<span class="nc" id="L88">            Maps.newConcurrentMap();</span>
+
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L93">        store.setDelegate(delegate);</span>
+<span class="nc" id="L94">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L95">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L99">        store.unsetDelegate(delegate);</span>
+<span class="nc" id="L100">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L101">    }</span>
+
+    @Override
+    public Set&lt;String&gt; getComponentNames() {
+<span class="nc" id="L105">        checkPermission(CONFIG_READ);</span>
+
+<span class="nc" id="L107">        return ImmutableSet.copyOf(properties.keySet());</span>
+    }
+
+    @Override
+    public void registerProperties(Class&lt;?&gt; componentClass) {
+<span class="nc" id="L112">        checkPermission(CONFIG_WRITE);</span>
+
+<span class="nc" id="L114">        String componentName = componentClass.getName();</span>
+<span class="nc" id="L115">        String resourceName = componentClass.getSimpleName() + RESOURCE_EXT;</span>
+<span class="nc" id="L116">        try (InputStream ris = componentClass.getResourceAsStream(resourceName)) {</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            checkArgument(ris != null, &quot;Property definitions not found at resource %s&quot;,</span>
+                          resourceName);
+
+            // Read the definitions
+<span class="nc" id="L121">            Set&lt;ConfigProperty&gt; defs = ConfigPropertyDefinitions.read(ris);</span>
+
+            // Produce a new map of the properties and register it.
+<span class="nc" id="L124">            Map&lt;String, ConfigProperty&gt; map = Maps.newConcurrentMap();</span>
+<span class="nc" id="L125">            defs.forEach(p -&gt; map.put(p.name(), p));</span>
+
+<span class="nc" id="L127">            properties.put(componentName, map);</span>
+<span class="nc" id="L128">            loadExistingValues(componentName);</span>
+<span class="nc bnc" id="L129" title="All 8 branches missed.">        } catch (IOException e) {</span>
+<span class="nc" id="L130">            log.error(&quot;Unable to read property definitions from resource &quot; + resourceName, e);</span>
+<span class="nc" id="L131">        }</span>
+<span class="nc" id="L132">    }</span>
+
+    @Override
+    public void unregisterProperties(Class&lt;?&gt; componentClass, boolean clear) {
+<span class="nc" id="L136">        checkPermission(CONFIG_WRITE);</span>
+
+<span class="nc" id="L138">        String componentName = componentClass.getName();</span>
+<span class="nc" id="L139">        checkNotNull(componentName, COMPONENT_NULL);</span>
+<span class="nc" id="L140">        Map&lt;String, ConfigProperty&gt; cps = properties.remove(componentName);</span>
+<span class="nc bnc" id="L141" title="All 4 branches missed.">        if (clear &amp;&amp; cps != null) {</span>
+<span class="nc" id="L142">            cps.keySet().forEach(name -&gt; store.unsetProperty(componentName, name));</span>
+<span class="nc" id="L143">            clearExistingValues(componentName);</span>
+        }
+<span class="nc" id="L145">    }</span>
+
+    // Clears any existing values that may have been set.
+    private void clearExistingValues(String componentName) {
+<span class="nc" id="L149">        triggerUpdate(componentName);</span>
+<span class="nc" id="L150">    }</span>
+
+    @Override
+    public Set&lt;ConfigProperty&gt; getProperties(String componentName) {
+<span class="nc" id="L154">        checkPermission(CONFIG_READ);</span>
+
+<span class="nc" id="L156">        Map&lt;String, ConfigProperty&gt; map = properties.get(componentName);</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        return map != null ? ImmutableSet.copyOf(map.values()) : null;</span>
+    }
+
+    @Override
+    public void setProperty(String componentName, String name, String value) {
+<span class="nc" id="L162">        checkPermission(CONFIG_WRITE);</span>
+
+<span class="nc" id="L164">        checkNotNull(componentName, COMPONENT_NULL);</span>
+<span class="nc" id="L165">        checkNotNull(name, PROPERTY_NULL);</span>
+
+<span class="nc" id="L167">        checkArgument(properties.containsKey(componentName),</span>
+                      COMPONENT_MISSING, componentName);
+<span class="nc" id="L169">        checkArgument(properties.get(componentName).containsKey(name),</span>
+                      PROPERTY_MISSING, name, componentName);
+<span class="nc" id="L171">        store.setProperty(componentName, name, value);</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    public void preSetProperty(String componentName, String name, String value) {
+
+<span class="nc" id="L177">        checkPermission(CONFIG_WRITE);</span>
+
+<span class="nc" id="L179">        checkNotNull(componentName, COMPONENT_NULL);</span>
+<span class="nc" id="L180">        checkNotNull(name, PROPERTY_NULL);</span>
+
+<span class="nc" id="L182">        store.setProperty(componentName, name, value);</span>
+<span class="nc" id="L183">    }</span>
+
+    @Override
+    public void unsetProperty(String componentName, String name) {
+<span class="nc" id="L187">        checkPermission(CONFIG_WRITE);</span>
+
+<span class="nc" id="L189">        checkNotNull(componentName, COMPONENT_NULL);</span>
+<span class="nc" id="L190">        checkNotNull(name, PROPERTY_NULL);</span>
+
+<span class="nc" id="L192">        checkArgument(properties.containsKey(componentName),</span>
+                      COMPONENT_MISSING, componentName);
+<span class="nc" id="L194">        checkArgument(properties.get(componentName).containsKey(name),</span>
+                      PROPERTY_MISSING, name, componentName);
+<span class="nc" id="L196">        store.unsetProperty(componentName, name);</span>
+<span class="nc" id="L197">    }</span>
+
+<span class="nc" id="L199">    private class InternalStoreDelegate implements ComponentConfigStoreDelegate {</span>
+
+        @Override
+        public void notify(ComponentConfigEvent event) {
+<span class="nc" id="L203">            String componentName = event.subject();</span>
+<span class="nc" id="L204">            String name = event.name();</span>
+<span class="nc" id="L205">            String value = event.value();</span>
+
+<span class="nc bnc" id="L207" title="All 3 branches missed.">            switch (event.type()) {</span>
+                case PROPERTY_SET:
+<span class="nc" id="L209">                    set(componentName, name, value);</span>
+<span class="nc" id="L210">                    break;</span>
+                case PROPERTY_UNSET:
+<span class="nc" id="L212">                    reset(componentName, name);</span>
+<span class="nc" id="L213">                    break;</span>
+                default:
+                    break;
+            }
+<span class="nc" id="L217">        }</span>
+    }
+
+    // Buffers multiple subsequent configuration updates into one notification.
+    private class InternalAccumulator extends AbstractAccumulator&lt;String&gt;
+            implements Accumulator&lt;String&gt; {
+
+<span class="nc" id="L224">        protected InternalAccumulator() {</span>
+<span class="nc" id="L225">            super(SharedExecutors.getTimer(), MAX_ITEMS, MAX_BATCH_MILLIS, MAX_IDLE_MILLIS);</span>
+<span class="nc" id="L226">        }</span>
+
+        @Override
+        public void processItems(List&lt;String&gt; items) {
+            // Conversion to set removes duplicates
+<span class="nc" id="L231">            Set&lt;String&gt; componentSet = new HashSet&lt;&gt;(items);</span>
+<span class="nc" id="L232">            componentSet.forEach(ComponentConfigManager.this::triggerUpdate);</span>
+<span class="nc" id="L233">        }</span>
+    }
+
+    // Locates the property in the component map and replaces it with an
+    // updated copy.
+    private void set(String componentName, String name, String value) {
+<span class="nc" id="L239">        Map&lt;String, ConfigProperty&gt; map = properties.get(componentName);</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (map != null) {</span>
+<span class="nc" id="L241">            ConfigProperty prop = map.get(name);</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">            if (prop != null) {</span>
+<span class="nc" id="L243">                map.put(name, ConfigProperty.setProperty(prop, value));</span>
+<span class="nc" id="L244">                accumulator.add(componentName);</span>
+<span class="nc" id="L245">                return;</span>
+            }
+        }
+<span class="nc" id="L248">        log.warn(&quot;Unable to set non-existent property {} for component {}&quot;,</span>
+                 name, componentName);
+<span class="nc" id="L250">    }</span>
+
+    // Locates the property in the component map and replaces it with an
+    // reset copy.
+    private void reset(String componentName, String name) {
+<span class="nc" id="L255">        Map&lt;String, ConfigProperty&gt; map = properties.get(componentName);</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if (map != null) {</span>
+<span class="nc" id="L257">            ConfigProperty prop = map.get(name);</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">            if (prop != null) {</span>
+<span class="nc" id="L259">                map.put(name, ConfigProperty.resetProperty(prop));</span>
+<span class="nc" id="L260">                accumulator.add(componentName);</span>
+<span class="nc" id="L261">                return;</span>
+            }
+<span class="nc" id="L263">            log.warn(&quot;Unable to reset non-existent property {} for component {}&quot;,</span>
+                     name, componentName);
+        }
+<span class="nc" id="L266">    }</span>
+
+    // Loads existing property values that may have been set.
+    private void loadExistingValues(String componentName) {
+        try {
+<span class="nc" id="L271">            Configuration cfg = cfgAdmin.getConfiguration(componentName, null);</span>
+<span class="nc" id="L272">            Map&lt;String, ConfigProperty&gt; map = properties.get(componentName);</span>
+<span class="nc" id="L273">            Dictionary&lt;String, Object&gt; props = cfg.getProperties();</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            if (props != null) {</span>
+<span class="nc" id="L275">                Enumeration&lt;String&gt; it = props.keys();</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">                while (it.hasMoreElements()) {</span>
+<span class="nc" id="L277">                    String name = it.nextElement();</span>
+<span class="nc" id="L278">                    ConfigProperty p = map.get(name);</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">                    if (p != null) {</span>
+<span class="nc" id="L280">                        map.put(name, ConfigProperty.setProperty(p, (String) props.get(name)));</span>
+                    }
+<span class="nc" id="L282">                }</span>
+            }
+<span class="nc" id="L284">        } catch (IOException e) {</span>
+<span class="nc" id="L285">            log.error(&quot;Unable to get configuration for &quot; + componentName, e);</span>
+<span class="nc" id="L286">        }</span>
+
+<span class="nc" id="L288">    }</span>
+
+    // FIXME: This should be a slightly deferred execution to allow changing
+    // values just once per component when a number of updates arrive shortly
+    // after each other.
+    private void triggerUpdate(String componentName) {
+        try {
+<span class="nc" id="L295">            Configuration cfg = cfgAdmin.getConfiguration(componentName, null);</span>
+<span class="nc" id="L296">            Map&lt;String, ConfigProperty&gt; map = properties.get(componentName);</span>
+<span class="nc" id="L297">            Dictionary&lt;String, Object&gt; props = new Hashtable&lt;&gt;();</span>
+<span class="nc" id="L298">            map.values().forEach(p -&gt; props.put(p.name(), p.value()));</span>
+<span class="nc" id="L299">            cfg.update(props);</span>
+<span class="nc" id="L300">        } catch (IOException e) {</span>
+<span class="nc" id="L301">            log.warn(&quot;Unable to update configuration for &quot; + componentName, e);</span>
+<span class="nc" id="L302">        }</span>
+<span class="nc" id="L303">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

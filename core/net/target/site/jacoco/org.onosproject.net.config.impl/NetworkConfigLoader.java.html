@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>NetworkConfigLoader.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.impl</a> &gt; <span class="el_source">NetworkConfigLoader.java</span></div><h1>NetworkConfigLoader.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.impl;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.net.config.Config;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Component for loading the initial network configuration.
+ */
+@Component(immediate = true)
+<span class="nc" id="L43">public class NetworkConfigLoader {</span>
+
+<span class="nc" id="L45">    private static final File CFG_FILE = new File(&quot;../config/network-cfg.json&quot;);</span>
+
+<span class="nc" id="L47">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService networkConfigService;
+
+    // FIXME: Add mutual exclusion to make sure this happens only once per startup.
+
+<span class="nc" id="L54">    private final Map&lt;InnerConfigPosition, JsonNode&gt; jsons = Maps.newConcurrentMap();</span>
+
+<span class="nc" id="L56">    private final NetworkConfigListener configListener = new InnerConfigListener();</span>
+
+    private ObjectNode root;
+
+    @Activate
+    public void activate() {
+        //TODO Maybe this should be at the bottom to avoid a potential race
+<span class="nc" id="L63">        networkConfigService.addListener(configListener);</span>
+        try {
+<span class="nc bnc" id="L65" title="All 2 branches missed.">            if (CFG_FILE.exists()) {</span>
+<span class="nc" id="L66">                root = (ObjectNode) new ObjectMapper().readTree(CFG_FILE);</span>
+
+<span class="nc" id="L68">                populateConfigurations();</span>
+
+<span class="nc" id="L70">                applyConfigurations();</span>
+
+<span class="nc" id="L72">                log.info(&quot;Loaded initial network configuration from {}&quot;, CFG_FILE);</span>
+            }
+<span class="nc" id="L74">        } catch (Exception e) {</span>
+<span class="nc" id="L75">            log.warn(&quot;Unable to load initial network configuration from {}&quot;,</span>
+                    CFG_FILE, e);
+<span class="nc" id="L77">        }</span>
+<span class="nc" id="L78">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L82">        networkConfigService.removeListener(configListener);</span>
+<span class="nc" id="L83">    }</span>
+    // sweep through pending config jsons and try to add them
+
+    /**
+     * Inner class that allows for handling of newly added NetConfig types.
+     */
+<span class="nc" id="L89">    private final class InnerConfigListener implements NetworkConfigListener {</span>
+
+        @Override
+        public void event(NetworkConfigEvent event) {
+            //TODO should this be done for other types of NetworkConfigEvents?
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            if (event.type() == NetworkConfigEvent.Type.CONFIG_REGISTERED ||</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">                    event.type() == NetworkConfigEvent.Type.CONFIG_ADDED) {</span>
+<span class="nc" id="L96">                applyConfigurations();</span>
+            }
+
+<span class="nc" id="L99">        }</span>
+    }
+
+    /**
+     * Inner class that allows for tracking of JSON class configurations.
+     */
+    private final class InnerConfigPosition {
+        private final String subjectKey, subject, configKey;
+
+        private String subjectKey() {
+<span class="nc" id="L109">            return subjectKey;</span>
+        }
+
+        private String subject() {
+<span class="nc" id="L113">            return subject;</span>
+        }
+
+        private String configKey() {
+<span class="nc" id="L117">            return configKey;</span>
+        }
+
+<span class="nc" id="L120">        private InnerConfigPosition(String subjectKey, String subject, String configKey) {</span>
+<span class="nc" id="L121">            this.subjectKey = subjectKey;</span>
+<span class="nc" id="L122">            this.subject = subject;</span>
+<span class="nc" id="L123">            this.configKey = configKey;</span>
+<span class="nc" id="L124">        }</span>
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L129">                return true;</span>
+            }
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            if (obj instanceof InnerConfigPosition) {</span>
+<span class="nc" id="L132">                final InnerConfigPosition that = (InnerConfigPosition) obj;</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                return Objects.equals(this.subjectKey, that.subjectKey)</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">                        &amp;&amp; Objects.equals(this.subject, that.subject)</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">                        &amp;&amp; Objects.equals(this.configKey, that.configKey);</span>
+            }
+<span class="nc" id="L137">            return false;</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L142">            return Objects.hash(subjectKey, subject, configKey);</span>
+        }
+    }
+
+    /**
+     * Save the JSON leaves associated with a specific subject key.
+     *
+     * @param sk   the subject key string.
+     * @param node the node associated with the subject key.
+     */
+    private void saveJson(String sk, ObjectNode node) {
+<span class="nc" id="L153">        node.fieldNames().forEachRemaining(s -&gt;</span>
+<span class="nc" id="L154">                saveSubjectJson(sk, s, (ObjectNode) node.path(s)));</span>
+<span class="nc" id="L155">    }</span>
+
+    /**
+     * Save the JSON leaves of the tree rooted as the node 'node' with subject key 'sk'.
+     *
+     * @param sk   the string of the subject key.
+     * @param s    the subject name.
+     * @param node the node rooting this subtree.
+     */
+    private void saveSubjectJson(String sk,
+                                 String s, ObjectNode node) {
+<span class="nc" id="L166">        node.fieldNames().forEachRemaining(c -&gt;</span>
+<span class="nc" id="L167">                this.jsons.put(new InnerConfigPosition(sk, s, c), node.path(c)));</span>
+<span class="nc" id="L168">    }</span>
+
+    /**
+     * Iterate through the JSON and populate a list of the leaf nodes of the structure.
+     */
+    private void populateConfigurations() {
+<span class="nc" id="L174">        root.fieldNames().forEachRemaining(sk -&gt;</span>
+<span class="nc" id="L175">                saveJson(sk, (ObjectNode) root.path(sk)));</span>
+
+<span class="nc" id="L177">    }</span>
+
+    /**
+     * Apply the configurations associated with all of the config classes that
+     * are imported and have not yet been applied.
+     */
+    private void applyConfigurations() {
+<span class="nc" id="L184">        Iterator&lt;Map.Entry&lt;InnerConfigPosition, JsonNode&gt;&gt; iter = jsons.entrySet().iterator();</span>
+
+        Map.Entry&lt;InnerConfigPosition, JsonNode&gt; entry;
+        InnerConfigPosition key;
+        JsonNode node;
+        String subjectKey;
+        String subjectString;
+        String configKey;
+
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        while (iter.hasNext()) {</span>
+<span class="nc" id="L194">            entry = iter.next();</span>
+<span class="nc" id="L195">            node = entry.getValue();</span>
+<span class="nc" id="L196">            key = entry.getKey();</span>
+<span class="nc" id="L197">            subjectKey = key.subjectKey();</span>
+<span class="nc" id="L198">            subjectString = key.subject();</span>
+<span class="nc" id="L199">            configKey = key.configKey();</span>
+
+<span class="nc" id="L201">            Class&lt;? extends Config&gt; configClass =</span>
+<span class="nc" id="L202">                    networkConfigService.getConfigClass(subjectKey, configKey);</span>
+            //Check that the config class has been imported
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            if (configClass != null) {</span>
+
+<span class="nc" id="L206">                Object subject = networkConfigService.getSubjectFactory(subjectKey).</span>
+<span class="nc" id="L207">                        createSubject(subjectString);</span>
+
+                //Apply the configuration
+<span class="nc" id="L210">                networkConfigService.applyConfig(subject, configClass, node);</span>
+
+                //Now that it has been applied the corresponding JSON entry is no longer needed
+<span class="nc" id="L213">                iter.remove();</span>
+            }
+<span class="nc" id="L215">        }</span>
+<span class="nc" id="L216">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

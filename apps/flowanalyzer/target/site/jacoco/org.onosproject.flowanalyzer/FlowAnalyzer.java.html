@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowAnalyzer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-flowanalyzer</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.flowanalyzer</a> &gt; <span class="el_source">FlowAnalyzer.java</span></div><h1>FlowAnalyzer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.flowanalyzer;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.HostId;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.PortCriterion;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.topology.TopologyService;
+import org.onosproject.net.topology.TopologyGraph;
+import org.onosproject.net.link.LinkService;
+import org.onosproject.net.Link;
+import org.onosproject.net.topology.TopologyVertex;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Simple flow space analyzer app.
+ */
+@Component(immediate = true)
+@Service(value = FlowAnalyzer.class)
+<span class="nc" id="L56">public class FlowAnalyzer {</span>
+
+<span class="nc" id="L58">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowRuleService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyService topologyService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkService linkService;
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="nc" id="L71">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L72">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L76">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L77">    }</span>
+
+    TopologyGraph graph;
+<span class="nc" id="L80">    Map&lt;FlowEntry, String&gt; label = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L81">    Set&lt;FlowEntry&gt; ignoredFlows = new HashSet&lt;&gt;();</span>
+
+    /**
+     * Analyzes and prints out a report on the status of every flow entry inside
+     * the network. The possible states are: Cleared (implying that the entry leads to
+     * a host), Cycle (implying that it is part of cycle), and Black Hole (implying
+     * that the entry does not lead to a single host).
+     *
+     * @return result string
+     */
+    public String analyze() {
+<span class="nc" id="L92">        graph = topologyService.getGraph(topologyService.currentTopology());</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        for (TopologyVertex v: graph.getVertexes()) {</span>
+<span class="nc" id="L94">            DeviceId srcDevice = v.deviceId();</span>
+<span class="nc" id="L95">            Iterable&lt;FlowEntry&gt; flowTable = flowRuleService.getFlowEntries(srcDevice);</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">            for (FlowEntry flow: flowTable) {</span>
+<span class="nc" id="L97">                dfs(flow);</span>
+<span class="nc" id="L98">            }</span>
+<span class="nc" id="L99">        }</span>
+
+        //analyze the cycles to look for &quot;critical flows&quot; that can be removed
+        //to break the cycle
+<span class="nc" id="L103">        Set&lt;FlowEntry&gt; critpts = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        for (FlowEntry flow: label.keySet()) {</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            if (&quot;Cycle&quot;.equals(label.get(flow))) {</span>
+<span class="nc" id="L106">                Map&lt;FlowEntry, String&gt; labelSaved = label;</span>
+<span class="nc" id="L107">                label = new HashMap&lt;FlowEntry, String&gt;();</span>
+<span class="nc" id="L108">                ignoredFlows.add(flow);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">                for (TopologyVertex v: graph.getVertexes()) {</span>
+<span class="nc" id="L110">                    DeviceId srcDevice = v.deviceId();</span>
+<span class="nc" id="L111">                    Iterable&lt;FlowEntry&gt; flowTable = flowRuleService.getFlowEntries(srcDevice);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                    for (FlowEntry flow1: flowTable) {</span>
+<span class="nc" id="L113">                        dfs(flow1);</span>
+<span class="nc" id="L114">                    }</span>
+<span class="nc" id="L115">                }</span>
+
+<span class="nc" id="L117">                boolean replacable = true;</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                for (FlowEntry flow2: label.keySet()) {</span>
+<span class="nc bnc" id="L119" title="All 4 branches missed.">                    if (&quot;Cleared&quot;.equals(labelSaved.get(flow2)) &amp;&amp; !(&quot;Cleared&quot;.equals(label.get(flow2)))) {</span>
+<span class="nc" id="L120">                        replacable = false;</span>
+                    }
+<span class="nc" id="L122">                }</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">                if (replacable) {</span>
+<span class="nc" id="L124">                    critpts.add(flow);</span>
+                }
+<span class="nc" id="L126">                label = labelSaved;</span>
+            }
+<span class="nc" id="L128">        }</span>
+
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        for (FlowEntry flow: critpts) {</span>
+<span class="nc" id="L131">            label.put(flow, &quot;Cycle Critical Point&quot;);</span>
+<span class="nc" id="L132">        }</span>
+
+<span class="nc" id="L134">        String s = &quot;\n&quot;;</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">        for (FlowEntry flow: label.keySet()) {</span>
+<span class="nc" id="L136">            s += (&quot;Flow Rule: &quot; + flowEntryRepresentation(flow) + &quot;\n&quot;);</span>
+<span class="nc" id="L137">            s += (&quot;Analysis: &quot; + label.get(flow) + &quot;!\n\n&quot;);</span>
+<span class="nc" id="L138">        }</span>
+<span class="nc" id="L139">        s += (&quot;Analyzed &quot; + label.keySet().size() + &quot; flows.&quot;);</span>
+        //log.info(s);
+<span class="nc" id="L141">        return s;</span>
+    }
+
+    public Map&lt;FlowEntry, String&gt; calcLabels() {
+<span class="nc" id="L145">        analyze();</span>
+<span class="nc" id="L146">        return label;</span>
+    }
+    public String analysisOutput()   {
+<span class="nc" id="L149">        analyze();</span>
+<span class="nc" id="L150">        String s = &quot;\n&quot;;</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        for (FlowEntry flow: label.keySet()) {</span>
+<span class="nc" id="L152">            s += (&quot;Flow Rule: &quot; + flowEntryRepresentation(flow) + &quot;\n&quot;);</span>
+<span class="nc" id="L153">            s += (&quot;Analysis: &quot; + label.get(flow) + &quot;!\n\n&quot;);</span>
+<span class="nc" id="L154">        }</span>
+<span class="nc" id="L155">        return s;</span>
+    }
+
+    private boolean dfs(FlowEntry flow) {
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (ignoredFlows.contains(flow)) {</span>
+<span class="nc" id="L160">            return false;</span>
+        }
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if (&quot;Cycle&quot;.equals(label.get(flow)) ||</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">                &quot;Black Hole&quot;.equals(label.get(flow)) ||</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">                &quot;Cleared&quot;.equals(label.get(flow)) ||</span>
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                 &quot;NA&quot;.equals(label.get(flow)) ||</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                &quot;Cycle Critical Point&quot;.equals(label.get(flow))) {</span>
+
+            // This flow has already been analyzed and there is no need to analyze it further
+<span class="nc bnc" id="L169" title="All 2 branches missed.">            return !&quot;Black Hole&quot;.equals(label.get(flow));</span>
+        }
+
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        if (&quot;Visiting&quot;.equals(label.get(flow))) {</span>
+            //you've detected a cycle because you reached the same entry again during your dfs
+            //let it continue so you can label the whole cycle
+<span class="nc" id="L175">            label.put(flow, &quot;Cycle&quot;);</span>
+        } else {
+            //otherwise, mark off the current flow entry as currently being visited
+<span class="nc" id="L178">            label.put(flow, &quot;Visiting&quot;);</span>
+        }
+
+<span class="nc" id="L181">        boolean pointsToLiveEntry = false;</span>
+
+<span class="nc" id="L183">        List&lt;Instruction&gt; instructions = flow.treatment().allInstructions();</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        for (Instruction i: instructions) {</span>
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            if (i instanceof Instructions.OutputInstruction) {</span>
+<span class="nc" id="L186">                pointsToLiveEntry |= analyzeInstruction(i, flow);</span>
+            }
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            if (&quot;NA&quot;.equals(label.get(flow))) {</span>
+<span class="nc" id="L189">                return pointsToLiveEntry;</span>
+            }
+<span class="nc" id="L191">        }</span>
+
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        if (!pointsToLiveEntry) {</span>
+            //this entry does not point to any &quot;live&quot; entries thus must be a black hole
+<span class="nc" id="L195">            label.put(flow, &quot;Black Hole&quot;);</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        } else if (&quot;Visiting&quot;.equals(label.get(flow))) {</span>
+            //the flow is not in a cycle or in a black hole
+<span class="nc" id="L198">            label.put(flow, &quot;Cleared&quot;);</span>
+        }
+<span class="nc" id="L200">        return pointsToLiveEntry;</span>
+    }
+
+    private boolean analyzeInstruction(Instruction i, FlowEntry flow) {
+<span class="nc" id="L204">        boolean pointsToLiveEntry = false;</span>
+<span class="nc" id="L205">        Instructions.OutputInstruction output = (Instructions.OutputInstruction) i;</span>
+<span class="nc" id="L206">        PortNumber port = output.port();</span>
+<span class="nc" id="L207">        PortNumber outPort = null;</span>
+
+<span class="nc" id="L209">        DeviceId egress = null;</span>
+<span class="nc" id="L210">        boolean hasHost = false;</span>
+
+<span class="nc" id="L212">        ConnectPoint portPt = new ConnectPoint(flow.deviceId(), port);</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        for (Link l: linkService.getEgressLinks(portPt)) {</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            if (l.dst().elementId() instanceof DeviceId) {</span>
+<span class="nc" id="L215">                egress = l.dst().deviceId();</span>
+<span class="nc" id="L216">                outPort = l.dst().port();</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">            } else if (l.dst().elementId() instanceof HostId) {</span>
+                //the port leads to a host: therefore it is not a dead link
+<span class="nc" id="L219">                pointsToLiveEntry = true;</span>
+<span class="nc" id="L220">                hasHost = true;</span>
+            }
+<span class="nc" id="L222">        }</span>
+<span class="nc bnc" id="L223" title="All 4 branches missed.">        if (!topologyService.isInfrastructure(topologyService.currentTopology(), portPt) &amp;&amp; egress == null) {</span>
+<span class="nc" id="L224">            pointsToLiveEntry = true;</span>
+<span class="nc" id="L225">            hasHost = true;</span>
+        }
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (hasHost) {</span>
+<span class="nc" id="L228">            return pointsToLiveEntry;</span>
+        }
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (egress == null) {</span>
+            //the port that the flow instructions tells you to send the packet
+            //to doesn't exist or is a controller port
+<span class="nc" id="L233">            label.put(flow, &quot;NA&quot;);</span>
+<span class="nc" id="L234">            return pointsToLiveEntry;</span>
+        }
+
+<span class="nc" id="L237">        Iterable&lt;FlowEntry&gt; dstFlowTable = flowRuleService.getFlowEntries(egress);</span>
+
+<span class="nc" id="L239">        Set&lt;Criterion&gt; flowCriteria = flow.selector().criteria();</span>
+
+        //filter the criteria in order to remove port dependency
+<span class="nc" id="L242">        Set&lt;Criterion&gt; filteredCriteria = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        for (Criterion criterion : flowCriteria) {</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            if (!(criterion instanceof PortCriterion)) {</span>
+<span class="nc" id="L245">                filteredCriteria.add(criterion);</span>
+            }
+<span class="nc" id="L247">        }</span>
+
+        //ensure that the in port is equal to the port that it is coming in from
+<span class="nc" id="L250">        filteredCriteria.add(Criteria.matchInPort(outPort));</span>
+
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        for (FlowEntry entry: dstFlowTable) {</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">            if (ignoredFlows.contains(entry)) {</span>
+<span class="nc" id="L254">                continue;</span>
+            }
+<span class="nc bnc" id="L256" title="All 2 branches missed.">            if (filteredCriteria.containsAll(entry.selector().criteria())) {</span>
+<span class="nc" id="L257">                dfs(entry);</span>
+
+<span class="nc bnc" id="L259" title="All 2 branches missed.">                if (!&quot;Black Hole&quot;.equals(label.get(entry))) {</span>
+                    //this entry is &quot;live&quot; i.e not a black hole
+<span class="nc" id="L261">                    pointsToLiveEntry = true;</span>
+                }
+            }
+<span class="nc" id="L264">        }</span>
+<span class="nc" id="L265">        return pointsToLiveEntry;</span>
+    }
+    public String flowEntryRepresentation(FlowEntry flow) {
+<span class="nc" id="L268">        return &quot;Device: &quot; + flow.deviceId() + &quot;, &quot; + flow.selector().criteria() + &quot;, &quot; + flow.treatment().immediate();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

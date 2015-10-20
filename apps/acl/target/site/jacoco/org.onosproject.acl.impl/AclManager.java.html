@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AclManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-acl</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.acl.impl</a> &gt; <span class="el_source">AclManager.java</span></div><h1>AclManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ * Originally created by Pengfei Lu, Network and Cloud Computing Laboratory, Dalian University of Technology, China
+ * Advisers: Keqiu Li, Heng Qi and Haisheng Yu
+ * This work is supported by the State Key Program of National Natural Science of China(Grant No. 61432002)
+ * and Prospective Research Project on Future Networks in Jiangsu Future Networks Innovation Institute.
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.acl.impl;
+
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.IPv4;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.Ip4Prefix;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.TpPort;
+import org.onosproject.acl.AclRule;
+import org.onosproject.acl.AclService;
+import org.onosproject.acl.AclStore;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.acl.RuleId;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.core.IdGenerator;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Host;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.DefaultFlowEntry;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.host.HostEvent;
+import org.onosproject.net.host.HostListener;
+import org.onosproject.net.host.HostService;
+import org.slf4j.Logger;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Implementation of the ACL service.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L71">public class AclManager implements AclService {</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowRuleService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected AclStore aclStore;
+
+<span class="nc" id="L85">    private final Logger log = getLogger(getClass());</span>
+    private ApplicationId appId;
+<span class="nc" id="L87">    private final HostListener hostListener = new InternalHostListener();</span>
+    private IdGenerator idGenerator;
+
+    /**
+     * Checks if the given IP address is in the given CIDR address.
+     */
+    private boolean checkIpInCIDR(Ip4Address ip, Ip4Prefix cidr) {
+<span class="nc" id="L94">        int offset = 32 - cidr.prefixLength();</span>
+<span class="nc" id="L95">        int cidrPrefix = cidr.address().toInt();</span>
+<span class="nc" id="L96">        int ipIntValue = ip.toInt();</span>
+<span class="nc" id="L97">        cidrPrefix = cidrPrefix &gt;&gt; offset;</span>
+<span class="nc" id="L98">        ipIntValue = ipIntValue &gt;&gt; offset;</span>
+<span class="nc" id="L99">        cidrPrefix = cidrPrefix &lt;&lt; offset;</span>
+<span class="nc" id="L100">        ipIntValue = ipIntValue &lt;&lt; offset;</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        return (cidrPrefix == ipIntValue);</span>
+    }
+
+<span class="nc" id="L105">    private class InternalHostListener implements HostListener {</span>
+
+        /**
+         * Generate new ACL flow rules for new host following the given ACL rule.
+         */
+        private void processHostAddedEvent(HostEvent event, AclRule rule) {
+<span class="nc" id="L111">            DeviceId deviceId = event.subject().location().deviceId();</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            for (IpAddress address : event.subject().ipAddresses()) {</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                if ((rule.srcIp() != null) ?</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">                        (checkIpInCIDR(address.getIp4Address(), rule.srcIp())) :</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                        (checkIpInCIDR(address.getIp4Address(), rule.dstIp()))) {</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">                    if (!aclStore.checkIfRuleWorksInDevice(rule.id(), deviceId)) {</span>
+<span class="nc" id="L117">                        List&lt;RuleId&gt; allowingRuleList = aclStore</span>
+<span class="nc" id="L118">                                .getAllowingRuleByDenyingRule(rule.id());</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">                        if (allowingRuleList != null) {</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">                            for (RuleId allowingRuleId : allowingRuleList) {</span>
+<span class="nc" id="L121">                                generateACLFlow(aclStore.getAclRule(allowingRuleId), deviceId);</span>
+<span class="nc" id="L122">                            }</span>
+                        }
+<span class="nc" id="L124">                        generateACLFlow(rule, deviceId);</span>
+                    }
+                }
+<span class="nc" id="L127">            }</span>
+<span class="nc" id="L128">        }</span>
+
+        @Override
+        public void event(HostEvent event) {
+            // if a new host appears and an existing rule denies
+            // its traffic, a new ACL flow rule is generated.
+<span class="nc bnc" id="L134" title="All 2 branches missed.">            if (event.type() == HostEvent.Type.HOST_ADDED) {</span>
+<span class="nc" id="L135">                DeviceId deviceId = event.subject().location().deviceId();</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                if (mastershipService.getLocalRole(deviceId) == MastershipRole.MASTER) {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                    for (AclRule rule : aclStore.getAclRules()) {</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">                        if (rule.action() != AclRule.Action.ALLOW) {</span>
+<span class="nc" id="L139">                            processHostAddedEvent(event, rule);</span>
+                        }
+<span class="nc" id="L141">                    }</span>
+                }
+            }
+<span class="nc" id="L144">        }</span>
+    }
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L149">        appId = coreService.registerApplication(&quot;org.onos.acl&quot;);</span>
+<span class="nc" id="L150">        hostService.addListener(hostListener);</span>
+<span class="nc" id="L151">        idGenerator = coreService.getIdGenerator(&quot;acl-ids&quot;);</span>
+<span class="nc" id="L152">        AclRule.bindIdGenerator(idGenerator);</span>
+<span class="nc" id="L153">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L154">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L158">        hostService.removeListener(hostListener);</span>
+<span class="nc" id="L159">        flowRuleService.removeFlowRulesById(appId);</span>
+<span class="nc" id="L160">        aclStore.clearAcl();</span>
+<span class="nc" id="L161">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L162">    }</span>
+
+    @Override
+    public List&lt;AclRule&gt; getAclRules() {
+<span class="nc" id="L166">        return aclStore.getAclRules();</span>
+    }
+
+    /**
+     * Checks if the new ACL rule matches an existing rule.
+     * If existing allowing rules matches the new denying rule, store the mappings.
+     *
+     * @return true if the new ACL rule matches an existing rule, false otherwise
+     */
+    private boolean matchCheck(AclRule newRule) {
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        for (AclRule existingRule : aclStore.getAclRules()) {</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">            if (newRule.checkMatch(existingRule)) {</span>
+<span class="nc" id="L178">                return true;</span>
+            }
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            if (existingRule.action() == AclRule.Action.ALLOW</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">                    &amp;&amp; newRule.action() == AclRule.Action.DENY) {</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                if (existingRule.checkMatch(newRule)) {</span>
+<span class="nc" id="L184">                    aclStore.addDenyToAllowMapping(newRule.id(), existingRule.id());</span>
+                }
+            }
+<span class="nc" id="L187">        }</span>
+<span class="nc" id="L188">        return false;</span>
+    }
+
+    @Override
+    public boolean addAclRule(AclRule rule) {
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        if (matchCheck(rule)) {</span>
+<span class="nc" id="L194">            return false;</span>
+        }
+<span class="nc" id="L196">        aclStore.addAclRule(rule);</span>
+<span class="nc" id="L197">        log.info(&quot;ACL rule(id:{}) is added.&quot;, rule.id());</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (rule.action() != AclRule.Action.ALLOW) {</span>
+<span class="nc" id="L199">            enforceRuleAdding(rule);</span>
+        }
+<span class="nc" id="L201">        return true;</span>
+    }
+
+    /**
+     * Gets a set containing all devices connecting with the hosts
+     * whose IP address is in the given CIDR IP address.
+     */
+    private Set&lt;DeviceId&gt; getDeviceIdSet(Ip4Prefix cidrAddr) {
+<span class="nc" id="L209">        Set&lt;DeviceId&gt; deviceIdSet = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L210">        final Iterable&lt;Host&gt; hosts = hostService.getHosts();</span>
+
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (cidrAddr.prefixLength() != 32) {</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            for (Host h : hosts) {</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                for (IpAddress a : h.ipAddresses()) {</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">                    if (checkIpInCIDR(a.getIp4Address(), cidrAddr)) {</span>
+<span class="nc" id="L216">                        deviceIdSet.add(h.location().deviceId());</span>
+                    }
+<span class="nc" id="L218">                }</span>
+<span class="nc" id="L219">            }</span>
+        } else {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">            for (Host h : hosts) {</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">                for (IpAddress a : h.ipAddresses()) {</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">                    if (checkIpInCIDR(a.getIp4Address(), cidrAddr)) {</span>
+<span class="nc" id="L224">                        deviceIdSet.add(h.location().deviceId());</span>
+<span class="nc" id="L225">                        return deviceIdSet;</span>
+                    }
+<span class="nc" id="L227">                }</span>
+<span class="nc" id="L228">            }</span>
+        }
+<span class="nc" id="L230">        return deviceIdSet;</span>
+    }
+
+    /**
+     * Enforces denying ACL rule by ACL flow rules.
+     */
+    private void enforceRuleAdding(AclRule rule) {
+        Set&lt;DeviceId&gt; dpidSet;
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (rule.srcIp() != null) {</span>
+<span class="nc" id="L239">            dpidSet = getDeviceIdSet(rule.srcIp());</span>
+        } else {
+<span class="nc" id="L241">            dpidSet = getDeviceIdSet(rule.dstIp());</span>
+        }
+
+<span class="nc bnc" id="L244" title="All 2 branches missed.">        for (DeviceId deviceId : dpidSet) {</span>
+<span class="nc" id="L245">            List&lt;RuleId&gt; allowingRuleList = aclStore.getAllowingRuleByDenyingRule(rule.id());</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">            if (allowingRuleList != null) {</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">                for (RuleId allowingRuleId : allowingRuleList) {</span>
+<span class="nc" id="L248">                    generateACLFlow(aclStore.getAclRule(allowingRuleId), deviceId);</span>
+<span class="nc" id="L249">                }</span>
+            }
+<span class="nc" id="L251">            generateACLFlow(rule, deviceId);</span>
+<span class="nc" id="L252">        }</span>
+<span class="nc" id="L253">    }</span>
+
+    /**
+     * Generates ACL flow rule according to ACL rule
+     * and install it into related device.
+     */
+    private void generateACLFlow(AclRule rule, DeviceId deviceId) {
+<span class="nc bnc" id="L260" title="All 4 branches missed.">        if (rule == null || aclStore.checkIfRuleWorksInDevice(rule.id(), deviceId)) {</span>
+<span class="nc" id="L261">            return;</span>
+        }
+
+<span class="nc" id="L264">        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L265">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L266">        FlowEntry.Builder flowEntry = DefaultFlowEntry.builder();</span>
+
+<span class="nc" id="L268">        selectorBuilder.matchEthType(Ethernet.TYPE_IPV4);</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (rule.srcIp() != null) {</span>
+<span class="nc" id="L270">            selectorBuilder.matchIPSrc(rule.srcIp());</span>
+<span class="nc bnc" id="L271" title="All 2 branches missed.">            if (rule.dstIp() != null) {</span>
+<span class="nc" id="L272">                selectorBuilder.matchIPDst(rule.dstIp());</span>
+            }
+        } else {
+<span class="nc" id="L275">            selectorBuilder.matchIPDst(rule.dstIp());</span>
+        }
+<span class="nc bnc" id="L277" title="All 2 branches missed.">        if (rule.ipProto() != 0) {</span>
+<span class="nc" id="L278">            selectorBuilder.matchIPProtocol(Integer.valueOf(rule.ipProto()).byteValue());</span>
+        }
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if (rule.dstTpPort() != 0) {</span>
+<span class="nc bnc" id="L281" title="All 3 branches missed.">            switch (rule.ipProto()) {</span>
+                case IPv4.PROTOCOL_TCP:
+<span class="nc" id="L283">                    selectorBuilder.matchTcpDst(TpPort.tpPort(rule.dstTpPort()));</span>
+<span class="nc" id="L284">                    break;</span>
+                case IPv4.PROTOCOL_UDP:
+<span class="nc" id="L286">                    selectorBuilder.matchUdpDst(TpPort.tpPort(rule.dstTpPort()));</span>
+<span class="nc" id="L287">                    break;</span>
+                default:
+                    break;
+            }
+        }
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (rule.action() == AclRule.Action.ALLOW) {</span>
+<span class="nc" id="L293">            treatment.add(Instructions.createOutput(PortNumber.CONTROLLER));</span>
+        }
+<span class="nc" id="L295">        flowEntry.forDevice(deviceId);</span>
+<span class="nc" id="L296">        flowEntry.withPriority(aclStore.getPriorityByDevice(deviceId));</span>
+<span class="nc" id="L297">        flowEntry.withSelector(selectorBuilder.build());</span>
+<span class="nc" id="L298">        flowEntry.withTreatment(treatment.build());</span>
+<span class="nc" id="L299">        flowEntry.fromApp(appId);</span>
+<span class="nc" id="L300">        flowEntry.makePermanent();</span>
+        // install flow rule
+<span class="nc" id="L302">        flowRuleService.applyFlowRules(flowEntry.build());</span>
+<span class="nc" id="L303">        log.debug(&quot;ACL flow rule {} is installed in {}.&quot;, flowEntry.build(), deviceId);</span>
+<span class="nc" id="L304">        aclStore.addRuleToFlowMapping(rule.id(), flowEntry.build());</span>
+<span class="nc" id="L305">        aclStore.addRuleToDeviceMapping(rule.id(), deviceId);</span>
+<span class="nc" id="L306">    }</span>
+
+    @Override
+    public void removeAclRule(RuleId ruleId) {
+<span class="nc" id="L310">        aclStore.removeAclRule(ruleId);</span>
+<span class="nc" id="L311">        log.info(&quot;ACL rule(id:{}) is removed.&quot;, ruleId);</span>
+<span class="nc" id="L312">        enforceRuleRemoving(ruleId);</span>
+<span class="nc" id="L313">    }</span>
+
+    /**
+     * Enforces removing an existing ACL rule.
+     */
+    private void enforceRuleRemoving(RuleId ruleId) {
+<span class="nc" id="L319">        Set&lt;FlowRule&gt; flowSet = aclStore.getFlowByRule(ruleId);</span>
+<span class="nc bnc" id="L320" title="All 2 branches missed.">        if (flowSet != null) {</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">            for (FlowRule flowRule : flowSet) {</span>
+<span class="nc" id="L322">                flowRuleService.removeFlowRules(flowRule);</span>
+<span class="nc" id="L323">                log.debug(&quot;ACL flow rule {} is removed from {}.&quot;, flowRule.toString(), flowRule.deviceId().toString());</span>
+<span class="nc" id="L324">            }</span>
+        }
+<span class="nc" id="L326">        aclStore.removeRuleToFlowMapping(ruleId);</span>
+<span class="nc" id="L327">        aclStore.removeRuleToDeviceMapping(ruleId);</span>
+<span class="nc" id="L328">        aclStore.removeDenyToAllowMapping(ruleId);</span>
+<span class="nc" id="L329">    }</span>
+
+    @Override
+    public void clearAcl() {
+<span class="nc" id="L333">        aclStore.clearAcl();</span>
+<span class="nc" id="L334">        flowRuleService.removeFlowRulesById(appId);</span>
+<span class="nc" id="L335">        log.info(&quot;ACL is cleared.&quot;);</span>
+<span class="nc" id="L336">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

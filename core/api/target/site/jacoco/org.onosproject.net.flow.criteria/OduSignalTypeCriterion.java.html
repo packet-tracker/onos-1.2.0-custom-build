@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OduSignalTypeCriterion.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flow.criteria</a> &gt; <span class="el_source">OduSignalTypeCriterion.java</span></div><h1>OduSignalTypeCriterion.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flow.criteria;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.Objects;
+
+import org.onosproject.net.OduSignalType;
+
+/**
+ * Implementation of ODU (Optical channel Data Unit) signal Type criterion.
+ * This criterion is based on the specification of &quot;OFPXMT_EXP_ODU_SIGTYPE&quot; in
+ * Open Networking Foundation &quot;Optical Transport Protocol Extension Version 1.0&quot;, but
+ * defined in protocol agnostic way.
+ */
+public final class OduSignalTypeCriterion implements Criterion {
+
+    private final OduSignalType signalType;
+
+    /**
+     * Create an instance with the specified ODU signal Type.
+     *
+     * @param signalType - ODU signal Type
+     */
+<span class="fc" id="L40">    OduSignalTypeCriterion(OduSignalType signalType) {</span>
+<span class="fc" id="L41">        this.signalType = checkNotNull(signalType);</span>
+<span class="fc" id="L42">    }</span>
+
+    @Override
+    public Type type() {
+<span class="fc" id="L46">        return Type.ODU_SIGTYPE;</span>
+    }
+
+    /**
+     * Returns the ODU Signal Type to match.
+     *
+     * @return the ODU signal Type to match
+     */
+    public OduSignalType signalType() {
+<span class="fc" id="L55">        return signalType;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L60">        return Objects.hash(type(), signalType);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L65" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L66">            return true;</span>
+        }
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        if (!(obj instanceof OduSignalTypeCriterion)) {</span>
+<span class="fc" id="L69">            return false;</span>
+        }
+<span class="fc" id="L71">        final OduSignalTypeCriterion that = (OduSignalTypeCriterion) obj;</span>
+<span class="fc" id="L72">        return Objects.equals(this.signalType, that.signalType);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L77">        return toStringHelper(type().toString())</span>
+<span class="fc" id="L78">                .add(&quot;signalType&quot;, signalType)</span>
+<span class="fc" id="L79">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

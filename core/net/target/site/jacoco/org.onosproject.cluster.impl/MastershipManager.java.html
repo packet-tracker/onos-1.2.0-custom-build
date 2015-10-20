@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MastershipManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.cluster.impl</a> &gt; <span class="el_source">MastershipManager.java</span></div><h1>MastershipManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.cluster.impl;
+
+import com.codahale.metrics.Timer;
+import com.codahale.metrics.Timer.Context;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.Futures;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.metrics.MetricsService;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.cluster.RoleInfo;
+import org.onosproject.event.AbstractListenerManager;
+import org.onosproject.core.MetricsHelper;
+import org.onosproject.mastership.MastershipAdminService;
+import org.onosproject.mastership.MastershipEvent;
+import org.onosproject.mastership.MastershipListener;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.mastership.MastershipStore;
+import org.onosproject.mastership.MastershipStoreDelegate;
+import org.onosproject.mastership.MastershipTerm;
+import org.onosproject.mastership.MastershipTermService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Lists.newArrayList;
+import static org.onlab.metrics.MetricsUtil.startTimer;
+import static org.onlab.metrics.MetricsUtil.stopTimer;
+import static org.onosproject.cluster.ControllerNode.State.ACTIVE;
+import static org.onosproject.net.MastershipRole.MASTER;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+
+@Component(immediate = true)
+@Service
+<span class="fc" id="L70">public class MastershipManager</span>
+    extends AbstractListenerManager&lt;MastershipEvent, MastershipListener&gt;
+    implements MastershipService, MastershipAdminService, MastershipTermService,
+               MetricsHelper {
+
+    private static final String NODE_ID_NULL = &quot;Node ID cannot be null&quot;;
+    private static final String DEVICE_ID_NULL = &quot;Device ID cannot be null&quot;;
+    private static final String ROLE_NULL = &quot;Mastership role cannot be null&quot;;
+
+<span class="fc" id="L79">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L81">    private final MastershipStoreDelegate delegate = new InternalDelegate();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MetricsService metricsService;
+
+    private NodeId localNodeId;
+    private Timer requestRoleTimer;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L97">        requestRoleTimer = createTimer(&quot;Mastership&quot;, &quot;requestRole&quot;, &quot;responseTime&quot;);</span>
+<span class="fc" id="L98">        localNodeId = clusterService.getLocalNode().id();</span>
+<span class="fc" id="L99">        eventDispatcher.addSink(MastershipEvent.class, listenerRegistry);</span>
+<span class="fc" id="L100">        store.setDelegate(delegate);</span>
+<span class="fc" id="L101">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L102">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L106">        eventDispatcher.removeSink(MastershipEvent.class);</span>
+<span class="fc" id="L107">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L108">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L109">    }</span>
+
+    @Override
+    public CompletableFuture&lt;Void&gt; setRole(NodeId nodeId, DeviceId deviceId, MastershipRole role) {
+<span class="fc" id="L113">        checkNotNull(nodeId, NODE_ID_NULL);</span>
+<span class="fc" id="L114">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L115">        checkNotNull(role, ROLE_NULL);</span>
+
+<span class="fc" id="L117">        CompletableFuture&lt;MastershipEvent&gt; eventFuture = null;</span>
+
+<span class="pc bpc" id="L119" title="1 of 4 branches missed.">        switch (role) {</span>
+            case MASTER:
+<span class="fc" id="L121">                eventFuture = store.setMaster(nodeId, deviceId);</span>
+<span class="fc" id="L122">                break;</span>
+            case STANDBY:
+<span class="fc" id="L124">                eventFuture = store.setStandby(nodeId, deviceId);</span>
+<span class="fc" id="L125">                break;</span>
+            case NONE:
+<span class="fc" id="L127">                eventFuture = store.relinquishRole(nodeId, deviceId);</span>
+<span class="fc" id="L128">                break;</span>
+            default:
+<span class="nc" id="L130">                log.info(&quot;Unknown role; ignoring&quot;);</span>
+<span class="nc" id="L131">                return CompletableFuture.completedFuture(null);</span>
+        }
+
+<span class="fc" id="L134">        return eventFuture.thenAccept(this::post)</span>
+<span class="fc" id="L135">                          .thenApply(v -&gt; null);</span>
+    }
+
+    @Override
+    public MastershipRole getLocalRole(DeviceId deviceId) {
+<span class="fc" id="L140">        checkPermission(CLUSTER_READ);</span>
+
+<span class="fc" id="L142">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L143">        return store.getRole(clusterService.getLocalNode().id(), deviceId);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Void&gt; relinquishMastership(DeviceId deviceId) {
+<span class="fc" id="L148">        checkPermission(CLUSTER_WRITE);</span>
+<span class="fc" id="L149">        return store.relinquishRole(localNodeId, deviceId)</span>
+<span class="fc" id="L150">                    .thenAccept(this::post)</span>
+<span class="fc" id="L151">                    .thenApply(v -&gt; null);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;MastershipRole&gt; requestRoleFor(DeviceId deviceId) {
+<span class="fc" id="L156">        checkPermission(CLUSTER_WRITE);</span>
+
+<span class="fc" id="L158">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L159">        final Context timer = startTimer(requestRoleTimer);</span>
+<span class="fc" id="L160">        return store.requestRole(deviceId).whenComplete((result, error) -&gt; stopTimer(timer));</span>
+
+    }
+
+    @Override
+    public NodeId getMasterFor(DeviceId deviceId) {
+<span class="fc" id="L166">        checkPermission(CLUSTER_READ);</span>
+
+<span class="fc" id="L168">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="fc" id="L169">        return store.getMaster(deviceId);</span>
+    }
+
+    @Override
+    public Set&lt;DeviceId&gt; getDevicesOf(NodeId nodeId) {
+<span class="fc" id="L174">        checkPermission(CLUSTER_READ);</span>
+
+<span class="fc" id="L176">        checkNotNull(nodeId, NODE_ID_NULL);</span>
+<span class="fc" id="L177">        return store.getDevices(nodeId);</span>
+    }
+
+    @Override
+    public RoleInfo getNodesFor(DeviceId deviceId) {
+<span class="nc" id="L182">        checkPermission(CLUSTER_READ);</span>
+
+<span class="nc" id="L184">        checkNotNull(deviceId, DEVICE_ID_NULL);</span>
+<span class="nc" id="L185">        return store.getNodes(deviceId);</span>
+    }
+
+    @Override
+    public MastershipTerm getMastershipTerm(DeviceId deviceId) {
+<span class="fc" id="L190">        return store.getTermFor(deviceId);</span>
+    }
+
+    @Override
+    public MetricsService metricsService() {
+<span class="fc" id="L195">        return metricsService;</span>
+    }
+
+    @Override
+    public void balanceRoles() {
+<span class="nc" id="L200">        List&lt;ControllerNode&gt; nodes = newArrayList(clusterService.getNodes());</span>
+<span class="nc" id="L201">        Map&lt;ControllerNode, Set&lt;DeviceId&gt;&gt; controllerDevices = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L202">        int deviceCount = 0;</span>
+
+        // Create buckets reflecting current ownership.
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        for (ControllerNode node : nodes) {</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (clusterService.getState(node.id()) == ACTIVE) {</span>
+<span class="nc" id="L207">                Set&lt;DeviceId&gt; devicesOf = new HashSet&lt;&gt;(getDevicesOf(node.id()));</span>
+<span class="nc" id="L208">                deviceCount += devicesOf.size();</span>
+<span class="nc" id="L209">                controllerDevices.put(node, devicesOf);</span>
+<span class="nc" id="L210">                log.info(&quot;Node {} has {} devices.&quot;, node.id(), devicesOf.size());</span>
+            }
+<span class="nc" id="L212">        }</span>
+
+        // Now re-balance the buckets until they are roughly even.
+<span class="nc" id="L215">        List&lt;CompletableFuture&lt;Void&gt;&gt; balanceBucketsFutures = Lists.newLinkedList();</span>
+<span class="nc" id="L216">        int rounds = controllerDevices.keySet().size();</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        for (int i = 0; i &lt; rounds; i++) {</span>
+            // Iterate over the buckets and find the smallest and the largest.
+<span class="nc" id="L219">            ControllerNode smallest = findBucket(true, controllerDevices);</span>
+<span class="nc" id="L220">            ControllerNode largest = findBucket(false, controllerDevices);</span>
+<span class="nc" id="L221">            balanceBucketsFutures.add(balanceBuckets(smallest, largest, controllerDevices, deviceCount));</span>
+        }
+<span class="nc" id="L223">        CompletableFuture&lt;Void&gt; balanceRolesFuture = CompletableFuture.allOf(</span>
+<span class="nc" id="L224">                balanceBucketsFutures.toArray(new CompletableFuture[balanceBucketsFutures.size()]));</span>
+
+<span class="nc" id="L226">        Futures.getUnchecked(balanceRolesFuture);</span>
+<span class="nc" id="L227">    }</span>
+
+    private ControllerNode findBucket(boolean min,
+                                      Map&lt;ControllerNode, Set&lt;DeviceId&gt;&gt;  controllerDevices) {
+<span class="nc bnc" id="L231" title="All 2 branches missed.">        int xSize = min ? Integer.MAX_VALUE : -1;</span>
+<span class="nc" id="L232">        ControllerNode xNode = null;</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        for (ControllerNode node : controllerDevices.keySet()) {</span>
+<span class="nc" id="L234">            int size = controllerDevices.get(node).size();</span>
+<span class="nc bnc" id="L235" title="All 8 branches missed.">            if ((min &amp;&amp; size &lt; xSize) || (!min &amp;&amp; size &gt; xSize)) {</span>
+<span class="nc" id="L236">                xSize = size;</span>
+<span class="nc" id="L237">                xNode = node;</span>
+            }
+<span class="nc" id="L239">        }</span>
+<span class="nc" id="L240">        return xNode;</span>
+    }
+
+    private CompletableFuture&lt;Void&gt; balanceBuckets(ControllerNode smallest, ControllerNode largest,
+                                Map&lt;ControllerNode, Set&lt;DeviceId&gt;&gt;  controllerDevices,
+                                int deviceCount) {
+<span class="nc" id="L246">        Collection&lt;DeviceId&gt; minBucket = controllerDevices.get(smallest);</span>
+<span class="nc" id="L247">        Collection&lt;DeviceId&gt; maxBucket = controllerDevices.get(largest);</span>
+<span class="nc" id="L248">        int bucketCount = controllerDevices.keySet().size();</span>
+
+<span class="nc" id="L250">        int delta = (maxBucket.size() - minBucket.size()) / 2;</span>
+<span class="nc" id="L251">        delta = Math.min(deviceCount / bucketCount, delta);</span>
+
+<span class="nc" id="L253">        List&lt;CompletableFuture&lt;Void&gt;&gt; setRoleFutures = Lists.newLinkedList();</span>
+
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        if (delta &gt; 0) {</span>
+<span class="nc" id="L256">            log.info(&quot;Attempting to move {} nodes from {} to {}...&quot;, delta,</span>
+<span class="nc" id="L257">                     largest.id(), smallest.id());</span>
+
+<span class="nc" id="L259">            int i = 0;</span>
+<span class="nc" id="L260">            Iterator&lt;DeviceId&gt; it = maxBucket.iterator();</span>
+<span class="nc bnc" id="L261" title="All 4 branches missed.">            while (it.hasNext() &amp;&amp; i &lt; delta) {</span>
+<span class="nc" id="L262">                DeviceId deviceId = it.next();</span>
+<span class="nc" id="L263">                log.info(&quot;Setting {} as the master for {}&quot;, smallest.id(), deviceId);</span>
+<span class="nc" id="L264">                setRoleFutures.add(setRole(smallest.id(), deviceId, MASTER));</span>
+<span class="nc" id="L265">                controllerDevices.get(smallest).add(deviceId);</span>
+<span class="nc" id="L266">                it.remove();</span>
+<span class="nc" id="L267">                i++;</span>
+<span class="nc" id="L268">            }</span>
+        }
+
+<span class="nc" id="L271">        return CompletableFuture.allOf(setRoleFutures.toArray(new CompletableFuture[setRoleFutures.size()]));</span>
+    }
+
+
+<span class="fc" id="L275">    public class InternalDelegate implements MastershipStoreDelegate {</span>
+        @Override
+        public void notify(MastershipEvent event) {
+<span class="fc" id="L278">            post(event);</span>
+<span class="fc" id="L279">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

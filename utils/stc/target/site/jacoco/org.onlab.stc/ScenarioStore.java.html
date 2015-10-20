@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ScenarioStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-stc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.stc</a> &gt; <span class="el_source">ScenarioStore.java</span></div><h1>ScenarioStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.stc;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.PropertiesConfiguration;
+import org.onlab.stc.Coordinator.Status;
+
+import java.io.File;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.stc.Coordinator.Status.*;
+import static org.onlab.stc.Coordinator.print;
+
+/**
+ * Maintains state of scenario execution.
+ */
+class ScenarioStore {
+
+    private final ProcessFlow processFlow;
+    private final File storeFile;
+    private final File logDir;
+
+<span class="fc" id="L43">    private final List&lt;StepEvent&gt; events = Lists.newArrayList();</span>
+<span class="fc" id="L44">    private final Map&lt;String, Status&gt; statusMap = Maps.newConcurrentMap();</span>
+
+<span class="fc" id="L46">    private long startTime = Long.MAX_VALUE;</span>
+<span class="fc" id="L47">    private long endTime = Long.MIN_VALUE;</span>
+
+    /**
+     * Creates a new scenario store for the specified process flow.
+     *
+     * @param processFlow scenario process flow
+     * @param logDir      scenario log directory
+     * @param name        scenario name
+     */
+<span class="fc" id="L56">    ScenarioStore(ProcessFlow processFlow, File logDir, String name) {</span>
+<span class="fc" id="L57">        this.processFlow = processFlow;</span>
+<span class="fc" id="L58">        this.logDir = logDir;</span>
+<span class="fc" id="L59">        this.storeFile = new File(logDir, name + &quot;.stc&quot;);</span>
+<span class="fc" id="L60">        load();</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     * Resets status of all steps to waiting and clears all events.
+     */
+    void reset() {
+<span class="fc" id="L67">        events.clear();</span>
+<span class="fc" id="L68">        statusMap.clear();</span>
+<span class="fc" id="L69">        processFlow.getVertexes().forEach(step -&gt; statusMap.put(step.name(), WAITING));</span>
+        try {
+<span class="fc" id="L71">            removeLogs();</span>
+<span class="fc" id="L72">            PropertiesConfiguration cfg = new PropertiesConfiguration(storeFile);</span>
+<span class="fc" id="L73">            cfg.clear();</span>
+<span class="fc" id="L74">            cfg.save();</span>
+<span class="fc" id="L75">            startTime = Long.MAX_VALUE;</span>
+<span class="fc" id="L76">            endTime = Long.MIN_VALUE;</span>
+<span class="nc" id="L77">        } catch (ConfigurationException e) {</span>
+<span class="nc" id="L78">            print(&quot;Unable to store file %s&quot;, storeFile);</span>
+<span class="fc" id="L79">        }</span>
+
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * Returns set of all test steps.
+     *
+     * @return set of steps
+     */
+    Set&lt;Step&gt; getSteps() {
+<span class="nc" id="L89">        return processFlow.getVertexes();</span>
+    }
+
+    /**
+     * Returns a chronological list of step or group records.
+     *
+     * @return list of events
+     */
+    synchronized List&lt;StepEvent&gt; getEvents() {
+<span class="nc" id="L98">        return ImmutableList.copyOf(events);</span>
+    }
+
+    /**
+     * Returns the status record of the specified test step.
+     *
+     * @param step test step or group
+     * @return step status record
+     */
+    Status getStatus(Step step) {
+<span class="fc" id="L108">        return checkNotNull(statusMap.get(step.name()), &quot;Step %s not found&quot;, step.name());</span>
+    }
+
+    /**
+     * Marks the specified test step as being in progress.
+     *
+     * @param step test step or group
+     */
+    synchronized void markStarted(Step step) {
+<span class="fc" id="L117">        add(new StepEvent(step.name(), IN_PROGRESS, step.command()));</span>
+<span class="fc" id="L118">        save();</span>
+<span class="fc" id="L119">    }</span>
+
+    /**
+     * Marks the specified test step as being complete.
+     *
+     * @param step   test step or group
+     * @param status new step status
+     */
+    synchronized void markComplete(Step step, Status status) {
+<span class="fc" id="L128">        add(new StepEvent(step.name(), status, null));</span>
+<span class="fc" id="L129">        save();</span>
+<span class="fc" id="L130">    }</span>
+
+    /**
+     * Returns true if all steps in the store have been marked as completed
+     * regardless of the completion status.
+     *
+     * @return true if all steps completed one way or another
+     */
+    synchronized boolean isComplete() {
+<span class="fc bfc" id="L139" title="All 6 branches covered.">        return !statusMap.values().stream().anyMatch(s -&gt; s == WAITING || s == IN_PROGRESS);</span>
+    }
+
+    /**
+     * Indicates whether there are any failures.
+     *
+     * @return true if there are failed steps
+     */
+    boolean hasFailures() {
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        for (Status status : statusMap.values()) {</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">            if (status == FAILED) {</span>
+<span class="nc" id="L150">                return true;</span>
+            }
+<span class="fc" id="L152">        }</span>
+<span class="fc" id="L153">        return false;</span>
+    }
+
+    /**
+     * Registers a new step record.
+     *
+     * @param event step event
+     */
+    private synchronized void add(StepEvent event) {
+<span class="fc" id="L162">        events.add(event);</span>
+<span class="fc" id="L163">        statusMap.put(event.name(), event.status());</span>
+<span class="fc" id="L164">        startTime = Math.min(startTime, event.time());</span>
+<span class="fc" id="L165">        endTime = Math.max(endTime, event.time());</span>
+<span class="fc" id="L166">    }</span>
+
+    /**
+     * Loads the states from disk.
+     */
+    private void load() {
+        try {
+<span class="fc" id="L173">            PropertiesConfiguration cfg = new PropertiesConfiguration(storeFile);</span>
+<span class="pc" id="L174">            cfg.getKeys().forEachRemaining(prop -&gt; add(StepEvent.fromString(cfg.getString(prop))));</span>
+<span class="fc" id="L175">            cfg.save();</span>
+<span class="nc" id="L176">        } catch (ConfigurationException e) {</span>
+<span class="nc" id="L177">            print(&quot;Unable to load file %s&quot;, storeFile);</span>
+<span class="fc" id="L178">        }</span>
+<span class="fc" id="L179">    }</span>
+
+    /**
+     * Saves the states to disk.
+     */
+    private void save() {
+        try {
+<span class="fc" id="L186">            PropertiesConfiguration cfg = new PropertiesConfiguration(storeFile);</span>
+<span class="fc" id="L187">            events.forEach(event -&gt; cfg.setProperty(&quot;T&quot; + event.time(), event.toString()));</span>
+<span class="fc" id="L188">            cfg.save();</span>
+<span class="nc" id="L189">        } catch (ConfigurationException e) {</span>
+<span class="nc" id="L190">            print(&quot;Unable to store file %s&quot;, storeFile);</span>
+<span class="fc" id="L191">        }</span>
+<span class="fc" id="L192">    }</span>
+
+    /**
+     * Removes all scenario log files.
+     */
+    private void removeLogs() {
+<span class="fc" id="L198">        File[] logFiles = logDir.listFiles();</span>
+<span class="pc bpc" id="L199" title="2 of 4 branches missed.">        if (logFiles != null &amp;&amp; logFiles.length &gt; 0) {</span>
+<span class="fc bfc" id="L200" title="All 2 branches covered.">            for (File file : logFiles) {</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">                if (!file.delete()) {</span>
+<span class="nc" id="L202">                    print(&quot;Unable to delete log file %s&quot;, file);</span>
+                }
+            }
+        }
+<span class="fc" id="L206">    }</span>
+
+    /**
+     * Returns the scenario run start time.
+     *
+     * @return start time in mills since start of epoch
+     */
+    public long startTime() {
+<span class="nc" id="L214">        return startTime;</span>
+    }
+
+    /**
+     * Returns the scenario run end time or current time if the scenario
+     * is still running.
+     *
+     * @return end time (or current time) in mills since start of epoch
+     */
+    public long endTime() {
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        return endTime &gt; 0 ? endTime : System.currentTimeMillis();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

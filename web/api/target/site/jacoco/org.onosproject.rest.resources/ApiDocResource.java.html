@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ApiDocResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">ApiDocResource.java</span></div><h1>ApiDocResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.onosproject.rest.AbstractInjectionResource;
+import org.onosproject.rest.ApiDocService;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.SequenceInputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+
+import static com.google.common.collect.ImmutableList.of;
+import static com.google.common.io.ByteStreams.toByteArray;
+import static javax.ws.rs.core.MediaType.*;
+import static javax.ws.rs.core.Response.temporaryRedirect;
+import static org.onlab.util.Tools.nullIsNotFound;
+
+/**
+ * REST API documentation.
+ */
+@Path(&quot;docs&quot;)
+<span class="nc" id="L46">public class ApiDocResource extends AbstractInjectionResource {</span>
+
+    private static final String CONTENT_TYPE = &quot;Content-Type&quot;;
+    private static final String STYLESHEET = &quot;text/css&quot;;
+    private static final String SCRIPT = &quot;text/javascript&quot;;
+    private static final String DOCS = &quot;/docs/&quot;;
+
+    private static final String INJECT_START = &quot;&lt;!-- {API-START} --&gt;&quot;;
+    private static final String INJECT_END = &quot;&lt;!-- {API-END} --&gt;&quot;;
+
+    @Context
+    private UriInfo uriInfo;
+
+    /**
+     * Get all registered REST API docs.
+     * Returns array of all registered API docs.
+     *
+     * @return 200 OK
+     */
+    @GET
+    @Path(&quot;apis&quot;)
+    public Response getApiList() {
+<span class="nc" id="L68">        ObjectNode root = mapper().createObjectNode();</span>
+<span class="nc" id="L69">        ArrayNode apis = newArray(root, &quot;apis&quot;);</span>
+<span class="nc" id="L70">        get(ApiDocService.class).getDocProviders().forEach(p -&gt; apis.add(p.name()));</span>
+<span class="nc" id="L71">        return ok(root.toString()).build();</span>
+    }
+
+    /**
+     * Get Swagger UI JSON.
+     *
+     * @param key REST API web context
+     * @return 200 OK
+     */
+    @GET
+    @Path(&quot;apis/{key: .*?}/swagger.json&quot;)
+    public Response getApi(@PathParam(&quot;key&quot;) String key) {
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        String k = key.startsWith(&quot;/&quot;) ? key : &quot;/&quot; + key;</span>
+<span class="nc" id="L84">        InputStream stream = nullIsNotFound(get(ApiDocService.class).getDocProvider(k),</span>
+<span class="nc" id="L85">                                            &quot;REST API not found for &quot; + k).docs();</span>
+<span class="nc" id="L86">        return ok(nullIsNotFound(stream, &quot;REST API docs not found for &quot; + k))</span>
+<span class="nc" id="L87">                .header(CONTENT_TYPE, APPLICATION_JSON).build();</span>
+    }
+
+    /**
+     * Get REST API model schema.
+     *
+     * @param key REST API web context
+     * @return 200 OK
+     */
+    @GET
+    @Path(&quot;apis/{key: .*?}/model.json&quot;)
+    public Response getApiModel(@PathParam(&quot;name&quot;) String key) {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        String k = key.startsWith(&quot;/&quot;) ? key : &quot;/&quot; + key;</span>
+<span class="nc" id="L100">        InputStream stream = nullIsNotFound(get(ApiDocService.class).getDocProvider(k),</span>
+<span class="nc" id="L101">                                            &quot;REST API not found for &quot; + k).model();</span>
+<span class="nc" id="L102">        return ok(nullIsNotFound(stream, &quot;REST API model not found for &quot; + k))</span>
+<span class="nc" id="L103">                .header(CONTENT_TYPE, APPLICATION_JSON).build();</span>
+    }
+
+    /**
+     * Get Swagger UI main index page.
+     *
+     * @return 200 OK
+     * @throws IOException if unable to get index resource
+     * @throws URISyntaxException if unable to create redirect URI
+     */
+    @GET
+    @Path(&quot;/&quot;)
+    public Response getDefault() throws IOException, URISyntaxException {
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        return uriInfo.getPath().endsWith(&quot;/&quot;) ? getIndex() :</span>
+<span class="nc" id="L117">                temporaryRedirect(new URI(uriInfo.getPath() + &quot;/&quot;)).build();</span>
+    }
+
+    /**
+     * Get Swagger UI main index page.
+     *
+     * @return 200 OK
+     * @throws IOException if unable to get index resource
+     */
+    @GET
+    @Path(&quot;index.html&quot;)
+    public Response getIndex() throws IOException {
+<span class="nc" id="L129">        InputStream stream = getClass().getClassLoader().getResourceAsStream(DOCS + &quot;index.html&quot;);</span>
+<span class="nc" id="L130">        nullIsNotFound(stream, &quot;index.html not found&quot;);</span>
+
+<span class="nc" id="L132">        String index = new String(toByteArray(stream));</span>
+
+<span class="nc" id="L134">        int p1s = split(index, 0, INJECT_START);</span>
+<span class="nc" id="L135">        int p1e = split(index, p1s, INJECT_END);</span>
+<span class="nc" id="L136">        int p2s = split(index, p1e, null);</span>
+
+<span class="nc" id="L138">        StreamEnumeration streams =</span>
+<span class="nc" id="L139">                new StreamEnumeration(of(stream(index, 0, p1s),</span>
+<span class="nc" id="L140">                                         includeOptions(get(ApiDocService.class)),</span>
+<span class="nc" id="L141">                                         stream(index, p1e, p2s)));</span>
+
+<span class="nc" id="L143">        return ok(new SequenceInputStream(streams))</span>
+<span class="nc" id="L144">                .header(CONTENT_TYPE, TEXT_HTML).build();</span>
+    }
+
+    private InputStream includeOptions(ApiDocService service) {
+<span class="nc" id="L148">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L149">        service.getDocProviders().forEach(p -&gt; {</span>
+<span class="nc" id="L150">            sb.append(&quot;&lt;option value=\&quot;&quot;).append(p.key()).append(&quot;\&quot;&quot;)</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">                    .append(p.key().equals(&quot;/onos/v1&quot;) ? &quot; selected&gt;&quot; : &quot;&gt;&quot;)</span>
+<span class="nc" id="L152">                    .append(p.name())</span>
+<span class="nc" id="L153">                    .append(&quot;&lt;/option&gt;&quot;);</span>
+<span class="nc" id="L154">        });</span>
+<span class="nc" id="L155">        return new ByteArrayInputStream(sb.toString().getBytes());</span>
+    }
+
+    /**
+     * Get Swagger UI resource.
+     *
+     * @param resource path of the resource
+     * @return 200 OK
+     * @throws IOException if unable to get named resource
+     */
+    @GET
+    @Path(&quot;{resource: .*}&quot;)
+    public Response getResource(@PathParam(&quot;resource&quot;) String resource) throws IOException {
+<span class="nc" id="L168">        InputStream stream = getClass().getClassLoader().getResourceAsStream(DOCS + resource);</span>
+<span class="nc" id="L169">        return ok(nullIsNotFound(stream, resource + &quot; not found&quot;))</span>
+<span class="nc" id="L170">                .header(CONTENT_TYPE, contentType(resource)).build();</span>
+    }
+
+    static String contentType(String resource) {
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        return resource.endsWith(&quot;.html&quot;) ? TEXT_HTML :</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                resource.endsWith(&quot;.css&quot;) ? STYLESHEET :</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">                        resource.endsWith(&quot;.js&quot;) ? SCRIPT :</span>
+                                APPLICATION_OCTET_STREAM;
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

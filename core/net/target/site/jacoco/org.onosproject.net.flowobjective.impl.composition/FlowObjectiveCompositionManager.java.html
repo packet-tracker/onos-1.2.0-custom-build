@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowObjectiveCompositionManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flowobjective.impl.composition</a> &gt; <span class="el_source">FlowObjectiveCompositionManager.java</span></div><h1>FlowObjectiveCompositionManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flowobjective.impl.composition;
+
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.osgi.DefaultServiceDirectory;
+import org.onlab.osgi.ServiceDirectory;
+import org.onlab.util.ItemNotFoundException;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.mastership.MastershipEvent;
+import org.onosproject.mastership.MastershipListener;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.behaviour.Pipeliner;
+import org.onosproject.net.behaviour.PipelinerContext;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.driver.DefaultDriverProviderService;
+import org.onosproject.net.driver.DriverHandler;
+import org.onosproject.net.driver.DriverService;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flowobjective.FilteringObjective;
+import org.onosproject.net.flowobjective.FlowObjectiveService;
+import org.onosproject.net.flowobjective.FlowObjectiveStore;
+import org.onosproject.net.flowobjective.FlowObjectiveStoreDelegate;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.NextObjective;
+import org.onosproject.net.flowobjective.Objective;
+import org.onosproject.net.flowobjective.ObjectiveError;
+import org.onosproject.net.flowobjective.ObjectiveEvent;
+import org.onosproject.net.group.GroupService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.Executors.newFixedThreadPool;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+/**
+ * Provides implementation of the flow objective programming service with composition feature.
+ *
+ * Note: This is an experimental, alternative implementation of the FlowObjectiveManager
+ * that supports composition. It can be enabled by setting the enable flag below to true,
+ * and you should also add &quot;enabled = false&quot; to the FlowObjectiveManager.
+ *
+ * The implementation relies a FlowObjectiveCompositionTree that is not yet distributed,
+ * so it will not have high availability and may break if device mastership changes.
+ * Therefore, it is safest to use this component in a single instance scenario.
+ * This comment will be removed when a distributed implementation is available.
+ */
+@Component(immediate = true, enabled = false)
+@Service
+<span class="nc" id="L84">public class FlowObjectiveCompositionManager implements FlowObjectiveService {</span>
+
+<span class="nc" id="L86">    public enum PolicyOperator {</span>
+<span class="nc" id="L87">        Parallel,</span>
+<span class="nc" id="L88">        Sequential,</span>
+<span class="nc" id="L89">        Override,</span>
+<span class="nc" id="L90">        Application</span>
+    }
+
+    public static final int INSTALL_RETRY_ATTEMPTS = 5;
+    public static final long INSTALL_RETRY_INTERVAL = 1000; // ms
+
+<span class="nc" id="L96">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DriverService driverService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    // Note: The following dependencies are added on behalf of the pipeline
+    // driver behaviours to assure these services are available for their
+    // initialization.
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowRuleService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected GroupService groupService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowObjectiveStore flowObjectiveStore;
+
+    // Note: This must remain an optional dependency to allow re-install of default drivers.
+    // Note: For now disabled until we can move to OPTIONAL_UNARY dependency
+    // @Reference(cardinality = ReferenceCardinality.OPTIONAL_UNARY, policy = ReferencePolicy.DYNAMIC)
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DefaultDriverProviderService defaultDriverService;
+
+<span class="nc" id="L128">    private final FlowObjectiveStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+<span class="nc" id="L130">    private final Map&lt;DeviceId, DriverHandler&gt; driverHandlers = Maps.newConcurrentMap();</span>
+<span class="nc" id="L131">    private final Map&lt;DeviceId, Pipeliner&gt; pipeliners = Maps.newConcurrentMap();</span>
+
+<span class="nc" id="L133">    private final PipelinerContext context = new InnerPipelineContext();</span>
+<span class="nc" id="L134">    private final MastershipListener mastershipListener = new InnerMastershipListener();</span>
+<span class="nc" id="L135">    private final DeviceListener deviceListener = new InnerDeviceListener();</span>
+
+<span class="nc" id="L137">    protected ServiceDirectory serviceDirectory = new DefaultServiceDirectory();</span>
+
+<span class="nc" id="L139">    private Map&lt;Integer, Set&lt;PendingNext&gt;&gt; pendingForwards = Maps.newConcurrentMap();</span>
+
+    private ExecutorService executorService;
+
+    private String policy;
+    private Map&lt;DeviceId, FlowObjectiveCompositionTree&gt; deviceCompositionTreeMap;
+
+    @Activate
+    protected void activate() {
+<span class="nc" id="L148">        executorService = newFixedThreadPool(4, groupedThreads(&quot;onos/objective-installer&quot;, &quot;%d&quot;));</span>
+<span class="nc" id="L149">        flowObjectiveStore.setDelegate(delegate);</span>
+<span class="nc" id="L150">        mastershipService.addListener(mastershipListener);</span>
+<span class="nc" id="L151">        deviceService.addListener(deviceListener);</span>
+<span class="nc" id="L152">        deviceService.getDevices().forEach(device -&gt; setupPipelineHandler(device.id()));</span>
+<span class="nc" id="L153">        deviceCompositionTreeMap = Maps.newConcurrentMap();</span>
+<span class="nc" id="L154">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L155">    }</span>
+
+    @Deactivate
+    protected void deactivate() {
+<span class="nc" id="L159">        flowObjectiveStore.unsetDelegate(delegate);</span>
+<span class="nc" id="L160">        mastershipService.removeListener(mastershipListener);</span>
+<span class="nc" id="L161">        deviceService.removeListener(deviceListener);</span>
+<span class="nc" id="L162">        executorService.shutdown();</span>
+<span class="nc" id="L163">        pipeliners.clear();</span>
+<span class="nc" id="L164">        driverHandlers.clear();</span>
+<span class="nc" id="L165">        deviceCompositionTreeMap.clear();</span>
+<span class="nc" id="L166">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L167">    }</span>
+
+    /**
+     * Task that passes the flow objective down to the driver. The task will
+     * make a few attempts to find the appropriate driver, then eventually give
+     * up and report an error if no suitable driver could be found.
+     */
+    private class ObjectiveInstaller implements Runnable {
+        private final DeviceId deviceId;
+        private final Objective objective;
+
+        private final int numAttempts;
+
+        public ObjectiveInstaller(DeviceId deviceId, Objective objective) {
+<span class="nc" id="L181">            this(deviceId, objective, 1);</span>
+<span class="nc" id="L182">        }</span>
+
+<span class="nc" id="L184">        public ObjectiveInstaller(DeviceId deviceId, Objective objective, int attemps) {</span>
+<span class="nc" id="L185">            this.deviceId = checkNotNull(deviceId);</span>
+<span class="nc" id="L186">            this.objective = checkNotNull(objective);</span>
+<span class="nc" id="L187">            this.numAttempts = checkNotNull(attemps);</span>
+<span class="nc" id="L188">        }</span>
+
+        @Override
+        public void run() {
+            try {
+<span class="nc" id="L193">                Pipeliner pipeliner = getDevicePipeliner(deviceId);</span>
+
+<span class="nc bnc" id="L195" title="All 2 branches missed.">                if (pipeliner != null) {</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">                    if (objective instanceof NextObjective) {</span>
+<span class="nc" id="L197">                        pipeliner.next((NextObjective) objective);</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">                    } else if (objective instanceof ForwardingObjective) {</span>
+<span class="nc" id="L199">                        pipeliner.forward((ForwardingObjective) objective);</span>
+                    } else {
+<span class="nc" id="L201">                        pipeliner.filter((FilteringObjective) objective);</span>
+                    }
+<span class="nc bnc" id="L203" title="All 2 branches missed.">                } else if (numAttempts &lt; INSTALL_RETRY_ATTEMPTS) {</span>
+<span class="nc" id="L204">                    Thread.sleep(INSTALL_RETRY_INTERVAL);</span>
+<span class="nc" id="L205">                    executorService.submit(new ObjectiveInstaller(deviceId, objective, numAttempts + 1));</span>
+                } else {
+                    // Otherwise we've tried a few times and failed, report an
+                    // error back to the user.
+<span class="nc" id="L209">                    objective.context().ifPresent(</span>
+<span class="nc" id="L210">                            c -&gt; c.onError(objective, ObjectiveError.DEVICEMISSING));</span>
+                }
+<span class="nc" id="L212">            } catch (Exception e) {</span>
+<span class="nc" id="L213">                log.warn(&quot;Exception while installing flow objective&quot;, e);</span>
+<span class="nc" id="L214">            }</span>
+<span class="nc" id="L215">        }</span>
+    }
+
+    @Override
+    public void filter(DeviceId deviceId, FilteringObjective filteringObjective) {
+<span class="nc" id="L220">        checkPermission(FLOWRULE_WRITE);</span>
+
+<span class="nc" id="L222">        List&lt;FilteringObjective&gt; filteringObjectives</span>
+<span class="nc" id="L223">                = this.deviceCompositionTreeMap.get(deviceId).updateFilter(filteringObjective);</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        for (FilteringObjective tmp : filteringObjectives) {</span>
+<span class="nc" id="L225">            executorService.submit(new ObjectiveInstaller(deviceId, tmp));</span>
+<span class="nc" id="L226">        }</span>
+<span class="nc" id="L227">    }</span>
+
+    @Override
+    public void forward(DeviceId deviceId, ForwardingObjective forwardingObjective) {
+<span class="nc" id="L231">        checkPermission(FLOWRULE_WRITE);</span>
+
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        if (queueObjective(deviceId, forwardingObjective)) {</span>
+<span class="nc" id="L234">            return;</span>
+        }
+<span class="nc" id="L236">        List&lt;ForwardingObjective&gt; forwardingObjectives</span>
+<span class="nc" id="L237">                = this.deviceCompositionTreeMap.get(deviceId).updateForward(forwardingObjective);</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for (ForwardingObjective tmp : forwardingObjectives) {</span>
+<span class="nc" id="L239">            executorService.submit(new ObjectiveInstaller(deviceId, tmp));</span>
+<span class="nc" id="L240">        }</span>
+<span class="nc" id="L241">    }</span>
+
+    @Override
+    public void next(DeviceId deviceId, NextObjective nextObjective) {
+<span class="nc" id="L245">        checkPermission(FLOWRULE_WRITE);</span>
+
+<span class="nc" id="L247">        List&lt;NextObjective&gt; nextObjectives = this.deviceCompositionTreeMap.get(deviceId).updateNext(nextObjective);</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        for (NextObjective tmp : nextObjectives) {</span>
+<span class="nc" id="L249">            executorService.submit(new ObjectiveInstaller(deviceId, tmp));</span>
+<span class="nc" id="L250">        }</span>
+<span class="nc" id="L251">    }</span>
+
+    @Override
+    public int allocateNextId() {
+<span class="nc" id="L255">        checkPermission(FLOWRULE_WRITE);</span>
+
+<span class="nc" id="L257">        return flowObjectiveStore.allocateNextId();</span>
+    }
+
+    private boolean queueObjective(DeviceId deviceId, ForwardingObjective fwd) {
+<span class="nc bnc" id="L261" title="All 2 branches missed.">        if (fwd.nextId() != null &amp;&amp;</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">                flowObjectiveStore.getNextGroup(fwd.nextId()) == null) {</span>
+<span class="nc" id="L263">            log.trace(&quot;Queuing forwarding objective for nextId {}&quot;, fwd.nextId());</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if (pendingForwards.putIfAbsent(fwd.nextId(),</span>
+<span class="nc" id="L265">                    Sets.newHashSet(new PendingNext(deviceId, fwd))) != null) {</span>
+<span class="nc" id="L266">                Set&lt;PendingNext&gt; pending = pendingForwards.get(fwd.nextId());</span>
+<span class="nc" id="L267">                pending.add(new PendingNext(deviceId, fwd));</span>
+            }
+<span class="nc" id="L269">            return true;</span>
+        }
+<span class="nc" id="L271">        return false;</span>
+    }
+
+    @Override
+    public void initPolicy(String policy) {
+<span class="nc" id="L276">        this.policy = policy;</span>
+<span class="nc" id="L277">        deviceService.getDevices().forEach(device -&gt;</span>
+<span class="nc" id="L278">                this.deviceCompositionTreeMap.put(device.id(), FlowObjectiveCompositionUtil.parsePolicyString(policy)));</span>
+<span class="nc" id="L279">        log.info(&quot;Initialize policy {}&quot;, policy);</span>
+<span class="nc" id="L280">    }</span>
+
+    // Retrieves the device pipeline behaviour from the cache.
+    private Pipeliner getDevicePipeliner(DeviceId deviceId) {
+<span class="nc" id="L284">        Pipeliner pipeliner = pipeliners.get(deviceId);</span>
+<span class="nc" id="L285">        return pipeliner;</span>
+    }
+
+    private void setupPipelineHandler(DeviceId deviceId) {
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        if (defaultDriverService == null) {</span>
+            // We're not ready to go to work yet.
+<span class="nc" id="L291">            return;</span>
+        }
+
+        // Attempt to lookup the handler in the cache
+<span class="nc" id="L295">        DriverHandler handler = driverHandlers.get(deviceId);</span>
+<span class="nc bnc" id="L296" title="All 2 branches missed.">        if (handler == null) {</span>
+            try {
+                // Otherwise create it and if it has pipeline behaviour, cache it
+<span class="nc" id="L299">                handler = driverService.createHandler(deviceId);</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">                if (!handler.driver().hasBehaviour(Pipeliner.class)) {</span>
+<span class="nc" id="L301">                    log.warn(&quot;Pipeline behaviour not supported for device {}&quot;,</span>
+                            deviceId);
+<span class="nc" id="L303">                    return;</span>
+                }
+<span class="nc" id="L305">            } catch (ItemNotFoundException e) {</span>
+<span class="nc" id="L306">                log.warn(&quot;No applicable driver for device {}&quot;, deviceId);</span>
+<span class="nc" id="L307">                return;</span>
+<span class="nc" id="L308">            }</span>
+
+<span class="nc" id="L310">            driverHandlers.put(deviceId, handler);</span>
+        }
+
+        // Always (re)initialize the pipeline behaviour
+<span class="nc" id="L314">        log.info(&quot;Driver {} bound to device {} ... initializing driver&quot;,</span>
+<span class="nc" id="L315">                handler.driver().name(), deviceId);</span>
+<span class="nc" id="L316">        Pipeliner pipeliner = handler.behaviour(Pipeliner.class);</span>
+<span class="nc" id="L317">        pipeliner.init(deviceId, context);</span>
+<span class="nc" id="L318">        pipeliners.putIfAbsent(deviceId, pipeliner);</span>
+<span class="nc" id="L319">    }</span>
+
+    // Triggers driver setup when the local node becomes a device master.
+<span class="nc" id="L322">    private class InnerMastershipListener implements MastershipListener {</span>
+        @Override
+        public void event(MastershipEvent event) {
+<span class="nc bnc" id="L325" title="All 3 branches missed.">            switch (event.type()) {</span>
+                case MASTER_CHANGED:
+<span class="nc" id="L327">                    log.debug(&quot;mastership changed on device {}&quot;, event.subject());</span>
+<span class="nc bnc" id="L328" title="All 2 branches missed.">                    if (deviceService.isAvailable(event.subject())) {</span>
+<span class="nc" id="L329">                        setupPipelineHandler(event.subject());</span>
+                    }
+                    break;
+                case BACKUPS_CHANGED:
+<span class="nc" id="L333">                    break;</span>
+                default:
+                    break;
+            }
+<span class="nc" id="L337">        }</span>
+    }
+
+    // Triggers driver setup when a device is (re)detected.
+<span class="nc" id="L341">    private class InnerDeviceListener implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+<span class="nc bnc" id="L344" title="All 8 branches missed.">            switch (event.type()) {</span>
+                case DEVICE_ADDED:
+                case DEVICE_AVAILABILITY_CHANGED:
+<span class="nc" id="L347">                    log.debug(&quot;Device either added or availability changed {}&quot;,</span>
+<span class="nc" id="L348">                            event.subject().id());</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">                    if (deviceService.isAvailable(event.subject().id())) {</span>
+<span class="nc" id="L350">                        log.debug(&quot;Device is now available {}&quot;, event.subject().id());</span>
+<span class="nc" id="L351">                        setupPipelineHandler(event.subject().id());</span>
+                    }
+                    break;
+                case DEVICE_UPDATED:
+<span class="nc" id="L355">                    break;</span>
+                case DEVICE_REMOVED:
+<span class="nc" id="L357">                    break;</span>
+                case DEVICE_SUSPENDED:
+<span class="nc" id="L359">                    break;</span>
+                case PORT_ADDED:
+<span class="nc" id="L361">                    break;</span>
+                case PORT_UPDATED:
+<span class="nc" id="L363">                    break;</span>
+                case PORT_REMOVED:
+<span class="nc" id="L365">                    break;</span>
+                default:
+                    break;
+            }
+<span class="nc" id="L369">        }</span>
+    }
+
+    // Processing context for initializing pipeline driver behaviours.
+<span class="nc" id="L373">    private class InnerPipelineContext implements PipelinerContext {</span>
+        @Override
+        public ServiceDirectory directory() {
+<span class="nc" id="L376">            return serviceDirectory;</span>
+        }
+
+        @Override
+        public FlowObjectiveStore store() {
+<span class="nc" id="L381">            return flowObjectiveStore;</span>
+        }
+    }
+
+<span class="nc" id="L385">    private class InternalStoreDelegate implements FlowObjectiveStoreDelegate {</span>
+        @Override
+        public void notify(ObjectiveEvent event) {
+<span class="nc" id="L388">            log.debug(&quot;Received notification of obj event {}&quot;, event);</span>
+<span class="nc" id="L389">            Set&lt;PendingNext&gt; pending = pendingForwards.remove(event.subject());</span>
+
+<span class="nc bnc" id="L391" title="All 2 branches missed.">            if (pending == null) {</span>
+<span class="nc" id="L392">                log.debug(&quot;Nothing pending for this obj event&quot;);</span>
+<span class="nc" id="L393">                return;</span>
+            }
+
+<span class="nc" id="L396">            log.debug(&quot;Processing pending forwarding objectives {}&quot;, pending.size());</span>
+
+<span class="nc" id="L398">            pending.forEach(p -&gt; getDevicePipeliner(p.deviceId())</span>
+<span class="nc" id="L399">                    .forward(p.forwardingObjective()));</span>
+
+<span class="nc" id="L401">        }</span>
+    }
+
+    /**
+     * Data class used to hold a pending forwarding objective that could not
+     * be processed because the associated next object was not present.
+     */
+    private class PendingNext {
+        private final DeviceId deviceId;
+        private final ForwardingObjective fwd;
+
+<span class="nc" id="L412">        public PendingNext(DeviceId deviceId, ForwardingObjective fwd) {</span>
+<span class="nc" id="L413">            this.deviceId = deviceId;</span>
+<span class="nc" id="L414">            this.fwd = fwd;</span>
+<span class="nc" id="L415">        }</span>
+
+        public DeviceId deviceId() {
+<span class="nc" id="L418">            return deviceId;</span>
+        }
+
+        public ForwardingObjective forwardingObjective() {
+<span class="nc" id="L422">            return fwd;</span>
+        }
+    }
+
+    public static String forwardingObjectiveToString(ForwardingObjective forwardingObjective) {
+<span class="nc" id="L427">        String str = forwardingObjective.priority() + &quot; &quot;;</span>
+<span class="nc" id="L428">        str += &quot;selector( &quot;;</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">        for (Criterion criterion : forwardingObjective.selector().criteria()) {</span>
+<span class="nc" id="L430">            str += criterion + &quot; &quot;;</span>
+<span class="nc" id="L431">        }</span>
+<span class="nc" id="L432">        str += &quot;) treatment( &quot;;</span>
+<span class="nc bnc" id="L433" title="All 2 branches missed.">        for (Instruction instruction : forwardingObjective.treatment().allInstructions()) {</span>
+<span class="nc" id="L434">            str += instruction + &quot; &quot;;</span>
+<span class="nc" id="L435">        }</span>
+<span class="nc" id="L436">        str += &quot;)&quot;;</span>
+<span class="nc" id="L437">        return str;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

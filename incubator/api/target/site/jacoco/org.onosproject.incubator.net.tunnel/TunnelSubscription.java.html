@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>TunnelSubscription.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.tunnel</a> &gt; <span class="el_source">TunnelSubscription.java</span></div><h1>TunnelSubscription.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.incubator.net.tunnel;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.Objects;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.AbstractAnnotated;
+import org.onosproject.net.Annotations;
+import org.onosproject.incubator.net.tunnel.Tunnel.Type;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Represents for a order that consumer subscribe tunnel. ONOS maintains request
+ * information, it means ONOS knows how much resource echo consumer uses in the
+ * ONOS. Although there is no a tunnel that consumer want to use, when producer
+ * creates a new tunnel, ONOS will notify the consumers that want to use it.
+ */
+@Beta
+public final class TunnelSubscription extends AbstractAnnotated {
+    private final ApplicationId consumerId;
+    private final TunnelEndPoint src;
+    private final TunnelEndPoint dst;
+    private final Type type;
+    private final TunnelId tunnelId;
+    private final TunnelName tunnelName;
+
+    /**
+     * Creates a TunnelSubscription.
+     *
+     * @param consumerId consumer identity
+     * @param src source tunnel end point of tunnel
+     * @param dst destination tunnel end point of tunnel
+     * @param tunnelId tunnel identity
+     * @param type tunnel type
+     * @param tunnelName the name of a tunnel
+     * @param annotations parameter
+     */
+    public TunnelSubscription(ApplicationId consumerId, TunnelEndPoint src,
+                 TunnelEndPoint dst, TunnelId tunnelId, Type type,
+                 TunnelName tunnelName, Annotations... annotations) {
+<span class="fc" id="L60">        super(annotations);</span>
+<span class="fc" id="L61">        checkNotNull(consumerId, &quot;consumerId cannot be null&quot;);</span>
+<span class="fc" id="L62">        this.consumerId = consumerId;</span>
+<span class="fc" id="L63">        this.src = src;</span>
+<span class="fc" id="L64">        this.dst = dst;</span>
+<span class="fc" id="L65">        this.type = type;</span>
+<span class="fc" id="L66">        this.tunnelId = tunnelId;</span>
+<span class="fc" id="L67">        this.tunnelName = tunnelName;</span>
+<span class="fc" id="L68">    }</span>
+
+    /**
+     * Returns consumer identity.
+     *
+     * @return consumerId consumer id
+     */
+    public ApplicationId consumerId() {
+<span class="nc" id="L76">        return consumerId;</span>
+    }
+
+    /**
+     * Returns source point of tunnel.
+     *
+     * @return source point
+     */
+    public TunnelEndPoint src() {
+<span class="nc" id="L85">        return src;</span>
+    }
+
+    /**
+     * Returns destination point of tunnel.
+     *
+     * @return destination point
+     */
+    public TunnelEndPoint dst() {
+<span class="nc" id="L94">        return dst;</span>
+    }
+
+    /**
+     * Returns tunnel type.
+     *
+     * @return tunnel type
+     */
+    public Type type() {
+<span class="nc" id="L103">        return type;</span>
+    }
+
+    /**
+     * Returns tunnel identity.
+     *
+     * @return tunnel id
+     */
+    public TunnelId tunnelId() {
+<span class="nc" id="L112">        return tunnelId;</span>
+    }
+
+    /**
+     * Returns tunnel name.
+     *
+     * @return tunnel name
+     */
+    public TunnelName tunnelName() {
+<span class="nc" id="L121">        return tunnelName;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L126">        return Objects.hash(consumerId, src, dst, type, tunnelId, tunnelName);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L131" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L132">            return true;</span>
+        }
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        if (obj instanceof TunnelSubscription) {</span>
+<span class="fc" id="L135">            final TunnelSubscription other = (TunnelSubscription) obj;</span>
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">            return Objects.equals(this.src, other.src)</span>
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.dst, other.dst)</span>
+<span class="fc bfc" id="L138" title="All 2 branches covered.">                    &amp;&amp; Objects.equals(this.consumerId, other.consumerId)</span>
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.type, other.type)</span>
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.tunnelId, other.tunnelId)</span>
+<span class="pc bpc" id="L141" title="1 of 2 branches missed.">                    &amp;&amp; Objects.equals(this.tunnelName, other.tunnelName);</span>
+        }
+<span class="fc" id="L143">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L148">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L149">                .add(&quot;src&quot;, src)</span>
+<span class="fc" id="L150">                .add(&quot;dst&quot;, dst)</span>
+<span class="fc" id="L151">                .add(&quot;consumerId&quot;, consumerId)</span>
+<span class="fc" id="L152">                .add(&quot;type&quot;, type)</span>
+<span class="fc" id="L153">                .add(&quot;tunnelId&quot;, tunnelId)</span>
+<span class="fc" id="L154">                .add(&quot;tunnelName&quot;, tunnelName).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

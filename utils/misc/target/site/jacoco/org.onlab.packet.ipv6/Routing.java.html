@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Routing.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.ipv6</a> &gt; <span class="el_source">Routing.java</span></div><h1>Routing.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onlab.packet.ipv6;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Data;
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+import org.onlab.packet.IPv6;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+import static org.onlab.packet.PacketUtils.checkHeaderLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements IPv6 routing extension header format. (RFC 2460)
+ */
+<span class="fc" id="L35">public class Routing extends BasePacket implements IExtensionHeader {</span>
+    public static final byte FIXED_HEADER_LENGTH = 4; // bytes
+    public static final byte FIXED_ROUTING_DATA_LENGTH = 4; // bytes
+    public static final byte LENGTH_UNIT = 8; // bytes per unit
+
+    protected byte nextHeader;
+    protected byte headerExtLength;
+    protected byte routingType;
+    protected byte segmentsLeft;
+    protected byte[] routingData;
+
+    @Override
+    public byte getNextHeader() {
+<span class="fc" id="L48">        return this.nextHeader;</span>
+    }
+
+    @Override
+    public Routing setNextHeader(final byte nextHeader) {
+<span class="fc" id="L53">        this.nextHeader = nextHeader;</span>
+<span class="fc" id="L54">        return this;</span>
+    }
+
+    /**
+     * Gets the extension length of this header.
+     *
+     * @return header length
+     */
+    public byte getHeaderExtLength() {
+<span class="fc" id="L63">        return this.headerExtLength;</span>
+    }
+
+    /**
+     * Sets the extension length of this header.
+     *
+     * @param headerExtLength the header length to set
+     * @return this
+     */
+    public Routing setHeaderExtLength(final byte headerExtLength) {
+<span class="fc" id="L73">        this.headerExtLength = headerExtLength;</span>
+<span class="fc" id="L74">        return this;</span>
+    }
+
+    /**
+     * Gets the routing type of this header.
+     *
+     * @return routing type
+     */
+    public byte getRoutingType() {
+<span class="fc" id="L83">        return this.routingType;</span>
+    }
+
+    /**
+     * Sets the routing type of this header.
+     *
+     * @param routingType the routing type to set
+     * @return this
+     */
+    public Routing setRoutingType(final byte routingType) {
+<span class="fc" id="L93">        this.routingType = routingType;</span>
+<span class="fc" id="L94">        return this;</span>
+    }
+
+    /**
+     * Gets the number of remaining route segments of this header.
+     *
+     * @return number of remaining route segments
+     */
+    public byte getSegmentsLeft() {
+<span class="fc" id="L103">        return this.segmentsLeft;</span>
+    }
+
+    /**
+     * Sets the number of remaining route segments of this header.
+     *
+     * @param segmentsLeft the number of remaining route segments to set
+     * @return this
+     */
+    public Routing setSegmntsLeft(final byte segmentsLeft) {
+<span class="fc" id="L113">        this.segmentsLeft = segmentsLeft;</span>
+<span class="fc" id="L114">        return this;</span>
+    }
+
+    /**
+     * Gets the routing data.
+     *
+     * @return the routing data
+     */
+    public byte[] getRoutingData() {
+<span class="fc" id="L123">        return this.routingData;</span>
+    }
+
+    /**
+     * Sets the routing data.
+     *
+     * @param routingData the routing data to set
+     * @return this
+     */
+    public Routing setRoutingData(final byte[] routingData) {
+<span class="fc" id="L133">        this.routingData =</span>
+<span class="fc" id="L134">                Arrays.copyOfRange(routingData, 0, routingData.length);</span>
+<span class="fc" id="L135">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L140">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L141" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="fc" id="L142">            this.payload.setParent(this);</span>
+<span class="fc" id="L143">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="fc" id="L146">        int headerLength = FIXED_HEADER_LENGTH + routingData.length;</span>
+<span class="fc" id="L147">        int payloadLength = 0;</span>
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L149">            payloadLength = payloadData.length;</span>
+        }
+
+<span class="fc" id="L152">        final byte[] data = new byte[headerLength + payloadLength];</span>
+<span class="fc" id="L153">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L155">        bb.put(this.nextHeader);</span>
+<span class="fc" id="L156">        bb.put(this.headerExtLength);</span>
+<span class="fc" id="L157">        bb.put(this.routingType);</span>
+<span class="fc" id="L158">        bb.put(this.segmentsLeft);</span>
+<span class="fc" id="L159">        bb.put(this.routingData, 0, routingData.length);</span>
+
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L162">            bb.put(payloadData);</span>
+        }
+
+<span class="pc bpc" id="L165" title="3 of 4 branches missed.">        if (this.parent != null &amp;&amp; this.parent instanceof IExtensionHeader) {</span>
+<span class="nc" id="L166">            ((IExtensionHeader) this.parent).setNextHeader(IPv6.PROTOCOL_ROUTING);</span>
+        }
+<span class="fc" id="L168">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L173">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L174">        this.nextHeader = bb.get();</span>
+<span class="nc" id="L175">        this.headerExtLength = bb.get();</span>
+<span class="nc" id="L176">        this.routingType = bb.get();</span>
+<span class="nc" id="L177">        this.segmentsLeft = bb.get();</span>
+<span class="nc" id="L178">        int dataLength =</span>
+                FIXED_ROUTING_DATA_LENGTH + LENGTH_UNIT * this.headerExtLength;
+<span class="nc" id="L180">        this.routingData = new byte[dataLength];</span>
+<span class="nc" id="L181">        bb.get(this.routingData, 0, dataLength);</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(this.nextHeader)) {</span>
+<span class="nc" id="L185">            deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(this.nextHeader);</span>
+        } else {
+<span class="nc" id="L187">            deserializer = new Data().deserializer();</span>
+        }
+        try {
+<span class="nc" id="L190">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L191">                                                    bb.limit() - bb.position());</span>
+<span class="nc" id="L192">            this.payload.setParent(this);</span>
+<span class="nc" id="L193">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L194">            return this;</span>
+<span class="nc" id="L195">        }</span>
+
+<span class="nc" id="L197">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L207">        final int prime = 5807;</span>
+<span class="nc" id="L208">        int result = super.hashCode();</span>
+<span class="nc" id="L209">        result = prime * result + this.nextHeader;</span>
+<span class="nc" id="L210">        result = prime * result + this.headerExtLength;</span>
+<span class="nc" id="L211">        result = prime * result + this.routingType;</span>
+<span class="nc" id="L212">        result = prime * result + this.segmentsLeft;</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        for (byte b : this.routingData) {</span>
+<span class="nc" id="L214">            result = prime * result + b;</span>
+        }
+<span class="nc" id="L216">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L226" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L227">            return true;</span>
+        }
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L230">            return false;</span>
+        }
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if (!(obj instanceof Routing)) {</span>
+<span class="nc" id="L233">            return false;</span>
+        }
+<span class="fc" id="L235">        final Routing other = (Routing) obj;</span>
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">        if (this.nextHeader != other.nextHeader) {</span>
+<span class="nc" id="L237">            return false;</span>
+        }
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">        if (this.headerExtLength != other.headerExtLength) {</span>
+<span class="nc" id="L240">            return false;</span>
+        }
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">        if (this.routingType != other.routingType) {</span>
+<span class="nc" id="L243">            return false;</span>
+        }
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">        if (this.segmentsLeft != other.segmentsLeft) {</span>
+<span class="fc" id="L246">            return false;</span>
+        }
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (!Arrays.equals(this.routingData, other.routingData)) {</span>
+<span class="nc" id="L249">            return false;</span>
+        }
+<span class="nc" id="L251">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for routing headers.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;Routing&gt; deserializer() {
+<span class="fc" id="L260">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L261">            checkInput(data, offset, length, FIXED_HEADER_LENGTH);</span>
+
+<span class="fc" id="L263">            Routing routing = new Routing();</span>
+
+<span class="fc" id="L265">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L266">            routing.nextHeader = bb.get();</span>
+<span class="fc" id="L267">            routing.headerExtLength = bb.get();</span>
+<span class="fc" id="L268">            routing.routingType = bb.get();</span>
+<span class="fc" id="L269">            routing.segmentsLeft = bb.get();</span>
+<span class="fc" id="L270">            int dataLength =</span>
+                    FIXED_ROUTING_DATA_LENGTH + LENGTH_UNIT * routing.headerExtLength;
+
+<span class="fc" id="L273">            checkHeaderLength(bb.remaining(), dataLength);</span>
+
+<span class="fc" id="L275">            routing.routingData = new byte[dataLength];</span>
+<span class="fc" id="L276">            bb.get(routing.routingData, 0, dataLength);</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L279" title="1 of 2 branches missed.">            if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(routing.nextHeader)) {</span>
+<span class="fc" id="L280">                deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(routing.nextHeader);</span>
+            } else {
+<span class="nc" id="L282">                deserializer = new Data().deserializer();</span>
+            }
+<span class="fc" id="L284">            routing.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L285">                                               bb.limit() - bb.position());</span>
+<span class="fc" id="L286">            routing.payload.setParent(routing);</span>
+
+<span class="fc" id="L288">            return routing;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

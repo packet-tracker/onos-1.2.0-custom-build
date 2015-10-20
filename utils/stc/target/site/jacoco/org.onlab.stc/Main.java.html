@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Main.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-stc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.stc</a> &gt; <span class="el_source">Main.java</span></div><h1>Main.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.stc;
+
+import com.google.common.collect.ImmutableList;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.servlet.ServletHandler;
+import org.eclipse.jetty.util.log.Logger;
+import org.onlab.stc.Coordinator.Status;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+import static java.lang.System.currentTimeMillis;
+import static org.onlab.stc.Coordinator.Status.*;
+import static org.onlab.stc.Coordinator.print;
+
+/**
+ * Main program for executing system test coordinator.
+ */
+public final class Main {
+
+    private static final String NONE = &quot;\u001B[0m&quot;;
+    private static final String GRAY = &quot;\u001B[30;1m&quot;;
+    private static final String RED = &quot;\u001B[31;1m&quot;;
+    private static final String GREEN = &quot;\u001B[32;1m&quot;;
+    private static final String BLUE = &quot;\u001B[36m&quot;;
+
+    private static final String SUCCESS_SUMMARY =
+            &quot;%s %sPassed! %d steps succeeded%s&quot;;
+    private static final String MIXED_SUMMARY =
+            &quot;%s%d steps succeeded; %s%d steps failed; %s%d steps skipped%s&quot;;
+    private static final String FAILURE_SUMMARY = &quot;%s %sFailed! &quot; + MIXED_SUMMARY;
+    private static final String ABORTED_SUMMARY = &quot;%s %sAborted! &quot; + MIXED_SUMMARY;
+
+<span class="nc" id="L54">    private boolean isReported = false;</span>
+
+<span class="nc" id="L56">    private enum Command {</span>
+<span class="nc" id="L57">        LIST, RUN, RUN_RANGE, HELP</span>
+    }
+
+    private final String scenarioFile;
+
+<span class="nc" id="L62">    private Command command = Command.HELP;</span>
+<span class="nc" id="L63">    private String runFromPatterns = &quot;&quot;;</span>
+<span class="nc" id="L64">    private String runToPatterns = &quot;&quot;;</span>
+
+    private Coordinator coordinator;
+    private Monitor monitor;
+<span class="nc" id="L68">    private Listener delegate = new Listener();</span>
+
+<span class="nc" id="L70">    private static boolean useColor = Objects.equals(&quot;true&quot;, System.getenv(&quot;stcColor&quot;));</span>
+
+    // usage: stc [&lt;scenario-file&gt;] [run]
+    // usage: stc [&lt;scenario-file&gt;] run [from &lt;from-patterns&gt;] [to &lt;to-patterns&gt;]]
+    // usage: stc [&lt;scenario-file&gt;] list
+
+    // Public construction forbidden
+<span class="nc" id="L77">    private Main(String[] args) {</span>
+<span class="nc" id="L78">        this.scenarioFile = args[0];</span>
+
+<span class="nc bnc" id="L80" title="All 6 branches missed.">        if (args.length &lt;= 1 || args.length == 2 &amp;&amp; args[1].equals(&quot;run&quot;)) {</span>
+<span class="nc" id="L81">            command = Command.RUN;</span>
+<span class="nc bnc" id="L82" title="All 4 branches missed.">        } else if (args.length == 2 &amp;&amp; args[1].equals(&quot;list&quot;)) {</span>
+<span class="nc" id="L83">            command = Command.LIST;</span>
+<span class="nc bnc" id="L84" title="All 4 branches missed.">        } else if (args.length &gt;= 4 &amp;&amp; args[1].equals(&quot;run&quot;)) {</span>
+<span class="nc" id="L85">            int i = 2;</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            if (args[i].equals(&quot;from&quot;)) {</span>
+<span class="nc" id="L87">                command = Command.RUN_RANGE;</span>
+<span class="nc" id="L88">                runFromPatterns = args[i + 1];</span>
+<span class="nc" id="L89">                i += 2;</span>
+            }
+
+<span class="nc bnc" id="L92" title="All 4 branches missed.">            if (args.length &gt;= i + 2 &amp;&amp; args[i].equals(&quot;to&quot;)) {</span>
+<span class="nc" id="L93">                command = Command.RUN_RANGE;</span>
+<span class="nc" id="L94">                runToPatterns = args[i + 1];</span>
+            }
+        }
+<span class="nc" id="L97">    }</span>
+
+    /**
+     * Main entry point for coordinating test scenario execution.
+     *
+     * @param args command-line arguments
+     */
+    public static void main(String[] args) {
+<span class="nc" id="L105">        Main main = new Main(args);</span>
+<span class="nc" id="L106">        main.run();</span>
+<span class="nc" id="L107">    }</span>
+
+    // Runs the scenario processing
+    private void run() {
+        try {
+            // Load scenario
+<span class="nc" id="L113">            Scenario scenario = Scenario.loadScenario(new FileInputStream(scenarioFile));</span>
+
+            // Elaborate scenario
+<span class="nc" id="L116">            Compiler compiler = new Compiler(scenario);</span>
+<span class="nc" id="L117">            compiler.compile();</span>
+
+            // Setup the process flow coordinator
+<span class="nc" id="L120">            coordinator = new Coordinator(scenario, compiler.processFlow(),</span>
+<span class="nc" id="L121">                                          compiler.logDir());</span>
+<span class="nc" id="L122">            coordinator.addListener(delegate);</span>
+
+            // Prepare the GUI monitor
+<span class="nc" id="L125">            monitor = new Monitor(coordinator, compiler);</span>
+<span class="nc" id="L126">            startMonitorServer(monitor);</span>
+
+            // Execute process flow
+<span class="nc" id="L129">            processCommand();</span>
+
+<span class="nc" id="L131">        } catch (FileNotFoundException e) {</span>
+<span class="nc" id="L132">            print(&quot;Unable to find scenario file %s&quot;, scenarioFile);</span>
+<span class="nc" id="L133">        }</span>
+<span class="nc" id="L134">    }</span>
+
+    // Initiates a web-server for the monitor GUI.
+    private static void startMonitorServer(Monitor monitor) {
+<span class="nc" id="L138">        org.eclipse.jetty.util.log.Log.setLog(new NullLogger());</span>
+<span class="nc" id="L139">        Server server = new Server(9999);</span>
+<span class="nc" id="L140">        ServletHandler handler = new ServletHandler();</span>
+<span class="nc" id="L141">        server.setHandler(handler);</span>
+<span class="nc" id="L142">        MonitorWebSocketServlet.setMonitor(monitor);</span>
+<span class="nc" id="L143">        handler.addServletWithMapping(MonitorWebSocketServlet.class, &quot;/*&quot;);</span>
+        try {
+<span class="nc" id="L145">            server.start();</span>
+<span class="nc" id="L146">        } catch (Exception e) {</span>
+<span class="nc" id="L147">            e.printStackTrace();</span>
+<span class="nc" id="L148">        }</span>
+<span class="nc" id="L149">    }</span>
+
+    // Processes the appropriate command
+    private void processCommand() {
+<span class="nc bnc" id="L153" title="All 4 branches missed.">        switch (command) {</span>
+            case RUN:
+<span class="nc" id="L155">                processRun();</span>
+<span class="nc" id="L156">                break;</span>
+            case LIST:
+<span class="nc" id="L158">                processList();</span>
+<span class="nc" id="L159">                break;</span>
+            case RUN_RANGE:
+<span class="nc" id="L161">                processRunRange();</span>
+<span class="nc" id="L162">                break;</span>
+            default:
+<span class="nc" id="L164">                print(&quot;Unsupported command %s&quot;, command);</span>
+        }
+<span class="nc" id="L166">    }</span>
+
+    // Processes the scenario 'run' command.
+    private void processRun() {
+<span class="nc" id="L170">        coordinator.reset();</span>
+<span class="nc" id="L171">        runCoordinator();</span>
+<span class="nc" id="L172">    }</span>
+
+    // Processes the scenario 'run' command for range of steps.
+    private void processRunRange() {
+<span class="nc" id="L176">        coordinator.reset(list(runFromPatterns), list(runToPatterns));</span>
+<span class="nc" id="L177">        runCoordinator();</span>
+<span class="nc" id="L178">    }</span>
+
+    // Processes the scenario 'list' command.
+    private void processList() {
+<span class="nc" id="L182">        coordinator.getRecords()</span>
+<span class="nc" id="L183">                .forEach(event -&gt; logStatus(event.time(), event.name(), event.status(), event.command()));</span>
+<span class="nc" id="L184">        printSummary(0, false);</span>
+<span class="nc" id="L185">        System.exit(0);</span>
+<span class="nc" id="L186">    }</span>
+
+    // Runs the coordinator and waits for it to finish.
+    private void runCoordinator() {
+        try {
+<span class="nc" id="L191">            Runtime.getRuntime().addShutdownHook(new ShutdownHook());</span>
+<span class="nc" id="L192">            coordinator.start();</span>
+<span class="nc" id="L193">            int exitCode = coordinator.waitFor();</span>
+<span class="nc" id="L194">            pause(100); // allow stdout to flush</span>
+<span class="nc" id="L195">            printSummary(exitCode, false);</span>
+<span class="nc" id="L196">            System.exit(exitCode);</span>
+<span class="nc" id="L197">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L198">            print(&quot;Unable to execute scenario %s&quot;, scenarioFile);</span>
+<span class="nc" id="L199">        }</span>
+<span class="nc" id="L200">    }</span>
+
+    private synchronized void printSummary(int exitCode, boolean isAborted) {
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (!isReported) {</span>
+<span class="nc" id="L204">            isReported = true;</span>
+<span class="nc" id="L205">            Set&lt;Step&gt; steps = coordinator.getSteps();</span>
+<span class="nc" id="L206">            String duration = formatDuration((int) (coordinator.duration() / 1_000));</span>
+<span class="nc" id="L207">            int count = steps.size();</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">            if (exitCode == 0) {</span>
+<span class="nc" id="L209">                print(SUCCESS_SUMMARY, duration, color(SUCCEEDED), count, color(null));</span>
+            } else {
+<span class="nc bnc" id="L211" title="All 2 branches missed.">                long success = steps.stream().filter(s -&gt; coordinator.getStatus(s) == SUCCEEDED).count();</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                long failed = steps.stream().filter(s -&gt; coordinator.getStatus(s) == FAILED).count();</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">                long skipped = steps.stream().filter(s -&gt; coordinator.getStatus(s) == SKIPPED).count();</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                print(isAborted ? ABORTED_SUMMARY : FAILURE_SUMMARY, duration,</span>
+<span class="nc" id="L215">                      color(FAILED), color(SUCCEEDED), success,</span>
+<span class="nc" id="L216">                      color(FAILED), failed, color(SKIPPED), skipped, color(null));</span>
+            }
+        }
+<span class="nc" id="L219">    }</span>
+
+    /**
+     * Internal delegate to monitor the process execution.
+     */
+<span class="nc" id="L224">    private static class Listener implements StepProcessListener {</span>
+        @Override
+        public void onStart(Step step, String command) {
+<span class="nc" id="L227">            logStatus(currentTimeMillis(), step.name(), IN_PROGRESS, command);</span>
+<span class="nc" id="L228">        }</span>
+
+        @Override
+        public void onCompletion(Step step, Status status) {
+<span class="nc" id="L232">            logStatus(currentTimeMillis(), step.name(), status, null);</span>
+<span class="nc" id="L233">        }</span>
+
+        @Override
+        public void onOutput(Step step, String line) {
+<span class="nc" id="L237">        }</span>
+    }
+
+    // Logs the step status.
+    private static void logStatus(long time, String name, Status status, String cmd) {
+<span class="nc bnc" id="L242" title="All 2 branches missed.">        if (cmd != null) {</span>
+<span class="nc" id="L243">            print(&quot;%s  %s%s %s%s -- %s&quot;, time(time), color(status), name, action(status), color(null), cmd);</span>
+        } else {
+<span class="nc" id="L245">            print(&quot;%s  %s%s %s%s&quot;, time(time), color(status), name, action(status), color(null));</span>
+        }
+<span class="nc" id="L247">    }</span>
+
+    // Produces a description of event using the specified step status.
+    private static String action(Status status) {
+<span class="nc bnc" id="L251" title="All 8 branches missed.">        return status == IN_PROGRESS ? &quot;started&quot; :</span>
+                (status == SUCCEEDED ? &quot;completed&quot; :
+                        (status == FAILED ? &quot;failed&quot; :
+                                (status == SKIPPED ? &quot;skipped&quot; : &quot;waiting&quot;)));
+    }
+
+    // Produces an ANSI escape code for color using the specified step status.
+    private static String color(Status status) {
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (!useColor) {</span>
+<span class="nc" id="L260">            return &quot;&quot;;</span>
+        }
+<span class="nc bnc" id="L262" title="All 8 branches missed.">        return status == null ? NONE :</span>
+                (status == IN_PROGRESS ? BLUE :
+                        (status == SUCCEEDED ? GREEN :
+                                (status == FAILED ? RED : GRAY)));
+    }
+
+    // Produces a list from the specified comma-separated string.
+    private static List&lt;String&gt; list(String patterns) {
+<span class="nc" id="L270">        return ImmutableList.copyOf(patterns.split(&quot;,&quot;));</span>
+    }
+
+    // Produces a formatted time stamp.
+    private static String time(long time) {
+<span class="nc" id="L275">        return new SimpleDateFormat(&quot;YYYY-MM-dd HH:mm:ss&quot;).format(new Date(time));</span>
+    }
+
+    // Pauses for the specified number of millis.
+    private static void pause(int ms) {
+        try {
+<span class="nc" id="L281">            Thread.sleep(ms);</span>
+<span class="nc" id="L282">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L283">            print(&quot;Interrupted!&quot;);</span>
+<span class="nc" id="L284">        }</span>
+<span class="nc" id="L285">    }</span>
+
+    // Formats time duration
+    private static String formatDuration(int totalSeconds) {
+<span class="nc" id="L289">        int seconds = totalSeconds % 60;</span>
+<span class="nc" id="L290">        int totalMinutes = totalSeconds / 60;</span>
+<span class="nc" id="L291">        int minutes = totalMinutes % 60;</span>
+<span class="nc" id="L292">        int hours = totalMinutes / 60;</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">        return hours &gt; 0 ?</span>
+<span class="nc" id="L294">                String.format(&quot;%d:%02d:%02d&quot;, hours, minutes, seconds) :</span>
+<span class="nc" id="L295">                String.format(&quot;%d:%02d&quot;, minutes, seconds);</span>
+    }
+
+    // Shutdown hook to report status even when aborted.
+<span class="nc" id="L299">    private class ShutdownHook extends Thread {</span>
+        @Override
+        public void run() {
+<span class="nc" id="L302">            printSummary(1, true);</span>
+<span class="nc" id="L303">        }</span>
+    }
+
+    // Logger to quiet Jetty down
+<span class="nc" id="L307">    private static class NullLogger implements Logger {</span>
+        @Override
+        public String getName() {
+<span class="nc" id="L310">            return &quot;quiet&quot;;</span>
+        }
+
+        @Override
+        public void warn(String msg, Object... args) {
+<span class="nc" id="L315">        }</span>
+
+        @Override
+        public void warn(Throwable thrown) {
+<span class="nc" id="L319">        }</span>
+
+        @Override
+        public void warn(String msg, Throwable thrown) {
+<span class="nc" id="L323">        }</span>
+
+        @Override
+        public void info(String msg, Object... args) {
+<span class="nc" id="L327">        }</span>
+
+        @Override
+        public void info(Throwable thrown) {
+<span class="nc" id="L331">        }</span>
+
+        @Override
+        public void info(String msg, Throwable thrown) {
+<span class="nc" id="L335">        }</span>
+
+        @Override
+        public boolean isDebugEnabled() {
+<span class="nc" id="L339">            return false;</span>
+        }
+
+        @Override
+        public void setDebugEnabled(boolean enabled) {
+<span class="nc" id="L344">        }</span>
+
+        @Override
+        public void debug(String msg, Object... args) {
+<span class="nc" id="L348">        }</span>
+
+        @Override
+        public void debug(Throwable thrown) {
+<span class="nc" id="L352">        }</span>
+
+        @Override
+        public void debug(String msg, Throwable thrown) {
+<span class="nc" id="L356">        }</span>
+
+        @Override
+        public Logger getLogger(String name) {
+<span class="nc" id="L360">            return this;</span>
+        }
+
+        @Override
+        public void ignore(Throwable ignored) {
+<span class="nc" id="L365">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

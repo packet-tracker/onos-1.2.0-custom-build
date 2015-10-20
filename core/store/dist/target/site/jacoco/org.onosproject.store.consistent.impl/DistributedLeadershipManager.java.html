@@ -1,0 +1,606 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedLeadershipManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">DistributedLeadershipManager.java</span></div><h1>DistributedLeadershipManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.consistent.impl;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.MapDifference;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
+import org.apache.commons.lang.math.RandomUtils;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cluster.ClusterEvent;
+import org.onosproject.cluster.ClusterEvent.Type;
+import org.onosproject.cluster.ClusterEventListener;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.Leadership;
+import org.onosproject.cluster.LeadershipEvent;
+import org.onosproject.cluster.LeadershipEventListener;
+import org.onosproject.cluster.LeadershipService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.event.ListenerRegistry;
+import org.onosproject.event.EventDeliveryService;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.ConsistentMapException;
+import org.onosproject.store.service.MapEvent;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.cluster.ControllerNode.State.ACTIVE;
+import static org.onosproject.cluster.ControllerNode.State.INACTIVE;
+
+/**
+ * Distributed Lock Manager implemented on top of ConsistentMap.
+ * &lt;p&gt;
+ * This implementation makes use of ClusterService's failure
+ * detection capabilities to detect and purge stale locks.
+ * TODO: Ensure lock safety and liveness.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L84">public class DistributedLeadershipManager implements LeadershipService {</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected EventDeliveryService eventDispatcher;
+
+<span class="nc" id="L98">    private final Logger log = getLogger(getClass());</span>
+    private ScheduledExecutorService electionRunner;
+    private ScheduledExecutorService lockExecutor;
+    private ScheduledExecutorService staleLeadershipPurgeExecutor;
+    private ScheduledExecutorService leadershipRefresher;
+
+    private ConsistentMap&lt;String, NodeId&gt; leaderMap;
+    private ConsistentMap&lt;String, List&lt;NodeId&gt;&gt; candidateMap;
+
+    private ListenerRegistry&lt;LeadershipEvent, LeadershipEventListener&gt; listenerRegistry;
+<span class="nc" id="L108">    private final Map&lt;String, Leadership&gt; leaderBoard = Maps.newConcurrentMap();</span>
+<span class="nc" id="L109">    private final Map&lt;String, Leadership&gt; candidateBoard = Maps.newConcurrentMap();</span>
+<span class="nc" id="L110">    private final ClusterEventListener clusterEventListener = new InternalClusterEventListener();</span>
+
+    private NodeId localNodeId;
+<span class="nc" id="L113">    private Set&lt;String&gt; activeTopics = Sets.newConcurrentHashSet();</span>
+<span class="nc" id="L114">    private Map&lt;String, CompletableFuture&lt;Leadership&gt;&gt; pendingFutures = Maps.newConcurrentMap();</span>
+
+    // The actual delay is randomly chosen from the interval [0, WAIT_BEFORE_RETRY_MILLIS)
+    private static final int WAIT_BEFORE_RETRY_MILLIS = 150;
+    private static final int DELAY_BETWEEN_LEADER_LOCK_ATTEMPTS_SEC = 2;
+    private static final int LEADERSHIP_REFRESH_INTERVAL_SEC = 2;
+    private static final int DELAY_BETWEEN_STALE_LEADERSHIP_PURGE_ATTEMPTS_SEC = 2;
+
+<span class="nc" id="L122">    private final AtomicBoolean staleLeadershipPurgeScheduled = new AtomicBoolean(false);</span>
+
+<span class="nc" id="L124">    private static final Serializer SERIALIZER = Serializer.using(KryoNamespaces.API);</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L128">        leaderMap = storageService.&lt;String, NodeId&gt;consistentMapBuilder()</span>
+<span class="nc" id="L129">                .withName(&quot;onos-topic-leaders&quot;)</span>
+<span class="nc" id="L130">                .withSerializer(SERIALIZER)</span>
+<span class="nc" id="L131">                .withPartitionsDisabled().build();</span>
+<span class="nc" id="L132">        candidateMap = storageService.&lt;String, List&lt;NodeId&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L133">                .withName(&quot;onos-topic-candidates&quot;)</span>
+<span class="nc" id="L134">                .withSerializer(SERIALIZER)</span>
+<span class="nc" id="L135">                .withPartitionsDisabled().build();</span>
+
+<span class="nc" id="L137">        leaderMap.addListener(event -&gt; {</span>
+<span class="nc" id="L138">            log.debug(&quot;Received {}&quot;, event);</span>
+<span class="nc" id="L139">            LeadershipEvent.Type leadershipEventType = null;</span>
+<span class="nc bnc" id="L140" title="All 4 branches missed.">            if (event.type() == MapEvent.Type.INSERT || event.type() == MapEvent.Type.UPDATE) {</span>
+<span class="nc" id="L141">                leadershipEventType = LeadershipEvent.Type.LEADER_ELECTED;</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            } else if (event.type() == MapEvent.Type.REMOVE) {</span>
+<span class="nc" id="L143">                leadershipEventType = LeadershipEvent.Type.LEADER_BOOTED;</span>
+            }
+<span class="nc" id="L145">            onLeadershipEvent(new LeadershipEvent(</span>
+                    leadershipEventType,
+<span class="nc" id="L147">                    new Leadership(event.key(),</span>
+<span class="nc" id="L148">                            event.value().value(),</span>
+<span class="nc" id="L149">                            event.value().version(),</span>
+<span class="nc" id="L150">                            event.value().creationTime())));</span>
+<span class="nc" id="L151">        });</span>
+
+<span class="nc" id="L153">        candidateMap.addListener(event -&gt; {</span>
+<span class="nc" id="L154">            log.debug(&quot;Received {}&quot;, event);</span>
+<span class="nc bnc" id="L155" title="All 4 branches missed.">            if (event.type() != MapEvent.Type.INSERT &amp;&amp; event.type() != MapEvent.Type.UPDATE) {</span>
+<span class="nc" id="L156">                log.error(&quot;Entries must not be removed from candidate map&quot;);</span>
+<span class="nc" id="L157">                return;</span>
+            }
+<span class="nc" id="L159">            onLeadershipEvent(new LeadershipEvent(</span>
+                    LeadershipEvent.Type.CANDIDATES_CHANGED,
+<span class="nc" id="L161">                    new Leadership(event.key(),</span>
+<span class="nc" id="L162">                            event.value().value(),</span>
+<span class="nc" id="L163">                            event.value().version(),</span>
+<span class="nc" id="L164">                            event.value().creationTime())));</span>
+<span class="nc" id="L165">        });</span>
+
+<span class="nc" id="L167">        localNodeId = clusterService.getLocalNode().id();</span>
+
+<span class="nc" id="L169">        electionRunner = Executors.newSingleThreadScheduledExecutor(</span>
+<span class="nc" id="L170">                groupedThreads(&quot;onos/store/leadership&quot;, &quot;election-runner&quot;));</span>
+<span class="nc" id="L171">        lockExecutor = Executors.newScheduledThreadPool(</span>
+<span class="nc" id="L172">                4, groupedThreads(&quot;onos/store/leadership&quot;, &quot;election-thread-%d&quot;));</span>
+<span class="nc" id="L173">        staleLeadershipPurgeExecutor = Executors.newSingleThreadScheduledExecutor(</span>
+<span class="nc" id="L174">                groupedThreads(&quot;onos/store/leadership&quot;, &quot;stale-leadership-evictor&quot;));</span>
+<span class="nc" id="L175">        leadershipRefresher = Executors.newSingleThreadScheduledExecutor(</span>
+<span class="nc" id="L176">                groupedThreads(&quot;onos/store/leadership&quot;, &quot;refresh-thread&quot;));</span>
+
+<span class="nc" id="L178">        clusterService.addListener(clusterEventListener);</span>
+
+<span class="nc" id="L180">        electionRunner.scheduleWithFixedDelay(</span>
+                this::electLeaders, 0, DELAY_BETWEEN_LEADER_LOCK_ATTEMPTS_SEC, TimeUnit.SECONDS);
+
+<span class="nc" id="L183">        leadershipRefresher.scheduleWithFixedDelay(</span>
+                this::refreshLeaderBoard, 0, LEADERSHIP_REFRESH_INTERVAL_SEC, TimeUnit.SECONDS);
+
+<span class="nc" id="L186">        listenerRegistry = new ListenerRegistry&lt;&gt;();</span>
+<span class="nc" id="L187">        eventDispatcher.addSink(LeadershipEvent.class, listenerRegistry);</span>
+
+<span class="nc" id="L189">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L190">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (clusterService.getNodes().size() &gt; 1) {</span>
+            // FIXME: Determine why this takes ~50 seconds to shutdown on a single node!
+<span class="nc" id="L196">            leaderBoard.forEach((topic, leadership) -&gt; {</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                if (localNodeId.equals(leadership.leader())) {</span>
+<span class="nc" id="L198">                    withdraw(topic);</span>
+                }
+<span class="nc" id="L200">            });</span>
+        }
+
+<span class="nc" id="L203">        clusterService.removeListener(clusterEventListener);</span>
+<span class="nc" id="L204">        eventDispatcher.removeSink(LeadershipEvent.class);</span>
+
+<span class="nc" id="L206">        electionRunner.shutdown();</span>
+<span class="nc" id="L207">        lockExecutor.shutdown();</span>
+<span class="nc" id="L208">        staleLeadershipPurgeExecutor.shutdown();</span>
+<span class="nc" id="L209">        leadershipRefresher.shutdown();</span>
+
+<span class="nc" id="L211">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L212">    }</span>
+
+    @Override
+    public Map&lt;String, Leadership&gt; getLeaderBoard() {
+<span class="nc" id="L216">        return ImmutableMap.copyOf(leaderBoard);</span>
+    }
+
+    @Override
+    public Map&lt;String, List&lt;NodeId&gt;&gt; getCandidates() {
+<span class="nc" id="L221">        return Maps.toMap(candidateBoard.keySet(), this::getCandidates);</span>
+    }
+
+    @Override
+    public List&lt;NodeId&gt; getCandidates(String path) {
+<span class="nc" id="L226">        Leadership current = candidateBoard.get(path);</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        return current == null ? ImmutableList.of() : ImmutableList.copyOf(current.candidates());</span>
+    }
+
+    @Override
+    public NodeId getLeader(String path) {
+<span class="nc" id="L232">        Leadership leadership = leaderBoard.get(path);</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">        return leadership != null ? leadership.leader() : null;</span>
+    }
+
+    @Override
+    public Leadership getLeadership(String path) {
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        checkArgument(path != null);</span>
+<span class="nc" id="L239">        return leaderBoard.get(path);</span>
+    }
+
+    @Override
+    public Set&lt;String&gt; ownedTopics(NodeId nodeId) {
+<span class="nc bnc" id="L244" title="All 2 branches missed.">        checkArgument(nodeId != null);</span>
+<span class="nc" id="L245">        return leaderBoard.entrySet()</span>
+<span class="nc" id="L246">                    .stream()</span>
+<span class="nc" id="L247">                    .filter(entry -&gt; nodeId.equals(entry.getValue().leader()))</span>
+<span class="nc" id="L248">                    .map(Entry::getKey)</span>
+<span class="nc" id="L249">                    .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Leadership&gt; runForLeadership(String path) {
+<span class="nc" id="L254">        log.debug(&quot;Running for leadership for topic: {}&quot;, path);</span>
+<span class="nc" id="L255">        CompletableFuture&lt;Leadership&gt; resultFuture = new CompletableFuture&lt;&gt;();</span>
+<span class="nc" id="L256">        doRunForLeadership(path, resultFuture);</span>
+<span class="nc" id="L257">        return resultFuture;</span>
+    }
+
+    private void doRunForLeadership(String path, CompletableFuture&lt;Leadership&gt; future) {
+        try {
+<span class="nc" id="L262">            Versioned&lt;List&lt;NodeId&gt;&gt; candidates = candidateMap.computeIf(path,</span>
+<span class="nc bnc" id="L263" title="All 4 branches missed.">                    currentList -&gt; currentList == null || !currentList.contains(localNodeId),</span>
+                    (topic, currentList) -&gt; {
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                        if (currentList == null) {</span>
+<span class="nc" id="L266">                            return ImmutableList.of(localNodeId);</span>
+                        } else {
+<span class="nc" id="L268">                            List&lt;NodeId&gt; newList = Lists.newLinkedList();</span>
+<span class="nc" id="L269">                            newList.addAll(currentList);</span>
+<span class="nc" id="L270">                            newList.add(localNodeId);</span>
+<span class="nc" id="L271">                            return newList;</span>
+                        }
+                    });
+<span class="nc" id="L274">            log.debug(&quot;In the leadership race for topic {} with candidates {}&quot;, path, candidates);</span>
+<span class="nc" id="L275">            activeTopics.add(path);</span>
+<span class="nc" id="L276">            Leadership leadership = electLeader(path, candidates.value());</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">            if (leadership == null) {</span>
+<span class="nc" id="L278">                pendingFutures.put(path, future);</span>
+            } else {
+<span class="nc" id="L280">                future.complete(leadership);</span>
+            }
+<span class="nc" id="L282">        } catch (ConsistentMapException e) {</span>
+<span class="nc" id="L283">            log.debug(&quot;Failed to enter topic leader race for {}. Retrying.&quot;, path, e);</span>
+<span class="nc" id="L284">            rerunForLeadership(path, future);</span>
+<span class="nc" id="L285">        }</span>
+<span class="nc" id="L286">    }</span>
+
+    @Override
+    public CompletableFuture&lt;Void&gt; withdraw(String path) {
+<span class="nc" id="L290">        activeTopics.remove(path);</span>
+<span class="nc" id="L291">        CompletableFuture&lt;Void&gt; resultFuture = new CompletableFuture&lt;&gt;();</span>
+<span class="nc" id="L292">        doWithdraw(path, resultFuture);</span>
+<span class="nc" id="L293">        return resultFuture;</span>
+    }
+
+
+    private void doWithdraw(String path, CompletableFuture&lt;Void&gt; future) {
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        if (activeTopics.contains(path)) {</span>
+<span class="nc" id="L299">            future.completeExceptionally(new CancellationException(String.format(&quot;%s is now a active topic&quot;, path)));</span>
+        }
+        try {
+<span class="nc" id="L302">            leaderMap.computeIf(path,</span>
+                                localNodeId::equals,
+<span class="nc" id="L304">                                (topic, leader) -&gt; null);</span>
+<span class="nc" id="L305">            candidateMap.computeIf(path,</span>
+<span class="nc bnc" id="L306" title="All 4 branches missed.">                                   candidates -&gt; candidates != null &amp;&amp; candidates.contains(localNodeId),</span>
+<span class="nc" id="L307">                                   (topic, candidates) -&gt; candidates.stream()</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">                                                                    .filter(nodeId -&gt; !localNodeId.equals(nodeId))</span>
+<span class="nc" id="L309">                                                                    .collect(Collectors.toList()));</span>
+<span class="nc" id="L310">            future.complete(null);</span>
+<span class="nc" id="L311">        } catch (Exception e) {</span>
+<span class="nc" id="L312">            log.debug(&quot;Failed to verify (and clear) any lock this node might be holding for {}&quot;, path, e);</span>
+<span class="nc" id="L313">            retryWithdraw(path, future);</span>
+<span class="nc" id="L314">        }</span>
+<span class="nc" id="L315">    }</span>
+
+    @Override
+    public boolean stepdown(String path) {
+<span class="nc bnc" id="L319" title="All 4 branches missed.">        if (!activeTopics.contains(path) || !Objects.equals(localNodeId, getLeader(path))) {</span>
+<span class="nc" id="L320">            return false;</span>
+        }
+
+        try {
+<span class="nc bnc" id="L324" title="All 2 branches missed.">            return leaderMap.computeIf(path,</span>
+                                       localNodeId::equals,
+<span class="nc" id="L326">                                       (topic, leader) -&gt; null) == null;</span>
+<span class="nc" id="L327">        } catch (Exception e) {</span>
+<span class="nc" id="L328">            log.warn(&quot;Error executing stepdown for {}&quot;, path, e);</span>
+        }
+<span class="nc" id="L330">        return false;</span>
+    }
+
+    @Override
+    public void addListener(LeadershipEventListener listener) {
+<span class="nc" id="L335">        listenerRegistry.addListener(listener);</span>
+<span class="nc" id="L336">    }</span>
+
+    @Override
+    public void removeListener(LeadershipEventListener listener) {
+<span class="nc" id="L340">        listenerRegistry.removeListener(listener);</span>
+<span class="nc" id="L341">    }</span>
+
+    @Override
+    public boolean makeTopCandidate(String path, NodeId nodeId) {
+<span class="nc" id="L345">        Versioned&lt;List&lt;NodeId&gt;&gt; candidateList = candidateMap.computeIf(path,</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">                candidates -&gt; candidates != null &amp;&amp;</span>
+<span class="nc bnc" id="L347" title="All 2 branches missed.">                              candidates.contains(nodeId) &amp;&amp;</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">                              !nodeId.equals(Iterables.getFirst(candidates, null)),</span>
+                (topic, candidates) -&gt; {
+<span class="nc" id="L350">                    List&lt;NodeId&gt; updatedCandidates = new ArrayList&lt;&gt;(candidates.size());</span>
+<span class="nc" id="L351">                    updatedCandidates.add(nodeId);</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">                    candidates.stream().filter(id -&gt; !nodeId.equals(id)).forEach(updatedCandidates::add);</span>
+<span class="nc" id="L353">                    return updatedCandidates;</span>
+                });
+<span class="nc bnc" id="L355" title="All 2 branches missed.">        List&lt;NodeId&gt; candidates = candidateList != null ? candidateList.value() : Collections.emptyList();</span>
+<span class="nc bnc" id="L356" title="All 4 branches missed.">        return candidates.size() &gt; 0 &amp;&amp; nodeId.equals(candidates.get(0));</span>
+    }
+
+    private Leadership electLeader(String path, List&lt;NodeId&gt; candidates) {
+<span class="nc" id="L360">        Leadership currentLeadership = getLeadership(path);</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (currentLeadership != null) {</span>
+<span class="nc" id="L362">            return currentLeadership;</span>
+        } else {
+<span class="nc" id="L364">            NodeId topCandidate = candidates</span>
+<span class="nc" id="L365">                        .stream()</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">                        .filter(n -&gt; clusterService.getState(n) == ACTIVE)</span>
+<span class="nc" id="L367">                        .findFirst()</span>
+<span class="nc" id="L368">                        .orElse(null);</span>
+            try {
+<span class="nc bnc" id="L370" title="All 2 branches missed.">                Versioned&lt;NodeId&gt; leader = localNodeId.equals(topCandidate)</span>
+<span class="nc" id="L371">                        ? leaderMap.computeIfAbsent(path, p -&gt; localNodeId) : leaderMap.get(path);</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">                if (leader != null) {</span>
+<span class="nc" id="L373">                    Leadership newLeadership = new Leadership(path,</span>
+<span class="nc" id="L374">                            leader.value(),</span>
+<span class="nc" id="L375">                            leader.version(),</span>
+<span class="nc" id="L376">                            leader.creationTime());</span>
+                    // Since reads only go through the local copy of leader board, we ought to update it
+                    // first before returning from this method.
+                    // This is to ensure a subsequent read will not read a stale value.
+<span class="nc" id="L380">                    onLeadershipEvent(new LeadershipEvent(LeadershipEvent.Type.LEADER_ELECTED, newLeadership));</span>
+<span class="nc" id="L381">                    return newLeadership;</span>
+                }
+<span class="nc" id="L383">            } catch (Exception e) {</span>
+<span class="nc" id="L384">                log.debug(&quot;Failed to elect leader for {}&quot;, path, e);</span>
+<span class="nc" id="L385">            }</span>
+        }
+<span class="nc" id="L387">        return null;</span>
+    }
+
+    private void electLeaders() {
+        try {
+<span class="nc" id="L392">            candidateMap.entrySet().forEach(entry -&gt; {</span>
+<span class="nc" id="L393">                String path = entry.getKey();</span>
+<span class="nc" id="L394">                Versioned&lt;List&lt;NodeId&gt;&gt; candidates = entry.getValue();</span>
+                // for active topics, check if this node can become a leader (if it isn't already)
+<span class="nc bnc" id="L396" title="All 2 branches missed.">                if (activeTopics.contains(path)) {</span>
+<span class="nc" id="L397">                    lockExecutor.submit(() -&gt; {</span>
+<span class="nc" id="L398">                        Leadership leadership = electLeader(path, candidates.value());</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">                        if (leadership != null) {</span>
+<span class="nc" id="L400">                            CompletableFuture&lt;Leadership&gt; future = pendingFutures.remove(path);</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">                            if (future != null) {</span>
+<span class="nc" id="L402">                                future.complete(leadership);</span>
+                            }
+                        }
+<span class="nc" id="L405">                    });</span>
+                }
+                // Raise a CANDIDATES_CHANGED event to force refresh local candidate board
+                // and also to update local listeners.
+                // Don't worry about duplicate events as they will be suppressed.
+<span class="nc" id="L410">                onLeadershipEvent(new LeadershipEvent(LeadershipEvent.Type.CANDIDATES_CHANGED,</span>
+                                                      new Leadership(path,
+<span class="nc" id="L412">                                                                     candidates.value(),</span>
+<span class="nc" id="L413">                                                                     candidates.version(),</span>
+<span class="nc" id="L414">                                                                     candidates.creationTime())));</span>
+<span class="nc" id="L415">            });</span>
+<span class="nc" id="L416">        } catch (Exception e) {</span>
+<span class="nc" id="L417">            log.debug(&quot;Failure electing leaders&quot;, e);</span>
+<span class="nc" id="L418">        }</span>
+<span class="nc" id="L419">    }</span>
+
+    private void onLeadershipEvent(LeadershipEvent leadershipEvent) {
+<span class="nc" id="L422">        log.trace(&quot;Leadership Event: time = {} type = {} event = {}&quot;,</span>
+<span class="nc" id="L423">                leadershipEvent.time(), leadershipEvent.type(),</span>
+                leadershipEvent);
+
+<span class="nc" id="L426">        Leadership leadershipUpdate = leadershipEvent.subject();</span>
+<span class="nc" id="L427">        LeadershipEvent.Type eventType = leadershipEvent.type();</span>
+<span class="nc" id="L428">        String topic = leadershipUpdate.topic();</span>
+
+<span class="nc" id="L430">        AtomicBoolean updateAccepted = new AtomicBoolean(false);</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">        if (eventType.equals(LeadershipEvent.Type.LEADER_ELECTED)) {</span>
+<span class="nc" id="L432">            leaderBoard.compute(topic, (k, currentLeadership) -&gt; {</span>
+<span class="nc bnc" id="L433" title="All 4 branches missed.">                if (currentLeadership == null || currentLeadership.epoch() &lt; leadershipUpdate.epoch()) {</span>
+<span class="nc" id="L434">                    updateAccepted.set(true);</span>
+<span class="nc" id="L435">                    return leadershipUpdate;</span>
+                }
+<span class="nc" id="L437">                return currentLeadership;</span>
+            });
+<span class="nc bnc" id="L439" title="All 2 branches missed.">        } else if (eventType.equals(LeadershipEvent.Type.LEADER_BOOTED)) {</span>
+<span class="nc" id="L440">            leaderBoard.compute(topic, (k, currentLeadership) -&gt; {</span>
+<span class="nc bnc" id="L441" title="All 4 branches missed.">                if (currentLeadership == null || currentLeadership.epoch() &lt;= leadershipUpdate.epoch()) {</span>
+<span class="nc" id="L442">                    updateAccepted.set(true);</span>
+                    // FIXME: Removing entries from leaderboard is not safe and should be visited.
+<span class="nc" id="L444">                    return null;</span>
+                }
+<span class="nc" id="L446">                return currentLeadership;</span>
+            });
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        } else if (eventType.equals(LeadershipEvent.Type.CANDIDATES_CHANGED)) {</span>
+<span class="nc" id="L449">            candidateBoard.compute(topic, (k, currentInfo) -&gt; {</span>
+<span class="nc bnc" id="L450" title="All 4 branches missed.">                if (currentInfo == null || currentInfo.epoch() &lt; leadershipUpdate.epoch()) {</span>
+<span class="nc" id="L451">                    updateAccepted.set(true);</span>
+<span class="nc" id="L452">                    return leadershipUpdate;</span>
+                }
+<span class="nc" id="L454">                return currentInfo;</span>
+            });
+        } else {
+<span class="nc" id="L457">            throw new IllegalStateException(&quot;Unknown event type.&quot;);</span>
+        }
+
+<span class="nc bnc" id="L460" title="All 2 branches missed.">        if (updateAccepted.get()) {</span>
+<span class="nc" id="L461">            eventDispatcher.post(leadershipEvent);</span>
+        }
+<span class="nc" id="L463">    }</span>
+
+    private void rerunForLeadership(String path, CompletableFuture&lt;Leadership&gt; future) {
+<span class="nc" id="L466">        lockExecutor.schedule(</span>
+<span class="nc" id="L467">                () -&gt; doRunForLeadership(path, future),</span>
+<span class="nc" id="L468">                RandomUtils.nextInt(WAIT_BEFORE_RETRY_MILLIS),</span>
+                TimeUnit.MILLISECONDS);
+<span class="nc" id="L470">    }</span>
+
+    private void retryWithdraw(String path, CompletableFuture&lt;Void&gt; future) {
+<span class="nc" id="L473">        lockExecutor.schedule(</span>
+<span class="nc" id="L474">                () -&gt; doWithdraw(path, future),</span>
+<span class="nc" id="L475">                RandomUtils.nextInt(WAIT_BEFORE_RETRY_MILLIS),</span>
+                TimeUnit.MILLISECONDS);
+<span class="nc" id="L477">    }</span>
+
+    private void scheduleStaleLeadershipPurge(int afterDelaySec) {
+<span class="nc bnc" id="L480" title="All 2 branches missed.">        if (staleLeadershipPurgeScheduled.compareAndSet(false, true)) {</span>
+<span class="nc" id="L481">            staleLeadershipPurgeExecutor.schedule(</span>
+                    this::purgeStaleLeadership,
+                    afterDelaySec,
+                    TimeUnit.SECONDS);
+        }
+<span class="nc" id="L486">    }</span>
+
+    /**
+     * Purges locks held by inactive nodes and evicts inactive nodes from candidacy.
+     */
+    private void purgeStaleLeadership() {
+<span class="nc" id="L492">        AtomicBoolean rerunPurge = new AtomicBoolean(false);</span>
+        try {
+<span class="nc" id="L494">            staleLeadershipPurgeScheduled.set(false);</span>
+<span class="nc" id="L495">            leaderMap.entrySet()</span>
+<span class="nc" id="L496">                .stream()</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">                .filter(e -&gt; clusterService.getState(e.getValue().value()) == INACTIVE)</span>
+<span class="nc" id="L498">                .forEach(entry -&gt; {</span>
+<span class="nc" id="L499">                    String path = entry.getKey();</span>
+<span class="nc" id="L500">                    NodeId nodeId = entry.getValue().value();</span>
+                    try {
+<span class="nc" id="L502">                        leaderMap.computeIf(path, nodeId::equals, (topic, leader) -&gt; null);</span>
+<span class="nc" id="L503">                    } catch (Exception e) {</span>
+<span class="nc" id="L504">                        log.debug(&quot;Failed to purge stale lock held by {} for {}&quot;, nodeId, path, e);</span>
+<span class="nc" id="L505">                        rerunPurge.set(true);</span>
+<span class="nc" id="L506">                    }</span>
+<span class="nc" id="L507">                });</span>
+
+<span class="nc" id="L509">            candidateMap.entrySet()</span>
+<span class="nc" id="L510">                .forEach(entry -&gt; {</span>
+<span class="nc" id="L511">                    String path = entry.getKey();</span>
+<span class="nc" id="L512">                    Versioned&lt;List&lt;NodeId&gt;&gt; candidates = entry.getValue();</span>
+<span class="nc bnc" id="L513" title="All 2 branches missed.">                    List&lt;NodeId&gt; candidatesList = candidates != null</span>
+<span class="nc" id="L514">                            ? candidates.value() : Collections.emptyList();</span>
+<span class="nc" id="L515">                    List&lt;NodeId&gt; activeCandidatesList =</span>
+<span class="nc" id="L516">                            candidatesList.stream()</span>
+<span class="nc bnc" id="L517" title="All 2 branches missed.">                                          .filter(n -&gt; clusterService.getState(n) == ACTIVE)</span>
+<span class="nc bnc" id="L518" title="All 4 branches missed.">                                          .filter(n -&gt; !localNodeId.equals(n) || activeTopics.contains(path))</span>
+<span class="nc" id="L519">                                          .collect(Collectors.toList());</span>
+<span class="nc bnc" id="L520" title="All 2 branches missed.">                    if (activeCandidatesList.size() &lt; candidatesList.size()) {</span>
+<span class="nc" id="L521">                        Set&lt;NodeId&gt; removedCandidates =</span>
+<span class="nc" id="L522">                                Sets.difference(Sets.newHashSet(candidatesList),</span>
+<span class="nc" id="L523">                                                Sets.newHashSet(activeCandidatesList));</span>
+                        try {
+<span class="nc" id="L525">                            candidateMap.computeIf(path,</span>
+<span class="nc" id="L526">                                        c -&gt; c.stream()</span>
+<span class="nc bnc" id="L527" title="All 2 branches missed.">                                              .filter(n -&gt; clusterService.getState(n) == INACTIVE)</span>
+<span class="nc bnc" id="L528" title="All 2 branches missed.">                                              .count() &gt; 0,</span>
+<span class="nc" id="L529">                                        (topic, c) -&gt; c.stream()</span>
+<span class="nc bnc" id="L530" title="All 2 branches missed.">                                                       .filter(n -&gt; clusterService.getState(n) == ACTIVE)</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">                                                       .filter(n -&gt; !localNodeId.equals(n) ||</span>
+<span class="nc bnc" id="L532" title="All 2 branches missed.">                                                                   activeTopics.contains(path))</span>
+<span class="nc" id="L533">                                                       .collect(Collectors.toList()));</span>
+<span class="nc" id="L534">                        } catch (Exception e) {</span>
+<span class="nc" id="L535">                            log.debug(&quot;Failed to evict inactive candidates {} from &quot;</span>
+                                    + &quot;candidate list for {}&quot;, removedCandidates, path, e);
+<span class="nc" id="L537">                            rerunPurge.set(true);</span>
+<span class="nc" id="L538">                        }</span>
+                    }
+<span class="nc" id="L540">                });</span>
+<span class="nc" id="L541">        } catch (Exception e) {</span>
+<span class="nc" id="L542">            log.debug(&quot;Failure purging state leadership.&quot;, e);</span>
+<span class="nc" id="L543">            rerunPurge.set(true);</span>
+<span class="nc" id="L544">        }</span>
+
+<span class="nc bnc" id="L546" title="All 2 branches missed.">        if (rerunPurge.get()) {</span>
+<span class="nc" id="L547">            log.debug(&quot;Rescheduling stale leadership purge due to errors encountered in previous run&quot;);</span>
+<span class="nc" id="L548">            scheduleStaleLeadershipPurge(DELAY_BETWEEN_STALE_LEADERSHIP_PURGE_ATTEMPTS_SEC);</span>
+        }
+<span class="nc" id="L550">    }</span>
+
+    private void refreshLeaderBoard() {
+        try {
+<span class="nc" id="L554">            Map&lt;String, Leadership&gt; newLeaderBoard = Maps.newHashMap();</span>
+<span class="nc" id="L555">            leaderMap.entrySet().forEach(entry -&gt; {</span>
+<span class="nc" id="L556">                String path = entry.getKey();</span>
+<span class="nc" id="L557">                Versioned&lt;NodeId&gt; leader = entry.getValue();</span>
+<span class="nc" id="L558">                Leadership leadership = new Leadership(path,</span>
+<span class="nc" id="L559">                                                       leader.value(),</span>
+<span class="nc" id="L560">                                                       leader.version(),</span>
+<span class="nc" id="L561">                                                       leader.creationTime());</span>
+<span class="nc" id="L562">                newLeaderBoard.put(path, leadership);</span>
+<span class="nc" id="L563">            });</span>
+
+            // first take snapshot of current leader board.
+<span class="nc" id="L566">            Map&lt;String, Leadership&gt; currentLeaderBoard = ImmutableMap.copyOf(leaderBoard);</span>
+
+<span class="nc" id="L568">            MapDifference&lt;String, Leadership&gt; diff = Maps.difference(currentLeaderBoard, newLeaderBoard);</span>
+
+            // evict stale leaders
+<span class="nc" id="L571">            diff.entriesOnlyOnLeft().forEach((path, leadership) -&gt; {</span>
+<span class="nc" id="L572">                log.debug(&quot;Evicting {} from leaderboard. It is no longer active leader.&quot;, leadership);</span>
+<span class="nc" id="L573">                onLeadershipEvent(new LeadershipEvent(LeadershipEvent.Type.LEADER_BOOTED, leadership));</span>
+<span class="nc" id="L574">            });</span>
+
+            // add missing leaders
+<span class="nc" id="L577">            diff.entriesOnlyOnRight().forEach((path, leadership) -&gt; {</span>
+<span class="nc" id="L578">                log.debug(&quot;Adding {} to leaderboard. It is now the active leader.&quot;, leadership);</span>
+<span class="nc" id="L579">                onLeadershipEvent(new LeadershipEvent(LeadershipEvent.Type.LEADER_ELECTED, leadership));</span>
+<span class="nc" id="L580">            });</span>
+
+            // add updated leaders
+<span class="nc" id="L583">            diff.entriesDiffering().forEach((path, difference) -&gt; {</span>
+<span class="nc" id="L584">                Leadership current = difference.leftValue();</span>
+<span class="nc" id="L585">                Leadership updated = difference.rightValue();</span>
+<span class="nc bnc" id="L586" title="All 2 branches missed.">                if (current.epoch() &lt; updated.epoch()) {</span>
+<span class="nc" id="L587">                    log.debug(&quot;Updated {} in leaderboard.&quot;, updated);</span>
+<span class="nc" id="L588">                    onLeadershipEvent(new LeadershipEvent(LeadershipEvent.Type.LEADER_ELECTED, updated));</span>
+                }
+<span class="nc" id="L590">            });</span>
+<span class="nc" id="L591">        } catch (Exception e) {</span>
+<span class="nc" id="L592">            log.debug(&quot;Failed to refresh leader board&quot;, e);</span>
+<span class="nc" id="L593">        }</span>
+<span class="nc" id="L594">    }</span>
+
+<span class="nc" id="L596">    private class InternalClusterEventListener implements ClusterEventListener {</span>
+
+        @Override
+        public void event(ClusterEvent event) {
+<span class="nc bnc" id="L600" title="All 4 branches missed.">            if (event.type() == Type.INSTANCE_DEACTIVATED || event.type() == Type.INSTANCE_REMOVED) {</span>
+<span class="nc" id="L601">                scheduleStaleLeadershipPurge(0);</span>
+            }
+<span class="nc" id="L603">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentsWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">IntentsWebResource.java</span></div><h1>IntentsWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
+import javax.ws.rs.core.UriInfo;
+
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.intent.HostToHostIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentEvent;
+import org.onosproject.net.intent.IntentListener;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.net.intent.IntentState;
+import org.onosproject.net.intent.Key;
+import org.onosproject.net.intent.PointToPointIntent;
+import org.onosproject.rest.AbstractWebResource;
+import org.slf4j.Logger;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static org.onlab.util.Tools.nullIsNotFound;
+import static org.onosproject.net.intent.IntentState.FAILED;
+import static org.onosproject.net.intent.IntentState.WITHDRAWN;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Query, submit and withdraw network intents.
+ */
+@Path(&quot;intents&quot;)
+<span class="fc" id="L61">public class IntentsWebResource extends AbstractWebResource {</span>
+    @Context
+    UriInfo uriInfo;
+
+<span class="fc" id="L65">    private static final Logger log = getLogger(IntentsWebResource.class);</span>
+    private static final int WITHDRAW_EVENT_TIMEOUT_SECONDS = 5;
+
+    public static final String INTENT_NOT_FOUND = &quot;Intent is not found&quot;;
+
+    /**
+     * Get all intents.
+     * Returns array containing all the intents in the system.
+     *
+     * @return array of all the intents in the system
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getIntents() {
+<span class="fc" id="L79">        final Iterable&lt;Intent&gt; intents = get(IntentService.class).getIntents();</span>
+<span class="fc" id="L80">        final ObjectNode root = encodeArray(Intent.class, &quot;intents&quot;, intents);</span>
+<span class="fc" id="L81">        return ok(root).build();</span>
+    }
+
+    /**
+     * Get intent by application and key.
+     * Returns details of the specified intent.
+     *
+     * @param appId application identifier
+     * @param key   intent key
+     * @return intent data
+     */
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path(&quot;{appId}/{key}&quot;)
+    public Response getIntentById(@PathParam(&quot;appId&quot;) String appId,
+                                  @PathParam(&quot;key&quot;) String key) {
+<span class="fc" id="L97">        final ApplicationId app = get(CoreService.class).getAppId(appId);</span>
+
+<span class="fc" id="L99">        Intent intent = get(IntentService.class).getIntent(Key.of(key, app));</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        if (intent == null) {</span>
+<span class="fc" id="L101">            long numericalKey = Long.decode(key);</span>
+<span class="fc" id="L102">            intent = get(IntentService.class).getIntent(Key.of(numericalKey, app));</span>
+        }
+<span class="fc" id="L104">        nullIsNotFound(intent, INTENT_NOT_FOUND);</span>
+
+        final ObjectNode root;
+<span class="pc bpc" id="L107" title="1 of 2 branches missed.">        if (intent instanceof HostToHostIntent) {</span>
+<span class="nc" id="L108">            root = codec(HostToHostIntent.class).encode((HostToHostIntent) intent, this);</span>
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        } else if (intent instanceof PointToPointIntent) {</span>
+<span class="nc" id="L110">            root = codec(PointToPointIntent.class).encode((PointToPointIntent) intent, this);</span>
+        } else {
+<span class="fc" id="L112">            root = codec(Intent.class).encode(intent, this);</span>
+        }
+<span class="fc" id="L114">        return ok(root).build();</span>
+    }
+
+    class DeleteListener implements IntentListener {
+        final Key key;
+        final CountDownLatch latch;
+
+<span class="fc" id="L121">        DeleteListener(Key key, CountDownLatch latch) {</span>
+<span class="fc" id="L122">            this.key = key;</span>
+<span class="fc" id="L123">            this.latch = latch;</span>
+<span class="fc" id="L124">        }</span>
+
+        @Override
+        public void event(IntentEvent event) {
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">            if (Objects.equals(event.subject().key(), key) &amp;&amp;</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">                    (event.type() == IntentEvent.Type.WITHDRAWN ||</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">                            event.type() == IntentEvent.Type.FAILED)) {</span>
+<span class="fc" id="L131">                latch.countDown();</span>
+            }
+<span class="fc" id="L133">        }</span>
+    }
+
+    /**
+     * Submit a new intent.
+     * Creates and submits intent from the JSON request.
+     *
+     * @param stream input JSON
+     * @return status of the request - CREATED if the JSON is correct,
+     * BAD_REQUEST if the JSON is invalid
+     */
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response createIntent(InputStream stream) {
+        try {
+<span class="fc" id="L149">            IntentService service = get(IntentService.class);</span>
+<span class="fc" id="L150">            ObjectNode root = (ObjectNode) mapper().readTree(stream);</span>
+<span class="fc" id="L151">            Intent intent = codec(Intent.class).decode(root, this);</span>
+<span class="fc" id="L152">            service.submit(intent);</span>
+<span class="fc" id="L153">            UriBuilder locationBuilder = uriInfo.getBaseUriBuilder()</span>
+<span class="fc" id="L154">                    .path(&quot;intents&quot;)</span>
+<span class="fc" id="L155">                    .path(intent.appId().name())</span>
+<span class="fc" id="L156">                    .path(Long.toString(intent.id().fingerprint()));</span>
+<span class="fc" id="L157">            return Response</span>
+<span class="fc" id="L158">                    .created(locationBuilder.build())</span>
+<span class="fc" id="L159">                    .build();</span>
+<span class="fc" id="L160">        } catch (IOException ioe) {</span>
+<span class="fc" id="L161">            throw new IllegalArgumentException(ioe);</span>
+        }
+    }
+
+    /**
+     * Withdraw intent.
+     * Withdraws the specified intent from the system.
+     *
+     * @param appId application identifier
+     * @param key   intent key
+     */
+    @DELETE
+    @Path(&quot;{appId}/{key}&quot;)
+    public void deleteIntentById(@PathParam(&quot;appId&quot;) String appId,
+                                 @PathParam(&quot;key&quot;) String key) {
+<span class="fc" id="L176">        final ApplicationId app = get(CoreService.class).getAppId(appId);</span>
+
+<span class="fc" id="L178">        Intent intent = get(IntentService.class).getIntent(Key.of(key, app));</span>
+<span class="fc" id="L179">        IntentService service = get(IntentService.class);</span>
+
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">        if (intent == null) {</span>
+<span class="fc" id="L182">            intent = service</span>
+<span class="fc" id="L183">                    .getIntent(Key.of(Long.decode(key), app));</span>
+        }
+<span class="fc bfc" id="L185" title="All 2 branches covered.">        if (intent == null) {</span>
+            // No such intent.  REST standards recommend a positive status code
+            // in this case.
+<span class="fc" id="L188">            return;</span>
+        }
+
+
+<span class="fc" id="L192">        Key k = intent.key();</span>
+
+        // set up latch and listener to track uninstall progress
+<span class="fc" id="L195">        CountDownLatch latch = new CountDownLatch(1);</span>
+
+<span class="fc" id="L197">        IntentListener listener = new DeleteListener(k, latch);</span>
+<span class="fc" id="L198">        service.addListener(listener);</span>
+
+        try {
+            // request the withdraw
+<span class="fc" id="L202">            service.withdraw(intent);</span>
+
+            try {
+<span class="fc" id="L205">                latch.await(WITHDRAW_EVENT_TIMEOUT_SECONDS, TimeUnit.SECONDS);</span>
+<span class="nc" id="L206">            } catch (InterruptedException e) {</span>
+<span class="nc" id="L207">                log.info(&quot;REST Delete operation timed out waiting for intent {}&quot;, k);</span>
+<span class="fc" id="L208">            }</span>
+            // double check the state
+<span class="fc" id="L210">            IntentState state = service.getIntentState(k);</span>
+<span class="pc bpc" id="L211" title="2 of 4 branches missed.">            if (state == WITHDRAWN || state == FAILED) {</span>
+<span class="nc" id="L212">                service.purge(intent);</span>
+            }
+
+        } finally {
+            // clean up the listener
+<span class="pc" id="L217">            service.removeListener(listener);</span>
+<span class="fc" id="L218">        }</span>
+<span class="fc" id="L219">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

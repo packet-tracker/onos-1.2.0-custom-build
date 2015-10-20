@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentUtils.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-sdnip</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.sdnip</a> &gt; <span class="el_source">IntentUtils.java</span></div><h1>IntentUtils.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.sdnip;
+
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.MultiPointToSinglePointIntent;
+import org.onosproject.net.intent.PointToPointIntent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * Utilities for dealing with intents.
+ */
+public final class IntentUtils {
+
+<span class="fc" id="L34">    private static final Logger log = LoggerFactory.getLogger(IntentUtils.class);</span>
+
+<span class="nc" id="L36">    private IntentUtils() {</span>
+
+<span class="nc" id="L38">    }</span>
+
+    /**
+     * Checks if two intents represent the same value.
+     *
+     * &lt;p&gt;({@link Intent#equals(Object)} only checks ID equality)&lt;/p&gt;
+     *
+     * &lt;p&gt;Both intents must be of the same type.&lt;/p&gt;
+     *
+     * @param one first intent
+     * @param two second intent
+     * @return true if the two intents represent the same value, otherwise false
+     */
+    public static boolean equals(Intent one, Intent two) {
+<span class="pc bpc" id="L52" title="1 of 2 branches missed.">        checkArgument(one.getClass() == two.getClass(),</span>
+                &quot;Intents are not the same type&quot;);
+
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">        if (!(Objects.equals(one.appId(), two.appId()) &amp;&amp;</span>
+<span class="fc bfc" id="L56" title="All 2 branches covered.">                Objects.equals(one.key(), two.key()))) {</span>
+<span class="fc" id="L57">            return false;</span>
+        }
+
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (one instanceof MultiPointToSinglePointIntent) {</span>
+<span class="fc" id="L61">            MultiPointToSinglePointIntent intent1 = (MultiPointToSinglePointIntent) one;</span>
+<span class="fc" id="L62">            MultiPointToSinglePointIntent intent2 = (MultiPointToSinglePointIntent) two;</span>
+
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">            return Objects.equals(intent1.selector(), intent2.selector()) &amp;&amp;</span>
+<span class="fc bfc" id="L65" title="All 2 branches covered.">                    Objects.equals(intent1.treatment(), intent2.treatment()) &amp;&amp;</span>
+<span class="pc bpc" id="L66" title="1 of 2 branches missed.">                    Objects.equals(intent1.ingressPoints(), intent2.ingressPoints()) &amp;&amp;</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">                    Objects.equals(intent1.egressPoint(), intent2.egressPoint());</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">        } else if (one instanceof PointToPointIntent) {</span>
+<span class="fc" id="L69">            PointToPointIntent intent1 = (PointToPointIntent) one;</span>
+<span class="fc" id="L70">            PointToPointIntent intent2 = (PointToPointIntent) two;</span>
+
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">            return Objects.equals(intent1.selector(), intent2.selector()) &amp;&amp;</span>
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">                    Objects.equals(intent1.treatment(), intent2.treatment()) &amp;&amp;</span>
+<span class="pc bpc" id="L74" title="1 of 2 branches missed.">                    Objects.equals(intent1.ingressPoint(), intent2.ingressPoint()) &amp;&amp;</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">                    Objects.equals(intent1.egressPoint(), intent2.egressPoint());</span>
+        } else {
+<span class="nc" id="L77">            log.error(&quot;Unimplemented intent type&quot;);</span>
+<span class="nc" id="L78">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

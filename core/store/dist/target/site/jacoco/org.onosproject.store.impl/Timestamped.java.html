@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Timestamped.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.impl</a> &gt; <span class="el_source">Timestamped.java</span></div><h1>Timestamped.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.impl;
+
+import com.google.common.base.MoreObjects;
+import org.onosproject.store.Timestamp;
+
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Wrapper class to store Timestamped value.
+ *
+ * @param &lt;T&gt; Timestamped value type
+ */
+public final class Timestamped&lt;T&gt; {
+
+    private final Timestamp timestamp;
+    private final T value;
+
+    /**
+     * Creates a time stamped value.
+     *
+     * @param value to be timestamp
+     * @param timestamp the timestamp
+     */
+<span class="fc" id="L41">    public Timestamped(T value, Timestamp timestamp) {</span>
+<span class="fc" id="L42">        this.value = checkNotNull(value);</span>
+<span class="fc" id="L43">        this.timestamp = checkNotNull(timestamp);</span>
+<span class="fc" id="L44">    }</span>
+
+    /**
+     * Returns the value.
+     *
+     * @return value
+     */
+    public T value() {
+<span class="fc" id="L52">        return value;</span>
+    }
+
+    /**
+     * Returns the time stamp.
+     *
+     * @return time stamp
+     */
+    public Timestamp timestamp() {
+<span class="fc" id="L61">        return timestamp;</span>
+    }
+
+    /**
+     * Tests if this timestamped value is newer than the other.
+     *
+     * @param other timestamped value
+     * @return true if this instance is newer.
+     */
+    public boolean isNewer(Timestamped&lt;T&gt; other) {
+<span class="fc" id="L71">        return isNewerThan(checkNotNull(other).timestamp());</span>
+    }
+
+    /**
+     * Tests if this timestamp is newer than the specified timestamp.
+     *
+     * @param other timestamp to compare against
+     * @return true if this instance is newer
+     */
+    public boolean isNewerThan(Timestamp other) {
+<span class="fc" id="L81">        return timestamp.isNewerThan(other);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L86">        return timestamp.hashCode();</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L92">            return true;</span>
+        }
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (!(obj instanceof Timestamped)) {</span>
+<span class="fc" id="L95">            return false;</span>
+        }
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L98">        Timestamped&lt;T&gt; that = (Timestamped&lt;T&gt;) obj;</span>
+<span class="fc" id="L99">        return Objects.equals(this.timestamp, that.timestamp);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L104">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L105">                    .add(&quot;timestamp&quot;, timestamp)</span>
+<span class="fc" id="L106">                    .add(&quot;value&quot;, value)</span>
+<span class="fc" id="L107">                    .toString();</span>
+    }
+
+    // Default constructor for serialization
+    /**
+     * @deprecated in Cardinal Release
+     */
+    @Deprecated
+<span class="fc" id="L115">    private Timestamped() {</span>
+<span class="fc" id="L116">        this.value = null;</span>
+<span class="fc" id="L117">        this.timestamp = null;</span>
+<span class="fc" id="L118">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

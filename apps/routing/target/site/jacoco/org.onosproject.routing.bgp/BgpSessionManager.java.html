@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpSessionManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpSessionManager.java</span></div><h1>BgpSessionManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Service;
+import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelException;
+import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.ChannelPipeline;
+import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.channel.Channels;
+import org.jboss.netty.channel.group.ChannelGroup;
+import org.jboss.netty.channel.group.DefaultChannelGroup;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.Ip4Prefix;
+import org.onlab.packet.Ip6Prefix;
+import org.onlab.packet.IpPrefix;
+import org.onosproject.routing.BgpService;
+import org.onosproject.routing.RouteListener;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.util.Collection;
+import java.util.Dictionary;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.Executors.newCachedThreadPool;
+import static org.onlab.util.Tools.groupedThreads;
+
+/**
+ * BGP Session Manager class.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L60">public class BgpSessionManager implements BgpInfoService, BgpService {</span>
+<span class="fc" id="L61">    private static final Logger log =</span>
+<span class="fc" id="L62">            LoggerFactory.getLogger(BgpSessionManager.class);</span>
+
+<span class="fc" id="L64">    boolean isShutdown = true;</span>
+    private Channel serverChannel;     // Listener for incoming BGP connections
+    private ServerBootstrap serverBootstrap;
+<span class="fc" id="L67">    private ChannelGroup allChannels = new DefaultChannelGroup();</span>
+<span class="fc" id="L68">    private ConcurrentMap&lt;SocketAddress, BgpSession&gt; bgpSessions =</span>
+            new ConcurrentHashMap&lt;&gt;();
+    private Ip4Address myBgpId;        // Same BGP ID for all peers
+
+<span class="fc" id="L72">    private BgpRouteSelector bgpRouteSelector = new BgpRouteSelector(this);</span>
+<span class="fc" id="L73">    private ConcurrentMap&lt;Ip4Prefix, BgpRouteEntry&gt; bgpRoutes4 =</span>
+            new ConcurrentHashMap&lt;&gt;();
+<span class="fc" id="L75">    private ConcurrentMap&lt;Ip6Prefix, BgpRouteEntry&gt; bgpRoutes6 =</span>
+            new ConcurrentHashMap&lt;&gt;();
+
+    private RouteListener routeListener;
+
+    private static final int DEFAULT_BGP_PORT = 2000;
+    private int bgpPort;
+
+    @Activate
+    protected void activate(ComponentContext context) {
+<span class="fc" id="L85">        readComponentConfiguration(context);</span>
+<span class="fc" id="L86">        log.info(&quot;BgpSessionManager started&quot;);</span>
+<span class="fc" id="L87">    }</span>
+
+    @Deactivate
+    protected void deactivate() {
+<span class="nc" id="L91">        log.info(&quot;BgpSessionManager stopped&quot;);</span>
+<span class="nc" id="L92">    }</span>
+
+    /**
+     * Extracts properties from the component configuration context.
+     *
+     * @param context the component context
+     */
+    private void readComponentConfiguration(ComponentContext context) {
+<span class="fc" id="L100">        Dictionary&lt;?, ?&gt; properties = context.getProperties();</span>
+        try {
+<span class="fc" id="L102">            String strPort = (String) properties.get(&quot;bgpPort&quot;);</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">            if (strPort != null) {</span>
+<span class="fc" id="L104">                bgpPort = Integer.parseInt(strPort);</span>
+            } else {
+<span class="nc" id="L106">                bgpPort = DEFAULT_BGP_PORT;</span>
+            }
+<span class="nc" id="L108">        } catch (NumberFormatException | ClassCastException e) {</span>
+<span class="nc" id="L109">            bgpPort = DEFAULT_BGP_PORT;</span>
+<span class="fc" id="L110">        }</span>
+<span class="fc" id="L111">        log.debug(&quot;BGP port is set to {}&quot;, bgpPort);</span>
+<span class="fc" id="L112">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+        // Blank @Modified method to catch modifications to the context.
+        // If no @Modified method exists, it seems @Activate is called again
+        // when the context is modified.
+<span class="nc" id="L119">    }</span>
+
+    /**
+     * Checks whether the BGP Session Manager is shutdown.
+     *
+     * @return true if the BGP Session Manager is shutdown, otherwise false
+     */
+    boolean isShutdown() {
+<span class="fc" id="L127">        return this.isShutdown;</span>
+    }
+
+    /**
+     * Gets the route listener.
+     *
+     * @return the route listener to use
+     */
+    RouteListener getRouteListener() {
+<span class="fc" id="L136">        return routeListener;</span>
+    }
+
+    /**
+     * Gets the BGP sessions.
+     *
+     * @return the BGP sessions
+     */
+    public Collection&lt;BgpSession&gt; getBgpSessions() {
+<span class="fc" id="L145">        return bgpSessions.values();</span>
+    }
+
+    /**
+     * Gets the selected IPv4 BGP routes among all BGP sessions.
+     *
+     * @return the selected IPv4 BGP routes among all BGP sessions
+     */
+    public Collection&lt;BgpRouteEntry&gt; getBgpRoutes4() {
+<span class="fc" id="L154">        return bgpRoutes4.values();</span>
+    }
+
+    /**
+     * Gets the selected IPv6 BGP routes among all BGP sessions.
+     *
+     * @return the selected IPv6 BGP routes among all BGP sessions
+     */
+    public Collection&lt;BgpRouteEntry&gt; getBgpRoutes6() {
+<span class="nc" id="L163">        return bgpRoutes6.values();</span>
+    }
+
+    /**
+     * Finds a BGP route for a prefix. The prefix can be either IPv4 or IPv6.
+     *
+     * @param prefix the prefix to use
+     * @return the BGP route if found, otherwise null
+     */
+    BgpRouteEntry findBgpRoute(IpPrefix prefix) {
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">        if (prefix.isIp4()) {</span>
+<span class="fc" id="L174">            return bgpRoutes4.get(prefix.getIp4Prefix());               // IPv4</span>
+        }
+<span class="nc" id="L176">        return bgpRoutes6.get(prefix.getIp6Prefix());                   // IPv6</span>
+    }
+
+    /**
+     * Adds a BGP route. The route can be either IPv4 or IPv6.
+     *
+     * @param bgpRouteEntry the BGP route entry to use
+     */
+    void addBgpRoute(BgpRouteEntry bgpRouteEntry) {
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (bgpRouteEntry.isIp4()) {</span>
+<span class="fc" id="L186">            bgpRoutes4.put(bgpRouteEntry.prefix().getIp4Prefix(),       // IPv4</span>
+                           bgpRouteEntry);
+        } else {
+<span class="nc" id="L189">            bgpRoutes6.put(bgpRouteEntry.prefix().getIp6Prefix(),       // IPv6</span>
+                           bgpRouteEntry);
+        }
+<span class="fc" id="L192">    }</span>
+
+    /**
+     * Removes a BGP route for a prefix. The prefix can be either IPv4 or IPv6.
+     *
+     * @param prefix the prefix to use
+     * @return true if the route was found and removed, otherwise false
+     */
+    boolean removeBgpRoute(IpPrefix prefix) {
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">        if (prefix.isIp4()) {</span>
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">            return (bgpRoutes4.remove(prefix.getIp4Prefix()) != null);  // IPv4</span>
+        }
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        return (bgpRoutes6.remove(prefix.getIp6Prefix()) != null);      // IPv6</span>
+    }
+
+    /**
+     * Adds the channel for a BGP session.
+     *
+     * @param channel the channel to add
+     */
+    void addSessionChannel(Channel channel) {
+<span class="fc" id="L213">        allChannels.add(channel);</span>
+<span class="fc" id="L214">    }</span>
+
+    /**
+     * Removes the channel for a BGP session.
+     *
+     * @param channel the channel to remove
+     */
+    void removeSessionChannel(Channel channel) {
+<span class="fc" id="L222">        allChannels.remove(channel);</span>
+<span class="fc" id="L223">    }</span>
+
+    /**
+     * Processes the connection from a BGP peer.
+     *
+     * @param bgpSession the BGP session for the peer
+     * @return true if the connection can be established, otherwise false
+     */
+    boolean peerConnected(BgpSession bgpSession) {
+
+        // Test whether there is already a session from the same remote
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">        if (bgpSessions.get(bgpSession.remoteInfo().address()) != null) {</span>
+<span class="nc" id="L235">            return false;               // Duplicate BGP session</span>
+        }
+<span class="fc" id="L237">        bgpSessions.put(bgpSession.remoteInfo().address(), bgpSession);</span>
+
+        //
+        // If the first connection, set my BGP ID to the local address
+        // of the socket.
+        //
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">        if (bgpSession.localInfo().address() instanceof InetSocketAddress) {</span>
+<span class="fc" id="L244">            InetAddress inetAddr =</span>
+<span class="fc" id="L245">                ((InetSocketAddress) bgpSession.localInfo().address()).getAddress();</span>
+<span class="fc" id="L246">            Ip4Address ip4Address = Ip4Address.valueOf(inetAddr.getAddress());</span>
+<span class="fc" id="L247">            updateMyBgpId(ip4Address);</span>
+        }
+<span class="fc" id="L249">        return true;</span>
+    }
+
+    /**
+     * Processes the disconnection from a BGP peer.
+     *
+     * @param bgpSession the BGP session for the peer
+     */
+    void peerDisconnected(BgpSession bgpSession) {
+<span class="fc" id="L258">        bgpSessions.remove(bgpSession.remoteInfo().address());</span>
+<span class="fc" id="L259">    }</span>
+
+    /**
+     * Conditionally updates the local BGP ID if it wasn't set already.
+     * &lt;p/&gt;
+     * NOTE: A BGP instance should use same BGP ID across all BGP sessions.
+     *
+     * @param ip4Address the IPv4 address to use as BGP ID
+     */
+    private synchronized void updateMyBgpId(Ip4Address ip4Address) {
+<span class="fc bfc" id="L269" title="All 2 branches covered.">        if (myBgpId == null) {</span>
+<span class="fc" id="L270">            myBgpId = ip4Address;</span>
+<span class="fc" id="L271">            log.debug(&quot;BGP: My BGP ID is {}&quot;, myBgpId);</span>
+        }
+<span class="fc" id="L273">    }</span>
+
+    /**
+     * Gets the local BGP Identifier as an IPv4 address.
+     *
+     * @return the local BGP Identifier as an IPv4 address
+     */
+    Ip4Address getMyBgpId() {
+<span class="fc" id="L281">        return myBgpId;</span>
+    }
+
+    /**
+     * Gets the BGP Route Selector.
+     *
+     * @return the BGP Route Selector
+     */
+    BgpRouteSelector getBgpRouteSelector() {
+<span class="fc" id="L290">        return bgpRouteSelector;</span>
+    }
+
+    @Override
+    public void start(RouteListener routeListener) {
+<span class="fc" id="L295">        log.debug(&quot;BGP Session Manager start.&quot;);</span>
+<span class="fc" id="L296">        isShutdown = false;</span>
+
+<span class="fc" id="L298">        this.routeListener = checkNotNull(routeListener);</span>
+
+<span class="fc" id="L300">        ChannelFactory channelFactory = new NioServerSocketChannelFactory(</span>
+<span class="fc" id="L301">                newCachedThreadPool(groupedThreads(&quot;onos/bgp&quot;, &quot;sm-boss-%d&quot;)),</span>
+<span class="fc" id="L302">                newCachedThreadPool(groupedThreads(&quot;onos/bgp&quot;, &quot;sm-worker-%d&quot;)));</span>
+<span class="fc" id="L303">        ChannelPipelineFactory pipelineFactory = () -&gt; {</span>
+            // Allocate a new session per connection
+<span class="fc" id="L305">            BgpSession bgpSessionHandler =</span>
+                    new BgpSession(BgpSessionManager.this);
+<span class="fc" id="L307">            BgpFrameDecoder bgpFrameDecoder =</span>
+                    new BgpFrameDecoder(bgpSessionHandler);
+
+            // Setup the processing pipeline
+<span class="fc" id="L311">            ChannelPipeline pipeline = Channels.pipeline();</span>
+<span class="fc" id="L312">            pipeline.addLast(&quot;BgpFrameDecoder&quot;, bgpFrameDecoder);</span>
+<span class="fc" id="L313">            pipeline.addLast(&quot;BgpSession&quot;, bgpSessionHandler);</span>
+<span class="fc" id="L314">            return pipeline;</span>
+        };
+<span class="fc" id="L316">        InetSocketAddress listenAddress =</span>
+                new InetSocketAddress(bgpPort);
+
+<span class="fc" id="L319">        serverBootstrap = new ServerBootstrap(channelFactory);</span>
+        // serverBootstrap.setOptions(&quot;reuseAddr&quot;, true);
+<span class="fc" id="L321">        serverBootstrap.setOption(&quot;child.keepAlive&quot;, true);</span>
+<span class="fc" id="L322">        serverBootstrap.setOption(&quot;child.tcpNoDelay&quot;, true);</span>
+<span class="fc" id="L323">        serverBootstrap.setPipelineFactory(pipelineFactory);</span>
+        try {
+<span class="fc" id="L325">            serverChannel = serverBootstrap.bind(listenAddress);</span>
+<span class="fc" id="L326">            allChannels.add(serverChannel);</span>
+<span class="nc" id="L327">        } catch (ChannelException e) {</span>
+<span class="nc" id="L328">            log.debug(&quot;Exception binding to BGP port {}: &quot;,</span>
+<span class="nc" id="L329">                      listenAddress.getPort(), e);</span>
+<span class="fc" id="L330">        }</span>
+<span class="fc" id="L331">    }</span>
+
+    @Override
+    public void stop() {
+<span class="fc" id="L335">        isShutdown = true;</span>
+<span class="fc" id="L336">        allChannels.close().awaitUninterruptibly();</span>
+<span class="fc" id="L337">        serverBootstrap.releaseExternalResources();</span>
+<span class="fc" id="L338">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

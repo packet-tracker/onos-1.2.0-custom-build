@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultVirtualDevice.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-incubator-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.incubator.net.virtual</a> &gt; <span class="el_source">DefaultVirtualDevice.java</span></div><h1>DefaultVirtualDevice.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.incubator.net.virtual;
+
+import org.onlab.packet.ChassisId;
+import org.onosproject.net.DefaultDevice;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.provider.ProviderId;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.*;
+
+/**
+ * Default representation of a virtual device.
+ */
+public class DefaultVirtualDevice extends DefaultDevice implements VirtualDevice {
+
+    private static final String VIRTUAL = &quot;virtual&quot;;
+<span class="nc" id="L33">    private static final ProviderId PID = new ProviderId(VIRTUAL, VIRTUAL);</span>
+
+    private final NetworkId networkId;
+
+    /**
+     * Creates a network element attributed to the specified provider.
+     *
+     * @param networkId network identifier
+     * @param id        device identifier
+     */
+    public DefaultVirtualDevice(NetworkId networkId, DeviceId id) {
+<span class="nc" id="L44">        super(PID, id, Type.VIRTUAL, VIRTUAL, VIRTUAL, VIRTUAL, VIRTUAL,</span>
+              new ChassisId(0));
+<span class="nc" id="L46">        this.networkId = networkId;</span>
+<span class="nc" id="L47">    }</span>
+
+    @Override
+    public NetworkId networkId() {
+<span class="nc" id="L51">        return networkId;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L56">        return 31 * super.hashCode() + Objects.hash(networkId);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L62">            return true;</span>
+        }
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        if (obj instanceof DefaultVirtualDevice) {</span>
+<span class="nc" id="L65">            DefaultVirtualDevice that = (DefaultVirtualDevice) obj;</span>
+<span class="nc bnc" id="L66" title="All 4 branches missed.">            return super.equals(that) &amp;&amp; Objects.equals(this.networkId, that.networkId);</span>
+        }
+<span class="nc" id="L68">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L73">        return toStringHelper(this).add(&quot;networkId&quot;, networkId).toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

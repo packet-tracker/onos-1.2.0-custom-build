@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentCleanup.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl</a> &gt; <span class="el_source">IntentCleanup.java</span></div><h1>IntentCleanup.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.net.intent.IntentData;
+import org.onosproject.net.intent.IntentEvent;
+import org.onosproject.net.intent.IntentListener;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.net.intent.IntentStore;
+import org.onosproject.net.intent.Key;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+import java.util.Dictionary;
+import java.util.Properties;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static org.onlab.util.Tools.get;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * This component cleans up intents that have encountered errors or otherwise
+ * stalled during installation or withdrawal.
+ * &lt;p&gt;
+ * It periodically polls (based on configured period) for pending and CORRUPT
+ * intents from the store and retries. It also listens for CORRUPT event
+ * notifications, which signify errors in processing, and retries.
+ * &lt;/p&gt;
+ */
+@Component(immediate = true)
+<span class="fc" id="L57">public class IntentCleanup implements Runnable, IntentListener {</span>
+
+<span class="fc" id="L59">    private static final Logger log = getLogger(IntentCleanup.class);</span>
+
+    private static final int DEFAULT_PERIOD = 5; //seconds
+    private static final int DEFAULT_THRESHOLD = 5; //tries
+
+<span class="fc" id="L64">    @Property(name = &quot;enabled&quot;, boolValue = true,</span>
+              label = &quot;Enables/disables the intent cleanup component&quot;)
+    private boolean enabled = true;
+
+<span class="fc" id="L68">    @Property(name = &quot;period&quot;, intValue = DEFAULT_PERIOD,</span>
+              label = &quot;Frequency in ms between cleanup runs&quot;)
+    protected int period = DEFAULT_PERIOD;
+    private long periodMs;
+
+<span class="fc" id="L73">    @Property(name = &quot;retryThreshold&quot;, intValue = DEFAULT_THRESHOLD,</span>
+            label = &quot;Number of times to retry CORRUPT intent without delay&quot;)
+    protected int retryThreshold = DEFAULT_THRESHOLD;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentService service;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+    private ExecutorService executor;
+    private Timer timer;
+    private TimerTask timerTask;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L92">        cfgService.registerProperties(getClass());</span>
+<span class="fc" id="L93">        executor = newSingleThreadExecutor(groupedThreads(&quot;onos/intent&quot;, &quot;cleanup&quot;));</span>
+<span class="fc" id="L94">        timer = new Timer(&quot;onos-intent-cleanup-timer&quot;);</span>
+<span class="fc" id="L95">        service.addListener(this);</span>
+<span class="fc" id="L96">        adjustRate();</span>
+<span class="fc" id="L97">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L98">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L102">        cfgService.unregisterProperties(getClass(), false);</span>
+<span class="fc" id="L103">        service.removeListener(this);</span>
+<span class="fc" id="L104">        timer.cancel();</span>
+<span class="fc" id="L105">        timerTask = null;</span>
+<span class="fc" id="L106">        executor.shutdown();</span>
+<span class="fc" id="L107">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L108">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        Dictionary&lt;?, ?&gt; properties = context != null ? context.getProperties() : new Properties();</span>
+
+        int newPeriod;
+        boolean newEnabled;
+        try {
+<span class="nc" id="L117">            String s = get(properties, &quot;period&quot;);</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">            newPeriod = isNullOrEmpty(s) ? period : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L120">            s = get(properties, &quot;retryThreshold&quot;);</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">            retryThreshold = isNullOrEmpty(s) ? retryThreshold : Integer.parseInt(s.trim());</span>
+
+<span class="nc" id="L123">            s = get(properties, &quot;enabled&quot;);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            newEnabled = isNullOrEmpty(s) ? enabled : Boolean.parseBoolean(s.trim());</span>
+<span class="nc" id="L125">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L126">            log.warn(e.getMessage());</span>
+<span class="nc" id="L127">            newPeriod = period;</span>
+<span class="nc" id="L128">            newEnabled = enabled;</span>
+<span class="nc" id="L129">        }</span>
+
+        // Any change in the following parameters implies hard restart
+<span class="nc bnc" id="L132" title="All 4 branches missed.">        if (newPeriod != period || enabled != newEnabled) {</span>
+<span class="nc" id="L133">            period = newPeriod;</span>
+<span class="nc" id="L134">            enabled = newEnabled;</span>
+<span class="nc" id="L135">            adjustRate();</span>
+        }
+
+<span class="nc" id="L138">        log.info(&quot;Settings: enabled={}, period={}, retryThreshold={}&quot;,</span>
+<span class="nc" id="L139">                 enabled, period, retryThreshold);</span>
+<span class="nc" id="L140">    }</span>
+
+    protected void adjustRate() {
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">        if (timerTask != null) {</span>
+<span class="nc" id="L144">            timerTask.cancel();</span>
+<span class="nc" id="L145">            timerTask = null;</span>
+        }
+
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        if (enabled) {</span>
+<span class="fc" id="L149">            timerTask = new TimerTask() {</span>
+                @Override
+                public void run() {
+<span class="nc" id="L152">                    executor.submit(IntentCleanup.this);</span>
+<span class="nc" id="L153">                }</span>
+            };
+
+<span class="fc" id="L156">            periodMs = period * 1_000; //convert to ms</span>
+<span class="fc" id="L157">            timer.scheduleAtFixedRate(timerTask, periodMs, periodMs);</span>
+        }
+<span class="fc" id="L159">    }</span>
+
+
+    @Override
+    public void run() {
+        try {
+<span class="fc" id="L165">            cleanup();</span>
+<span class="nc" id="L166">        } catch (Exception e) {</span>
+<span class="nc" id="L167">            log.warn(&quot;Caught exception during Intent cleanup&quot;, e);</span>
+<span class="fc" id="L168">        }</span>
+<span class="fc" id="L169">    }</span>
+
+    private void resubmitCorrupt(IntentData intentData, boolean checkThreshold) {
+<span class="fc bfc" id="L172" title="All 4 branches covered.">        if (checkThreshold &amp;&amp; intentData.errorCount() &gt;= retryThreshold) {</span>
+<span class="fc" id="L173">            return; // threshold met or exceeded</span>
+        }
+
+<span class="pc bpc" id="L176" title="2 of 3 branches missed.">        switch (intentData.request()) {</span>
+            case INSTALL_REQ:
+<span class="fc" id="L178">                service.submit(intentData.intent());</span>
+<span class="fc" id="L179">                break;</span>
+            case WITHDRAW_REQ:
+<span class="nc" id="L181">                service.withdraw(intentData.intent());</span>
+<span class="nc" id="L182">                break;</span>
+            default:
+<span class="nc" id="L184">                log.warn(&quot;Trying to resubmit corrupt/failed intent {} in state {} with request {}&quot;,</span>
+<span class="nc" id="L185">                         intentData.key(), intentData.state(), intentData.request());</span>
+                break;
+        }
+<span class="fc" id="L188">    }</span>
+
+    private void resubmitPendingRequest(IntentData intentData) {
+<span class="pc bpc" id="L191" title="2 of 3 branches missed.">        switch (intentData.request()) {</span>
+            case INSTALL_REQ:
+<span class="fc" id="L193">                service.submit(intentData.intent());</span>
+<span class="fc" id="L194">                break;</span>
+            case WITHDRAW_REQ:
+<span class="nc" id="L196">                service.withdraw(intentData.intent());</span>
+<span class="nc" id="L197">                break;</span>
+            default:
+<span class="nc" id="L199">                log.warn(&quot;Failed to resubmit pending intent {} in state {} with request {}&quot;,</span>
+<span class="nc" id="L200">                         intentData.key(), intentData.state(), intentData.request());</span>
+                break;
+        }
+<span class="fc" id="L203">    }</span>
+
+    /**
+     * Iterates through corrupt, failed and pending intents and
+     * re-submit/withdraw appropriately.
+     */
+    private void cleanup() {
+<span class="fc" id="L210">        int corruptCount = 0, failedCount = 0, stuckCount = 0, pendingCount = 0;</span>
+
+<span class="fc bfc" id="L212" title="All 2 branches covered.">        for (IntentData intentData : store.getIntentData(true, periodMs)) {</span>
+<span class="pc bpc" id="L213" title="2 of 4 branches missed.">            switch (intentData.state()) {</span>
+                case FAILED:
+<span class="nc" id="L215">                    resubmitCorrupt(intentData, false);</span>
+<span class="nc" id="L216">                    failedCount++;</span>
+<span class="nc" id="L217">                    break;</span>
+                case CORRUPT:
+<span class="fc" id="L219">                    resubmitCorrupt(intentData, false);</span>
+<span class="fc" id="L220">                    corruptCount++;</span>
+<span class="fc" id="L221">                    break;</span>
+                case INSTALLING: //FALLTHROUGH
+                case WITHDRAWING:
+<span class="fc" id="L224">                    resubmitPendingRequest(intentData);</span>
+<span class="fc" id="L225">                    stuckCount++;</span>
+<span class="fc" id="L226">                    break;</span>
+                default:
+                    //NOOP
+                    break;
+            }
+<span class="fc" id="L231">        }</span>
+
+<span class="fc bfc" id="L233" title="All 2 branches covered.">        for (IntentData intentData : store.getPendingData(true, periodMs)) {</span>
+<span class="fc" id="L234">            resubmitPendingRequest(intentData);</span>
+<span class="fc" id="L235">            stuckCount++;</span>
+<span class="fc" id="L236">        }</span>
+
+<span class="pc bpc" id="L238" title="1 of 2 branches missed.">        if (corruptCount + failedCount + stuckCount + pendingCount &gt; 0) {</span>
+<span class="fc" id="L239">            log.debug(&quot;Intent cleanup ran and resubmitted {} corrupt, {} failed, {} stuck, and {} pending intents&quot;,</span>
+<span class="fc" id="L240">                    corruptCount, failedCount, stuckCount, pendingCount);</span>
+        }
+<span class="fc" id="L242">    }</span>
+
+    @Override
+    public void event(IntentEvent event) {
+        // this is the fast path for CORRUPT intents, retry on event notification.
+        //TODO we might consider using the timer to back off for subsequent retries
+<span class="pc bpc" id="L248" title="1 of 4 branches missed.">        if (enabled &amp;&amp; event.type() == IntentEvent.Type.CORRUPT) {</span>
+<span class="fc" id="L249">            Key key = event.subject().key();</span>
+<span class="pc bpc" id="L250" title="1 of 2 branches missed.">            if (store.isMaster(key)) {</span>
+<span class="fc" id="L251">                IntentData data = store.getIntentData(event.subject().key());</span>
+<span class="fc" id="L252">                resubmitCorrupt(data, true);</span>
+            }
+        }
+<span class="fc" id="L255">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

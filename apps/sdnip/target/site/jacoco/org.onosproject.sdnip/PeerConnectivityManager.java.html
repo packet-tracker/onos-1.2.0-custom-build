@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PeerConnectivityManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-sdnip</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.sdnip</a> &gt; <span class="el_source">PeerConnectivityManager.java</span></div><h1>PeerConnectivityManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.sdnip;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.IPv4;
+import org.onlab.packet.IPv6;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.TpPort;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.incubator.net.intf.Interface;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.host.InterfaceIpAddress;
+import org.onosproject.net.intent.Key;
+import org.onosproject.net.intent.PointToPointIntent;
+import org.onosproject.routing.IntentSynchronizationService;
+import org.onosproject.routing.RoutingService;
+import org.onosproject.routing.config.BgpConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Manages the connectivity requirements between peers.
+ */
+public class PeerConnectivityManager {
+    private static final int PRIORITY_OFFSET = 1000;
+
+    private static final String SUFFIX_DST = &quot;dst&quot;;
+    private static final String SUFFIX_SRC = &quot;src&quot;;
+    private static final String SUFFIX_ICMP = &quot;icmp&quot;;
+
+<span class="fc" id="L60">    private static final Logger log = LoggerFactory.getLogger(</span>
+            PeerConnectivityManager.class);
+
+    private static final short BGP_PORT = 179;
+
+    private final IntentSynchronizationService intentSynchronizer;
+    private final NetworkConfigService configService;
+    private final InterfaceService interfaceService;
+
+    private final ApplicationId appId;
+    private final ApplicationId routerAppId;
+
+    // Just putting something random here for now. Figure out exactly what
+    // indexes we need when we start making use of them.
+    private final Multimap&lt;BgpConfig.BgpSpeakerConfig, PointToPointIntent&gt; peerIntents;
+
+    /**
+     * Creates a new PeerConnectivityManager.
+     *
+     * @param appId              the application ID
+     * @param intentSynchronizer the intent synchronizer
+     * @param configService      the SDN-IP config service
+     * @param interfaceService   the interface service
+     * @param routerAppId        application ID
+     */
+    public PeerConnectivityManager(ApplicationId appId,
+                                   IntentSynchronizationService intentSynchronizer,
+                                   NetworkConfigService configService,
+                                   ApplicationId routerAppId,
+<span class="fc" id="L89">                                   InterfaceService interfaceService) {</span>
+<span class="fc" id="L90">        this.appId = appId;</span>
+<span class="fc" id="L91">        this.intentSynchronizer = intentSynchronizer;</span>
+<span class="fc" id="L92">        this.configService = configService;</span>
+<span class="fc" id="L93">        this.routerAppId = routerAppId;</span>
+<span class="fc" id="L94">        this.interfaceService = interfaceService;</span>
+
+<span class="fc" id="L96">        peerIntents = HashMultimap.create();</span>
+<span class="fc" id="L97">    }</span>
+
+    /**
+     * Starts the peer connectivity manager.
+     */
+    public void start() {
+<span class="fc" id="L103">        setUpConnectivity();</span>
+<span class="fc" id="L104">    }</span>
+
+    /**
+     * Stops the peer connectivity manager.
+     */
+    public void stop() {
+<span class="nc" id="L110">    }</span>
+
+    /**
+     * Sets up paths to establish connectivity between all internal
+     * BGP speakers and external BGP peers.
+     */
+    private void setUpConnectivity() {
+<span class="fc" id="L117">        BgpConfig config = configService.getConfig(routerAppId, RoutingService.CONFIG_CLASS);</span>
+
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">        if (config == null) {</span>
+<span class="nc" id="L120">            log.warn(&quot;No BgpConfig found&quot;);</span>
+<span class="nc" id="L121">            return;</span>
+        }
+
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        for (BgpConfig.BgpSpeakerConfig bgpSpeaker : config.bgpSpeakers()) {</span>
+<span class="fc" id="L125">            log.debug(&quot;Start to set up BGP paths for BGP speaker: {}&quot;,</span>
+                    bgpSpeaker);
+
+<span class="fc" id="L128">            buildSpeakerIntents(bgpSpeaker).forEach(i -&gt; {</span>
+<span class="fc" id="L129">                peerIntents.put(bgpSpeaker, i);</span>
+<span class="fc" id="L130">                intentSynchronizer.submit(i);</span>
+<span class="fc" id="L131">            });</span>
+
+<span class="fc" id="L133">        }</span>
+<span class="fc" id="L134">    }</span>
+
+    private Collection&lt;PointToPointIntent&gt; buildSpeakerIntents(BgpConfig.BgpSpeakerConfig speaker) {
+<span class="fc" id="L137">        List&lt;PointToPointIntent&gt; intents = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L139" title="All 2 branches covered.">        for (IpAddress peerAddress : speaker.peers()) {</span>
+<span class="fc" id="L140">            Interface peeringInterface = interfaceService.getMatchingInterface(peerAddress);</span>
+
+<span class="fc bfc" id="L142" title="All 2 branches covered.">            if (peeringInterface == null) {</span>
+<span class="fc" id="L143">                log.debug(&quot;No peering interface found for peer {} on speaker {}&quot;,</span>
+                        peerAddress, speaker);
+<span class="fc" id="L145">                continue;</span>
+            }
+
+<span class="fc" id="L148">            IpAddress peeringAddress = null;</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">            for (InterfaceIpAddress address : peeringInterface.ipAddresses()) {</span>
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">                if (address.subnetAddress().contains(peerAddress)) {</span>
+<span class="fc" id="L151">                    peeringAddress = address.ipAddress();</span>
+<span class="fc" id="L152">                    break;</span>
+                }
+<span class="nc" id="L154">            }</span>
+
+<span class="fc" id="L156">            checkNotNull(peeringAddress);</span>
+
+<span class="fc" id="L158">            intents.addAll(buildIntents(speaker.connectPoint(), peeringAddress,</span>
+<span class="fc" id="L159">                    peeringInterface.connectPoint(), peerAddress));</span>
+<span class="fc" id="L160">        }</span>
+
+<span class="fc" id="L162">        return intents;</span>
+    }
+
+    /**
+     * Builds the required intents between the two pairs of connect points and
+     * IP addresses.
+     *
+     * @param portOne the first connect point
+     * @param ipOne the first IP address
+     * @param portTwo the second connect point
+     * @param ipTwo the second IP address
+     * @return the intents to install
+     */
+    private Collection&lt;PointToPointIntent&gt; buildIntents(ConnectPoint portOne,
+                                                        IpAddress ipOne,
+                                                        ConnectPoint portTwo,
+                                                        IpAddress ipTwo) {
+
+<span class="fc" id="L180">        List&lt;PointToPointIntent&gt; intents = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L182">        TrafficTreatment treatment = DefaultTrafficTreatment.emptyTreatment();</span>
+        TrafficSelector selector;
+        Key key;
+
+        byte tcpProtocol;
+        byte icmpProtocol;
+
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">        if (ipOne.isIp4()) {</span>
+<span class="fc" id="L190">            tcpProtocol = IPv4.PROTOCOL_TCP;</span>
+<span class="fc" id="L191">            icmpProtocol = IPv4.PROTOCOL_ICMP;</span>
+        } else {
+<span class="nc" id="L193">            tcpProtocol = IPv6.PROTOCOL_TCP;</span>
+<span class="nc" id="L194">            icmpProtocol = IPv6.PROTOCOL_ICMP6;</span>
+        }
+
+        // Path from BGP speaker to BGP peer matching destination TCP port 179
+<span class="fc" id="L198">        selector = buildSelector(tcpProtocol,</span>
+                ipOne,
+                ipTwo,
+                null,
+<span class="fc" id="L202">                BGP_PORT);</span>
+
+<span class="fc" id="L204">        key = buildKey(ipOne, ipTwo, SUFFIX_DST);</span>
+
+<span class="fc" id="L206">        intents.add(PointToPointIntent.builder()</span>
+<span class="fc" id="L207">                .appId(appId)</span>
+<span class="fc" id="L208">                .key(key)</span>
+<span class="fc" id="L209">                .selector(selector)</span>
+<span class="fc" id="L210">                .treatment(treatment)</span>
+<span class="fc" id="L211">                .ingressPoint(portOne)</span>
+<span class="fc" id="L212">                .egressPoint(portTwo)</span>
+<span class="fc" id="L213">                .priority(PRIORITY_OFFSET)</span>
+<span class="fc" id="L214">                .build());</span>
+
+        // Path from BGP speaker to BGP peer matching source TCP port 179
+<span class="fc" id="L217">        selector = buildSelector(tcpProtocol,</span>
+                ipOne,
+                ipTwo,
+<span class="fc" id="L220">                BGP_PORT,</span>
+                null);
+
+<span class="fc" id="L223">        key = buildKey(ipOne, ipTwo, SUFFIX_SRC);</span>
+
+<span class="fc" id="L225">        intents.add(PointToPointIntent.builder()</span>
+<span class="fc" id="L226">                .appId(appId)</span>
+<span class="fc" id="L227">                .key(key)</span>
+<span class="fc" id="L228">                .selector(selector)</span>
+<span class="fc" id="L229">                .treatment(treatment)</span>
+<span class="fc" id="L230">                .ingressPoint(portOne)</span>
+<span class="fc" id="L231">                .egressPoint(portTwo)</span>
+<span class="fc" id="L232">                .priority(PRIORITY_OFFSET)</span>
+<span class="fc" id="L233">                .build());</span>
+
+        // Path from BGP peer to BGP speaker matching destination TCP port 179
+<span class="fc" id="L236">        selector = buildSelector(tcpProtocol,</span>
+                ipTwo,
+                ipOne,
+                null,
+<span class="fc" id="L240">                BGP_PORT);</span>
+
+<span class="fc" id="L242">        key = buildKey(ipTwo, ipOne, SUFFIX_DST);</span>
+
+<span class="fc" id="L244">        intents.add(PointToPointIntent.builder()</span>
+<span class="fc" id="L245">                .appId(appId)</span>
+<span class="fc" id="L246">                .key(key)</span>
+<span class="fc" id="L247">                .selector(selector)</span>
+<span class="fc" id="L248">                .treatment(treatment)</span>
+<span class="fc" id="L249">                .ingressPoint(portTwo)</span>
+<span class="fc" id="L250">                .egressPoint(portOne)</span>
+<span class="fc" id="L251">                .priority(PRIORITY_OFFSET)</span>
+<span class="fc" id="L252">                .build());</span>
+
+        // Path from BGP peer to BGP speaker matching source TCP port 179
+<span class="fc" id="L255">        selector = buildSelector(tcpProtocol,</span>
+                ipTwo,
+                ipOne,
+<span class="fc" id="L258">                BGP_PORT,</span>
+                null);
+
+<span class="fc" id="L261">        key = buildKey(ipTwo, ipOne, SUFFIX_SRC);</span>
+
+<span class="fc" id="L263">        intents.add(PointToPointIntent.builder()</span>
+<span class="fc" id="L264">                .appId(appId)</span>
+<span class="fc" id="L265">                .key(key)</span>
+<span class="fc" id="L266">                .selector(selector)</span>
+<span class="fc" id="L267">                .treatment(treatment)</span>
+<span class="fc" id="L268">                .ingressPoint(portTwo)</span>
+<span class="fc" id="L269">                .egressPoint(portOne)</span>
+<span class="fc" id="L270">                .priority(PRIORITY_OFFSET)</span>
+<span class="fc" id="L271">                .build());</span>
+
+        // ICMP path from BGP speaker to BGP peer
+<span class="fc" id="L274">        selector = buildSelector(icmpProtocol,</span>
+                ipOne,
+                ipTwo,
+                null,
+                null);
+
+<span class="fc" id="L280">        key = buildKey(ipOne, ipTwo, SUFFIX_ICMP);</span>
+
+<span class="fc" id="L282">        intents.add(PointToPointIntent.builder()</span>
+<span class="fc" id="L283">                .appId(appId)</span>
+<span class="fc" id="L284">                .key(key)</span>
+<span class="fc" id="L285">                .selector(selector)</span>
+<span class="fc" id="L286">                .treatment(treatment)</span>
+<span class="fc" id="L287">                .ingressPoint(portOne)</span>
+<span class="fc" id="L288">                .egressPoint(portTwo)</span>
+<span class="fc" id="L289">                .priority(PRIORITY_OFFSET)</span>
+<span class="fc" id="L290">                .build());</span>
+
+        // ICMP path from BGP peer to BGP speaker
+<span class="fc" id="L293">        selector = buildSelector(icmpProtocol,</span>
+                ipTwo,
+                ipOne,
+                null,
+                null);
+
+<span class="fc" id="L299">        key = buildKey(ipTwo, ipOne, SUFFIX_ICMP);</span>
+
+<span class="fc" id="L301">        intents.add(PointToPointIntent.builder()</span>
+<span class="fc" id="L302">                .appId(appId)</span>
+<span class="fc" id="L303">                .key(key)</span>
+<span class="fc" id="L304">                .selector(selector)</span>
+<span class="fc" id="L305">                .treatment(treatment)</span>
+<span class="fc" id="L306">                .ingressPoint(portTwo)</span>
+<span class="fc" id="L307">                .egressPoint(portOne)</span>
+<span class="fc" id="L308">                .priority(PRIORITY_OFFSET)</span>
+<span class="fc" id="L309">                .build());</span>
+
+<span class="fc" id="L311">        return intents;</span>
+    }
+
+    /**
+     * Builds a traffic selector based on the set of input parameters.
+     *
+     * @param ipProto IP protocol
+     * @param srcIp source IP address
+     * @param dstIp destination IP address
+     * @param srcTcpPort source TCP port, or null if shouldn't be set
+     * @param dstTcpPort destination TCP port, or null if shouldn't be set
+     * @return the new traffic selector
+     */
+    private TrafficSelector buildSelector(byte ipProto, IpAddress srcIp,
+                                          IpAddress dstIp, Short srcTcpPort,
+                                          Short dstTcpPort) {
+<span class="fc" id="L327">        TrafficSelector.Builder builder = DefaultTrafficSelector.builder()</span>
+<span class="fc" id="L328">                .matchEthType(Ethernet.TYPE_IPV4)</span>
+<span class="fc" id="L329">                .matchIPProtocol(ipProto);</span>
+
+<span class="pc bpc" id="L331" title="1 of 2 branches missed.">        if (dstIp.isIp4()) {</span>
+<span class="fc" id="L332">            builder.matchIPSrc(IpPrefix.valueOf(srcIp, IpPrefix.MAX_INET_MASK_LENGTH))</span>
+<span class="fc" id="L333">                    .matchIPDst(IpPrefix.valueOf(dstIp, IpPrefix.MAX_INET_MASK_LENGTH));</span>
+        } else {
+<span class="nc" id="L335">            builder.matchIPv6Src(IpPrefix.valueOf(srcIp, IpPrefix.MAX_INET6_MASK_LENGTH))</span>
+<span class="nc" id="L336">                    .matchIPv6Dst(IpPrefix.valueOf(dstIp, IpPrefix.MAX_INET6_MASK_LENGTH));</span>
+        }
+
+<span class="fc bfc" id="L339" title="All 2 branches covered.">        if (srcTcpPort != null) {</span>
+<span class="fc" id="L340">            builder.matchTcpSrc(TpPort.tpPort(srcTcpPort));</span>
+        }
+
+<span class="fc bfc" id="L343" title="All 2 branches covered.">        if (dstTcpPort != null) {</span>
+<span class="fc" id="L344">            builder.matchTcpDst(TpPort.tpPort(dstTcpPort));</span>
+        }
+
+<span class="fc" id="L347">        return builder.build();</span>
+    }
+
+    /**
+     * Builds an intent Key for a point-to-point intent based off the source
+     * and destination IP address, as well as a suffix String to distinguish
+     * between different types of intents between the same source and
+     * destination.
+     *
+     * @param srcIp source IP address
+     * @param dstIp destination IP address
+     * @param suffix suffix string
+     * @return
+     */
+    private Key buildKey(IpAddress srcIp, IpAddress dstIp, String suffix) {
+<span class="fc" id="L362">        String keyString = new StringBuilder()</span>
+<span class="fc" id="L363">                .append(srcIp.toString())</span>
+<span class="fc" id="L364">                .append(&quot;-&quot;)</span>
+<span class="fc" id="L365">                .append(dstIp.toString())</span>
+<span class="fc" id="L366">                .append(&quot;-&quot;)</span>
+<span class="fc" id="L367">                .append(suffix)</span>
+<span class="fc" id="L368">                .toString();</span>
+
+<span class="fc" id="L370">        return Key.of(keyString, appId);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

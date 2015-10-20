@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConsistentLinkResourceStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.resource.impl</a> &gt; <span class="el_source">ConsistentLinkResourceStore.java</span></div><h1>ConsistentLinkResourceStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.resource.impl;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.onlab.util.Bandwidth;
+import org.onosproject.net.OmsPort;
+import org.onosproject.net.device.DeviceService;
+import org.slf4j.Logger;
+import org.onlab.util.PositionalParameterStringFormatter;
+import org.onosproject.net.Link;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.Port;
+import org.onosproject.net.intent.IntentId;
+import org.onosproject.net.resource.link.BandwidthResource;
+import org.onosproject.net.resource.link.BandwidthResourceAllocation;
+import org.onosproject.net.resource.link.LambdaResource;
+import org.onosproject.net.resource.link.LambdaResourceAllocation;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.onosproject.net.resource.link.LinkResourceEvent;
+import org.onosproject.net.resource.link.LinkResourceStore;
+import org.onosproject.net.resource.link.LinkResourceStoreDelegate;
+import org.onosproject.net.resource.link.MplsLabel;
+import org.onosproject.net.resource.link.MplsLabelResourceAllocation;
+import org.onosproject.net.resource.ResourceAllocation;
+import org.onosproject.net.resource.ResourceAllocationException;
+import org.onosproject.net.resource.ResourceType;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.TransactionContext;
+import org.onosproject.store.service.TransactionException;
+import org.onosproject.store.service.TransactionalMap;
+import org.onosproject.store.service.Versioned;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.net.AnnotationKeys.BANDWIDTH;
+
+/**
+ * Store that manages link resources using Copycat-backed TransactionalMaps.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L79">public class ConsistentLinkResourceStore extends</span>
+        AbstractStore&lt;LinkResourceEvent, LinkResourceStoreDelegate&gt; implements
+        LinkResourceStore {
+
+<span class="nc" id="L83">    private final Logger log = getLogger(getClass());</span>
+
+<span class="nc" id="L85">    private static final BandwidthResource DEFAULT_BANDWIDTH = new BandwidthResource(Bandwidth.mbps(1_000));</span>
+<span class="nc" id="L86">    private static final BandwidthResource EMPTY_BW = new BandwidthResource(Bandwidth.bps(0));</span>
+
+    // Smallest non-reserved MPLS label
+    private static final int MIN_UNRESERVED_LABEL = 0x10;
+    // Max non-reserved MPLS label = 239
+    private static final int MAX_UNRESERVED_LABEL = 0xEF;
+
+    // table to store current allocations
+    /** LinkKey -&gt; List&lt;LinkResourceAllocations&gt;. */
+    private static final String LINK_RESOURCE_ALLOCATIONS = &quot;LinkAllocations&quot;;
+
+    /** IntentId -&gt; LinkResourceAllocations. */
+    private static final String INTENT_ALLOCATIONS = &quot;LinkIntentAllocations&quot;;
+
+<span class="nc" id="L100">    private static final Serializer SERIALIZER = Serializer.using(KryoNamespaces.API);</span>
+
+    // for reading committed values.
+    private ConsistentMap&lt;IntentId, LinkResourceAllocations&gt; intentAllocMap;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L113">        intentAllocMap = storageService.&lt;IntentId, LinkResourceAllocations&gt;consistentMapBuilder()</span>
+<span class="nc" id="L114">                .withName(INTENT_ALLOCATIONS)</span>
+<span class="nc" id="L115">                .withSerializer(SERIALIZER)</span>
+<span class="nc" id="L116">                .build();</span>
+<span class="nc" id="L117">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L118">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L122">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L123">    }</span>
+
+    private TransactionalMap&lt;IntentId, LinkResourceAllocations&gt; getIntentAllocs(TransactionContext tx) {
+<span class="nc" id="L126">        return tx.getTransactionalMap(INTENT_ALLOCATIONS, SERIALIZER);</span>
+    }
+
+    private TransactionalMap&lt;LinkKey, List&lt;LinkResourceAllocations&gt;&gt; getLinkAllocs(TransactionContext tx) {
+<span class="nc" id="L130">        return tx.getTransactionalMap(LINK_RESOURCE_ALLOCATIONS, SERIALIZER);</span>
+    }
+
+    private TransactionContext getTxContext() {
+<span class="nc" id="L134">        return storageService.transactionContextBuilder().build();</span>
+    }
+
+    private Set&lt;ResourceAllocation&gt; getResourceCapacity(ResourceType type, Link link) {
+<span class="nc bnc" id="L138" title="All 4 branches missed.">        switch (type) {</span>
+            case BANDWIDTH:
+<span class="nc" id="L140">                return ImmutableSet.of(getBandwidthResourceCapacity(link));</span>
+            case LAMBDA:
+<span class="nc" id="L142">                return getLambdaResourceCapacity(link);</span>
+            case MPLS_LABEL:
+<span class="nc" id="L144">                return getMplsResourceCapacity();</span>
+            default:
+<span class="nc" id="L146">                return ImmutableSet.of();</span>
+        }
+    }
+
+    private Set&lt;ResourceAllocation&gt; getLambdaResourceCapacity(Link link) {
+<span class="nc" id="L151">        Port port = deviceService.getPort(link.src().deviceId(), link.src().port());</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        if (!(port instanceof OmsPort)) {</span>
+<span class="nc" id="L153">            return Collections.emptySet();</span>
+        }
+
+<span class="nc" id="L156">        OmsPort omsPort = (OmsPort) port;</span>
+<span class="nc" id="L157">        Set&lt;ResourceAllocation&gt; allocations = new HashSet&lt;&gt;();</span>
+        // Assume fixed grid for now
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        for (int i = 0; i &lt; omsPort.totalChannels(); i++) {</span>
+<span class="nc" id="L160">            allocations.add(new LambdaResourceAllocation(LambdaResource.valueOf(i)));</span>
+        }
+<span class="nc" id="L162">        return allocations;</span>
+    }
+
+    private BandwidthResourceAllocation getBandwidthResourceCapacity(Link link) {
+
+        // if Link annotation exist, use them
+        // if all fails, use DEFAULT_BANDWIDTH
+<span class="nc" id="L169">        BandwidthResource bandwidth = DEFAULT_BANDWIDTH;</span>
+<span class="nc" id="L170">        String strBw = link.annotations().value(BANDWIDTH);</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">        if (strBw == null) {</span>
+<span class="nc" id="L172">            return new BandwidthResourceAllocation(bandwidth);</span>
+        }
+
+        try {
+<span class="nc" id="L176">            bandwidth = new BandwidthResource(Bandwidth.mbps(Double.parseDouble(strBw)));</span>
+<span class="nc" id="L177">        } catch (NumberFormatException e) {</span>
+            // do nothings, use default bandwidth
+<span class="nc" id="L179">            bandwidth = DEFAULT_BANDWIDTH;</span>
+<span class="nc" id="L180">        }</span>
+<span class="nc" id="L181">        return new BandwidthResourceAllocation(bandwidth);</span>
+    }
+
+    private Set&lt;ResourceAllocation&gt; getMplsResourceCapacity() {
+<span class="nc" id="L185">        Set&lt;ResourceAllocation&gt; allocations = new HashSet&lt;&gt;();</span>
+        //Ignoring reserved labels of 0 through 15
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        for (int i = MIN_UNRESERVED_LABEL; i &lt;= MAX_UNRESERVED_LABEL; i++) {</span>
+<span class="nc" id="L188">            allocations.add(new MplsLabelResourceAllocation(MplsLabel</span>
+<span class="nc" id="L189">                    .valueOf(i)));</span>
+
+        }
+<span class="nc" id="L192">        return allocations;</span>
+    }
+
+    private Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; getResourceCapacity(Link link) {
+<span class="nc" id="L196">        Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; caps = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        for (ResourceType type : ResourceType.values()) {</span>
+<span class="nc" id="L198">            Set&lt;ResourceAllocation&gt; cap = getResourceCapacity(type, link);</span>
+<span class="nc" id="L199">            caps.put(type, cap);</span>
+        }
+<span class="nc" id="L201">        return caps;</span>
+    }
+
+    @Override
+    public Set&lt;ResourceAllocation&gt; getFreeResources(Link link) {
+<span class="nc" id="L206">        TransactionContext tx = getTxContext();</span>
+
+<span class="nc" id="L208">        tx.begin();</span>
+        try {
+<span class="nc" id="L210">            Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; freeResources = getFreeResourcesEx(tx, link);</span>
+<span class="nc" id="L211">            return freeResources.values().stream()</span>
+<span class="nc" id="L212">                    .flatMap(Collection::stream)</span>
+<span class="nc" id="L213">                    .collect(Collectors.toSet());</span>
+        } finally {
+<span class="nc" id="L215">            tx.abort();</span>
+        }
+    }
+
+    private Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; getFreeResourcesEx(TransactionContext tx, Link link) {
+<span class="nc" id="L220">        checkNotNull(tx);</span>
+<span class="nc" id="L221">        checkNotNull(link);</span>
+
+<span class="nc" id="L223">        Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; free = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L224">        final Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; caps = getResourceCapacity(link);</span>
+<span class="nc" id="L225">        final List&lt;LinkResourceAllocations&gt; allocations = ImmutableList.copyOf(getAllocations(tx, link));</span>
+
+<span class="nc" id="L227">        Set&lt;ResourceAllocation&gt; bw = caps.get(ResourceType.BANDWIDTH);</span>
+<span class="nc" id="L228">        Set&lt;ResourceAllocation&gt; value = getFreeBandwidthResources(link, bw, allocations);</span>
+<span class="nc" id="L229">        free.put(ResourceType.BANDWIDTH, value);</span>
+
+<span class="nc" id="L231">        Set&lt;ResourceAllocation&gt; lmd = caps.get(ResourceType.LAMBDA);</span>
+<span class="nc" id="L232">        Set&lt;ResourceAllocation&gt; freeL = getFreeResources(link, lmd, allocations,</span>
+                LambdaResourceAllocation.class);
+<span class="nc" id="L234">        free.put(ResourceType.LAMBDA, freeL);</span>
+
+<span class="nc" id="L236">        Set&lt;ResourceAllocation&gt; mpls = caps.get(ResourceType.MPLS_LABEL);</span>
+<span class="nc" id="L237">        Set&lt;ResourceAllocation&gt; freeLabel = getFreeResources(link, mpls, allocations,</span>
+                MplsLabelResourceAllocation.class);
+<span class="nc" id="L239">        free.put(ResourceType.MPLS_LABEL, freeLabel);</span>
+
+<span class="nc" id="L241">        return free;</span>
+    }
+
+    private Set&lt;ResourceAllocation&gt; getFreeBandwidthResources(Link link, Set&lt;ResourceAllocation&gt; bw,
+                                                              List&lt;LinkResourceAllocations&gt; allocations) {
+<span class="nc bnc" id="L246" title="All 4 branches missed.">        if (bw == null || bw.isEmpty()) {</span>
+<span class="nc" id="L247">            bw = Sets.newHashSet(new BandwidthResourceAllocation(EMPTY_BW));</span>
+        }
+
+<span class="nc" id="L250">        BandwidthResourceAllocation cap = (BandwidthResourceAllocation) bw.iterator().next();</span>
+<span class="nc" id="L251">        double freeBw = cap.bandwidth().toDouble();</span>
+
+        // enumerate current allocations, subtracting resources
+<span class="nc" id="L254">        double allocatedBw = allocations.stream()</span>
+<span class="nc" id="L255">                .flatMap(x -&gt; x.getResourceAllocation(link).stream())</span>
+<span class="nc" id="L256">                .filter(x -&gt; x instanceof BandwidthResourceAllocation)</span>
+<span class="nc" id="L257">                .map(x -&gt; (BandwidthResourceAllocation) x)</span>
+<span class="nc" id="L258">                .mapToDouble(x -&gt; x.bandwidth().toDouble())</span>
+<span class="nc" id="L259">                .sum();</span>
+<span class="nc" id="L260">        freeBw -= allocatedBw;</span>
+<span class="nc" id="L261">        return Sets.newHashSet(</span>
+<span class="nc" id="L262">                new BandwidthResourceAllocation(new BandwidthResource(Bandwidth.bps(freeBw))));</span>
+    }
+
+    private Set&lt;ResourceAllocation&gt; getFreeResources(Link link,
+                                                     Set&lt;ResourceAllocation&gt; resources,
+                                                     List&lt;LinkResourceAllocations&gt; allocations,
+                                                     Class&lt;? extends ResourceAllocation&gt; cls) {
+<span class="nc bnc" id="L269" title="All 4 branches missed.">        if (resources == null || resources.isEmpty()) {</span>
+            // nothing left
+<span class="nc" id="L271">            return Collections.emptySet();</span>
+        }
+<span class="nc" id="L273">        Set&lt;ResourceAllocation&gt; freeL = resources.stream()</span>
+<span class="nc" id="L274">                .filter(cls::isInstance)</span>
+<span class="nc" id="L275">                .collect(Collectors.toSet());</span>
+
+        // enumerate current allocations, removing resources
+<span class="nc" id="L278">        List&lt;ResourceAllocation&gt; allocated = allocations.stream()</span>
+<span class="nc" id="L279">                .flatMap(x -&gt; x.getResourceAllocation(link).stream())</span>
+<span class="nc" id="L280">                .filter(cls::isInstance)</span>
+<span class="nc" id="L281">                .collect(Collectors.toList());</span>
+<span class="nc" id="L282">        freeL.removeAll(allocated);</span>
+<span class="nc" id="L283">        return freeL;</span>
+    }
+
+    @Override
+    public void allocateResources(LinkResourceAllocations allocations) {
+<span class="nc" id="L288">        checkNotNull(allocations);</span>
+<span class="nc" id="L289">        TransactionContext tx = getTxContext();</span>
+
+<span class="nc" id="L291">        tx.begin();</span>
+        try {
+<span class="nc" id="L293">            TransactionalMap&lt;IntentId, LinkResourceAllocations&gt; intentAllocs = getIntentAllocs(tx);</span>
+<span class="nc" id="L294">            intentAllocs.put(allocations.intentId(), allocations);</span>
+<span class="nc" id="L295">            allocations.links().forEach(link -&gt; allocateLinkResource(tx, link, allocations));</span>
+<span class="nc" id="L296">            tx.commit();</span>
+<span class="nc" id="L297">        } catch (TransactionException | ResourceAllocationException e) {</span>
+<span class="nc" id="L298">            log.error(&quot;Exception thrown, rolling back&quot;, e);</span>
+<span class="nc" id="L299">            tx.abort();</span>
+<span class="nc" id="L300">        } catch (Exception e) {</span>
+<span class="nc" id="L301">            log.error(&quot;Exception thrown, rolling back&quot;, e);</span>
+<span class="nc" id="L302">            tx.abort();</span>
+<span class="nc" id="L303">            throw e;</span>
+<span class="nc" id="L304">        }</span>
+<span class="nc" id="L305">    }</span>
+
+    private void allocateLinkResource(TransactionContext tx, Link link,
+            LinkResourceAllocations allocations) {
+        // requested resources
+<span class="nc" id="L310">        Set&lt;ResourceAllocation&gt; reqs = allocations.getResourceAllocation(link);</span>
+<span class="nc" id="L311">        Map&lt;ResourceType, Set&lt;ResourceAllocation&gt;&gt; available = getFreeResourcesEx(tx, link);</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        for (ResourceAllocation req : reqs) {</span>
+<span class="nc" id="L313">            Set&lt;ResourceAllocation&gt; avail = available.get(req.type());</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">            if (req instanceof BandwidthResourceAllocation) {</span>
+                // check if allocation should be accepted
+<span class="nc bnc" id="L316" title="All 2 branches missed.">                if (avail.isEmpty()) {</span>
+<span class="nc" id="L317">                    throw new ResourceAllocationException(String.format(&quot;There's no Bandwidth resource on %s?&quot;, link));</span>
+                }
+<span class="nc" id="L319">                BandwidthResourceAllocation bw = (BandwidthResourceAllocation) avail.iterator().next();</span>
+<span class="nc" id="L320">                double bwLeft = bw.bandwidth().toDouble();</span>
+<span class="nc" id="L321">                BandwidthResourceAllocation bwReq = ((BandwidthResourceAllocation) req);</span>
+<span class="nc" id="L322">                bwLeft -= bwReq.bandwidth().toDouble();</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">                if (bwLeft &lt; 0) {</span>
+<span class="nc" id="L324">                    throw new ResourceAllocationException(</span>
+<span class="nc" id="L325">                            PositionalParameterStringFormatter.format(</span>
+                                    &quot;Unable to allocate bandwidth for link {} &quot;
+                                        + &quot; requested amount is {} current allocation is {}&quot;,
+                                    link,
+<span class="nc" id="L329">                                    bwReq.bandwidth().toDouble(),</span>
+                                    bw));
+                }
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            } else if (req instanceof LambdaResourceAllocation) {</span>
+<span class="nc" id="L333">                LambdaResourceAllocation lambdaAllocation = (LambdaResourceAllocation) req;</span>
+                // check if allocation should be accepted
+<span class="nc bnc" id="L335" title="All 2 branches missed.">                if (!avail.contains(req)) {</span>
+                    // requested lambda was not available
+<span class="nc" id="L337">                    throw new ResourceAllocationException(</span>
+<span class="nc" id="L338">                            PositionalParameterStringFormatter.format(</span>
+                                &quot;Unable to allocate lambda for link {} lambda is {}&quot;,
+                                    link,
+<span class="nc" id="L341">                                    lambdaAllocation.lambda().toInt()));</span>
+                }
+<span class="nc bnc" id="L343" title="All 2 branches missed.">            } else if (req instanceof MplsLabelResourceAllocation) {</span>
+<span class="nc" id="L344">                MplsLabelResourceAllocation mplsAllocation = (MplsLabelResourceAllocation) req;</span>
+<span class="nc bnc" id="L345" title="All 2 branches missed.">                if (!avail.contains(req)) {</span>
+<span class="nc" id="L346">                    throw new ResourceAllocationException(</span>
+                                                          PositionalParameterStringFormatter
+<span class="nc" id="L348">                                                                  .format(&quot;Unable to allocate MPLS label for link &quot;</span>
+                                                                          + &quot;{} MPLS label is {}&quot;,
+                                                                          link,
+                                                                          mplsAllocation
+<span class="nc" id="L352">                                                                                  .mplsLabel()</span>
+<span class="nc" id="L353">                                                                                  .toString()));</span>
+                }
+            }
+<span class="nc" id="L356">        }</span>
+        // all requests allocatable =&gt; add allocation
+<span class="nc" id="L358">        final LinkKey linkKey = LinkKey.linkKey(link);</span>
+<span class="nc" id="L359">        TransactionalMap&lt;LinkKey, List&lt;LinkResourceAllocations&gt;&gt; linkAllocs = getLinkAllocs(tx);</span>
+<span class="nc" id="L360">        List&lt;LinkResourceAllocations&gt; before = linkAllocs.get(linkKey);</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">        if (before == null) {</span>
+<span class="nc" id="L362">            List&lt;LinkResourceAllocations&gt; after = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L363">            after.add(allocations);</span>
+<span class="nc" id="L364">            linkAllocs.putIfAbsent(linkKey, after);</span>
+<span class="nc" id="L365">        } else {</span>
+<span class="nc" id="L366">            boolean overlapped = before.stream()</span>
+<span class="nc" id="L367">                    .flatMap(x -&gt; x.getResourceAllocation(link).stream())</span>
+<span class="nc" id="L368">                    .anyMatch(x -&gt; allocations.getResourceAllocation(link).contains(x));</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">            if (overlapped) {</span>
+<span class="nc" id="L370">                throw new ResourceAllocationException(</span>
+<span class="nc" id="L371">                        String.format(&quot;Resource allocations are overlapped between %s and %s&quot;,</span>
+                        before, allocations)
+                );
+            }
+<span class="nc" id="L375">            List&lt;LinkResourceAllocations&gt; after = new ArrayList&lt;&gt;(before.size() + 1);</span>
+<span class="nc" id="L376">            after.addAll(before);</span>
+<span class="nc" id="L377">            after.add(allocations);</span>
+<span class="nc" id="L378">            linkAllocs.replace(linkKey, before, after);</span>
+        }
+<span class="nc" id="L380">    }</span>
+
+    @Override
+    public LinkResourceEvent releaseResources(LinkResourceAllocations allocations) {
+<span class="nc" id="L384">        checkNotNull(allocations);</span>
+
+<span class="nc" id="L386">        final IntentId intentId = allocations.intentId();</span>
+<span class="nc" id="L387">        final Collection&lt;Link&gt; links = allocations.links();</span>
+<span class="nc" id="L388">        boolean success = false;</span>
+        do {
+<span class="nc" id="L390">            TransactionContext tx = getTxContext();</span>
+<span class="nc" id="L391">            tx.begin();</span>
+            try {
+<span class="nc" id="L393">                TransactionalMap&lt;IntentId, LinkResourceAllocations&gt; intentAllocs = getIntentAllocs(tx);</span>
+<span class="nc" id="L394">                intentAllocs.remove(intentId);</span>
+
+<span class="nc" id="L396">                TransactionalMap&lt;LinkKey, List&lt;LinkResourceAllocations&gt;&gt; linkAllocs = getLinkAllocs(tx);</span>
+<span class="nc" id="L397">                links.forEach(link -&gt; {</span>
+<span class="nc" id="L398">                    final LinkKey linkId = LinkKey.linkKey(link);</span>
+
+<span class="nc" id="L400">                    List&lt;LinkResourceAllocations&gt; before = linkAllocs.get(linkId);</span>
+<span class="nc bnc" id="L401" title="All 4 branches missed.">                    if (before == null || before.isEmpty()) {</span>
+                        // something is wrong, but it is already freed
+<span class="nc" id="L403">                        log.warn(&quot;There was no resource left to release on {}&quot;, linkId);</span>
+<span class="nc" id="L404">                        return;</span>
+                    }
+<span class="nc" id="L406">                    List&lt;LinkResourceAllocations&gt; after = new ArrayList&lt;&gt;(before);</span>
+<span class="nc" id="L407">                    after.remove(allocations);</span>
+<span class="nc" id="L408">                    linkAllocs.replace(linkId, before, after);</span>
+<span class="nc" id="L409">                });</span>
+<span class="nc" id="L410">                tx.commit();</span>
+<span class="nc" id="L411">                success = true;</span>
+<span class="nc" id="L412">            } catch (TransactionException e) {</span>
+<span class="nc" id="L413">                log.debug(&quot;Transaction failed, retrying&quot;, e);</span>
+<span class="nc" id="L414">                tx.abort();</span>
+<span class="nc" id="L415">            } catch (Exception e) {</span>
+<span class="nc" id="L416">                log.error(&quot;Exception thrown during releaseResource {}&quot;, allocations, e);</span>
+<span class="nc" id="L417">                tx.abort();</span>
+<span class="nc" id="L418">                throw e;</span>
+<span class="nc" id="L419">            }</span>
+<span class="nc bnc" id="L420" title="All 2 branches missed.">        } while (!success);</span>
+
+        // Issue events to force recompilation of intents.
+<span class="nc" id="L423">        final List&lt;LinkResourceAllocations&gt; releasedResources = ImmutableList.of(allocations);</span>
+<span class="nc" id="L424">        return new LinkResourceEvent(</span>
+                LinkResourceEvent.Type.ADDITIONAL_RESOURCES_AVAILABLE,
+                releasedResources);
+
+    }
+
+    @Override
+    public LinkResourceAllocations getAllocations(IntentId intentId) {
+<span class="nc" id="L432">        checkNotNull(intentId);</span>
+<span class="nc" id="L433">        Versioned&lt;LinkResourceAllocations&gt; alloc = null;</span>
+        try {
+<span class="nc" id="L435">            alloc = intentAllocMap.get(intentId);</span>
+<span class="nc" id="L436">        } catch (Exception e) {</span>
+<span class="nc" id="L437">            log.warn(&quot;Could not read resource allocation information&quot;, e);</span>
+<span class="nc" id="L438">        }</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">        return alloc == null ? null : alloc.value();</span>
+    }
+
+    @Override
+    public Iterable&lt;LinkResourceAllocations&gt; getAllocations(Link link) {
+<span class="nc" id="L444">        checkNotNull(link);</span>
+<span class="nc" id="L445">        TransactionContext tx = getTxContext();</span>
+<span class="nc" id="L446">        Iterable&lt;LinkResourceAllocations&gt; res = null;</span>
+<span class="nc" id="L447">        tx.begin();</span>
+        try {
+<span class="nc" id="L449">            res = getAllocations(tx, link);</span>
+        } finally {
+<span class="nc" id="L451">            tx.abort();</span>
+<span class="nc" id="L452">        }</span>
+<span class="nc bnc" id="L453" title="All 2 branches missed.">        return res == null ? Collections.emptyList() : res;</span>
+    }
+
+    @Override
+    public Iterable&lt;LinkResourceAllocations&gt; getAllocations() {
+        try {
+<span class="nc" id="L459">            Set&lt;LinkResourceAllocations&gt; allocs =</span>
+<span class="nc" id="L460">                    intentAllocMap.values().stream().map(Versioned::value).collect(Collectors.toSet());</span>
+<span class="nc" id="L461">            return ImmutableSet.copyOf(allocs);</span>
+<span class="nc" id="L462">        } catch (Exception e) {</span>
+<span class="nc" id="L463">            log.warn(&quot;Could not read resource allocation information&quot;, e);</span>
+        }
+<span class="nc" id="L465">        return ImmutableSet.of();</span>
+    }
+
+    private Iterable&lt;LinkResourceAllocations&gt; getAllocations(TransactionContext tx, Link link) {
+<span class="nc" id="L469">        checkNotNull(tx);</span>
+<span class="nc" id="L470">        checkNotNull(link);</span>
+<span class="nc" id="L471">        final LinkKey key = LinkKey.linkKey(link);</span>
+<span class="nc" id="L472">        TransactionalMap&lt;LinkKey, List&lt;LinkResourceAllocations&gt;&gt; linkAllocs = getLinkAllocs(tx);</span>
+
+<span class="nc" id="L474">        List&lt;LinkResourceAllocations&gt; res = linkAllocs.get(key);</span>
+<span class="nc bnc" id="L475" title="All 2 branches missed.">        if (res != null) {</span>
+<span class="nc" id="L476">            return res;</span>
+        }
+
+<span class="nc" id="L479">        res = linkAllocs.putIfAbsent(key, new ArrayList&lt;&gt;());</span>
+<span class="nc bnc" id="L480" title="All 2 branches missed.">        if (res == null) {</span>
+<span class="nc" id="L481">            return Collections.emptyList();</span>
+        } else {
+<span class="nc" id="L483">            return res;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

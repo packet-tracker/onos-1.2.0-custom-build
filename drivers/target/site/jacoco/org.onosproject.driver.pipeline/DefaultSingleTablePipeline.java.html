@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultSingleTablePipeline.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.pipeline</a> &gt; <span class="el_source">DefaultSingleTablePipeline.java</span></div><h1>DefaultSingleTablePipeline.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.pipeline;
+
+import org.onlab.osgi.ServiceDirectory;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.behaviour.Pipeliner;
+import org.onosproject.net.behaviour.PipelinerContext;
+import org.onosproject.net.driver.AbstractHandlerBehaviour;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.flowobjective.FilteringObjective;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+import org.onosproject.net.flowobjective.NextObjective;
+import org.onosproject.net.flowobjective.ObjectiveError;
+import org.slf4j.Logger;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Simple single table pipeline abstraction.
+ */
+<span class="nc" id="L43">public class DefaultSingleTablePipeline extends AbstractHandlerBehaviour implements Pipeliner {</span>
+
+<span class="nc" id="L45">    private final Logger log = getLogger(getClass());</span>
+
+    private ServiceDirectory serviceDirectory;
+    private FlowRuleService flowRuleService;
+    private DeviceId deviceId;
+
+    @Override
+    public void init(DeviceId deviceId, PipelinerContext context) {
+<span class="nc" id="L53">        this.serviceDirectory = context.directory();</span>
+<span class="nc" id="L54">        this.deviceId = deviceId;</span>
+
+<span class="nc" id="L56">        flowRuleService = serviceDirectory.get(FlowRuleService.class);</span>
+<span class="nc" id="L57">    }</span>
+
+    @Override
+<span class="nc" id="L60">    public void filter(FilteringObjective filter) {}</span>
+
+    @Override
+    public void forward(ForwardingObjective fwd) {
+<span class="nc" id="L64">        FlowRuleOperations.Builder flowBuilder = FlowRuleOperations.builder();</span>
+
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if (fwd.flag() != ForwardingObjective.Flag.VERSATILE) {</span>
+<span class="nc" id="L67">            throw new UnsupportedOperationException(</span>
+                    &quot;Only VERSATILE is supported.&quot;);
+        }
+
+<span class="nc" id="L71">        TrafficSelector selector = fwd.selector();</span>
+<span class="nc" id="L72">        TrafficTreatment treatment = fwd.treatment();</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if ((fwd.treatment().deferred().size() == 0) &amp;&amp;</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">                (fwd.treatment().immediate().size() == 0) &amp;&amp;</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">                (fwd.treatment().tableTransition() == null) &amp;&amp;</span>
+<span class="nc bnc" id="L76" title="All 2 branches missed.">                (!fwd.treatment().clearedDeferred())) {</span>
+<span class="nc" id="L77">            TrafficTreatment.Builder flowTreatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L78">            flowTreatment.add(Instructions.createDrop());</span>
+<span class="nc" id="L79">            treatment = flowTreatment.build();</span>
+        }
+
+<span class="nc" id="L82">        FlowRule.Builder ruleBuilder = DefaultFlowRule.builder()</span>
+<span class="nc" id="L83">                .forDevice(deviceId)</span>
+<span class="nc" id="L84">                .withSelector(selector)</span>
+<span class="nc" id="L85">                .withTreatment(treatment)</span>
+<span class="nc" id="L86">                .fromApp(fwd.appId())</span>
+<span class="nc" id="L87">                .withPriority(fwd.priority());</span>
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (fwd.permanent()) {</span>
+<span class="nc" id="L90">            ruleBuilder.makePermanent();</span>
+        } else {
+<span class="nc" id="L92">            ruleBuilder.makeTemporary(fwd.timeout());</span>
+        }
+
+
+<span class="nc bnc" id="L96" title="All 3 branches missed.">        switch (fwd.op()) {</span>
+
+            case ADD:
+<span class="nc" id="L99">                flowBuilder.add(ruleBuilder.build());</span>
+<span class="nc" id="L100">                break;</span>
+            case REMOVE:
+<span class="nc" id="L102">                flowBuilder.remove(ruleBuilder.build());</span>
+<span class="nc" id="L103">                break;</span>
+            default:
+<span class="nc" id="L105">                log.warn(&quot;Unknown operation {}&quot;, fwd.op());</span>
+        }
+
+<span class="nc" id="L108">        flowRuleService.apply(flowBuilder.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc bnc" id="L111" title="All 2 branches missed.">                if (fwd.context().isPresent()) {</span>
+<span class="nc" id="L112">                    fwd.context().get().onSuccess(fwd);</span>
+                }
+<span class="nc" id="L114">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                if (fwd.context().isPresent()) {</span>
+<span class="nc" id="L119">                    fwd.context().get().onError(fwd, ObjectiveError.FLOWINSTALLATIONFAILED);</span>
+                }
+<span class="nc" id="L121">            }</span>
+        }));
+
+<span class="nc" id="L124">    }</span>
+
+    @Override
+<span class="nc" id="L127">    public void next(NextObjective nextObjective) {}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelUpdateMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLabelUpdateMsgVer1.java</span></div><h1>PcepLabelUpdateMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLabelUpdate;
+import org.onosproject.pcepio.protocol.PcepLabelUpdateMsg;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP lable update message.
+ */
+class PcepLabelUpdateMsgVer1 implements PcepLabelUpdateMsg {
+
+    // Pcep version: 1
+
+    /*
+      The format of the PCLabelUpd message:
+
+                  &lt;PCLabelUpd Message&gt;         ::=     &lt;Common Header&gt;
+                                                       &lt;pce-label-update-list&gt;
+                Where:
+
+                &lt;pce-label-update-list&gt;        ::=     &lt;pce-label-update&gt;
+                                                       [&lt;pce-label-update-list&gt;]
+                &lt;pce-label-update&gt;             ::=     (&lt;pce-label-download&gt;|&lt;pce-label-map&gt;)
+
+                Where:
+                &lt;pce-label-download&gt;           ::=      &lt;SRP&gt;
+                                                        &lt;LSP&gt;
+                                                        &lt;label-list&gt;
+
+                &lt;pce-label-map&gt;                 ::=     &lt;SRP&gt;
+                                                        &lt;LABEL&gt;
+                                                        &lt;FEC&gt;
+
+                &lt;label-list &gt;                   ::=     &lt;LABEL&gt;
+                                                        [&lt;label-list&gt;]
+
+     */
+<span class="fc" id="L66">    protected static final Logger log = LoggerFactory.getLogger(PcepLabelUpdateMsgVer1.class);</span>
+
+    public static final byte PACKET_VERSION = 1;
+
+    //LabelUpdateMsgMinLength = COMMON-HEADER(4)+SrpObjMinLentgh(12)+LabelObjectMinLength(12)+FECType1Object(8)
+    public static final int PACKET_MINIMUM_LENGTH = 36;
+<span class="fc" id="L72">    public static final PcepType MSG_TYPE = PcepType.LABEL_UPDATE;</span>
+    //pce-label-update-list
+    private LinkedList&lt;PcepLabelUpdate&gt; llPcLabelUpdateList;
+
+<span class="fc" id="L76">    static final PcepLabelUpdateMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader reads LabelUpdate Message from the channel.
+     */
+<span class="fc" id="L81">    static class Reader implements PcepMessageReader&lt;PcepLabelUpdateMsg&gt; {</span>
+
+        @Override
+        public PcepLabelUpdateMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L87">                throw new PcepParseException(&quot;Readable bytes are less than Packet minimum length.&quot;);</span>
+            }
+
+            // fixed value property version == 1
+<span class="fc" id="L91">            byte version = cb.readByte();</span>
+<span class="fc" id="L92">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L94">                throw new PcepParseException(&quot;Wrong version.Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+            }
+            // fixed value property type == 13
+<span class="fc" id="L97">            byte type = cb.readByte();</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L99">                throw new PcepParseException(&quot;Wrong type. Expected=PcepType.LABEL_UPDATE(13), got=&quot; + type);</span>
+            }
+<span class="fc" id="L101">            short length = cb.readShort();</span>
+<span class="pc bpc" id="L102" title="1 of 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L103">                throw new PcepParseException(&quot;Wrong length. Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, is: &quot;</span>
+                        + length);
+            }
+            // parse &lt;pce-label-download&gt; / &lt;pce-label-map&gt;
+<span class="fc" id="L107">            LinkedList&lt;PcepLabelUpdate&gt; llPcLabelUpdateList = parsePcLabelUpdateList(cb);</span>
+<span class="fc" id="L108">            return new PcepLabelUpdateMsgVer1(llPcLabelUpdateList);</span>
+        }
+
+        /**
+         * Returns list of PCEP Label Update object.
+         *
+         * @param cb of type channel buffer
+         * @return llPcLabelUpdateList list of PCEP label update object
+         * @throws PcepParseException when fails to parse list of PCEP label update object
+         */
+        public LinkedList&lt;PcepLabelUpdate&gt; parsePcLabelUpdateList(ChannelBuffer cb) throws PcepParseException {
+
+            LinkedList&lt;PcepLabelUpdate&gt; llPcLabelUpdateList;
+<span class="fc" id="L121">            llPcLabelUpdateList = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L123" title="All 2 branches covered.">            while (0 &lt; cb.readableBytes()) {</span>
+<span class="fc" id="L124">                llPcLabelUpdateList.add(PcepLabelUpdateVer1.read(cb));</span>
+            }
+<span class="fc" id="L126">            return llPcLabelUpdateList;</span>
+        }
+    }
+
+    /**
+     * Constructor to initialize PCEP Label Update List.
+     *
+     * @param llPcLabelUpdateList list of PCEP Label Update object
+     */
+<span class="fc" id="L135">    PcepLabelUpdateMsgVer1(LinkedList&lt;PcepLabelUpdate&gt; llPcLabelUpdateList) {</span>
+<span class="fc" id="L136">        this.llPcLabelUpdateList = llPcLabelUpdateList;</span>
+<span class="fc" id="L137">    }</span>
+
+    /**
+     * Builder class for PCEP label update message.
+     */
+<span class="nc" id="L142">    static class Builder implements PcepLabelUpdateMsg.Builder {</span>
+
+        LinkedList&lt;PcepLabelUpdate&gt; llPcLabelUpdateList;
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L148">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L153">            return PcepType.LABEL_UPDATE;</span>
+        }
+
+        @Override
+        public PcepLabelUpdateMsg build() {
+<span class="nc" id="L158">            return new PcepLabelUpdateMsgVer1(this.llPcLabelUpdateList);</span>
+        }
+
+        @Override
+        public LinkedList&lt;PcepLabelUpdate&gt; getPcLabelUpdateList() {
+<span class="nc" id="L163">            return this.llPcLabelUpdateList;</span>
+        }
+
+        @Override
+        public Builder setPcLabelUpdateList(LinkedList&lt;PcepLabelUpdate&gt; ll) {
+<span class="nc" id="L168">            this.llPcLabelUpdateList = ll;</span>
+<span class="nc" id="L169">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="fc" id="L175">        WRITER.write(cb, this);</span>
+<span class="fc" id="L176">    }</span>
+
+<span class="fc" id="L178">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer writes LabelUpdate Message to the channel.
+     */
+<span class="fc" id="L183">    static class Writer implements PcepMessageWriter&lt;PcepLabelUpdateMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepLabelUpdateMsgVer1 message) throws PcepParseException {
+
+<span class="fc" id="L188">            int startIndex = cb.writerIndex();</span>
+
+            // first 3 bits set to version
+<span class="fc" id="L191">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+
+            // message type
+<span class="fc" id="L194">            cb.writeByte(MSG_TYPE.getType());</span>
+
+            // Length will be set after calculating length, but currently set it as 0.
+<span class="fc" id="L197">            int msgLenIndex = cb.writerIndex();</span>
+
+<span class="fc" id="L199">            cb.writeShort((short) 0);</span>
+<span class="fc" id="L200">            ListIterator&lt;PcepLabelUpdate&gt; listIterator = message.llPcLabelUpdateList.listIterator();</span>
+
+<span class="fc bfc" id="L202" title="All 2 branches covered.">            while (listIterator.hasNext()) {</span>
+<span class="fc" id="L203">                PcepLabelUpdate labelUpdate = listIterator.next();</span>
+<span class="fc" id="L204">                labelUpdate.write(cb);</span>
+<span class="fc" id="L205">            }</span>
+
+            // update message length field
+<span class="fc" id="L208">            int length = cb.writerIndex() - startIndex;</span>
+<span class="fc" id="L209">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="fc" id="L210">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L215">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L220">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public LinkedList&lt;PcepLabelUpdate&gt; getPcLabelUpdateList() {
+<span class="nc" id="L225">        return this.llPcLabelUpdateList;</span>
+    }
+
+    @Override
+    public void setPcLabelUpdateList(LinkedList&lt;PcepLabelUpdate&gt; ll) {
+<span class="nc" id="L230">        this.llPcLabelUpdateList = ll;</span>
+<span class="nc" id="L231">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L235">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L236">                .add(&quot;PcLabelUpdateList&quot;, llPcLabelUpdateList)</span>
+<span class="nc" id="L237">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

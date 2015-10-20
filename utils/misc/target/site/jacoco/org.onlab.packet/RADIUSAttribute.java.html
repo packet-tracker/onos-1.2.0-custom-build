@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>RADIUSAttribute.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">RADIUSAttribute.java</span></div><h1>RADIUSAttribute.java</h1><pre class="source lang-java linenums">/*
+ *
+ *  * Copyright 2015 AT&amp;T Foundry
+ *  *
+ *  * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ *  * you may not use this file except in compliance with the License.
+ *  * You may obtain a copy of the License at
+ *  *
+ *  *     http://www.apache.org/licenses/LICENSE-2.0
+ *  *
+ *  * Unless required by applicable law or agreed to in writing, software
+ *  * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  * See the License for the specific language governing permissions and
+ *  * limitations under the License.
+ *
+ */
+
+package org.onlab.packet;
+
+/**
+ * An attribute in a RADIUS packet.
+ */
+public class RADIUSAttribute {
+    protected byte type;
+    protected byte length;
+    protected byte[] value;
+
+    // RADIUS attribute types
+    public static final byte RADIUS_ATTR_USERNAME = 1;
+    public static final byte RADIUS_ATTR_NAS_IP = 4;
+    public static final byte RADIUS_ATTR_NAS_PORT = 5;
+    public static final byte RADIUS_ATTR_FRAMED_MTU = 12;
+    public static final byte RADIUS_ATTR_STATE = 24;
+    public static final byte RADIUS_ATTR_VENDOR_SPECIFIC = 26;
+    public static final byte RADIUS_ATTR_CALLING_STATION_ID = 31;
+    public static final byte RADIUS_ATTR_NAS_ID = 32;
+    public static final byte RADIUS_ATTR_ACCT_SESSION_ID = 44;
+    public static final byte RADIUS_ATTR_NAS_PORT_TYPE = 61;
+    public static final byte RADIUS_ATTR_EAP_MESSAGE = 79;
+    public static final byte RADIUS_ATTR_MESSAGE_AUTH = 80;
+    public static final byte RADIUS_ATTR_NAS_PORT_ID = 87;
+
+    /**
+     * Default constructor.
+     */
+<span class="nc" id="L47">    public RADIUSAttribute() {</span>
+<span class="nc" id="L48">    }</span>
+
+    /**
+     * Constructs a RADIUS attribute with the give type, length and value.
+     *
+     * @param type type
+     * @param length length
+     * @param value value
+     */
+<span class="nc" id="L57">    public RADIUSAttribute(final byte type, final byte length, final byte[] value) {</span>
+<span class="nc" id="L58">        this.type = type;</span>
+<span class="nc" id="L59">        this.length = length;</span>
+<span class="nc" id="L60">        this.value = value;</span>
+<span class="nc" id="L61">    }</span>
+
+    /**
+     * Checks if the attribute type is valid.
+     *
+     * @return whether the type is valid or not
+     */
+    public boolean isValidType() {
+<span class="nc bnc" id="L69" title="All 22 branches missed.">        return this.type == RADIUS_ATTR_USERNAME ||</span>
+                this.type == RADIUS_ATTR_NAS_IP ||
+                this.type == RADIUS_ATTR_NAS_PORT ||
+                this.type == RADIUS_ATTR_VENDOR_SPECIFIC ||
+                this.type == RADIUS_ATTR_CALLING_STATION_ID ||
+                this.type == RADIUS_ATTR_NAS_ID ||
+                this.type == RADIUS_ATTR_ACCT_SESSION_ID ||
+                this.type == RADIUS_ATTR_NAS_PORT_TYPE ||
+                this.type == RADIUS_ATTR_EAP_MESSAGE ||
+                this.type == RADIUS_ATTR_MESSAGE_AUTH ||
+                this.type == RADIUS_ATTR_NAS_PORT_ID;
+    }
+
+    /**
+     * Gets the attribute type.
+     *
+     * @return the type
+     */
+    public byte getType() {
+<span class="nc" id="L88">        return this.type;</span>
+    }
+
+    /**
+     * Sets the attribute type.
+     *
+     * @param type the code to set
+     * @return this
+     */
+    public RADIUSAttribute setType(final byte type) {
+<span class="nc" id="L98">        this.type = type;</span>
+<span class="nc" id="L99">        return this;</span>
+    }
+
+    /**
+     * Gets the attribute length.
+     *
+     * @return the length
+     */
+    public byte getLength() {
+<span class="nc" id="L108">        return this.length;</span>
+    }
+
+    /**
+     * Sets the attribute length.
+     *
+     * @param length the length to set
+     * @return this
+     */
+    public RADIUSAttribute setLength(final byte length) {
+<span class="nc" id="L118">        this.length = length;</span>
+<span class="nc" id="L119">        return this;</span>
+    }
+
+    /**
+     * Gets the attribute value.
+     *
+     * @return the value
+     */
+    public byte[] getValue() {
+<span class="nc" id="L128">        return this.value;</span>
+    }
+
+    /**
+     * Sets the attribute value.
+     *
+     * @param value the data to set
+     * @return this
+     */
+    public RADIUSAttribute setValue(final byte[] value) {
+<span class="nc" id="L138">        this.value = value;</span>
+<span class="nc" id="L139">        return this;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

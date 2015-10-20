@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?><components xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0">
+    <scr:component immediate="true" name="org.onosproject.incubator.store.virtual.impl.DistributedVirtualNetworkStore" activate="activate" deactivate="deactivate">
+        <implementation class="org.onosproject.incubator.store.virtual.impl.DistributedVirtualNetworkStore"/>
+        <service servicefactory="false">
+            <provide interface="org.onosproject.incubator.net.virtual.VirtualNetworkStore"/>
+            <provide interface="org.onosproject.store.Store"/>
+        </service>
+        <property name="service.pid" value="org.onosproject.incubator.store.virtual.impl.DistributedVirtualNetworkStore"/>
+    </scr:component>
+</components>

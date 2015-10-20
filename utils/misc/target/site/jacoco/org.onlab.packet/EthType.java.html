@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EthType.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">EthType.java</span></div><h1>EthType.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+/**
+ * Representation of an Ethertype.
+ */
+public class EthType {
+
+    /**
+     * A list of known ethertypes. Adding a fully defined enum here will
+     * associated the ethertype with a textual representation and a parsing
+     * class.
+     */
+<span class="pc" id="L28">    public enum EtherType {</span>
+
+<span class="fc" id="L30">        ARP(0x806, &quot;arp&quot;, org.onlab.packet.ARP.deserializer()),</span>
+<span class="fc" id="L31">        RARP(0x8035, &quot;rarp&quot;, org.onlab.packet.ARP.deserializer()),</span>
+<span class="fc" id="L32">        IPV4(0x800, &quot;ipv4&quot;, org.onlab.packet.IPv4.deserializer()),</span>
+<span class="fc" id="L33">        IPV6(0x86dd, &quot;ipv6&quot;, org.onlab.packet.IPv6.deserializer()),</span>
+<span class="fc" id="L34">        LLDP(0x88cc, &quot;lldp&quot;, org.onlab.packet.LLDP.deserializer()),</span>
+<span class="fc" id="L35">        VLAN(0x8100, &quot;vlan&quot;, null),</span>
+<span class="fc" id="L36">        BDDP(0x8942, &quot;bddp&quot;, org.onlab.packet.LLDP.deserializer()),</span>
+<span class="fc" id="L37">        MPLS_UNICAST(0x8847, &quot;mpls_unicast&quot;, org.onlab.packet.MPLS.deserializer()),</span>
+<span class="fc" id="L38">        MPLS_MULTICAST(0x8848, &quot;mpls_unicast&quot;, org.onlab.packet.MPLS.deserializer()),</span>
+<span class="fc" id="L39">        EAPOL(0x888e, &quot;eapol&quot;, org.onlab.packet.EAPOL.deserializer()),</span>
+<span class="fc" id="L40">        UNKNOWN(0, &quot;unknown&quot;, null);</span>
+
+
+        private final EthType etherType;
+        private final String type;
+        private final Deserializer&lt;?&gt; deserializer;
+
+        /**
+         * Constucts a new ethertype.
+         *
+         * @param ethType The actual ethertype
+         * @param type it's textual representation
+         * @param deserializer a parser for this ethertype
+         */
+<span class="fc" id="L54">        EtherType(int ethType, String type, Deserializer&lt;?&gt; deserializer) {</span>
+<span class="fc" id="L55">            this.etherType = new EthType(ethType);</span>
+<span class="fc" id="L56">            this.type = type;</span>
+<span class="fc" id="L57">            this.deserializer = deserializer;</span>
+<span class="fc" id="L58">        }</span>
+
+        public EthType ethType() {
+<span class="fc" id="L61">            return etherType;</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L66">            return type;</span>
+        }
+
+        public Deserializer&lt;?&gt; deserializer() {
+<span class="fc" id="L70">            return deserializer;</span>
+        }
+
+        public static EtherType lookup(short etherType) {
+<span class="nc bnc" id="L74" title="All 2 branches missed.">            for (EtherType ethType : EtherType.values()) {</span>
+<span class="nc bnc" id="L75" title="All 2 branches missed.">                if (ethType.ethType().toShort() == etherType) {</span>
+<span class="nc" id="L76">                    return ethType;</span>
+                }
+            }
+<span class="nc" id="L79">            return UNKNOWN;</span>
+        }
+
+    }
+
+
+    private final short etherType;
+
+    /**
+     * Builds the EthType.
+     *
+     * @param etherType an integer representing an ethtype
+     */
+<span class="fc" id="L92">    public EthType(int etherType) {</span>
+<span class="fc" id="L93">        this.etherType = (short) (etherType &amp; 0xFFFF);</span>
+<span class="fc" id="L94">    }</span>
+
+    /**
+     * Builds the EthType.
+     *
+     * @param etherType a short representing the ethtype
+     */
+<span class="nc" id="L101">    public EthType(short etherType) {</span>
+<span class="nc" id="L102">        this.etherType = etherType;</span>
+<span class="nc" id="L103">    }</span>
+
+    /**
+     * Returns the short value for this ethtype.
+     *
+     * @return a short value
+     */
+    public short toShort() {
+<span class="fc" id="L111">        return etherType;</span>
+    }
+
+    /**
+     * Looks up the ethertype by it's numerical representation
+     * and returns it's textual format.
+     *
+     * @param etherType the short value of the ethertype
+     * @return a textual representation
+     */
+    public EtherType lookup(short etherType) {
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        for (EtherType ethType : EtherType.values()) {</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">            if (ethType.ethType().toShort() == etherType) {</span>
+<span class="nc" id="L124">                return ethType;</span>
+            }
+        }
+<span class="nc" id="L127">        return null;</span>
+    }
+
+    @Override
+    public boolean equals(Object o) {
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (this == o) {</span>
+<span class="nc" id="L133">            return true;</span>
+        }
+<span class="nc bnc" id="L135" title="All 4 branches missed.">        if (o == null || getClass() != o.getClass()) {</span>
+<span class="nc" id="L136">            return false;</span>
+        }
+
+<span class="nc" id="L139">        EthType ethType = (EthType) o;</span>
+
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (etherType != ethType.etherType) {</span>
+<span class="nc" id="L142">            return false;</span>
+        }
+
+<span class="nc" id="L145">        return true;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L150">        return (int) etherType;</span>
+    }
+
+    public String toString() {
+<span class="nc" id="L154">        EtherType ethType = lookup(this.etherType);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        return (ethType == null ? String.format(&quot;0x%04x&quot;, etherType) :</span>
+<span class="nc" id="L156">                ethType.toString());</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

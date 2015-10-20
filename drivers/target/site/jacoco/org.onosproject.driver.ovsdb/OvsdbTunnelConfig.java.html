@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OvsdbTunnelConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.ovsdb</a> &gt; <span class="el_source">OvsdbTunnelConfig.java</span></div><h1>OvsdbTunnelConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.ovsdb;
+
+import java.util.Collection;
+
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.onlab.packet.IpAddress;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.behaviour.DefaultTunnelDescription;
+import org.onosproject.net.behaviour.IpTunnelEndPoint;
+import org.onosproject.net.behaviour.TunnelConfig;
+import org.onosproject.net.behaviour.TunnelDescription;
+import org.onosproject.net.behaviour.TunnelName;
+import org.onosproject.net.driver.AbstractHandlerBehaviour;
+import org.onosproject.net.driver.DriverHandler;
+import org.onosproject.ovsdb.controller.OvsdbClientService;
+import org.onosproject.ovsdb.controller.OvsdbController;
+import org.onosproject.ovsdb.controller.OvsdbNodeId;
+import org.onosproject.ovsdb.controller.OvsdbTunnel;
+
+/**
+ * OVSDB-based implementation of tunnel config behaviour.
+ */
+<span class="nc" id="L40">public class OvsdbTunnelConfig extends AbstractHandlerBehaviour</span>
+        implements TunnelConfig {
+
+    private static final String DEFAULT_ADDRESS = &quot;0.0.0.0&quot;;
+
+    @Override
+    public void createTunnel(TunnelDescription tunnel) {
+<span class="nc" id="L47">        DriverHandler handler = handler();</span>
+<span class="nc" id="L48">        OvsdbClientService ovsdbNode = getOvsdbNode(handler);</span>
+<span class="nc" id="L49">        IpTunnelEndPoint ipSrc = IpTunnelEndPoint.ipTunnelPoint(IpAddress</span>
+<span class="nc" id="L50">                .valueOf(DEFAULT_ADDRESS));</span>
+<span class="nc" id="L51">        IpTunnelEndPoint ipDst = IpTunnelEndPoint.ipTunnelPoint(IpAddress</span>
+<span class="nc" id="L52">                .valueOf(DEFAULT_ADDRESS));</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        if (tunnel.src() instanceof IpTunnelEndPoint) {</span>
+<span class="nc" id="L54">            ipSrc = (IpTunnelEndPoint) tunnel.src();</span>
+        }
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        if (tunnel.dst() instanceof IpTunnelEndPoint) {</span>
+<span class="nc" id="L57">            ipDst = (IpTunnelEndPoint) tunnel.dst();</span>
+        }
+        //Even if source point ip or destination point ip equals 0:0:0:0, it is still work-in-progress.
+<span class="nc" id="L60">        ovsdbNode.createTunnel(ipSrc.ip(), ipDst.ip());</span>
+<span class="nc" id="L61">    }</span>
+
+    @Override
+    public void removeTunnel(TunnelDescription tunnel) {
+<span class="nc" id="L65">        DriverHandler handler = handler();</span>
+<span class="nc" id="L66">        OvsdbClientService ovsdbNode = getOvsdbNode(handler);</span>
+<span class="nc" id="L67">        IpTunnelEndPoint ipSrc = IpTunnelEndPoint.ipTunnelPoint(IpAddress</span>
+<span class="nc" id="L68">                .valueOf(DEFAULT_ADDRESS));</span>
+<span class="nc" id="L69">        IpTunnelEndPoint ipDst = IpTunnelEndPoint.ipTunnelPoint(IpAddress</span>
+<span class="nc" id="L70">                .valueOf(DEFAULT_ADDRESS));</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (tunnel.src() instanceof IpTunnelEndPoint) {</span>
+<span class="nc" id="L72">            ipSrc = (IpTunnelEndPoint) tunnel.src();</span>
+        }
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (tunnel.dst() instanceof IpTunnelEndPoint) {</span>
+<span class="nc" id="L75">            ipDst = (IpTunnelEndPoint) tunnel.dst();</span>
+        }
+      //Even if source point ip or destination point ip equals 0:0:0:0, it is still work-in-progress.
+<span class="nc" id="L78">        ovsdbNode.dropTunnel(ipSrc.ip(), ipDst.ip());</span>
+<span class="nc" id="L79">    }</span>
+
+    @Override
+    public void updateTunnel(TunnelDescription tunnel) {
+        // TODO Auto-generated method stub
+
+<span class="nc" id="L85">    }</span>
+
+    @Override
+    public Collection&lt;TunnelDescription&gt; getTunnels() {
+<span class="nc" id="L89">        DriverHandler handler = handler();</span>
+<span class="nc" id="L90">        OvsdbClientService ovsdbNode = getOvsdbNode(handler);</span>
+<span class="nc" id="L91">        Set&lt;OvsdbTunnel&gt; tunnels = ovsdbNode.getTunnels();</span>
+
+<span class="nc" id="L93">        return tunnels.stream()</span>
+<span class="nc" id="L94">                .map(x -&gt;</span>
+<span class="nc" id="L95">                        new DefaultTunnelDescription(</span>
+<span class="nc" id="L96">                                IpTunnelEndPoint.ipTunnelPoint(x.localIp()),</span>
+<span class="nc" id="L97">                                IpTunnelEndPoint.ipTunnelPoint(x.remoteIp()),</span>
+                                TunnelDescription.Type.VXLAN,
+<span class="nc" id="L99">                                TunnelName.tunnelName(x.tunnelName().toString())</span>
+                        )
+                )
+<span class="nc" id="L102">                .collect(Collectors.toSet());</span>
+    }
+
+    // OvsdbNodeId(IP:port) is used in the adaptor while DeviceId(ovsdb:IP:port)
+    // is used in the core. So DeviceId need be changed to OvsdbNodeId.
+    private OvsdbNodeId changeDeviceIdToNodeId(DeviceId deviceId) {
+<span class="nc" id="L108">        int lastColon = deviceId.toString().lastIndexOf(&quot;:&quot;);</span>
+<span class="nc" id="L109">        int fistColon = deviceId.toString().indexOf(&quot;:&quot;);</span>
+<span class="nc" id="L110">        String ip = deviceId.toString().substring(fistColon + 1, lastColon);</span>
+<span class="nc" id="L111">        String port = deviceId.toString().substring(lastColon + 1);</span>
+<span class="nc" id="L112">        IpAddress ipAddress = IpAddress.valueOf(ip);</span>
+<span class="nc" id="L113">        long portL = Long.parseLong(port);</span>
+<span class="nc" id="L114">        return new OvsdbNodeId(ipAddress, portL);</span>
+    }
+
+    private OvsdbClientService getOvsdbNode(DriverHandler handler) {
+<span class="nc" id="L118">        OvsdbController ovsController = handler.get(OvsdbController.class);</span>
+<span class="nc" id="L119">        DeviceId deviceId = handler.data().deviceId();</span>
+<span class="nc" id="L120">        OvsdbNodeId nodeId = changeDeviceIdToNodeId(deviceId);</span>
+<span class="nc" id="L121">        return ovsController.getOvsdbClient(nodeId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

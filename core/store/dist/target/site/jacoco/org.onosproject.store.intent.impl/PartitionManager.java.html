@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PartitionManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.intent.impl</a> &gt; <span class="el_source">PartitionManager.java</span></div><h1>PartitionManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.intent.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cluster.ClusterEvent;
+import org.onosproject.cluster.ClusterEventListener;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.Leadership;
+import org.onosproject.cluster.LeadershipEvent;
+import org.onosproject.cluster.LeadershipEventListener;
+import org.onosproject.cluster.LeadershipService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.event.EventDeliveryService;
+import org.onosproject.event.ListenerRegistry;
+import org.onosproject.net.intent.Key;
+import org.onosproject.net.intent.PartitionEvent;
+import org.onosproject.net.intent.PartitionEventListener;
+import org.onosproject.net.intent.PartitionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
+/**
+ * Manages the assignment of intent keyspace partitions to instances.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L55">public class PartitionManager implements PartitionService {</span>
+
+<span class="fc" id="L57">    private static final Logger log = LoggerFactory.getLogger(PartitionManager.class);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LeadershipService leadershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected EventDeliveryService eventDispatcher;
+
+<span class="fc" id="L68">    protected final AtomicBoolean rebalanceScheduled = new AtomicBoolean(false);</span>
+
+    static final int NUM_PARTITIONS = 14;
+    private static final int BACKOFF_TIME = 2;
+    private static final int CHECK_PARTITION_BALANCE_PERIOD_SEC = 10;
+    private static final int RETRY_AFTER_DELAY_SEC = 5;
+
+    private static final String ELECTION_PREFIX = &quot;intent-partition-&quot;;
+
+    private ListenerRegistry&lt;PartitionEvent, PartitionEventListener&gt; listenerRegistry;
+<span class="fc" id="L78">    private LeadershipEventListener leaderListener = new InternalLeadershipListener();</span>
+<span class="fc" id="L79">    private ClusterEventListener clusterListener = new InternalClusterEventListener();</span>
+
+<span class="fc" id="L81">    private ScheduledExecutorService executor = Executors</span>
+<span class="fc" id="L82">            .newScheduledThreadPool(1);</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L86">        leadershipService.addListener(leaderListener);</span>
+<span class="fc" id="L87">        clusterService.addListener(clusterListener);</span>
+
+<span class="fc" id="L89">        listenerRegistry = new ListenerRegistry&lt;&gt;();</span>
+<span class="fc" id="L90">        eventDispatcher.addSink(PartitionEvent.class, listenerRegistry);</span>
+
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        for (int i = 0; i &lt; NUM_PARTITIONS; i++) {</span>
+<span class="fc" id="L93">            leadershipService.runForLeadership(getPartitionPath(i));</span>
+        }
+
+<span class="pc" id="L96">        executor.scheduleAtFixedRate(() -&gt; scheduleRebalance(0), 0,</span>
+                                     CHECK_PARTITION_BALANCE_PERIOD_SEC, TimeUnit.SECONDS);
+<span class="fc" id="L98">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L102">        executor.shutdownNow();</span>
+
+<span class="nc" id="L104">        eventDispatcher.removeSink(PartitionEvent.class);</span>
+<span class="nc" id="L105">        leadershipService.removeListener(leaderListener);</span>
+<span class="nc" id="L106">        clusterService.removeListener(clusterListener);</span>
+<span class="nc" id="L107">    }</span>
+
+    /**
+     * Sets the specified executor to be used for scheduling background tasks.
+     *
+     * @param executor scheduled executor service for background tasks
+     * @return this PartitionManager
+     */
+    public PartitionManager withScheduledExecutor(ScheduledExecutorService executor) {
+<span class="fc" id="L116">        this.executor = executor;</span>
+<span class="fc" id="L117">        return this;</span>
+    }
+
+    private String getPartitionPath(int i) {
+<span class="fc" id="L121">        return ELECTION_PREFIX + i;</span>
+    }
+
+    private String getPartitionPath(PartitionId id) {
+<span class="fc" id="L125">        return getPartitionPath(id.value());</span>
+    }
+
+    private PartitionId getPartitionForKey(Key intentKey) {
+<span class="fc" id="L129">        int partition = Math.abs((int) intentKey.hash()) % NUM_PARTITIONS;</span>
+        //TODO investigate Guava consistent hash method
+        // ... does it add significant computational complexity? is it worth it?
+        //int partition = consistentHash(intentKey.hash(), NUM_PARTITIONS);
+<span class="fc" id="L133">        PartitionId id = new PartitionId(partition);</span>
+<span class="fc" id="L134">        return id;</span>
+    }
+
+    @Override
+    public boolean isMine(Key intentKey) {
+<span class="fc" id="L139">        return Objects.equals(leadershipService.getLeader(getPartitionPath(getPartitionForKey(intentKey))),</span>
+<span class="fc" id="L140">                              clusterService.getLocalNode().id());</span>
+    }
+
+    @Override
+    public NodeId getLeader(Key intentKey) {
+<span class="nc" id="L145">        return leadershipService.getLeader(getPartitionPath(getPartitionForKey(intentKey)));</span>
+    }
+
+    @Override
+    public void addListener(PartitionEventListener listener) {
+<span class="nc" id="L150">        listenerRegistry.addListener(listener);</span>
+<span class="nc" id="L151">    }</span>
+
+    @Override
+    public void removeListener(PartitionEventListener listener) {
+<span class="nc" id="L155">        listenerRegistry.removeListener(listener);</span>
+<span class="nc" id="L156">    }</span>
+
+    protected void doRebalance() {
+<span class="fc" id="L159">        rebalanceScheduled.set(false);</span>
+        try {
+<span class="fc" id="L161">            rebalance();</span>
+<span class="nc" id="L162">        } catch (Exception e) {</span>
+<span class="nc" id="L163">            log.warn(&quot;Exception caught during rebalance task. Will retry in &quot; + RETRY_AFTER_DELAY_SEC + &quot; seconds&quot;, e);</span>
+<span class="nc" id="L164">            scheduleRebalance(RETRY_AFTER_DELAY_SEC);</span>
+<span class="fc" id="L165">        }</span>
+<span class="fc" id="L166">    }</span>
+
+    /**
+     * Determine whether we have more than our fair share of partitions, and if
+     * so, relinquish leadership of some of them for a little while to let
+     * other instances take over.
+     */
+    private void rebalance() {
+<span class="fc" id="L174">        int activeNodes = (int) clusterService.getNodes()</span>
+<span class="fc" id="L175">                .stream()</span>
+<span class="fc bfc" id="L176" title="All 2 branches covered.">                .filter(node -&gt; ControllerNode.State.ACTIVE == clusterService.getState(node.id()))</span>
+<span class="fc" id="L177">                .count();</span>
+
+<span class="fc" id="L179">        int myShare = (int) Math.ceil((double) NUM_PARTITIONS / activeNodes);</span>
+
+<span class="fc" id="L181">        List&lt;Leadership&gt; myPartitions = leadershipService.getLeaderBoard().values()</span>
+<span class="fc" id="L182">                .stream()</span>
+<span class="fc" id="L183">                .filter(l -&gt; clusterService.getLocalNode().id().equals(l.leader()))</span>
+<span class="fc" id="L184">                .filter(l -&gt; l.topic().startsWith(ELECTION_PREFIX))</span>
+<span class="fc" id="L185">                .collect(Collectors.toList());</span>
+
+<span class="fc" id="L187">        int relinquish = myPartitions.size() - myShare;</span>
+
+<span class="fc bfc" id="L189" title="All 2 branches covered.">        if (relinquish &lt;= 0) {</span>
+<span class="fc" id="L190">            return;</span>
+        }
+
+<span class="fc bfc" id="L193" title="All 2 branches covered.">        for (int i = 0; i &lt; relinquish; i++) {</span>
+<span class="fc" id="L194">            String topic = myPartitions.get(i).topic();</span>
+<span class="fc" id="L195">            leadershipService.withdraw(topic);</span>
+
+<span class="pc" id="L197">            executor.schedule(() -&gt; recontest(topic),</span>
+                              BACKOFF_TIME, TimeUnit.SECONDS);
+        }
+<span class="fc" id="L200">    }</span>
+
+    private void scheduleRebalance(int afterDelaySec) {
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (rebalanceScheduled.compareAndSet(false, true)) {</span>
+<span class="fc" id="L204">            executor.schedule(this::doRebalance, afterDelaySec, TimeUnit.SECONDS);</span>
+        }
+<span class="fc" id="L206">    }</span>
+
+    /**
+     * Try and recontest for leadership of a partition.
+     *
+     * @param path topic name to recontest
+     */
+    private void recontest(String path) {
+<span class="nc" id="L214">        leadershipService.runForLeadership(path);</span>
+<span class="nc" id="L215">    }</span>
+
+<span class="fc" id="L217">    private final class InternalLeadershipListener implements LeadershipEventListener {</span>
+
+        @Override
+        public void event(LeadershipEvent event) {
+<span class="fc" id="L221">            Leadership leadership = event.subject();</span>
+
+<span class="pc bpc" id="L223" title="1 of 2 branches missed.">            if (Objects.equals(leadership.leader(), clusterService.getLocalNode().id()) &amp;&amp;</span>
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">                    leadership.topic().startsWith(ELECTION_PREFIX)) {</span>
+
+                // See if we need to let some partitions go
+<span class="fc" id="L227">                scheduleRebalance(0);</span>
+
+<span class="fc" id="L229">                eventDispatcher.post(new PartitionEvent(PartitionEvent.Type.LEADER_CHANGED,</span>
+<span class="fc" id="L230">                                                        leadership.topic()));</span>
+            }
+<span class="fc" id="L232">        }</span>
+    }
+
+<span class="fc" id="L235">    private final class InternalClusterEventListener implements</span>
+            ClusterEventListener {
+
+        @Override
+        public void event(ClusterEvent event) {
+<span class="nc" id="L240">            scheduleRebalance(0);</span>
+<span class="nc" id="L241">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SdnIpFib.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-sdnip</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.sdnip</a> &gt; <span class="el_source">SdnIpFib.java</span></div><h1>SdnIpFib.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.sdnip;
+
+import com.google.common.collect.ImmutableList;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.incubator.net.intf.Interface;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.intent.Constraint;
+import org.onosproject.net.intent.Key;
+import org.onosproject.net.intent.MultiPointToSinglePointIntent;
+import org.onosproject.net.intent.constraint.PartialFailureConstraint;
+import org.onosproject.routing.FibListener;
+import org.onosproject.routing.FibUpdate;
+import org.onosproject.routing.IntentSynchronizationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * FIB component of SDN-IP.
+ */
+public class SdnIpFib implements FibListener {
+<span class="fc" id="L55">    private Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final int PRIORITY_OFFSET = 100;
+    private static final int PRIORITY_MULTIPLIER = 5;
+<span class="fc" id="L59">    protected static final ImmutableList&lt;Constraint&gt; CONSTRAINTS</span>
+<span class="fc" id="L60">            = ImmutableList.of(new PartialFailureConstraint());</span>
+
+    private final Map&lt;IpPrefix, MultiPointToSinglePointIntent&gt; routeIntents;
+
+    private final ApplicationId appId;
+    private final InterfaceService interfaceService;
+    private final IntentSynchronizationService intentSynchronizer;
+
+    /**
+     * Class constructor.
+     *
+     * @param appId application ID to use when generating intents
+     * @param interfaceService interface service
+     * @param intentSynchronizer intent synchronizer
+     */
+    public SdnIpFib(ApplicationId appId, InterfaceService interfaceService,
+<span class="fc" id="L76">                    IntentSynchronizationService intentSynchronizer) {</span>
+<span class="fc" id="L77">        routeIntents = new ConcurrentHashMap&lt;&gt;();</span>
+
+<span class="fc" id="L79">        this.appId = appId;</span>
+<span class="fc" id="L80">        this.interfaceService = interfaceService;</span>
+<span class="fc" id="L81">        this.intentSynchronizer = intentSynchronizer;</span>
+<span class="fc" id="L82">    }</span>
+
+
+    @Override
+    public void update(Collection&lt;FibUpdate&gt; updates, Collection&lt;FibUpdate&gt; withdraws) {
+<span class="fc" id="L87">        int submitCount = 0, withdrawCount = 0;</span>
+        //
+        // NOTE: Semantically, we MUST withdraw existing intents before
+        // submitting new intents.
+        //
+<span class="fc" id="L92">        synchronized (this) {</span>
+            MultiPointToSinglePointIntent intent;
+
+            //
+            // Prepare the Intent batch operations for the intents to withdraw
+            //
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            for (FibUpdate withdraw : withdraws) {</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">                checkArgument(withdraw.type() == FibUpdate.Type.DELETE,</span>
+                        &quot;FibUpdate with wrong type in withdraws list&quot;);
+
+<span class="fc" id="L102">                IpPrefix prefix = withdraw.entry().prefix();</span>
+<span class="fc" id="L103">                intent = routeIntents.remove(prefix);</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">                if (intent == null) {</span>
+<span class="nc" id="L105">                    log.trace(&quot;SDN-IP No intent in routeIntents to delete &quot; +</span>
+                            &quot;for prefix: {}&quot;, prefix);
+<span class="nc" id="L107">                    continue;</span>
+                }
+<span class="fc" id="L109">                intentSynchronizer.withdraw(intent);</span>
+<span class="fc" id="L110">                withdrawCount++;</span>
+<span class="fc" id="L111">            }</span>
+
+            //
+            // Prepare the Intent batch operations for the intents to submit
+            //
+<span class="fc bfc" id="L116" title="All 2 branches covered.">            for (FibUpdate update : updates) {</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                checkArgument(update.type() == FibUpdate.Type.UPDATE,</span>
+                        &quot;FibUpdate with wrong type in updates list&quot;);
+
+<span class="fc" id="L120">                IpPrefix prefix = update.entry().prefix();</span>
+<span class="fc" id="L121">                intent = generateRouteIntent(prefix, update.entry().nextHopIp(),</span>
+<span class="fc" id="L122">                        update.entry().nextHopMac());</span>
+
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">                if (intent == null) {</span>
+                    // This preserves the old semantics - if an intent can't be
+                    // generated, we don't do anything with that prefix. But
+                    // perhaps we should withdraw the old intent anyway?
+<span class="nc" id="L128">                    continue;</span>
+                }
+
+<span class="fc" id="L131">                routeIntents.put(prefix, intent);</span>
+<span class="fc" id="L132">                intentSynchronizer.submit(intent);</span>
+<span class="fc" id="L133">                submitCount++;</span>
+<span class="fc" id="L134">            }</span>
+
+<span class="fc" id="L136">            log.debug(&quot;SDN-IP submitted {}/{}, withdrew = {}/{}&quot;, submitCount,</span>
+<span class="fc" id="L137">                    updates.size(), withdrawCount, withdraws.size());</span>
+<span class="pc" id="L138">        }</span>
+<span class="fc" id="L139">    }</span>
+
+    /**
+     * Generates a route intent for a prefix, the next hop IP address, and
+     * the next hop MAC address.
+     * &lt;p/&gt;
+     * This method will find the egress interface for the intent.
+     * Intent will match dst IP prefix and rewrite dst MAC address at all other
+     * border switches, then forward packets according to dst MAC address.
+     *
+     * @param prefix            IP prefix of the route to add
+     * @param nextHopIpAddress  IP address of the next hop
+     * @param nextHopMacAddress MAC address of the next hop
+     * @return the generated intent, or null if no intent should be submitted
+     */
+    private MultiPointToSinglePointIntent generateRouteIntent(
+            IpPrefix prefix,
+            IpAddress nextHopIpAddress,
+            MacAddress nextHopMacAddress) {
+
+        // Find the attachment point (egress interface) of the next hop
+<span class="fc" id="L160">        Interface egressInterface = interfaceService.getMatchingInterface(nextHopIpAddress);</span>
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if (egressInterface == null) {</span>
+<span class="nc" id="L162">            log.warn(&quot;No outgoing interface found for {}&quot;,</span>
+                    nextHopIpAddress);
+<span class="nc" id="L164">            return null;</span>
+        }
+
+        // Generate the intent itself
+<span class="fc" id="L168">        Set&lt;ConnectPoint&gt; ingressPorts = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L169">        ConnectPoint egressPort = egressInterface.connectPoint();</span>
+<span class="fc" id="L170">        log.debug(&quot;Generating intent for prefix {}, next hop mac {}&quot;,</span>
+                prefix, nextHopMacAddress);
+
+<span class="fc bfc" id="L173" title="All 2 branches covered.">        for (Interface intf : interfaceService.getInterfaces()) {</span>
+            // TODO this should be only peering interfaces
+<span class="fc bfc" id="L175" title="All 2 branches covered.">            if (!intf.connectPoint().equals(egressInterface.connectPoint())) {</span>
+<span class="fc" id="L176">                ConnectPoint srcPort = intf.connectPoint();</span>
+<span class="fc" id="L177">                ingressPorts.add(srcPort);</span>
+            }
+<span class="fc" id="L179">        }</span>
+
+        // Match the destination IP prefix at the first hop
+<span class="fc" id="L182">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="pc bpc" id="L183" title="1 of 2 branches missed.">        if (prefix.isIp4()) {</span>
+<span class="fc" id="L184">            selector.matchEthType(Ethernet.TYPE_IPV4);</span>
+<span class="fc" id="L185">            selector.matchIPDst(prefix);</span>
+        } else {
+<span class="nc" id="L187">            selector.matchEthType(Ethernet.TYPE_IPV6);</span>
+<span class="nc" id="L188">            selector.matchIPv6Dst(prefix);</span>
+        }
+
+        // Rewrite the destination MAC address
+<span class="fc" id="L192">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder()</span>
+<span class="fc" id="L193">                .setEthDst(nextHopMacAddress);</span>
+<span class="fc bfc" id="L194" title="All 2 branches covered.">        if (!egressInterface.vlan().equals(VlanId.NONE)) {</span>
+<span class="fc" id="L195">            treatment.setVlanId(egressInterface.vlan());</span>
+            // If we set VLAN ID, we have to make sure a VLAN tag exists.
+            // TODO support no VLAN -&gt; VLAN routing
+<span class="fc" id="L198">            selector.matchVlanId(VlanId.ANY);</span>
+        }
+
+<span class="fc" id="L201">        int priority =</span>
+<span class="fc" id="L202">                prefix.prefixLength() * PRIORITY_MULTIPLIER + PRIORITY_OFFSET;</span>
+<span class="fc" id="L203">        Key key = Key.of(prefix.toString(), appId);</span>
+<span class="fc" id="L204">        return MultiPointToSinglePointIntent.builder()</span>
+<span class="fc" id="L205">                .appId(appId)</span>
+<span class="fc" id="L206">                .key(key)</span>
+<span class="fc" id="L207">                .selector(selector.build())</span>
+<span class="fc" id="L208">                .treatment(treatment.build())</span>
+<span class="fc" id="L209">                .ingressPoints(ingressPorts)</span>
+<span class="fc" id="L210">                .egressPoint(egressPort)</span>
+<span class="fc" id="L211">                .priority(priority)</span>
+<span class="fc" id="L212">                .constraints(CONSTRAINTS)</span>
+<span class="fc" id="L213">                .build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

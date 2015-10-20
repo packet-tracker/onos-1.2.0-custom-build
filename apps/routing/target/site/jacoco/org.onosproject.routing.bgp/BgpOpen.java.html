@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpOpen.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpOpen.java</span></div><h1>BgpOpen.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.onlab.packet.Ip4Address;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * A class for handling BGP OPEN messages.
+ */
+final class BgpOpen {
+<span class="fc" id="L29">    private static final Logger log = LoggerFactory.getLogger(BgpOpen.class);</span>
+
+    /**
+     * Default constructor.
+     * &lt;p&gt;
+     * The constructor is private to prevent creating an instance of
+     * this utility class.
+     */
+<span class="nc" id="L37">    private BgpOpen() {</span>
+<span class="nc" id="L38">    }</span>
+
+    /**
+     * Processes BGP OPEN message.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param message the message to process
+     */
+    static void processBgpOpen(BgpSession bgpSession,
+                               ChannelHandlerContext ctx,
+                               ChannelBuffer message) {
+<span class="fc" id="L50">        int minLength =</span>
+            BgpConstants.BGP_OPEN_MIN_LENGTH - BgpConstants.BGP_HEADER_LENGTH;
+<span class="pc bpc" id="L52" title="1 of 2 branches missed.">        if (message.readableBytes() &lt; minLength) {</span>
+<span class="nc" id="L53">            log.debug(&quot;BGP RX OPEN Error from {}: &quot; +</span>
+                      &quot;Message length {} too short. Must be at least {}&quot;,
+<span class="nc" id="L55">                      bgpSession.remoteInfo().address(),</span>
+<span class="nc" id="L56">                      message.readableBytes(), minLength);</span>
+            //
+            // ERROR: Bad Message Length
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L61">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L62">                BgpNotification.prepareBgpNotificationBadMessageLength(</span>
+<span class="nc" id="L63">                        message.readableBytes() + BgpConstants.BGP_HEADER_LENGTH);</span>
+<span class="nc" id="L64">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L65">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L66">            return;</span>
+        }
+
+        //
+        // Parse the OPEN message
+        //
+        // Remote BGP version
+<span class="fc" id="L73">        int remoteBgpVersion = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L74" title="1 of 2 branches missed.">        if (remoteBgpVersion != BgpConstants.BGP_VERSION) {</span>
+<span class="nc" id="L75">            log.debug(&quot;BGP RX OPEN Error from {}: &quot; +</span>
+                      &quot;Unsupported BGP version {}. Should be {}&quot;,
+<span class="nc" id="L77">                      bgpSession.remoteInfo().address(), remoteBgpVersion,</span>
+<span class="nc" id="L78">                      BgpConstants.BGP_VERSION);</span>
+            //
+            // ERROR: Unsupported Version Number
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L83">            int errorCode = BgpConstants.Notifications.OpenMessageError.ERROR_CODE;</span>
+<span class="nc" id="L84">            int errorSubcode = BgpConstants.Notifications.OpenMessageError.UNSUPPORTED_VERSION_NUMBER;</span>
+<span class="nc" id="L85">            ChannelBuffer data = ChannelBuffers.buffer(2);</span>
+<span class="nc" id="L86">            data.writeShort(BgpConstants.BGP_VERSION);</span>
+<span class="nc" id="L87">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L88">                BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                       data);
+<span class="nc" id="L90">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L91">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L92">            return;</span>
+        }
+<span class="fc" id="L94">        bgpSession.remoteInfo().setBgpVersion(remoteBgpVersion);</span>
+
+        // Remote AS number
+<span class="fc" id="L97">        long remoteAs = message.readUnsignedShort();</span>
+<span class="fc" id="L98">        bgpSession.remoteInfo().setAsNumber(remoteAs);</span>
+        //
+        // NOTE: Currently, the local AS number is always set to the remote AS.
+        // This is done, because the peer setup is always iBGP.
+        // In the future, the local AS number should be configured as part
+        // of an explicit BGP peering configuration.
+        //
+<span class="fc" id="L105">        bgpSession.localInfo().setAsNumber(remoteAs);</span>
+
+        // Remote Hold Time
+<span class="fc" id="L108">        long remoteHoldtime = message.readUnsignedShort();</span>
+<span class="pc bpc" id="L109" title="2 of 4 branches missed.">        if ((remoteHoldtime != 0) &amp;&amp;</span>
+            (remoteHoldtime &lt; BgpConstants.BGP_KEEPALIVE_MIN_HOLDTIME)) {
+<span class="nc" id="L111">            log.debug(&quot;BGP RX OPEN Error from {}: &quot; +</span>
+                      &quot;Unacceptable Hold Time field {}. &quot; +
+                      &quot;Should be 0 or at least {}&quot;,
+<span class="nc" id="L114">                      bgpSession.remoteInfo().address(), remoteHoldtime,</span>
+<span class="nc" id="L115">                      BgpConstants.BGP_KEEPALIVE_MIN_HOLDTIME);</span>
+            //
+            // ERROR: Unacceptable Hold Time
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L120">            int errorCode = BgpConstants.Notifications.OpenMessageError.ERROR_CODE;</span>
+<span class="nc" id="L121">            int errorSubcode = BgpConstants.Notifications.OpenMessageError.UNACCEPTABLE_HOLD_TIME;</span>
+<span class="nc" id="L122">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L123">                BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                       null);
+<span class="nc" id="L125">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L126">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L127">            return;</span>
+        }
+<span class="fc" id="L129">        bgpSession.remoteInfo().setHoldtime(remoteHoldtime);</span>
+        //
+        // NOTE: Currently. the local BGP Holdtime is always set to the remote
+        // BGP holdtime.
+        // In the future, the local BGP Holdtime should be configured as part
+        // of an explicit BGP peering configuration.
+        //
+<span class="fc" id="L136">        bgpSession.localInfo().setHoldtime(remoteHoldtime);</span>
+
+        // Remote BGP Identifier
+<span class="fc" id="L139">        Ip4Address remoteBgpId =</span>
+<span class="fc" id="L140">            Ip4Address.valueOf((int) message.readUnsignedInt());</span>
+<span class="fc" id="L141">        bgpSession.remoteInfo().setBgpId(remoteBgpId);</span>
+
+        // Parse the Optional Parameters
+        try {
+<span class="fc" id="L145">            parseOptionalParameters(bgpSession, ctx, message);</span>
+<span class="nc" id="L146">        } catch (BgpMessage.BgpParseException e) {</span>
+            // ERROR: Error parsing optional parameters
+<span class="nc" id="L148">            log.debug(&quot;BGP RX OPEN Error from {}: &quot; +</span>
+                      &quot;Exception parsing Optional Parameters: {}&quot;,
+<span class="nc" id="L150">                      bgpSession.remoteInfo().address(), e);</span>
+            //
+            // ERROR: Invalid Optional Parameters: Unspecific
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L155">            int errorCode = BgpConstants.Notifications.OpenMessageError.ERROR_CODE;</span>
+<span class="nc" id="L156">            int errorSubcode = BgpConstants.Notifications.ERROR_SUBCODE_UNSPECIFIC;</span>
+<span class="nc" id="L157">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L158">                BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                       null);
+<span class="nc" id="L160">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L161">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L162">            return;</span>
+<span class="fc" id="L163">        }</span>
+
+        //
+        // NOTE: Prepare the BGP OPEN message before the original local AS
+        // is overwritten by the 4-octet AS number
+        //
+<span class="fc" id="L169">        ChannelBuffer txOpenMessage = prepareBgpOpen(bgpSession.localInfo());</span>
+
+        //
+        // Use the 4-octet AS number in lieu of the &quot;My AS&quot; field
+        // See RFC 6793, Section 4.1, second paragraph.
+        //
+<span class="fc bfc" id="L175" title="All 2 branches covered.">        if (bgpSession.remoteInfo().as4OctetCapability()) {</span>
+<span class="fc" id="L176">            long as4Number = bgpSession.remoteInfo().as4Number();</span>
+<span class="fc" id="L177">            bgpSession.remoteInfo().setAsNumber(as4Number);</span>
+<span class="fc" id="L178">            bgpSession.localInfo().setAsNumber(as4Number);</span>
+        }
+
+        //
+        // Verify that the AS number is same for all other BGP Sessions
+        // NOTE: This check applies only for our use-case where all BGP
+        // sessions are iBGP.
+        //
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        for (BgpSession bs : bgpSession.getBgpSessionManager().getBgpSessions()) {</span>
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">            if ((bs.remoteInfo().asNumber() != 0) &amp;&amp;</span>
+<span class="fc" id="L188">                (bgpSession.remoteInfo().asNumber() !=</span>
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">                 bs.remoteInfo().asNumber())) {</span>
+<span class="nc" id="L190">                log.debug(&quot;BGP RX OPEN Error from {}: Bad Peer AS {}. &quot; +</span>
+                          &quot;Expected {}&quot;,
+<span class="nc" id="L192">                          bgpSession.remoteInfo().address(),</span>
+<span class="nc" id="L193">                          bgpSession.remoteInfo().asNumber(),</span>
+<span class="nc" id="L194">                          bs.remoteInfo().asNumber());</span>
+                //
+                // ERROR: Bad Peer AS
+                //
+                // Send NOTIFICATION and close the connection
+<span class="nc" id="L199">                int errorCode = BgpConstants.Notifications.OpenMessageError.ERROR_CODE;</span>
+<span class="nc" id="L200">                int errorSubcode = BgpConstants.Notifications.OpenMessageError.BAD_PEER_AS;</span>
+<span class="nc" id="L201">                ChannelBuffer txMessage =</span>
+<span class="nc" id="L202">                    BgpNotification.prepareBgpNotification(errorCode,</span>
+                                                           errorSubcode, null);
+<span class="nc" id="L204">                ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L205">                bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L206">                return;</span>
+            }
+<span class="fc" id="L208">        }</span>
+
+<span class="fc" id="L210">        log.debug(&quot;BGP RX OPEN message from {}: &quot; +</span>
+                  &quot;BGPv{} AS {} BGP-ID {} Holdtime {}&quot;,
+<span class="fc" id="L212">                  bgpSession.remoteInfo().address(),</span>
+<span class="fc" id="L213">                  bgpSession.remoteInfo().bgpVersion(),</span>
+<span class="fc" id="L214">                  bgpSession.remoteInfo().asNumber(),</span>
+<span class="fc" id="L215">                  bgpSession.remoteInfo().bgpId(),</span>
+<span class="fc" id="L216">                  bgpSession.remoteInfo().holdtime());</span>
+
+        // Send my OPEN followed by KEEPALIVE
+<span class="fc" id="L219">        ctx.getChannel().write(txOpenMessage);</span>
+        //
+<span class="fc" id="L221">        ChannelBuffer txMessage = BgpKeepalive.prepareBgpKeepalive();</span>
+<span class="fc" id="L222">        ctx.getChannel().write(txMessage);</span>
+
+        // Start the KEEPALIVE timer
+<span class="fc" id="L225">        bgpSession.restartKeepaliveTimer(ctx);</span>
+
+        // Start the Session Timeout timer
+<span class="fc" id="L228">        bgpSession.restartSessionTimeoutTimer(ctx);</span>
+<span class="fc" id="L229">    }</span>
+
+    /**
+     * Prepares BGP OPEN message.
+     *
+     * @param localInfo the BGP Session local information to use
+     * @return the message to transmit (BGP header included)
+     */
+    static ChannelBuffer prepareBgpOpen(BgpSessionInfo localInfo) {
+<span class="fc" id="L238">        ChannelBuffer message =</span>
+<span class="fc" id="L239">            ChannelBuffers.buffer(BgpConstants.BGP_MESSAGE_MAX_LENGTH);</span>
+
+        //
+        // Prepare the OPEN message payload
+        //
+<span class="fc" id="L244">        message.writeByte(localInfo.bgpVersion());</span>
+<span class="fc" id="L245">        message.writeShort((int) localInfo.asNumber());</span>
+<span class="fc" id="L246">        message.writeShort((int) localInfo.holdtime());</span>
+<span class="fc" id="L247">        message.writeInt(localInfo.bgpId().toInt());</span>
+
+        // Prepare the optional BGP Capabilities
+<span class="fc" id="L250">        ChannelBuffer capabilitiesMessage =</span>
+<span class="fc" id="L251">            prepareBgpOpenCapabilities(localInfo);</span>
+<span class="fc" id="L252">        message.writeByte(capabilitiesMessage.readableBytes());</span>
+<span class="fc" id="L253">        message.writeBytes(capabilitiesMessage);</span>
+
+<span class="fc" id="L255">        return BgpMessage.prepareBgpMessage(BgpConstants.BGP_TYPE_OPEN,</span>
+                                            message);
+    }
+
+    /**
+     * Parses BGP OPEN Optional Parameters.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param message the message to process
+     * @throws BgpMessage.BgpParseException
+     */
+    private static void parseOptionalParameters(BgpSession bgpSession,
+                                                ChannelHandlerContext ctx,
+                                                ChannelBuffer message)
+        throws BgpMessage.BgpParseException {
+
+        //
+        // Get and verify the Optional Parameters Length
+        //
+<span class="fc" id="L275">        int optParamLength = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">        if (optParamLength &gt; message.readableBytes()) {</span>
+            // ERROR: Invalid Optional Parameter Length
+<span class="nc" id="L278">            String errorMsg = &quot;Invalid Optional Parameter Length field &quot; +</span>
+                optParamLength + &quot;. Remaining Optional Parameters &quot; +
+<span class="nc" id="L280">                message.readableBytes();</span>
+<span class="nc" id="L281">            throw new BgpMessage.BgpParseException(errorMsg);</span>
+        }
+<span class="fc bfc" id="L283" title="All 2 branches covered.">        if (optParamLength == 0) {</span>
+<span class="fc" id="L284">            return;                     // No Optional Parameters</span>
+        }
+
+        //
+        // Parse the Optional Parameters
+        //
+<span class="fc" id="L290">        int optParamEnd = message.readerIndex() + optParamLength;</span>
+<span class="fc bfc" id="L291" title="All 2 branches covered.">        while (message.readerIndex() &lt; optParamEnd) {</span>
+<span class="fc" id="L292">            int paramType = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">            if (message.readerIndex() &gt;= optParamEnd) {</span>
+                // ERROR: Malformed Optional Parameters
+<span class="nc" id="L295">                String errorMsg = &quot;Malformed Optional Parameters&quot;;</span>
+<span class="nc" id="L296">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+<span class="fc" id="L298">            int paramLen = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">            if (message.readerIndex() + paramLen &gt; optParamEnd) {</span>
+                // ERROR: Malformed Optional Parameters
+<span class="nc" id="L301">                String errorMsg = &quot;Malformed Optional Parameters&quot;;</span>
+<span class="nc" id="L302">                throw new BgpMessage.BgpParseException(errorMsg);</span>
+            }
+
+            //
+            // Extract the Optional Parameter Value based on the Parameter Type
+            //
+<span class="pc bpc" id="L308" title="1 of 2 branches missed.">            switch (paramType) {</span>
+            case BgpConstants.Open.Capabilities.TYPE:
+                // Optional Parameter Type: Capabilities
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">                if (paramLen &lt; BgpConstants.Open.Capabilities.MIN_LENGTH) {</span>
+                    // ERROR: Malformed Capability
+<span class="nc" id="L313">                    String errorMsg = &quot;Malformed Capability Type &quot; + paramType;</span>
+<span class="nc" id="L314">                    throw new BgpMessage.BgpParseException(errorMsg);</span>
+                }
+<span class="fc" id="L316">                int capabEnd = message.readerIndex() + paramLen;</span>
+<span class="fc" id="L317">                int capabCode = message.readUnsignedByte();</span>
+<span class="fc" id="L318">                int capabLen = message.readUnsignedByte();</span>
+<span class="pc bpc" id="L319" title="1 of 2 branches missed.">                if (message.readerIndex() + capabLen &gt; capabEnd) {</span>
+                    // ERROR: Malformed Capability
+<span class="nc" id="L321">                    String errorMsg = &quot;Malformed Capability Type &quot; + paramType;</span>
+<span class="nc" id="L322">                    throw new BgpMessage.BgpParseException(errorMsg);</span>
+                }
+
+<span class="pc bpc" id="L325" title="1 of 3 branches missed.">                switch (capabCode) {</span>
+                case BgpConstants.Open.Capabilities.MultiprotocolExtensions.CODE:
+                    // Multiprotocol Extensions Capabilities (RFC 4760)
+<span class="pc bpc" id="L328" title="1 of 2 branches missed.">                    if (capabLen != BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH) {</span>
+                        // ERROR: Multiprotocol Extension Length Error
+<span class="nc" id="L330">                        String errorMsg = &quot;Multiprotocol Extension Length Error&quot;;</span>
+<span class="nc" id="L331">                        throw new BgpMessage.BgpParseException(errorMsg);</span>
+                    }
+                    // Decode the AFI (2 octets) and SAFI (1 octet)
+<span class="fc" id="L334">                    int afi = message.readUnsignedShort();</span>
+<span class="fc" id="L335">                    int reserved = message.readUnsignedByte();</span>
+<span class="fc" id="L336">                    int safi = message.readUnsignedByte();</span>
+<span class="fc" id="L337">                    log.debug(&quot;BGP RX OPEN Capability: AFI = {} SAFI = {}&quot;,</span>
+<span class="fc" id="L338">                              afi, safi);</span>
+                    //
+                    // Setup the AFI/SAFI in the BgpSession
+                    //
+                    // NOTE: For now we just copy the remote AFI/SAFI setting
+                    // to the local configuration.
+                    //
+<span class="fc bfc" id="L345" title="All 4 branches covered.">                    if (afi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4 &amp;&amp;</span>
+                        safi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST) {
+<span class="fc" id="L347">                        bgpSession.remoteInfo().setIpv4Unicast();</span>
+<span class="fc" id="L348">                        bgpSession.localInfo().setIpv4Unicast();</span>
+<span class="pc bpc" id="L349" title="1 of 4 branches missed.">                    } else if (afi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4 &amp;&amp;</span>
+                               safi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_MULTICAST) {
+<span class="fc" id="L351">                        bgpSession.remoteInfo().setIpv4Multicast();</span>
+<span class="fc" id="L352">                        bgpSession.localInfo().setIpv4Multicast();</span>
+<span class="pc bpc" id="L353" title="1 of 4 branches missed.">                    } else if (afi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6 &amp;&amp;</span>
+                               safi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST) {
+<span class="fc" id="L355">                        bgpSession.remoteInfo().setIpv6Unicast();</span>
+<span class="fc" id="L356">                        bgpSession.localInfo().setIpv6Unicast();</span>
+<span class="pc bpc" id="L357" title="2 of 4 branches missed.">                    } else if (afi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6 &amp;&amp;</span>
+                               safi == BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_MULTICAST) {
+<span class="fc" id="L359">                        bgpSession.remoteInfo().setIpv6Multicast();</span>
+<span class="fc" id="L360">                        bgpSession.localInfo().setIpv6Multicast();</span>
+                    } else {
+<span class="nc" id="L362">                        log.debug(&quot;BGP RX OPEN Capability: Unknown AFI = {} SAFI = {}&quot;,</span>
+<span class="nc" id="L363">                                  afi, safi);</span>
+                    }
+<span class="nc" id="L365">                    break;</span>
+
+                case BgpConstants.Open.Capabilities.As4Octet.CODE:
+                    // Support for 4-octet AS Number Capabilities (RFC 6793)
+<span class="pc bpc" id="L369" title="1 of 2 branches missed.">                    if (capabLen != BgpConstants.Open.Capabilities.As4Octet.LENGTH) {</span>
+                        // ERROR: 4-octet AS Number Capability Length Error
+<span class="nc" id="L371">                        String errorMsg = &quot;4-octet AS Number Capability Length Error&quot;;</span>
+<span class="nc" id="L372">                        throw new BgpMessage.BgpParseException(errorMsg);</span>
+                    }
+<span class="fc" id="L374">                    long as4Number = message.readUnsignedInt();</span>
+
+<span class="fc" id="L376">                    bgpSession.remoteInfo().setAs4OctetCapability();</span>
+<span class="fc" id="L377">                    bgpSession.remoteInfo().setAs4Number(as4Number);</span>
+
+                    //
+                    // Copy remote 4-octet AS Number Capabilities and AS
+                    // Number. This is a temporary setting until local AS
+                    // number configuration is supported.
+                    //
+<span class="fc" id="L384">                    bgpSession.localInfo().setAs4OctetCapability();</span>
+<span class="fc" id="L385">                    bgpSession.localInfo().setAs4Number(as4Number);</span>
+<span class="fc" id="L386">                    log.debug(&quot;BGP RX OPEN Capability: AS4 Number = {}&quot;,</span>
+<span class="fc" id="L387">                              as4Number);</span>
+<span class="fc" id="L388">                    break;</span>
+
+                default:
+                    // Unknown Capability: ignore it
+<span class="nc" id="L392">                    log.debug(&quot;BGP RX OPEN Capability Code = {} Length = {}&quot;,</span>
+<span class="nc" id="L393">                              capabCode, capabLen);</span>
+<span class="nc" id="L394">                    message.readBytes(capabLen);</span>
+<span class="nc" id="L395">                    break;</span>
+                }
+
+                break;
+
+            default:
+                // Unknown Parameter Type: ignore it
+<span class="nc" id="L402">                log.debug(&quot;BGP RX OPEN Parameter Type = {} Length = {}&quot;,</span>
+<span class="nc" id="L403">                          paramType, paramLen);</span>
+<span class="nc" id="L404">                message.readBytes(paramLen);</span>
+                break;
+            }
+<span class="fc" id="L407">        }</span>
+<span class="fc" id="L408">    }</span>
+
+    /**
+     * Prepares the Capabilities for the BGP OPEN message.
+     *
+     * @param localInfo the BGP Session local information to use
+     * @return the buffer with the BGP Capabilities to transmit
+     */
+    private static ChannelBuffer prepareBgpOpenCapabilities(
+                                        BgpSessionInfo localInfo) {
+<span class="fc" id="L418">        ChannelBuffer message =</span>
+<span class="fc" id="L419">            ChannelBuffers.buffer(BgpConstants.BGP_MESSAGE_MAX_LENGTH);</span>
+
+        //
+        // Write the Multiprotocol Extensions Capabilities
+        //
+
+        // IPv4 unicast
+<span class="fc bfc" id="L426" title="All 2 branches covered.">        if (localInfo.ipv4Unicast()) {</span>
+<span class="fc" id="L427">            message.writeByte(BgpConstants.Open.Capabilities.TYPE);               // Param type</span>
+<span class="fc" id="L428">            message.writeByte(BgpConstants.Open.Capabilities.MIN_LENGTH +</span>
+                              BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Param len
+<span class="fc" id="L430">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.CODE);    // Capab. code
+<span class="fc" id="L432">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Capab. len
+<span class="fc" id="L434">            message.writeShort(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4);
+<span class="fc" id="L436">            message.writeByte(0);               // Reserved field</span>
+<span class="fc" id="L437">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST);
+        }
+        // IPv4 multicast
+<span class="fc bfc" id="L441" title="All 2 branches covered.">        if (localInfo.ipv4Multicast()) {</span>
+<span class="fc" id="L442">            message.writeByte(BgpConstants.Open.Capabilities.TYPE);               // Param type</span>
+<span class="fc" id="L443">            message.writeByte(BgpConstants.Open.Capabilities.MIN_LENGTH +</span>
+                              BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Param len
+<span class="fc" id="L445">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.CODE);    // Capab. code
+<span class="fc" id="L447">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Capab. len
+<span class="fc" id="L449">            message.writeShort(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV4);
+<span class="fc" id="L451">            message.writeByte(0);               // Reserved field</span>
+<span class="fc" id="L452">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_MULTICAST);
+        }
+        // IPv6 unicast
+<span class="fc bfc" id="L456" title="All 2 branches covered.">        if (localInfo.ipv6Unicast()) {</span>
+<span class="fc" id="L457">            message.writeByte(BgpConstants.Open.Capabilities.TYPE);               // Param type</span>
+<span class="fc" id="L458">            message.writeByte(BgpConstants.Open.Capabilities.MIN_LENGTH +</span>
+                              BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Param len
+<span class="fc" id="L460">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.CODE);    // Capab. code
+<span class="fc" id="L462">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Capab. len
+<span class="fc" id="L464">            message.writeShort(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6);
+<span class="fc" id="L466">            message.writeByte(0);               // Reserved field</span>
+<span class="fc" id="L467">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_UNICAST);
+        }
+        // IPv6 multicast
+<span class="fc bfc" id="L471" title="All 2 branches covered.">        if (localInfo.ipv6Multicast()) {</span>
+<span class="fc" id="L472">            message.writeByte(BgpConstants.Open.Capabilities.TYPE);               // Param type</span>
+<span class="fc" id="L473">            message.writeByte(BgpConstants.Open.Capabilities.MIN_LENGTH +</span>
+                              BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Param len
+<span class="fc" id="L475">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.CODE);    // Capab. code
+<span class="fc" id="L477">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.LENGTH);  // Capab. len
+<span class="fc" id="L479">            message.writeShort(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.AFI_IPV6);
+<span class="fc" id="L481">            message.writeByte(0);               // Reserved field</span>
+<span class="fc" id="L482">            message.writeByte(</span>
+                    BgpConstants.Open.Capabilities.MultiprotocolExtensions.SAFI_MULTICAST);
+        }
+
+        // 4 octet AS path capability
+<span class="fc bfc" id="L487" title="All 2 branches covered.">        if (localInfo.as4OctetCapability()) {</span>
+<span class="fc" id="L488">            message.writeByte(BgpConstants.Open.Capabilities.TYPE);               // Param type</span>
+<span class="fc" id="L489">            message.writeByte(BgpConstants.Open.Capabilities.MIN_LENGTH +</span>
+                              BgpConstants.Open.Capabilities.As4Octet.LENGTH);                 // Param len
+<span class="fc" id="L491">            message.writeByte(BgpConstants.Open.Capabilities.As4Octet.CODE);                   // Capab. code</span>
+<span class="fc" id="L492">            message.writeByte(BgpConstants.Open.Capabilities.As4Octet.LENGTH);                 // Capab. len</span>
+<span class="fc" id="L493">            message.writeInt((int) localInfo.as4Number());</span>
+        }
+<span class="fc" id="L495">        return message;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

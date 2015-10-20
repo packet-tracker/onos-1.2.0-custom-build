@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelRangeObjectVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLabelRangeObjectVer1.java</span></div><h1>PcepLabelRangeObjectVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLabelRangeObject;
+import org.onosproject.pcepio.types.PathSetupTypeTlv;
+import org.onosproject.pcepio.types.PcepObjectHeader;
+import org.onosproject.pcepio.types.PcepValueType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP label range object.
+ */
+public class PcepLabelRangeObjectVer1 implements PcepLabelRangeObject {
+
+    /*
+     * ref : draft-zhao-pce-pcep-extension-for-pce-controller-01, section : 7.2
+            0                   1                   2                     3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           | label type    | range size                                    |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                        label base                             |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                                                               |
+           //                      Optional TLVs                           //
+           |                                                               |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+                               LABEL-RANGE Object
+     */
+<span class="nc" id="L54">    protected static final Logger log = LoggerFactory.getLogger(PcepLabelRangeObjectVer1.class);</span>
+
+    public static final byte LABEL_RANGE_OBJ_TYPE = 1;
+    public static final byte LABEL_RANGE_OBJ_CLASS = 60; //to be defined
+    public static final byte LABEL_RANGE_OBJECT_VERSION = 1;
+    public static final short LABEL_RANGE_OBJ_MINIMUM_LENGTH = 12;
+    public static final int MINIMUM_COMMON_HEADER_LENGTH = 4;
+    //P flag and I flag must be set to 0
+<span class="nc" id="L62">    static final PcepObjectHeader DEFAULT_LABELRANGE_OBJECT_HEADER = new PcepObjectHeader(LABEL_RANGE_OBJ_CLASS,</span>
+            LABEL_RANGE_OBJ_TYPE, PcepObjectHeader.REQ_OBJ_OPTIONAL_PROCESS, PcepObjectHeader.RSP_OBJ_PROCESSED,
+            LABEL_RANGE_OBJ_MINIMUM_LENGTH);
+
+    private PcepObjectHeader labelRangeObjHeader;
+    private byte labelType;
+    private int rangeSize;
+    private int labelBase;
+    //Optional TLV
+    private LinkedList&lt;PcepValueType&gt; llOptionalTlv;
+
+    /**
+     * Constructor to initialize parameters for PCEP label range object.
+     *
+     * @param labelRangeObjHeader label range object header
+     * @param labelType label type
+     * @param rangeSize range size
+     * @param labelBase label base
+     * @param llOptionalTlv list of optional tlvs
+     */
+    public PcepLabelRangeObjectVer1(PcepObjectHeader labelRangeObjHeader, byte labelType, int rangeSize, int labelBase,
+<span class="nc" id="L83">            LinkedList&lt;PcepValueType&gt; llOptionalTlv) {</span>
+<span class="nc" id="L84">        this.labelRangeObjHeader = labelRangeObjHeader;</span>
+<span class="nc" id="L85">        this.labelType = labelType;</span>
+<span class="nc" id="L86">        this.rangeSize = rangeSize;</span>
+<span class="nc" id="L87">        this.llOptionalTlv = llOptionalTlv;</span>
+<span class="nc" id="L88">        this.labelBase = labelBase;</span>
+<span class="nc" id="L89">    }</span>
+
+    @Override
+    public void setLabelRangeObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L93">        this.labelRangeObjHeader = obj;</span>
+<span class="nc" id="L94">    }</span>
+
+    @Override
+    public void setLabelType(byte labelType) {
+<span class="nc" id="L98">        this.labelType = labelType;</span>
+<span class="nc" id="L99">    }</span>
+
+    @Override
+    public void setRangeSize(int rangeSize) {
+<span class="nc" id="L103">        this.rangeSize = rangeSize;</span>
+<span class="nc" id="L104">    }</span>
+
+    @Override
+    public void setLabelBase(int labelBase) {
+<span class="nc" id="L108">        this.labelBase = labelBase;</span>
+<span class="nc" id="L109">    }</span>
+
+    @Override
+    public PcepObjectHeader getLabelRangeObjHeader() {
+<span class="nc" id="L113">        return this.labelRangeObjHeader;</span>
+    }
+
+    @Override
+    public byte getLabelType() {
+<span class="nc" id="L118">        return this.labelType;</span>
+    }
+
+    @Override
+    public int getRangeSize() {
+<span class="nc" id="L123">        return this.rangeSize;</span>
+    }
+
+    @Override
+    public int getLabelBase() {
+<span class="nc" id="L128">        return this.labelBase;</span>
+    }
+
+    /**
+     * Reads from the channel buffer and returns object of  PcepLabelRangeObject.
+     *
+     * @param cb of type channel buffer
+     * @return object of  PcepLabelRangeObject
+     * @throws PcepParseException when fails to read from channel buffer
+     */
+    public static PcepLabelRangeObject read(ChannelBuffer cb) throws PcepParseException {
+
+        PcepObjectHeader labelRangeObjHeader;
+        byte labelType;
+        int rangeSize;
+        int labelBase;
+
+<span class="nc" id="L145">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc" id="L147">        labelRangeObjHeader = PcepObjectHeader.read(cb);</span>
+
+        //take only LabelRangeObject buffer.
+<span class="nc" id="L150">        ChannelBuffer tempCb = cb.readBytes(labelRangeObjHeader.getObjLen() - MINIMUM_COMMON_HEADER_LENGTH);</span>
+<span class="nc" id="L151">        int temp = 0;</span>
+<span class="nc" id="L152">        temp = tempCb.readInt();</span>
+<span class="nc" id="L153">        rangeSize = temp &amp; 0x00FFFFFF;</span>
+<span class="nc" id="L154">        labelType = (byte) (temp &gt;&gt; 24);</span>
+<span class="nc" id="L155">        labelBase = tempCb.readInt();</span>
+<span class="nc" id="L156">        llOptionalTlv = parseOptionalTlv(tempCb);</span>
+<span class="nc" id="L157">        return new PcepLabelRangeObjectVer1(labelRangeObjHeader, labelType, rangeSize, labelBase, llOptionalTlv);</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L163">        int objStartIndex = cb.writerIndex();</span>
+
+        //write common header
+<span class="nc" id="L166">        int objLenIndex = labelRangeObjHeader.write(cb);</span>
+<span class="nc" id="L167">        int temp = 0;</span>
+<span class="nc" id="L168">        temp = labelType;</span>
+<span class="nc" id="L169">        temp = temp &lt;&lt; 24;</span>
+<span class="nc" id="L170">        temp = temp | rangeSize;</span>
+<span class="nc" id="L171">        cb.writeInt(temp);</span>
+
+        // Add optional TLV
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        if (!packOptionalTlv(cb)) {</span>
+<span class="nc" id="L175">            throw new PcepParseException(&quot;Error while writing Optional tlv.&quot;);</span>
+        }
+
+        //now write LabelRange Object Length
+<span class="nc" id="L179">        cb.setShort(objLenIndex, (short) (cb.writerIndex() - objStartIndex));</span>
+<span class="nc" id="L180">        return cb.writerIndex() - objStartIndex;</span>
+    }
+
+    /**
+     * Returns list of optional tlvs.
+     *
+     * @param cb of type channle buffer
+     * @return list of optional tlvs
+     * @throws PcepParseException whne fails to parse list of optional tlvs
+     */
+    public static LinkedList&lt;PcepValueType&gt; parseOptionalTlv(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc" id="L192">        LinkedList&lt;PcepValueType&gt; llOutOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        while (MINIMUM_COMMON_HEADER_LENGTH &lt;= cb.readableBytes()) {</span>
+
+            PcepValueType tlv;
+            int iValue;
+<span class="nc" id="L198">            short hType = cb.readShort();</span>
+<span class="nc" id="L199">            short hLength = cb.readShort();</span>
+
+<span class="nc bnc" id="L201" title="All 2 branches missed.">            switch (hType) {</span>
+
+            case PathSetupTypeTlv.TYPE:
+<span class="nc" id="L204">                iValue = cb.readInt();</span>
+<span class="nc" id="L205">                tlv = new PathSetupTypeTlv(iValue);</span>
+<span class="nc" id="L206">                break;</span>
+
+            default:
+<span class="nc" id="L209">                throw new PcepParseException(&quot;Unsupported TLV in LabelRange Object.&quot;);</span>
+            }
+
+            // Check for the padding
+<span class="nc" id="L213">            int pad = hLength % 4;</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            if (0 &lt; pad) {</span>
+<span class="nc" id="L215">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                if (pad &lt;= cb.readableBytes()) {</span>
+<span class="nc" id="L217">                    cb.skipBytes(pad);</span>
+                }
+            }
+<span class="nc" id="L220">            llOutOptionalTlv.add(tlv);</span>
+<span class="nc" id="L221">        }</span>
+<span class="nc" id="L222">        return llOutOptionalTlv;</span>
+    }
+
+    /**
+     * Pack optional tlvs.
+     *
+     * @param cb of channel buffer
+     * @return true
+     */
+    protected boolean packOptionalTlv(ChannelBuffer cb) {
+
+<span class="nc" id="L233">        ListIterator&lt;PcepValueType&gt; listIterator = llOptionalTlv.listIterator();</span>
+
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        while (listIterator.hasNext()) {</span>
+<span class="nc" id="L236">            PcepValueType tlv = listIterator.next();</span>
+
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            if (tlv == null) {</span>
+<span class="nc" id="L239">                log.debug(&quot;tlv is null from OptionalTlv list&quot;);</span>
+<span class="nc" id="L240">                continue;</span>
+            }
+<span class="nc" id="L242">            tlv.write(cb);</span>
+
+            // need to take care of padding
+<span class="nc" id="L245">            int pad = tlv.getLength() % 4;</span>
+<span class="nc bnc" id="L246" title="All 2 branches missed.">            if (0 != pad) {</span>
+<span class="nc" id="L247">                pad = 4 - pad;</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">                for (int i = 0; i &lt; pad; ++i) {</span>
+<span class="nc" id="L249">                    cb.writeByte((byte) 0);</span>
+                }
+            }
+<span class="nc" id="L252">        }</span>
+<span class="nc" id="L253">        return true;</span>
+    }
+
+    /**
+     * Builder class for PCEP label range object.
+     */
+<span class="nc" id="L259">    public static class Builder implements PcepLabelRangeObject.Builder {</span>
+<span class="nc" id="L260">        private boolean bIsHeaderSet = false;</span>
+<span class="nc" id="L261">        private boolean bIsLabelType = false;</span>
+<span class="nc" id="L262">        private boolean bIsRangeSize = false;</span>
+<span class="nc" id="L263">        private boolean bIsLabelBase = false;</span>
+
+        byte labelType;
+        int rangeSize;
+        int labelBase;
+<span class="nc" id="L268">        private boolean bIsPFlagSet = false;</span>
+        private boolean bPFlag;
+
+<span class="nc" id="L271">        private boolean bIsIFlagSet = false;</span>
+        private boolean bIFlag;
+        private PcepObjectHeader labelRangeObjHeader;
+
+<span class="nc" id="L275">        LinkedList&lt;PcepValueType&gt; llOptionalTlv = new LinkedList&lt;&gt;();</span>
+
+        @Override
+        public PcepLabelRangeObject build() throws PcepParseException {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">            PcepObjectHeader labelRangeObjHeader = this.bIsHeaderSet ? this.labelRangeObjHeader</span>
+                    : DEFAULT_LABELRANGE_OBJECT_HEADER;
+
+<span class="nc bnc" id="L282" title="All 2 branches missed.">            if (!this.bIsLabelType) {</span>
+<span class="nc" id="L283">                throw new PcepParseException(&quot;LabelType NOT Set while building label range object.&quot;);</span>
+            }
+
+<span class="nc bnc" id="L286" title="All 2 branches missed.">            if (!this.bIsRangeSize) {</span>
+<span class="nc" id="L287">                throw new PcepParseException(&quot;RangeSize NOT Set while building label range object.&quot;);</span>
+            }
+
+<span class="nc bnc" id="L290" title="All 2 branches missed.">            if (!this.bIsLabelBase) {</span>
+<span class="nc" id="L291">                throw new PcepParseException(&quot;LabelBase NOT Set while building label range object.&quot;);</span>
+            }
+
+<span class="nc bnc" id="L294" title="All 2 branches missed.">            if (bIsPFlagSet) {</span>
+<span class="nc" id="L295">                labelRangeObjHeader.setPFlag(bPFlag);</span>
+            }
+
+<span class="nc bnc" id="L298" title="All 2 branches missed.">            if (bIsIFlagSet) {</span>
+<span class="nc" id="L299">                labelRangeObjHeader.setIFlag(bIFlag);</span>
+            }
+<span class="nc" id="L301">            return new PcepLabelRangeObjectVer1(labelRangeObjHeader, this.labelType, this.rangeSize, this.labelBase,</span>
+                    this.llOptionalTlv);
+        }
+
+        @Override
+        public PcepObjectHeader getLabelRangeObjHeader() {
+<span class="nc" id="L307">            return this.labelRangeObjHeader;</span>
+        }
+
+        @Override
+        public Builder setLabelRangeObjHeader(PcepObjectHeader obj) {
+<span class="nc" id="L312">            this.labelRangeObjHeader = obj;</span>
+<span class="nc" id="L313">            this.bIsHeaderSet = true;</span>
+<span class="nc" id="L314">            return this;</span>
+        }
+
+        @Override
+        public byte getLabelType() {
+<span class="nc" id="L319">            return this.labelType;</span>
+        }
+
+        @Override
+        public Builder setLabelType(byte labelType) {
+<span class="nc" id="L324">            this.labelType = labelType;</span>
+<span class="nc" id="L325">            this.bIsLabelType = true;</span>
+<span class="nc" id="L326">            return this;</span>
+        }
+
+        @Override
+        public int getRangeSize() {
+<span class="nc" id="L331">            return this.rangeSize;</span>
+        }
+
+        @Override
+        public Builder setRangeSize(int rangeSize) {
+<span class="nc" id="L336">            this.rangeSize = rangeSize;</span>
+<span class="nc" id="L337">            this.bIsRangeSize = true;</span>
+<span class="nc" id="L338">            return this;</span>
+        }
+
+        @Override
+        public int getLabelBase() {
+<span class="nc" id="L343">            return this.labelBase;</span>
+        }
+
+        @Override
+        public Builder setLabelBase(int labelBase) {
+<span class="nc" id="L348">            this.labelBase = labelBase;</span>
+<span class="nc" id="L349">            this.bIsLabelBase = true;</span>
+<span class="nc" id="L350">            return this;</span>
+        }
+
+        @Override
+        public Builder setPFlag(boolean value) {
+<span class="nc" id="L355">            this.bPFlag = value;</span>
+<span class="nc" id="L356">            this.bIsPFlagSet = true;</span>
+<span class="nc" id="L357">            return this;</span>
+        }
+
+        @Override
+        public Builder setIFlag(boolean value) {
+<span class="nc" id="L362">            this.bIFlag = value;</span>
+<span class="nc" id="L363">            this.bIsIFlagSet = true;</span>
+<span class="nc" id="L364">            return this;</span>
+        }
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L370">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L371">                .add(&quot;LabelType&quot;, labelType)</span>
+<span class="nc" id="L372">                .add(&quot;rangeSize&quot;, rangeSize)</span>
+<span class="nc" id="L373">                .add(&quot;labelBase&quot;, labelBase)</span>
+<span class="nc" id="L374">                .add(&quot;optionalTlvList&quot;, llOptionalTlv)</span>
+<span class="nc" id="L375">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

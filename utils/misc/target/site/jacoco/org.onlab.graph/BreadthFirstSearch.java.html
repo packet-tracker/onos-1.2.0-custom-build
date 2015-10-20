@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BreadthFirstSearch.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">BreadthFirstSearch.java</span></div><h1>BreadthFirstSearch.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import java.util.HashSet;
+import java.util.Set;
+
+/**
+ * Implementation of the BFS algorithm.
+ */
+<span class="fc" id="L24">public class BreadthFirstSearch&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;</span>
+        extends AbstractGraphPathSearch&lt;V, E&gt; {
+
+    @Override
+    public Result&lt;V, E&gt; search(Graph&lt;V, E&gt; graph, V src, V dst,
+                               EdgeWeight&lt;V, E&gt; weight, int maxPaths) {
+<span class="fc" id="L30">        checkArguments(graph, src, dst);</span>
+
+        // Prepare the graph result.
+<span class="fc" id="L33">        DefaultResult result = new DefaultResult(src, dst, maxPaths);</span>
+
+        // Setup the starting frontier with the source as the sole vertex.
+<span class="fc" id="L36">        Set&lt;V&gt; frontier = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L37">        result.updateVertex(src, null, 0.0, true);</span>
+<span class="fc" id="L38">        frontier.add(src);</span>
+
+<span class="fc" id="L40">        boolean reachedEnd = false;</span>
+<span class="fc bfc" id="L41" title="All 4 branches covered.">        while (!reachedEnd &amp;&amp; !frontier.isEmpty()) {</span>
+            // Prepare the next frontier.
+<span class="fc" id="L43">            Set&lt;V&gt; next = new HashSet&lt;&gt;();</span>
+
+            // Visit all vertexes in the current frontier.
+<span class="fc bfc" id="L46" title="All 2 branches covered.">            for (V vertex : frontier) {</span>
+<span class="fc" id="L47">                double cost = result.cost(vertex);</span>
+
+                // Visit all egress edges of the current frontier vertex.
+<span class="fc bfc" id="L50" title="All 2 branches covered.">                for (E edge : graph.getEdgesFrom(vertex)) {</span>
+<span class="fc" id="L51">                    V nextVertex = edge.dst();</span>
+<span class="fc bfc" id="L52" title="All 2 branches covered.">                    if (!result.hasCost(nextVertex)) {</span>
+                        // If this vertex has not been visited yet, update it.
+<span class="fc bfc" id="L54" title="All 2 branches covered.">                        double newCost = cost + (weight == null ? 1.0 : weight.weight(edge));</span>
+<span class="fc" id="L55">                        result.updateVertex(nextVertex, edge, newCost, true);</span>
+                        // If we have reached our intended destination, bail.
+<span class="fc bfc" id="L57" title="All 2 branches covered.">                        if (nextVertex.equals(dst)) {</span>
+<span class="fc" id="L58">                            reachedEnd = true;</span>
+<span class="fc" id="L59">                            break;</span>
+                        }
+<span class="fc" id="L61">                        next.add(nextVertex);</span>
+                    }
+
+<span class="fc bfc" id="L64" title="All 2 branches covered.">                    if (reachedEnd) {</span>
+<span class="fc" id="L65">                        break;</span>
+                    }
+<span class="fc" id="L67">                }</span>
+<span class="fc" id="L68">            }</span>
+
+            // Promote the next frontier.
+<span class="fc" id="L71">            frontier = next;</span>
+<span class="fc" id="L72">        }</span>
+
+        // Finally, but the paths on the search result and return.
+<span class="fc" id="L75">        result.buildPaths();</span>
+<span class="fc" id="L76">        return result;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

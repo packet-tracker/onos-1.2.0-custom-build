@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpenFlowGroupProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-of-provider-group</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.of.group.impl</a> &gt; <span class="el_source">OpenFlowGroupProvider.java</span></div><h1>OpenFlowGroupProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.provider.of.group.impl;
+
+import com.google.common.collect.Maps;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.core.DefaultGroupId;
+import org.onosproject.core.GroupId;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.group.DefaultGroup;
+import org.onosproject.net.group.Group;
+import org.onosproject.net.group.GroupBuckets;
+import org.onosproject.net.group.GroupDescription;
+import org.onosproject.net.group.GroupOperation;
+import org.onosproject.net.group.GroupOperations;
+import org.onosproject.net.group.GroupProvider;
+import org.onosproject.net.group.GroupProviderRegistry;
+import org.onosproject.net.group.GroupProviderService;
+import org.onosproject.net.group.StoredGroupBucketEntry;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.openflow.controller.Dpid;
+import org.onosproject.openflow.controller.OpenFlowController;
+import org.onosproject.openflow.controller.OpenFlowEventListener;
+import org.onosproject.openflow.controller.OpenFlowSwitch;
+import org.onosproject.openflow.controller.OpenFlowSwitchListener;
+import org.onosproject.openflow.controller.RoleState;
+import org.projectfloodlight.openflow.protocol.OFBucketCounter;
+import org.projectfloodlight.openflow.protocol.OFErrorMsg;
+import org.projectfloodlight.openflow.protocol.OFErrorType;
+import org.projectfloodlight.openflow.protocol.OFGroupDescStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFGroupDescStatsReply;
+import org.projectfloodlight.openflow.protocol.OFGroupMod;
+import org.projectfloodlight.openflow.protocol.OFGroupStatsEntry;
+import org.projectfloodlight.openflow.protocol.OFGroupStatsReply;
+import org.projectfloodlight.openflow.protocol.OFGroupType;
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPortStatus;
+import org.projectfloodlight.openflow.protocol.OFStatsReply;
+import org.projectfloodlight.openflow.protocol.OFStatsType;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Provider which uses an OpenFlow controller to handle Group.
+ */
+@Component(immediate = true)
+public class OpenFlowGroupProvider extends AbstractProvider implements GroupProvider {
+
+<span class="fc" id="L76">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected OpenFlowController controller;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected GroupProviderRegistry providerRegistry;
+
+    private GroupProviderService providerService;
+
+    static final int POLL_INTERVAL = 10;
+
+<span class="fc" id="L88">    private final InternalGroupProvider listener = new InternalGroupProvider();</span>
+
+<span class="fc" id="L90">    private static final AtomicLong XID_COUNTER = new AtomicLong(1);</span>
+<span class="fc" id="L91">    private final Map&lt;Dpid, GroupStatsCollector&gt; collectors = Maps.newHashMap();</span>
+<span class="fc" id="L92">    private final Map&lt;Long, OFStatsReply&gt; groupStats = Maps.newConcurrentMap();</span>
+<span class="fc" id="L93">    private final Map&lt;GroupId, GroupOperation&gt; pendingGroupOperations =</span>
+<span class="fc" id="L94">            Maps.newConcurrentMap();</span>
+
+    /* Map&lt;Group ID, Transaction ID&gt; */
+<span class="fc" id="L97">    private final Map&lt;GroupId, Long&gt; pendingXidMaps = Maps.newConcurrentMap();</span>
+
+    /**
+     * Creates a OpenFlow group provider.
+     */
+    public OpenFlowGroupProvider() {
+<span class="fc" id="L103">        super(new ProviderId(&quot;of&quot;, &quot;org.onosproject.provider.group&quot;));</span>
+<span class="fc" id="L104">    }</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L108">        providerService = providerRegistry.register(this);</span>
+<span class="fc" id="L109">        controller.addListener(listener);</span>
+<span class="fc" id="L110">        controller.addEventListener(listener);</span>
+
+<span class="fc bfc" id="L112" title="All 2 branches covered.">        for (OpenFlowSwitch sw : controller.getSwitches()) {</span>
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">            if (isGroupSupported(sw)) {</span>
+<span class="fc" id="L114">                GroupStatsCollector gsc = new GroupStatsCollector(sw, POLL_INTERVAL);</span>
+<span class="fc" id="L115">                gsc.start();</span>
+<span class="fc" id="L116">                collectors.put(new Dpid(sw.getId()), gsc);</span>
+            }
+<span class="fc" id="L118">        }</span>
+
+<span class="fc" id="L120">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L121">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L125">        providerRegistry.unregister(this);</span>
+<span class="fc" id="L126">        providerService = null;</span>
+
+<span class="fc" id="L128">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L129">    }</span>
+
+    @Override
+    public void performGroupOperation(DeviceId deviceId, GroupOperations groupOps) {
+<span class="fc" id="L133">        Map&lt;OFGroupMod, OpenFlowSwitch&gt; mods = Maps.newIdentityHashMap();</span>
+<span class="fc" id="L134">        final Dpid dpid = Dpid.dpid(deviceId.uri());</span>
+<span class="fc" id="L135">        OpenFlowSwitch sw = controller.getSwitch(dpid);</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">        for (GroupOperation groupOperation: groupOps.operations()) {</span>
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">            if (sw == null) {</span>
+<span class="nc" id="L138">                log.error(&quot;SW {} is not found&quot;, dpid);</span>
+<span class="nc" id="L139">                return;</span>
+            }
+<span class="fc" id="L141">            final Long groupModXid = XID_COUNTER.getAndIncrement();</span>
+<span class="fc" id="L142">            GroupModBuilder builder =</span>
+<span class="fc" id="L143">                    GroupModBuilder.builder(groupOperation.buckets(),</span>
+<span class="fc" id="L144">                            groupOperation.groupId(),</span>
+<span class="fc" id="L145">                            groupOperation.groupType(),</span>
+<span class="fc" id="L146">                            sw.factory(),</span>
+<span class="fc" id="L147">                            Optional.of(groupModXid));</span>
+<span class="fc" id="L148">            OFGroupMod groupMod = null;</span>
+<span class="pc bpc" id="L149" title="3 of 4 branches missed.">            switch (groupOperation.opType()) {</span>
+                case ADD:
+<span class="fc" id="L151">                    groupMod = builder.buildGroupAdd();</span>
+<span class="fc" id="L152">                    break;</span>
+                case MODIFY:
+<span class="nc" id="L154">                    groupMod = builder.buildGroupMod();</span>
+<span class="nc" id="L155">                    break;</span>
+                case DELETE:
+<span class="nc" id="L157">                    groupMod = builder.buildGroupDel();</span>
+<span class="nc" id="L158">                    break;</span>
+                default:
+<span class="nc" id="L160">                    log.error(&quot;Unsupported Group operation&quot;);</span>
+            }
+<span class="fc" id="L162">            sw.sendMsg(groupMod);</span>
+<span class="fc" id="L163">            GroupId groudId = new DefaultGroupId(groupMod.getGroup().getGroupNumber());</span>
+<span class="fc" id="L164">            pendingGroupOperations.put(groudId, groupOperation);</span>
+<span class="fc" id="L165">            pendingXidMaps.put(groudId, groupModXid);</span>
+<span class="fc" id="L166">        }</span>
+<span class="fc" id="L167">     }</span>
+
+    private void pushGroupMetrics(Dpid dpid, OFStatsReply statsReply) {
+<span class="fc" id="L170">        DeviceId deviceId = DeviceId.deviceId(Dpid.uri(dpid));</span>
+
+<span class="fc" id="L172">        OFGroupStatsReply groupStatsReply = null;</span>
+<span class="fc" id="L173">        OFGroupDescStatsReply groupDescStatsReply = null;</span>
+
+<span class="fc" id="L175">        synchronized (groupStats) {</span>
+<span class="fc bfc" id="L176" title="All 2 branches covered.">            if (statsReply.getStatsType() == OFStatsType.GROUP) {</span>
+<span class="fc" id="L177">                OFStatsReply reply = groupStats.get(statsReply.getXid() + 1);</span>
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">                if (reply != null) {</span>
+<span class="nc" id="L179">                    groupStatsReply = (OFGroupStatsReply) statsReply;</span>
+<span class="nc" id="L180">                    groupDescStatsReply = (OFGroupDescStatsReply) reply;</span>
+<span class="nc" id="L181">                    groupStats.remove(statsReply.getXid() + 1);</span>
+                } else {
+<span class="fc" id="L183">                    groupStats.put(statsReply.getXid(), statsReply);</span>
+                }
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">            } else if (statsReply.getStatsType() == OFStatsType.GROUP_DESC) {</span>
+<span class="fc" id="L186">                OFStatsReply reply = groupStats.get(statsReply.getXid() - 1);</span>
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">                if (reply != null) {</span>
+<span class="fc" id="L188">                    groupStatsReply = (OFGroupStatsReply) reply;</span>
+<span class="fc" id="L189">                    groupDescStatsReply = (OFGroupDescStatsReply) statsReply;</span>
+<span class="fc" id="L190">                    groupStats.remove(statsReply.getXid() - 1);</span>
+                } else {
+<span class="nc" id="L192">                    groupStats.put(statsReply.getXid(), statsReply);</span>
+                }
+            }
+<span class="pc" id="L195">        }</span>
+
+<span class="pc bpc" id="L197" title="1 of 4 branches missed.">        if (groupStatsReply != null &amp;&amp; groupDescStatsReply != null) {</span>
+<span class="fc" id="L198">            Collection&lt;Group&gt; groups = buildGroupMetrics(deviceId,</span>
+                    groupStatsReply, groupDescStatsReply);
+<span class="fc" id="L200">            providerService.pushGroupMetrics(deviceId, groups);</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">            for (Group group: groups) {</span>
+<span class="nc" id="L202">                pendingGroupOperations.remove(group.id());</span>
+<span class="nc" id="L203">                pendingXidMaps.remove(group.id());</span>
+<span class="nc" id="L204">            }</span>
+        }
+<span class="fc" id="L206">    }</span>
+
+    private Collection&lt;Group&gt; buildGroupMetrics(DeviceId deviceId,
+                                   OFGroupStatsReply groupStatsReply,
+                                   OFGroupDescStatsReply groupDescStatsReply) {
+
+<span class="fc" id="L212">        Map&lt;Integer, Group&gt; groups = Maps.newHashMap();</span>
+
+
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        for (OFGroupDescStatsEntry entry: groupDescStatsReply.getEntries()) {</span>
+<span class="nc" id="L216">            int id = entry.getGroup().getGroupNumber();</span>
+<span class="nc" id="L217">            GroupId groupId = new DefaultGroupId(id);</span>
+<span class="nc" id="L218">            GroupDescription.Type type = getGroupType(entry.getGroupType());</span>
+<span class="nc" id="L219">            GroupBuckets buckets = new GroupBucketEntryBuilder(entry.getBuckets(),</span>
+<span class="nc" id="L220">                    entry.getGroupType()).build();</span>
+<span class="nc" id="L221">            DefaultGroup group = new DefaultGroup(groupId, deviceId, type, buckets);</span>
+<span class="nc" id="L222">            groups.put(id, group);</span>
+<span class="nc" id="L223">        }</span>
+
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">        for (OFGroupStatsEntry entry: groupStatsReply.getEntries()) {</span>
+<span class="nc" id="L226">            int groupId = entry.getGroup().getGroupNumber();</span>
+<span class="nc" id="L227">            DefaultGroup group = (DefaultGroup) groups.get(groupId);</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">            if (group != null) {</span>
+<span class="nc" id="L229">                group.setBytes(entry.getByteCount().getValue());</span>
+<span class="nc" id="L230">                group.setLife(entry.getDurationSec());</span>
+<span class="nc" id="L231">                group.setPackets(entry.getPacketCount().getValue());</span>
+<span class="nc" id="L232">                group.setReferenceCount(entry.getRefCount());</span>
+<span class="nc" id="L233">                int bucketIndex = 0;</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">                for (OFBucketCounter bucketStats:entry.getBucketStats()) {</span>
+<span class="nc" id="L235">                    ((StoredGroupBucketEntry) group.buckets().buckets()</span>
+<span class="nc" id="L236">                            .get(bucketIndex))</span>
+<span class="nc" id="L237">                            .setPackets(bucketStats</span>
+<span class="nc" id="L238">                                        .getPacketCount().getValue());</span>
+<span class="nc" id="L239">                    ((StoredGroupBucketEntry) group.buckets().buckets()</span>
+<span class="nc" id="L240">                            .get(bucketIndex))</span>
+<span class="nc" id="L241">                            .setBytes(entry.getBucketStats()</span>
+<span class="nc" id="L242">                                      .get(bucketIndex)</span>
+<span class="nc" id="L243">                                      .getByteCount().getValue());</span>
+<span class="nc" id="L244">                    bucketIndex++;</span>
+<span class="nc" id="L245">                }</span>
+            }
+<span class="nc" id="L247">        }</span>
+
+<span class="fc" id="L249">        return groups.values();</span>
+    }
+
+    private GroupDescription.Type getGroupType(OFGroupType type) {
+<span class="pc bnc" id="L253" title="All 5 branches missed.">        switch (type) {</span>
+            case ALL:
+<span class="nc" id="L255">                return  GroupDescription.Type.ALL;</span>
+            case INDIRECT:
+<span class="nc" id="L257">                return GroupDescription.Type.INDIRECT;</span>
+            case SELECT:
+<span class="nc" id="L259">                return GroupDescription.Type.SELECT;</span>
+            case FF:
+<span class="nc" id="L261">                return GroupDescription.Type.FAILOVER;</span>
+            default:
+<span class="nc" id="L263">                log.error(&quot;Unsupported OF group type : {}&quot;, type);</span>
+                break;
+        }
+<span class="nc" id="L266">        return null;</span>
+    }
+
+    /**
+     * Returns a transaction ID for entire group operations and increases
+     * the counter by the number given.
+     *
+     * @param increase the amount to increase the counter by
+     * @return a transaction ID
+     */
+    public static long getXidAndAdd(int increase) {
+<span class="fc" id="L277">        return XID_COUNTER.getAndAdd(increase);</span>
+    }
+
+    private boolean isGroupSupported(OpenFlowSwitch sw) {
+<span class="pc bpc" id="L281" title="1 of 2 branches missed.">        if (sw.factory().getVersion() == OFVersion.OF_10 ||</span>
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">                sw.factory().getVersion() == OFVersion.OF_11 ||</span>
+<span class="pc bpc" id="L283" title="1 of 2 branches missed.">                sw.factory().getVersion() == OFVersion.OF_12) {</span>
+<span class="nc" id="L284">            return false;</span>
+        }
+
+<span class="fc" id="L287">        return true;</span>
+    }
+
+<span class="fc" id="L290">    private class InternalGroupProvider</span>
+            implements OpenFlowSwitchListener, OpenFlowEventListener {
+
+        @Override
+        public void handleMessage(Dpid dpid, OFMessage msg) {
+<span class="pc bpc" id="L295" title="1 of 3 branches missed.">            switch (msg.getType()) {</span>
+                case STATS_REPLY:
+<span class="fc" id="L297">                    pushGroupMetrics(dpid, (OFStatsReply) msg);</span>
+<span class="fc" id="L298">                    break;</span>
+                case ERROR:
+<span class="fc" id="L300">                    OFErrorMsg errorMsg = (OFErrorMsg) msg;</span>
+<span class="pc bpc" id="L301" title="1 of 2 branches missed.">                    if (errorMsg.getErrType() == OFErrorType.GROUP_MOD_FAILED) {</span>
+<span class="fc" id="L302">                        GroupId pendingGroupId = null;</span>
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">                        for (Map.Entry&lt;GroupId, Long&gt; entry: pendingXidMaps.entrySet()) {</span>
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">                            if (entry.getValue() == errorMsg.getXid()) {</span>
+<span class="fc" id="L305">                                pendingGroupId = entry.getKey();</span>
+<span class="fc" id="L306">                                break;</span>
+                            }
+<span class="nc" id="L308">                        }</span>
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">                        if (pendingGroupId == null) {</span>
+<span class="nc" id="L310">                            log.warn(&quot;Error for unknown group operation: {}&quot;,</span>
+<span class="nc" id="L311">                                    errorMsg.getXid());</span>
+                        } else {
+<span class="fc" id="L313">                            GroupOperation operation =</span>
+<span class="fc" id="L314">                                    pendingGroupOperations.get(pendingGroupId);</span>
+<span class="fc" id="L315">                            DeviceId deviceId = DeviceId.deviceId(Dpid.uri(dpid));</span>
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">                            if (operation != null) {</span>
+<span class="fc" id="L317">                                providerService.groupOperationFailed(deviceId,</span>
+                                        operation);
+<span class="fc" id="L319">                                pendingGroupOperations.remove(pendingGroupId);</span>
+<span class="fc" id="L320">                                pendingXidMaps.remove(pendingGroupId);</span>
+<span class="fc" id="L321">                                log.warn(&quot;Received an group mod error {}&quot;, msg);</span>
+                            } else {
+<span class="nc" id="L323">                                log.error(&quot;Cannot find pending group operation with group ID: {}&quot;,</span>
+                                        pendingGroupId);
+                            }
+                        }
+<span class="fc" id="L327">                        break;</span>
+                    }
+                default:
+                    break;
+            }
+<span class="fc" id="L332">        }</span>
+
+        @Override
+        public void switchAdded(Dpid dpid) {
+<span class="nc" id="L336">            OpenFlowSwitch sw = controller.getSwitch(dpid);</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (sw == null) {</span>
+<span class="nc" id="L338">                return;</span>
+            }
+<span class="nc bnc" id="L340" title="All 2 branches missed.">            if (isGroupSupported(sw)) {</span>
+<span class="nc" id="L341">                GroupStatsCollector gsc = new GroupStatsCollector(</span>
+<span class="nc" id="L342">                        controller.getSwitch(dpid), POLL_INTERVAL);</span>
+<span class="nc" id="L343">                gsc.start();</span>
+<span class="nc" id="L344">                collectors.put(dpid, gsc);</span>
+            }
+
+            //figure out race condition
+<span class="nc bnc" id="L348" title="All 2 branches missed.">            if (controller.getSwitch(dpid) == null) {</span>
+<span class="nc" id="L349">                switchRemoved(dpid);</span>
+            }
+<span class="nc" id="L351">        }</span>
+
+        @Override
+        public void switchRemoved(Dpid dpid) {
+<span class="nc" id="L355">            GroupStatsCollector collector = collectors.remove(dpid);</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">            if (collector != null) {</span>
+<span class="nc" id="L357">                collector.stop();</span>
+            }
+<span class="nc" id="L359">        }</span>
+
+        @Override
+        public void switchChanged(Dpid dpid) {
+<span class="nc" id="L363">        }</span>
+
+        @Override
+        public void portChanged(Dpid dpid, OFPortStatus status) {
+<span class="nc" id="L367">        }</span>
+
+        @Override
+        public void receivedRoleReply(Dpid dpid, RoleState requested, RoleState response) {
+<span class="nc" id="L371">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Tools.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.util</a> &gt; <span class="el_source">Tools.java</span></div><h1>Tools.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.util;
+
+import static java.nio.file.Files.delete;
+import static java.nio.file.Files.walkFileTree;
+import static org.onlab.util.GroupedThreadFactory.groupedThreadFactory;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Dictionary;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+
+import org.slf4j.Logger;
+
+import com.google.common.base.Strings;
+import com.google.common.primitives.UnsignedLongs;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+/**
+ * Miscellaneous utility methods.
+ */
+public abstract class Tools {
+
+<span class="nc" id="L65">    private Tools() {</span>
+<span class="nc" id="L66">    }</span>
+
+<span class="fc" id="L68">    private static final Logger log = getLogger(Tools.class);</span>
+
+<span class="fc" id="L70">    private static Random random = new Random();</span>
+
+    /**
+     * Returns a thread factory that produces threads named according to the
+     * supplied name pattern.
+     *
+     * @param pattern name pattern
+     * @return thread factory
+     */
+    public static ThreadFactory namedThreads(String pattern) {
+<span class="fc" id="L80">        return new ThreadFactoryBuilder()</span>
+<span class="fc" id="L81">                .setNameFormat(pattern)</span>
+<span class="fc" id="L82">                .setUncaughtExceptionHandler((t, e) -&gt; log.error(&quot;Uncaught exception on &quot; + t.getName(), e))</span>
+<span class="fc" id="L83">                .build();</span>
+    }
+
+    /**
+     * Returns a thread factory that produces threads named according to the
+     * supplied name pattern and from the specified thread-group. The thread
+     * group name is expected to be specified in slash-delimited format, e.g.
+     * {@code onos/intent}. The thread names will be produced by converting
+     * the thread group name into dash-delimited format and pre-pended to the
+     * specified pattern.
+     *
+     * @param groupName group name in slash-delimited format to indicate hierarchy
+     * @param pattern   name pattern
+     * @return thread factory
+     */
+    public static ThreadFactory groupedThreads(String groupName, String pattern) {
+<span class="fc" id="L99">        return new ThreadFactoryBuilder()</span>
+<span class="fc" id="L100">                .setThreadFactory(groupedThreadFactory(groupName))</span>
+<span class="fc" id="L101">                .setNameFormat(groupName.replace(GroupedThreadFactory.DELIMITER, &quot;-&quot;) + &quot;-&quot; + pattern)</span>
+<span class="pc" id="L102">                .setUncaughtExceptionHandler((t, e) -&gt; log.error(&quot;Uncaught exception on &quot; + t.getName(), e))</span>
+<span class="fc" id="L103">                .build();</span>
+    }
+
+    /**
+     * Returns a thread factory that produces threads with MIN_PRIORITY.
+     *
+     * @param factory backing ThreadFactory
+     * @return thread factory
+     */
+    public static ThreadFactory minPriority(ThreadFactory factory) {
+<span class="nc" id="L113">        return new ThreadFactoryBuilder()</span>
+<span class="nc" id="L114">                .setThreadFactory(factory)</span>
+<span class="nc" id="L115">                .setPriority(Thread.MIN_PRIORITY)</span>
+<span class="nc" id="L116">                .build();</span>
+    }
+
+    /**
+     * Returns true if the collection is null or is empty.
+     *
+     * @param collection collection to test
+     * @return true if null or empty; false otherwise
+     */
+    public static boolean isNullOrEmpty(Collection collection) {
+<span class="nc bnc" id="L126" title="All 4 branches missed.">        return collection == null || collection.isEmpty();</span>
+    }
+
+    /**
+     * Returns the specified item if that item is not null; otherwise throws
+     * not found exception.
+     *
+     * @param item    item to check
+     * @param message not found message
+     * @param &lt;T&gt;     item type
+     * @return item if not null
+     * @throws org.onlab.util.ItemNotFoundException if item is null
+     */
+    public static &lt;T&gt; T nullIsNotFound(T item, String message) {
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (item == null) {</span>
+<span class="nc" id="L141">            throw new ItemNotFoundException(message);</span>
+        }
+<span class="nc" id="L143">        return item;</span>
+    }
+
+    /**
+     * Returns the specified item if that item is not null; otherwise throws
+     * bad argument exception.
+     *
+     * @param item    item to check
+     * @param message not found message
+     * @param &lt;T&gt;     item type
+     * @return item if not null
+     * @throws IllegalArgumentException if item is null
+     */
+    public static &lt;T&gt; T nullIsIllegal(T item, String message) {
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (item == null) {</span>
+<span class="nc" id="L158">            throw new IllegalArgumentException(message);</span>
+        }
+<span class="nc" id="L160">        return item;</span>
+    }
+
+    /**
+     * Converts a string from hex to long.
+     *
+     * @param string hex number in string form; sans 0x
+     * @return long value
+     */
+    public static long fromHex(String string) {
+<span class="fc" id="L170">        return UnsignedLongs.parseUnsignedLong(string, 16);</span>
+    }
+
+    /**
+     * Converts a long value to hex string; 16 wide and sans 0x.
+     *
+     * @param value long value
+     * @return hex string
+     */
+    public static String toHex(long value) {
+<span class="fc" id="L180">        return Strings.padStart(UnsignedLongs.toString(value, 16), 16, '0');</span>
+    }
+
+    /**
+     * Converts a long value to hex string; 16 wide and sans 0x.
+     *
+     * @param value long value
+     * @param width string width; zero padded
+     * @return hex string
+     */
+    public static String toHex(long value, int width) {
+<span class="fc" id="L191">        return Strings.padStart(UnsignedLongs.toString(value, 16), width, '0');</span>
+    }
+
+    /**
+     * Returns a copy of the input byte array.
+     *
+     * @param original input
+     * @return copy of original
+     */
+    public static byte[] copyOf(byte[] original) {
+<span class="nc" id="L201">        return Arrays.copyOf(original, original.length);</span>
+    }
+
+    /**
+     * Get property as a string value.
+     *
+     * @param properties   properties to be looked up
+     * @param propertyName the name of the property to look up
+     * @return value when the propertyName is defined or return null
+     */
+    public static String get(Dictionary&lt;?, ?&gt; properties, String propertyName) {
+<span class="nc" id="L212">        Object v = properties.get(propertyName);</span>
+<span class="nc bnc" id="L213" title="All 4 branches missed.">        String s = (v instanceof String) ? (String) v :</span>
+<span class="nc" id="L214">                v != null ? v.toString() : null;</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        return Strings.isNullOrEmpty(s) ? null : s.trim();</span>
+    }
+
+    /**
+     * Suspends the current thread for a specified number of millis.
+     *
+     * @param ms number of millis
+     */
+    public static void delay(int ms) {
+        try {
+<span class="nc" id="L225">            Thread.sleep(ms);</span>
+<span class="nc" id="L226">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L227">            throw new RuntimeException(&quot;Interrupted&quot;, e);</span>
+<span class="nc" id="L228">        }</span>
+<span class="nc" id="L229">    }</span>
+
+    /**
+     * Returns a function that retries execution on failure.
+     * @param base base function
+     * @param exceptionClass type of exception for which to retry
+     * @param maxRetries max number of retries before giving up
+     * @param maxDelayBetweenRetries max delay between successive retries. The actual delay is randomly picked from
+     * the interval (0, maxDelayBetweenRetries]
+     * @return function
+     * @param &lt;U&gt; type of function input
+     * @param &lt;V&gt; type of function output
+     */
+    public static &lt;U, V&gt; Function&lt;U, V&gt; retryable(Function&lt;U, V&gt; base,
+            Class&lt;? extends Throwable&gt; exceptionClass,
+            int maxRetries,
+            int maxDelayBetweenRetries) {
+<span class="nc" id="L246">        return new RetryingFunction&lt;&gt;(base, exceptionClass, maxRetries, maxDelayBetweenRetries);</span>
+    }
+
+    /**
+     * Returns a Supplier that retries execution on failure.
+     * @param base base supplier
+     * @param exceptionClass type of exception for which to retry
+     * @param maxRetries max number of retries before giving up
+     * @param maxDelayBetweenRetries max delay between successive retries. The actual delay is randomly picked from
+     * the interval (0, maxDelayBetweenRetries]
+     * @return supplier
+     * @param &lt;V&gt; type of supplied result
+     */
+    public static &lt;V&gt; Supplier&lt;V&gt; retryable(Supplier&lt;V&gt; base,
+            Class&lt;? extends Throwable&gt; exceptionClass,
+            int maxRetries,
+            int maxDelayBetweenRetries) {
+<span class="nc" id="L263">        return () -&gt; new RetryingFunction&lt;&gt;(v -&gt; base.get(),</span>
+                exceptionClass,
+                maxRetries,
+<span class="nc" id="L266">                maxDelayBetweenRetries).apply(null);</span>
+    }
+
+    /**
+     * Suspends the current thread for a random number of millis between 0 and
+     * the indicated limit.
+     *
+     * @param ms max number of millis
+     */
+    public static void randomDelay(int ms) {
+        try {
+<span class="fc" id="L277">            Thread.sleep(random.nextInt(ms));</span>
+<span class="nc" id="L278">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L279">            throw new RuntimeException(&quot;Interrupted&quot;, e);</span>
+<span class="fc" id="L280">        }</span>
+<span class="fc" id="L281">    }</span>
+
+    /**
+     * Suspends the current thread for a specified number of millis and nanos.
+     *
+     * @param ms    number of millis
+     * @param nanos number of nanos
+     */
+    public static void delay(int ms, int nanos) {
+        try {
+<span class="nc" id="L291">            Thread.sleep(ms, nanos);</span>
+<span class="nc" id="L292">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L293">            throw new RuntimeException(&quot;Interrupted&quot;, e);</span>
+<span class="nc" id="L294">        }</span>
+<span class="nc" id="L295">    }</span>
+
+    /**
+     * Slurps the contents of a file into a list of strings, one per line.
+     *
+     * @param path file path
+     * @return file contents
+     * @deprecated in Emu release
+     */
+    @Deprecated
+    public static List&lt;String&gt; slurp(File path) {
+<span class="nc" id="L306">        try (</span>
+<span class="nc" id="L307">            BufferedReader br = new BufferedReader(</span>
+                    new InputStreamReader(new FileInputStream(path), StandardCharsets.UTF_8));
+                ) {
+<span class="nc" id="L310">            List&lt;String&gt; lines = new ArrayList&lt;&gt;();</span>
+            String line;
+<span class="nc bnc" id="L312" title="All 2 branches missed.">            while ((line = br.readLine()) != null) {</span>
+<span class="nc" id="L313">                lines.add(line);</span>
+            }
+<span class="nc" id="L315">            return lines;</span>
+
+<span class="nc bnc" id="L317" title="All 8 branches missed.">        } catch (IOException e) {</span>
+<span class="nc" id="L318">            return null;</span>
+        }
+    }
+
+    /**
+     * Purges the specified directory path.&amp;nbsp;Use with great caution since
+     * no attempt is made to check for symbolic links, which could result in
+     * deletion of unintended files.
+     *
+     * @param path directory to be removed
+     * @throws java.io.IOException if unable to remove contents
+     */
+    public static void removeDirectory(String path) throws IOException {
+<span class="nc" id="L331">        DirectoryDeleter visitor = new DirectoryDeleter();</span>
+<span class="nc" id="L332">        File dir = new File(path);</span>
+<span class="nc bnc" id="L333" title="All 4 branches missed.">        if (dir.exists() &amp;&amp; dir.isDirectory()) {</span>
+<span class="nc" id="L334">            walkFileTree(Paths.get(path), visitor);</span>
+<span class="nc bnc" id="L335" title="All 2 branches missed.">            if (visitor.exception != null) {</span>
+<span class="nc" id="L336">                throw visitor.exception;</span>
+            }
+        }
+<span class="nc" id="L339">    }</span>
+
+    /**
+     * Purges the specified directory path.&amp;nbsp;Use with great caution since
+     * no attempt is made to check for symbolic links, which could result in
+     * deletion of unintended files.
+     *
+     * @param dir directory to be removed
+     * @throws java.io.IOException if unable to remove contents
+     */
+    public static void removeDirectory(File dir) throws IOException {
+<span class="nc" id="L350">        DirectoryDeleter visitor = new DirectoryDeleter();</span>
+<span class="nc bnc" id="L351" title="All 4 branches missed.">        if (dir.exists() &amp;&amp; dir.isDirectory()) {</span>
+<span class="nc" id="L352">            walkFileTree(Paths.get(dir.getAbsolutePath()), visitor);</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">            if (visitor.exception != null) {</span>
+<span class="nc" id="L354">                throw visitor.exception;</span>
+            }
+        }
+<span class="nc" id="L357">    }</span>
+
+    // Auxiliary path visitor for recursive directory structure removal.
+<span class="nc" id="L360">    private static class DirectoryDeleter extends SimpleFileVisitor&lt;Path&gt; {</span>
+
+        private IOException exception;
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attributes)
+                throws IOException {
+<span class="nc bnc" id="L367" title="All 2 branches missed.">            if (attributes.isRegularFile()) {</span>
+<span class="nc" id="L368">                delete(file);</span>
+            }
+<span class="nc" id="L370">            return FileVisitResult.CONTINUE;</span>
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path directory, IOException ioe)
+                throws IOException {
+<span class="nc" id="L376">            delete(directory);</span>
+<span class="nc" id="L377">            return FileVisitResult.CONTINUE;</span>
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException ioe)
+                throws IOException {
+<span class="nc" id="L383">            this.exception = ioe;</span>
+<span class="nc" id="L384">            return FileVisitResult.TERMINATE;</span>
+        }
+    }
+
+    /**
+     * Returns a human friendly time ago string for a specified system time.
+     *
+     * @param unixTime system time in millis
+     * @return human friendly time ago
+     */
+    public static String timeAgo(long unixTime) {
+<span class="nc" id="L395">        long deltaMillis = System.currentTimeMillis() - unixTime;</span>
+<span class="nc" id="L396">        long secondsSince = (long) (deltaMillis / 1000.0);</span>
+<span class="nc" id="L397">        long minsSince = (long) (deltaMillis / (1000.0 * 60));</span>
+<span class="nc" id="L398">        long hoursSince = (long) (deltaMillis / (1000.0 * 60 * 60));</span>
+<span class="nc" id="L399">        long daysSince = (long) (deltaMillis / (1000.0 * 60 * 60 * 24));</span>
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        if (daysSince &gt; 0) {</span>
+<span class="nc" id="L401">            return String.format(&quot;%dd ago&quot;, daysSince);</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        } else if (hoursSince &gt; 0) {</span>
+<span class="nc" id="L403">            return String.format(&quot;%dh ago&quot;, hoursSince);</span>
+<span class="nc bnc" id="L404" title="All 2 branches missed.">        } else if (minsSince &gt; 0) {</span>
+<span class="nc" id="L405">            return String.format(&quot;%dm ago&quot;, minsSince);</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">        } else if (secondsSince &gt; 0) {</span>
+<span class="nc" id="L407">            return String.format(&quot;%ds ago&quot;, secondsSince);</span>
+        } else {
+<span class="nc" id="L409">            return &quot;just now&quot;;</span>
+        }
+    }
+
+    /**
+     * Copies the specified directory path.&amp;nbsp;Use with great caution since
+     * no attempt is made to check for symbolic links, which could result in
+     * copy of unintended files.
+     *
+     * @param src directory to be copied
+     * @param dst destination directory to be removed
+     * @throws java.io.IOException if unable to remove contents
+     */
+    public static void copyDirectory(String src, String dst) throws IOException {
+<span class="nc" id="L423">        walkFileTree(Paths.get(src), new DirectoryCopier(src, dst));</span>
+<span class="nc" id="L424">    }</span>
+
+    /**
+     * Copies the specified directory path.&amp;nbsp;Use with great caution since
+     * no attempt is made to check for symbolic links, which could result in
+     * copy of unintended files.
+     *
+     * @param src directory to be copied
+     * @param dst destination directory to be removed
+     * @throws java.io.IOException if unable to remove contents
+     */
+    public static void copyDirectory(File src, File dst) throws IOException {
+<span class="nc" id="L436">        walkFileTree(Paths.get(src.getAbsolutePath()),</span>
+<span class="nc" id="L437">                     new DirectoryCopier(src.getAbsolutePath(),</span>
+<span class="nc" id="L438">                                         dst.getAbsolutePath()));</span>
+<span class="nc" id="L439">    }</span>
+
+    /**
+     * Returns the future value when complete or if future
+     * completes exceptionally returns the defaultValue.
+     *
+     * @param future future
+     * @param defaultValue default value
+     * @param &lt;T&gt; future value type
+     * @return future value when complete or if future
+     * completes exceptionally returns the defaultValue.
+     */
+    public static &lt;T&gt; T futureGetOrElse(Future&lt;T&gt; future, T defaultValue) {
+        try {
+<span class="nc" id="L453">            return future.get();</span>
+<span class="nc" id="L454">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L455">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L456">            return defaultValue;</span>
+<span class="nc" id="L457">        } catch (ExecutionException e) {</span>
+<span class="nc" id="L458">            return defaultValue;</span>
+        }
+    }
+
+    /**
+     * Returns the future value when complete or if future
+     * completes exceptionally returns the defaultValue.
+     *
+     * @param future future
+     * @param timeout time to wait for successful completion
+     * @param timeUnit time unit
+     * @param defaultValue default value
+     * @param &lt;T&gt; future value type
+     * @return future value when complete or if future
+     * completes exceptionally returns the defaultValue.
+     */
+    public static &lt;T&gt; T futureGetOrElse(Future&lt;T&gt; future,
+                                        long timeout,
+                                        TimeUnit timeUnit,
+                                        T defaultValue) {
+        try {
+<span class="nc" id="L479">            return future.get(timeout, timeUnit);</span>
+<span class="nc" id="L480">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L481">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L482">            return defaultValue;</span>
+<span class="nc" id="L483">        } catch (ExecutionException | TimeoutException e) {</span>
+<span class="nc" id="L484">            return defaultValue;</span>
+        }
+    }
+
+    /**
+     * Returns a future that is completed exceptionally.
+     *
+     * @param t exception
+     * @param &lt;T&gt; future value type
+     * @return future
+     */
+    public static &lt;T&gt; CompletableFuture&lt;T&gt; exceptionalFuture(Throwable t) {
+<span class="nc" id="L496">        CompletableFuture&lt;T&gt; future = new CompletableFuture&lt;&gt;();</span>
+<span class="nc" id="L497">        future.completeExceptionally(t);</span>
+<span class="nc" id="L498">        return future;</span>
+    }
+
+    /**
+     * Returns the contents of {@code ByteBuffer} as byte array.
+     * &lt;p&gt;
+     * WARNING: There is a performance cost due to array copy
+     * when using this method.
+     *
+     * @param buffer byte buffer
+     * @return byte array containing the byte buffer contents
+     */
+    public static byte[] byteBuffertoArray(ByteBuffer buffer) {
+<span class="nc" id="L511">        int length = buffer.remaining();</span>
+<span class="nc bnc" id="L512" title="All 2 branches missed.">        if (buffer.hasArray()) {</span>
+<span class="nc" id="L513">            int offset = buffer.arrayOffset() + buffer.position();</span>
+<span class="nc" id="L514">            return Arrays.copyOfRange(buffer.array(), offset, offset + length);</span>
+        }
+<span class="nc" id="L516">        byte[] bytes = new byte[length];</span>
+<span class="nc" id="L517">        buffer.duplicate().get(bytes);</span>
+<span class="nc" id="L518">        return bytes;</span>
+    }
+
+    /**
+     * Converts an iterable to a stream.
+     *
+     * @param it iterable to convert
+     * @param &lt;T&gt; type if item
+     * @return iterable as a stream
+     */
+    public static &lt;T&gt; Stream&lt;T&gt; stream(Iterable&lt;T&gt; it) {
+<span class="nc" id="L529">        return StreamSupport.stream(it.spliterator(), false);</span>
+    }
+
+    // Auxiliary path visitor for recursive directory structure copying.
+    private static class DirectoryCopier extends SimpleFileVisitor&lt;Path&gt; {
+        private Path src;
+        private Path dst;
+<span class="nc" id="L536">        private StandardCopyOption copyOption = StandardCopyOption.REPLACE_EXISTING;</span>
+
+<span class="nc" id="L538">        DirectoryCopier(String src, String dst) {</span>
+<span class="nc" id="L539">            this.src = Paths.get(src);</span>
+<span class="nc" id="L540">            this.dst = Paths.get(dst);</span>
+<span class="nc" id="L541">        }</span>
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+<span class="nc" id="L545">            Path targetPath = dst.resolve(src.relativize(dir));</span>
+<span class="nc bnc" id="L546" title="All 2 branches missed.">            if (!Files.exists(targetPath)) {</span>
+<span class="nc" id="L547">                Files.createDirectory(targetPath);</span>
+            }
+<span class="nc" id="L549">            return FileVisitResult.CONTINUE;</span>
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+<span class="nc" id="L554">            Files.copy(file, dst.resolve(src.relativize(file)), copyOption);</span>
+<span class="nc" id="L555">            return FileVisitResult.CONTINUE;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

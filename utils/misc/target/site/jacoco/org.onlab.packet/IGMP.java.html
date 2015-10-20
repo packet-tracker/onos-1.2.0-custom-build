@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IGMP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">IGMP.java</span></div><h1>IGMP.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.slf4j.Logger;
+
+import static org.slf4j.LoggerFactory.getLogger;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+
+/**
+ * Implements IGMP control packet format.
+ */
+public class IGMP extends BasePacket {
+<span class="fc" id="L34">    private final Logger log = getLogger(getClass());</span>
+
+    public static final byte TYPE_IGMPV3_MEMBERSHIP_QUERY = 0x11;
+    public static final byte TYPE_IGMPV1_MEMBERSHIP_REPORT = 0x12;
+    public static final byte TYPE_IGMPV2_MEMBERSHIP_REPORT = 0x16;
+    public static final byte TYPE_IGMPV2_LEAVE_GROUP = 0x17;
+    public static final byte TYPE_IGMPV3_MEMBERSHIP_REPORT = 0x22;
+<span class="fc" id="L41">    public static final Map&lt;Byte, Deserializer&lt;? extends IPacket&gt;&gt; PROTOCOL_DESERIALIZER_MAP = new HashMap&lt;&gt;();</span>
+
+    public static final int MINIMUM_HEADER_LEN = 12;
+
+<span class="fc" id="L45">    List&lt;IGMPGroup&gt; groups = new ArrayList&lt;&gt;();</span>
+
+    // Fields contained in the IGMP header
+    private byte igmpType;
+<span class="fc" id="L49">    private byte resField = 0;</span>
+<span class="fc" id="L50">    private short checksum = 0;</span>
+
+    private byte[] unsupportTypeData;
+
+<span class="fc" id="L54">    public IGMP() {</span>
+<span class="fc" id="L55">    }</span>
+
+    /**
+     * Get the IGMP message type.
+     *
+     * @return the IGMP message type
+     */
+    public byte getIgmpType() {
+<span class="fc" id="L63">        return igmpType;</span>
+    }
+
+    /**
+     * Set the IGMP message type.
+     *
+     * @param msgType IGMP message type
+     */
+    public void setIgmpType(byte msgType) {
+<span class="fc" id="L72">        igmpType = msgType;</span>
+<span class="fc" id="L73">    }</span>
+
+    /**
+     * Get the checksum of this message.
+     *
+     * @return the checksum
+     */
+    public short getChecksum() {
+<span class="nc" id="L81">        return checksum;</span>
+    }
+
+    /**
+     * get the Max Resp Code.
+     *
+     * @return The Maximum Time allowed before before sending a responding report.
+     */
+    public byte getMaxRespField() {
+<span class="nc" id="L90">        return resField;</span>
+    }
+
+    /**
+     * Set the Max Resp Code.
+     *
+     * @param respCode the Maximum Response Code.
+     */
+    public void setMaxRespCode(byte respCode) {
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">        if (igmpType != IGMP.TYPE_IGMPV3_MEMBERSHIP_QUERY) {</span>
+<span class="nc" id="L100">            log.debug(&quot;Requesting the max response code for an incorrect field: &quot;);</span>
+        }
+<span class="fc" id="L102">        this.resField = respCode;</span>
+<span class="fc" id="L103">    }</span>
+
+    /**
+     * Get the list of IGMPGroups.  The group objects will be either IGMPQuery or IGMPMembership
+     * depending on the IGMP message type.  For IGMP Query, the groups list should only be
+     * one group.
+     *
+     * @return The list of IGMP groups.
+     */
+    public List&lt;IGMPGroup&gt; getGroups() {
+<span class="nc" id="L113">        return groups;</span>
+    }
+
+    /**
+     * Add a multicast group to this IGMP message.
+     *
+     * @param group the IGMPGroup will be IGMPQuery or IGMPMembership depending on the message type.
+     * @return true if group was valid and added, false otherwise.
+     */
+    public boolean addGroup(IGMPGroup group) {
+<span class="nc" id="L123">        checkNotNull(group);</span>
+<span class="nc bnc" id="L124" title="All 3 branches missed.">        switch (this.igmpType) {</span>
+            case TYPE_IGMPV3_MEMBERSHIP_QUERY:
+<span class="nc bnc" id="L126" title="All 2 branches missed.">                if (group instanceof IGMPMembership) {</span>
+<span class="nc" id="L127">                    return false;</span>
+                }
+
+<span class="nc bnc" id="L130" title="All 2 branches missed.">                if (group.sources.size() &gt; 1) {</span>
+<span class="nc" id="L131">                    return false;</span>
+                }
+                break;
+
+            case TYPE_IGMPV3_MEMBERSHIP_REPORT:
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                if (group instanceof IGMPMembership) {</span>
+<span class="nc" id="L137">                    return false;</span>
+                }
+                break;
+
+            default:
+<span class="nc" id="L142">                log.debug(&quot;Warning no IGMP message type has been set&quot;);</span>
+        }
+
+<span class="nc" id="L145">        this.groups.add(group);</span>
+<span class="nc" id="L146">        return true;</span>
+    }
+
+    /**
+     * Serialize this IGMP packet.  This will take care
+     * of serializing IGMPv3 Queries and IGMPv3 Membership
+     * Reports.
+     *
+     * @return the serialized IGMP message
+     */
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L158">        byte [] data = new byte[8915];</span>
+
+<span class="fc" id="L160">        ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="fc" id="L161">        bb.put(this.getIgmpType());</span>
+
+        // reserved or max resp code depending on type.
+<span class="fc" id="L164">        bb.put(this.resField);</span>
+
+        // Must calculate checksum
+<span class="fc" id="L167">        bb.putShort((short) 0);</span>
+
+<span class="pc bpc" id="L169" title="1 of 3 branches missed.">        switch (this.igmpType) {</span>
+
+            case IGMP.TYPE_IGMPV3_MEMBERSHIP_REPORT:
+                // reserved
+<span class="fc" id="L173">                bb.putShort((short) 0);</span>
+                // Number of groups
+<span class="fc" id="L175">                bb.putShort((short) groups.size());</span>
+                // Fall through
+
+            case IGMP.TYPE_IGMPV3_MEMBERSHIP_QUERY:
+
+<span class="fc bfc" id="L180" title="All 2 branches covered.">                for (IGMPGroup grp : groups) {</span>
+<span class="fc" id="L181">                    grp.serialize(bb);</span>
+<span class="fc" id="L182">                }</span>
+<span class="fc" id="L183">                break;</span>
+
+            default:
+<span class="nc" id="L186">                bb.put(this.unsupportTypeData);</span>
+                break;
+        }
+
+<span class="fc" id="L190">        int size = bb.position();</span>
+<span class="fc" id="L191">        bb.position(0);</span>
+<span class="fc" id="L192">        byte [] rdata = new byte[size];</span>
+<span class="fc" id="L193">        bb.get(rdata, 0, size);</span>
+<span class="fc" id="L194">        return rdata;</span>
+    }
+
+    /**
+     * Deserialize an IGMP message.
+     *
+     * @param data bytes to deserialize
+     * @param offset offset to start deserializing from
+     * @param length length of the data to deserialize
+     * @return populated IGMP object
+     */
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+
+<span class="nc" id="L209">        IGMP igmp = new IGMP();</span>
+        try {
+<span class="nc" id="L211">            igmp = IGMP.deserializer().deserialize(data, offset, length);</span>
+<span class="nc" id="L212">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L213">            log.error(e.getStackTrace().toString());</span>
+<span class="nc" id="L214">            return this;</span>
+<span class="nc" id="L215">        }</span>
+<span class="nc" id="L216">        this.igmpType = igmp.igmpType;</span>
+<span class="nc" id="L217">        this.resField = igmp.resField;</span>
+<span class="nc" id="L218">        this.checksum = igmp.checksum;</span>
+<span class="nc" id="L219">        this.groups = igmp.groups;</span>
+<span class="nc" id="L220">        return this;</span>
+    }
+
+    /**
+     * Deserializer function for IPv4 packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;IGMP&gt; deserializer() {
+<span class="fc" id="L229">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L230">            checkInput(data, offset, length, MINIMUM_HEADER_LEN);</span>
+
+<span class="fc" id="L232">            IGMP igmp = new IGMP();</span>
+
+<span class="fc" id="L234">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L235">            igmp.igmpType = bb.get();</span>
+<span class="fc" id="L236">            igmp.resField = bb.get();</span>
+<span class="fc" id="L237">            igmp.checksum = bb.getShort();</span>
+<span class="fc" id="L238">            int len = MINIMUM_HEADER_LEN;</span>
+            String msg;
+
+<span class="pc bpc" id="L241" title="2 of 4 branches missed.">            switch (igmp.igmpType) {</span>
+
+                case TYPE_IGMPV3_MEMBERSHIP_QUERY:
+<span class="fc" id="L244">                    IGMPQuery qgroup = new IGMPQuery();</span>
+<span class="fc" id="L245">                    qgroup.deserialize(bb);</span>
+<span class="fc" id="L246">                    igmp.groups.add(qgroup);</span>
+<span class="fc" id="L247">                    break;</span>
+
+                case TYPE_IGMPV3_MEMBERSHIP_REPORT:
+<span class="fc" id="L250">                    bb.getShort();  // Ignore resvd</span>
+<span class="fc" id="L251">                    int ngrps = bb.getShort();</span>
+
+<span class="fc bfc" id="L253" title="All 2 branches covered.">                    for (; ngrps &gt; 0; ngrps--) {</span>
+<span class="fc" id="L254">                        IGMPMembership mgroup = new IGMPMembership();</span>
+<span class="fc" id="L255">                        mgroup.deserialize(bb);</span>
+<span class="fc" id="L256">                        igmp.groups.add(mgroup);</span>
+                    }
+                    break;
+
+                /*
+                 * NOTE: according to the IGMPv3 spec. These previous IGMP type fields
+                 * must be supported.  At this time we are going to &lt;b&gt;assume&lt;/b&gt; we run
+                 * in a modern network where all devices are IGMPv3 capable.
+                 */
+                case TYPE_IGMPV1_MEMBERSHIP_REPORT:
+                case TYPE_IGMPV2_MEMBERSHIP_REPORT:
+                case TYPE_IGMPV2_LEAVE_GROUP:
+<span class="nc" id="L268">                    igmp.unsupportTypeData = bb.array();  // Is this the entire array?</span>
+<span class="nc" id="L269">                    msg = &quot;IGMP message type: &quot; + igmp.igmpType + &quot; is not supported&quot;;</span>
+<span class="nc" id="L270">                    igmp.log.debug(msg);</span>
+<span class="nc" id="L271">                    break;</span>
+
+                default:
+<span class="nc" id="L274">                    msg = &quot;IGMP message type: &quot; + igmp.igmpType + &quot; is not recognized&quot;;</span>
+<span class="nc" id="L275">                    igmp.unsupportTypeData = bb.array();</span>
+<span class="nc" id="L276">                    igmp.log.debug(msg);</span>
+                    break;
+            }
+<span class="fc" id="L279">            return igmp;</span>
+        };
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L291">            return true;</span>
+        }
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L294">            return false;</span>
+        }
+<span class="pc bpc" id="L296" title="1 of 2 branches missed.">        if (!(obj instanceof IGMP)) {</span>
+<span class="nc" id="L297">            return false;</span>
+        }
+<span class="fc" id="L299">        final IGMP other = (IGMP) obj;</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">        if (this.igmpType != other.igmpType) {</span>
+<span class="nc" id="L301">            return false;</span>
+        }
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">        if (this.resField != other.resField) {</span>
+<span class="nc" id="L304">            return false;</span>
+        }
+<span class="pc bpc" id="L306" title="1 of 2 branches missed.">        if (this.checksum != other.checksum) {</span>
+<span class="nc" id="L307">            return false;</span>
+        }
+<span class="pc bpc" id="L309" title="1 of 2 branches missed.">        if (this.groups.size() != other.groups.size()) {</span>
+<span class="nc" id="L310">            return false;</span>
+        }
+        // TODO: equals should be true regardless of order.
+<span class="pc bpc" id="L313" title="1 of 2 branches missed.">        if (!groups.equals(other.groups)) {</span>
+<span class="nc" id="L314">            return false;</span>
+        }
+<span class="fc" id="L316">        return true;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L326">        final int prime = 2521;</span>
+<span class="nc" id="L327">        int result = super.hashCode();</span>
+<span class="nc" id="L328">        result = prime * result + this.igmpType;</span>
+<span class="nc" id="L329">        result = prime * result + this.groups.size();</span>
+<span class="nc" id="L330">        result = prime * result + this.resField;</span>
+<span class="nc" id="L331">        result = prime * result + this.checksum;</span>
+<span class="nc" id="L332">        result = prime * result + this.groups.hashCode();</span>
+<span class="nc" id="L333">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

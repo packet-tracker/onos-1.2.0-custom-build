@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PIMAddrGroup.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.pim</a> &gt; <span class="el_source">PIMAddrGroup.java</span></div><h1>PIMAddrGroup.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet.pim;
+
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.Ip6Address;
+
+import java.nio.ByteBuffer;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+public class PIMAddrGroup {
+    private byte family;
+    private byte encType;
+    private byte reserved;
+    private boolean bBit;
+    private boolean zBit;
+    private byte masklen;
+    IpAddress addr;
+
+    public static final int ENC_GROUP_IPV4_BYTE_LENGTH = 4 + Ip4Address.BYTE_LENGTH;
+    public static final int ENC_GROUP_IPV6_BYTE_LENGTH = 4 + Ip6Address.BYTE_LENGTH;
+
+    /**
+     * PIM Encoded Group Address.
+     */
+<span class="fc" id="L43">    public PIMAddrGroup() {</span>
+<span class="fc" id="L44">        this.family = 4;</span>
+<span class="fc" id="L45">        this.encType = 0;</span>
+<span class="fc" id="L46">        this.reserved = 0;</span>
+<span class="fc" id="L47">        this.bBit = false;</span>
+<span class="fc" id="L48">        this.zBit = false;</span>
+<span class="fc" id="L49">    }</span>
+
+    /**
+     * PIM Encoded Source Address.
+     *
+     * @param addr IPv4 or IPv6
+     */
+<span class="nc" id="L56">    public PIMAddrGroup(String addr) {</span>
+<span class="nc" id="L57">        this.setAddr(addr);</span>
+<span class="nc" id="L58">    }</span>
+
+    /**
+     * PIM Encoded Group Address.
+     *
+     * @param gpfx PIM encoded group address.
+     */
+<span class="fc" id="L65">    public PIMAddrGroup(IpPrefix gpfx) {</span>
+<span class="fc" id="L66">        this.setAddr(gpfx);</span>
+<span class="fc" id="L67">    }</span>
+
+    /**
+     * PIM encoded source address.
+     *
+     * @param addr IPv4 or IPv6
+     */
+    public void setAddr(String addr) {
+<span class="nc" id="L75">        setAddr(IpPrefix.valueOf(addr));</span>
+<span class="nc" id="L76">    }</span>
+
+    /**
+     * Set the encoded source address.
+     *
+     * @param pfx address prefix
+     */
+    public void setAddr(IpPrefix pfx) {
+<span class="fc" id="L84">        this.addr = pfx.address();</span>
+<span class="fc" id="L85">        this.masklen = (byte) pfx.prefixLength();</span>
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">        this.family = (byte) ((this.addr.isIp4()) ? 4 : 6);</span>
+<span class="fc" id="L87">    }</span>
+
+    /**
+     * Get the IP family of this address: 4 or 6.
+     *
+     * @return the IP address family
+     */
+    public int getFamily() {
+<span class="nc" id="L95">        return this.family;</span>
+    }
+
+    /**
+     * Get the address of this encoded address.
+     *
+     * @return source address
+     */
+    public IpAddress getAddr() {
+<span class="fc" id="L104">        return this.addr;</span>
+    }
+
+    /**
+     * Get the masklen of the group address.
+     *
+     * @return the masklen
+     */
+    public int getMasklen() {
+<span class="nc" id="L113">        return this.masklen;</span>
+    }
+
+    /**
+     * Return the z bit for admin scoping. Only used for the Bootstrap router.
+     *
+     * @return true or false
+     */
+    public boolean getZBit() {
+<span class="nc" id="L122">        return this.zBit;</span>
+    }
+
+    /**
+     * Return the bBit. Used to indicate this is a bidir
+     *
+     * @return return true or false.
+     */
+    public boolean getBBit() {
+<span class="nc" id="L131">        return this.bBit;</span>
+    }
+
+    /**
+     * The size in bytes of a serialized address.
+     *
+     * @return the number of bytes when serialized
+     */
+    public int getByteSize() {
+<span class="fc" id="L140">        int size = 4;</span>
+<span class="pc bpc" id="L141" title="1 of 2 branches missed.">        size += addr.isIp4() ? 4 : 16;</span>
+<span class="fc" id="L142">        return size;</span>
+    }
+
+    /**
+     * Serialize this group address.
+     *
+     * @return the serialized address in a buffer
+     */
+    public byte[] serialize() {
+<span class="fc" id="L151">        int len = getByteSize();</span>
+
+<span class="fc" id="L153">        final byte[] data = new byte[len];</span>
+<span class="fc" id="L154">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L156">        bb.put(this.family);</span>
+<span class="fc" id="L157">        bb.put(this.encType);</span>
+
+        // Todo: technically we should be setting the B and Z bits, but we'll never use them.
+<span class="fc" id="L160">        bb.put(reserved);</span>
+
+<span class="fc" id="L162">        bb.put(this.masklen);</span>
+<span class="fc" id="L163">        bb.put(this.addr.toOctets());</span>
+<span class="fc" id="L164">        return data;</span>
+    }
+
+    /**
+     * Deserialze from a ByteBuffer.
+     *
+     * @param bb the ByteBuffer
+     * @return an encoded PIM group address
+     * @throws DeserializationException if unable to deserialize the packet data
+     */
+    public PIMAddrGroup deserialize(ByteBuffer bb) throws DeserializationException {
+
+        /*
+         * We need to verify that we have enough buffer space.  First we'll assume that
+         * we are decoding an IPv4 address.  After we read the first by (address family),
+         * we'll determine if we actually need more buffer space for an IPv6 address.
+         */
+<span class="fc" id="L181">        checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), ENC_GROUP_IPV4_BYTE_LENGTH);</span>
+
+<span class="fc" id="L183">        this.family = bb.get();</span>
+<span class="pc bpc" id="L184" title="3 of 4 branches missed.">        if (family != 4 &amp;&amp; family != 6) {</span>
+<span class="nc" id="L185">            throw new DeserializationException(&quot;Illegal IP version number: &quot; + family + &quot;\n&quot;);</span>
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">        } else if (family == 6) {</span>
+
+            // Check for one less by since we have already read the first byte of the packet.
+<span class="nc" id="L189">            checkInput(bb.array(), bb.position(), bb.limit() - bb.position(), ENC_GROUP_IPV6_BYTE_LENGTH - 1);</span>
+        }
+
+<span class="fc" id="L192">        this.encType = bb.get();</span>
+<span class="fc" id="L193">        this.reserved = bb.get();</span>
+<span class="pc bpc" id="L194" title="1 of 2 branches missed.">        if ((this.reserved &amp; 0x80) != 0) {</span>
+<span class="nc" id="L195">            this.bBit = true;</span>
+        }
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">        if ((this.reserved &amp; 0x01) != 0) {</span>
+<span class="nc" id="L198">            this.zBit = true;</span>
+        }
+        // Remove the z and b bits from reserved
+<span class="fc" id="L201">        this.reserved |= 0x7d;</span>
+
+<span class="fc" id="L203">        this.masklen = bb.get();</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">        if (this.family == 4) {</span>
+<span class="fc" id="L205">            this.addr = IpAddress.valueOf(bb.getInt());</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        } else if (this.family == 6) {</span>
+<span class="nc" id="L207">            this.addr = Ip6Address.valueOf(bb.array(), 2);</span>
+        }
+<span class="fc" id="L209">        return this;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L219">        final int prime = 2521;</span>
+<span class="nc" id="L220">        int result = super.hashCode();</span>
+<span class="nc" id="L221">        result = prime * result + this.family;</span>
+<span class="nc" id="L222">        result = prime * result + this.encType;</span>
+<span class="nc" id="L223">        result = prime * result + this.reserved;</span>
+<span class="nc" id="L224">        result = prime * result + this.masklen;</span>
+<span class="nc" id="L225">        result = prime * result + this.addr.hashCode();</span>
+<span class="nc" id="L226">        return result;</span>
+    }
+
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals()
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L238">            return true;</span>
+        }
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        if (!(obj instanceof PIMAddrGroup)) {</span>
+<span class="nc" id="L241">            return false;</span>
+        }
+<span class="nc" id="L243">        final PIMAddrGroup other = (PIMAddrGroup) obj;</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">        if (this.family != other.family) {</span>
+<span class="nc" id="L245">            return false;</span>
+        }
+
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (this.encType != other.encType) {</span>
+<span class="nc" id="L249">            return false;</span>
+        }
+
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        if (!this.addr.equals(other.addr)) {</span>
+<span class="nc" id="L253">            return false;</span>
+        }
+<span class="nc" id="L255">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

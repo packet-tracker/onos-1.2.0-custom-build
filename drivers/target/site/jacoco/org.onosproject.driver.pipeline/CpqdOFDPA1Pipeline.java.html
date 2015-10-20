@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>CpqdOFDPA1Pipeline.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-drivers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.driver.pipeline</a> &gt; <span class="el_source">CpqdOFDPA1Pipeline.java</span></div><h1>CpqdOFDPA1Pipeline.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.driver.pipeline;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleOperations;
+import org.onosproject.net.flow.FlowRuleOperationsContext;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.slf4j.Logger;
+
+
+/**
+ * Driver for software switch emulation of the OFDPA 1.0 pipeline.
+ * The software switch is the CPqD OF 1.3 switch.
+ */
+<span class="nc" id="L35">public class CpqdOFDPA1Pipeline extends OFDPA1Pipeline {</span>
+
+<span class="nc" id="L37">    private final Logger log = getLogger(getClass());</span>
+
+    @Override
+    protected void initializePipeline() {
+<span class="nc" id="L41">        processPortTable();</span>
+        //processVlanTable();
+<span class="nc" id="L43">        processTmacTable();</span>
+<span class="nc" id="L44">        processIpTable();</span>
+        //processMcastTable();
+<span class="nc" id="L46">        processBridgingTable();</span>
+<span class="nc" id="L47">        processAclTable();</span>
+        //processGroupTable();
+<span class="nc" id="L49">    }</span>
+
+    @Override
+    protected void processPortTable() {
+<span class="nc" id="L53">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+<span class="nc" id="L54">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L55">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L56">        treatment.transition(VLAN_TABLE);</span>
+<span class="nc" id="L57">        FlowRule tmisse = DefaultFlowRule.builder()</span>
+<span class="nc" id="L58">                .forDevice(deviceId)</span>
+<span class="nc" id="L59">                .withSelector(selector.build())</span>
+<span class="nc" id="L60">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L61">                .withPriority(LOWEST_PRIORITY)</span>
+<span class="nc" id="L62">                .fromApp(driverId)</span>
+<span class="nc" id="L63">                .makePermanent()</span>
+<span class="nc" id="L64">                .forTable(PORT_TABLE).build();</span>
+<span class="nc" id="L65">        ops = ops.add(tmisse);</span>
+
+<span class="nc" id="L67">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L70">                log.info(&quot;Initialized port table&quot;);</span>
+<span class="nc" id="L71">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L75">                log.info(&quot;Failed to initialize port table&quot;);</span>
+<span class="nc" id="L76">            }</span>
+        }));
+<span class="nc" id="L78">    }</span>
+
+    @Override
+    protected void processTmacTable() {
+        //table miss entry
+<span class="nc" id="L83">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+<span class="nc" id="L84">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L85">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L86">        selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L87">        treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L88">        treatment.transition(BRIDGING_TABLE);</span>
+<span class="nc" id="L89">        FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L90">                .forDevice(deviceId)</span>
+<span class="nc" id="L91">                .withSelector(selector.build())</span>
+<span class="nc" id="L92">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L93">                .withPriority(LOWEST_PRIORITY)</span>
+<span class="nc" id="L94">                .fromApp(driverId)</span>
+<span class="nc" id="L95">                .makePermanent()</span>
+<span class="nc" id="L96">                .forTable(TMAC_TABLE).build();</span>
+<span class="nc" id="L97">        ops =  ops.add(rule);</span>
+<span class="nc" id="L98">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L101">                log.info(&quot;Initialized tmac table&quot;);</span>
+<span class="nc" id="L102">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L106">                log.info(&quot;Failed to initialize tmac table&quot;);</span>
+<span class="nc" id="L107">            }</span>
+        }));
+<span class="nc" id="L109">    }</span>
+
+    @Override
+    protected void processIpTable() {
+        //table miss entry
+<span class="nc" id="L114">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+<span class="nc" id="L115">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L116">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L117">        selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L118">        treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L119">        treatment.transition(ACL_TABLE);</span>
+<span class="nc" id="L120">        FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L121">                .forDevice(deviceId)</span>
+<span class="nc" id="L122">                .withSelector(selector.build())</span>
+<span class="nc" id="L123">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L124">                .withPriority(LOWEST_PRIORITY)</span>
+<span class="nc" id="L125">                .fromApp(driverId)</span>
+<span class="nc" id="L126">                .makePermanent()</span>
+<span class="nc" id="L127">                .forTable(UNICAST_ROUTING_TABLE).build();</span>
+<span class="nc" id="L128">        ops =  ops.add(rule);</span>
+<span class="nc" id="L129">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L132">                log.info(&quot;Initialized IP table&quot;);</span>
+<span class="nc" id="L133">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L137">                log.info(&quot;Failed to initialize unicast IP table&quot;);</span>
+<span class="nc" id="L138">            }</span>
+        }));
+<span class="nc" id="L140">    }</span>
+
+    private void processBridgingTable() {
+        //table miss entry
+<span class="nc" id="L144">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+<span class="nc" id="L145">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L146">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L147">        selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L148">        treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L149">        treatment.transition(ACL_TABLE);</span>
+<span class="nc" id="L150">        FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L151">                .forDevice(deviceId)</span>
+<span class="nc" id="L152">                .withSelector(selector.build())</span>
+<span class="nc" id="L153">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L154">                .withPriority(LOWEST_PRIORITY)</span>
+<span class="nc" id="L155">                .fromApp(driverId)</span>
+<span class="nc" id="L156">                .makePermanent()</span>
+<span class="nc" id="L157">                .forTable(BRIDGING_TABLE).build();</span>
+<span class="nc" id="L158">        ops =  ops.add(rule);</span>
+<span class="nc" id="L159">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L162">                log.info(&quot;Initialized Bridging table&quot;);</span>
+<span class="nc" id="L163">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L167">                log.info(&quot;Failed to initialize Bridging table&quot;);</span>
+<span class="nc" id="L168">            }</span>
+        }));
+<span class="nc" id="L170">    }</span>
+
+    protected void processAclTable() {
+        //table miss entry - catch all to executed action-set
+<span class="nc" id="L174">        FlowRuleOperations.Builder ops = FlowRuleOperations.builder();</span>
+<span class="nc" id="L175">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L176">        TrafficTreatment.Builder treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L177">        selector = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L178">        treatment = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L179">        FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L180">                .forDevice(deviceId)</span>
+<span class="nc" id="L181">                .withSelector(selector.build())</span>
+<span class="nc" id="L182">                .withTreatment(treatment.build())</span>
+<span class="nc" id="L183">                .withPriority(LOWEST_PRIORITY)</span>
+<span class="nc" id="L184">                .fromApp(driverId)</span>
+<span class="nc" id="L185">                .makePermanent()</span>
+<span class="nc" id="L186">                .forTable(ACL_TABLE).build();</span>
+<span class="nc" id="L187">        ops =  ops.add(rule);</span>
+<span class="nc" id="L188">        flowRuleService.apply(ops.build(new FlowRuleOperationsContext() {</span>
+            @Override
+            public void onSuccess(FlowRuleOperations ops) {
+<span class="nc" id="L191">                log.info(&quot;Initialized Acl table&quot;);</span>
+<span class="nc" id="L192">            }</span>
+
+            @Override
+            public void onError(FlowRuleOperations ops) {
+<span class="nc" id="L196">                log.info(&quot;Failed to initialize Acl table&quot;);</span>
+<span class="nc" id="L197">            }</span>
+        }));
+<span class="nc" id="L199">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

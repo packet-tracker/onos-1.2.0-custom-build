@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalCircuitIntent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">OpticalCircuitIntent.java</span></div><h1>OpticalCircuitIntent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import com.google.common.annotations.Beta;
+import com.google.common.base.MoreObjects;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.OduCltPort;
+
+import java.util.Collections;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * An optical layer intent for circuits between two OduClt ports.
+ * No traffic selector or traffic treatment are needed.
+ */
+@Beta
+public class OpticalCircuitIntent extends Intent {
+    private final ConnectPoint src;
+    private final ConnectPoint dst;
+    private final OduCltPort.SignalType signalType;
+    private final boolean isBidirectional;
+
+    /**
+     * Creates an optical circuit intent between the specified
+     * connection points.
+     *
+     * @param appId application identification
+     * @param key intent key
+     * @param src the source transponder port
+     * @param dst the destination transponder port
+     * @param signalType ODU signal type
+     * @param isBidirectional indicate if intent is bidirectional
+     * @param priority priority to use for flows from this intent
+     */
+    protected OpticalCircuitIntent(ApplicationId appId, Key key, ConnectPoint src, ConnectPoint dst,
+                                   OduCltPort.SignalType signalType, boolean isBidirectional, int priority) {
+<span class="nc" id="L53">        super(appId, key, Collections.emptyList(), priority);</span>
+<span class="nc" id="L54">        this.src = checkNotNull(src);</span>
+<span class="nc" id="L55">        this.dst = checkNotNull(dst);</span>
+<span class="nc" id="L56">        this.signalType = checkNotNull(signalType);</span>
+<span class="nc" id="L57">        this.isBidirectional = isBidirectional;</span>
+<span class="nc" id="L58">    }</span>
+
+    /**
+     * Returns a new optical circuit intent builder.
+     *
+     * @return host to host intent builder
+     */
+    public static Builder builder() {
+<span class="nc" id="L66">        return new Builder();</span>
+    }
+
+
+    /**
+     * Builder for optical circuit intents.
+     */
+<span class="nc" id="L73">    public static class Builder extends Intent.Builder {</span>
+        private ConnectPoint src;
+        private ConnectPoint dst;
+        private OduCltPort.SignalType signalType;
+        private boolean isBidirectional;
+
+        @Override
+        public Builder appId(ApplicationId appId) {
+<span class="nc" id="L81">            return (Builder) super.appId(appId);</span>
+        }
+
+        @Override
+        public Builder key(Key key) {
+<span class="nc" id="L86">            return (Builder) super.key(key);</span>
+        }
+
+        @Override
+        public Builder priority(int priority) {
+<span class="nc" id="L91">            return (Builder) super.priority(priority);</span>
+        }
+
+        /**
+         * Sets the source for the intent that will be built.
+         *
+         * @param src source to use for built intent
+         * @return this builder
+         */
+        public Builder src(ConnectPoint src) {
+<span class="nc" id="L101">            this.src = src;</span>
+<span class="nc" id="L102">            return this;</span>
+        }
+
+        /**
+         * Sets the destination for the intent that will be built.
+         *
+         * @param dst dest to use for built intent
+         * @return this builder
+         */
+        public Builder dst(ConnectPoint dst) {
+<span class="nc" id="L112">            this.dst = dst;</span>
+<span class="nc" id="L113">            return this;</span>
+        }
+
+        /**
+         * Sets the ODU signal type for the intent that will be built.
+         *
+         * @param signalType signal type to use for built intent
+         * @return this builder
+         */
+        public Builder signalType(OduCltPort.SignalType signalType) {
+<span class="nc" id="L123">            this.signalType = signalType;</span>
+<span class="nc" id="L124">            return this;</span>
+        }
+
+        /**
+         * Sets the directionality of the intent.
+         *
+         * @param isBidirectional true if bidirectional, false if unidirectional
+         * @return this builder
+         */
+        public Builder bidirectional(boolean isBidirectional) {
+<span class="nc" id="L134">            this.isBidirectional = isBidirectional;</span>
+<span class="nc" id="L135">            return this;</span>
+        }
+
+        /**
+         * Builds an optical circuit intent from the accumulated parameters.
+         *
+         * @return point to point intent
+         */
+        public OpticalCircuitIntent build() {
+
+<span class="nc" id="L145">            return new OpticalCircuitIntent(</span>
+                    appId,
+                    key,
+                    src,
+                    dst,
+                    signalType,
+                    isBidirectional,
+                    priority
+            );
+        }
+    }
+
+    /**
+     * Constructor for serializer.
+     */
+    protected OpticalCircuitIntent() {
+<span class="nc" id="L161">        super();</span>
+<span class="nc" id="L162">        this.src = null;</span>
+<span class="nc" id="L163">        this.dst = null;</span>
+<span class="nc" id="L164">        this.signalType = null;</span>
+<span class="nc" id="L165">        this.isBidirectional = false;</span>
+<span class="nc" id="L166">    }</span>
+
+    /**
+     * Returns the source transponder port.
+     *
+     * @return source transponder port
+     */
+    public ConnectPoint getSrc() {
+<span class="nc" id="L174">        return src;</span>
+    }
+
+    /**
+     * Returns the destination transponder port.
+     *
+     * @return source transponder port
+     */
+    public ConnectPoint getDst() {
+<span class="nc" id="L183">        return dst;</span>
+    }
+
+    /**
+     * Returns the ODU signal type.
+     *
+     * @return ODU signal type
+     */
+    public OduCltPort.SignalType getSignalType() {
+<span class="nc" id="L192">        return signalType;</span>
+    }
+
+    /**
+     * Returns the directionality of the intent.
+     *
+     * @return true if bidirectional, false if unidirectional
+     */
+    public boolean isBidirectional() {
+<span class="nc" id="L201">        return isBidirectional;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L206">        return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L207">                .add(&quot;id&quot;, id())</span>
+<span class="nc" id="L208">                .add(&quot;key&quot;, key())</span>
+<span class="nc" id="L209">                .add(&quot;appId&quot;, appId())</span>
+<span class="nc" id="L210">                .add(&quot;priority&quot;, priority())</span>
+<span class="nc" id="L211">                .add(&quot;resources&quot;, resources())</span>
+<span class="nc" id="L212">                .add(&quot;src&quot;, src)</span>
+<span class="nc" id="L213">                .add(&quot;dst&quot;, dst)</span>
+<span class="nc" id="L214">                .add(&quot;signalType&quot;, signalType)</span>
+<span class="nc" id="L215">                .add(&quot;isBidirectional&quot;, isBidirectional)</span>
+<span class="nc" id="L216">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

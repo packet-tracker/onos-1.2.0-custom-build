@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AnnotationConstraint.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.constraint</a> &gt; <span class="el_source">AnnotationConstraint.java</span></div><h1>AnnotationConstraint.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.constraint;
+
+import com.google.common.annotations.Beta;
+import com.google.common.base.MoreObjects;
+import org.onosproject.net.Link;
+import org.onosproject.net.resource.link.LinkResourceService;
+
+import java.util.Objects;
+
+import static org.onosproject.net.AnnotationKeys.getAnnotatedValue;
+
+/**
+ * Constraint that evaluates an arbitrary link annotated value is under the specified threshold.
+ */
+@Beta
+public class AnnotationConstraint extends BooleanConstraint {
+
+    private final String key;
+    private final double threshold;
+
+    /**
+     * Creates a new constraint to keep the value for the specified key
+     * of link annotation under the threshold.
+     *
+     * @param key key of link annotation
+     * @param threshold threshold value of the specified link annotation
+     */
+<span class="fc" id="L43">    public AnnotationConstraint(String key, double threshold) {</span>
+<span class="fc" id="L44">        this.key = key;</span>
+<span class="fc" id="L45">        this.threshold = threshold;</span>
+<span class="fc" id="L46">    }</span>
+
+    // Constructor for serialization
+<span class="nc" id="L49">    private AnnotationConstraint() {</span>
+<span class="nc" id="L50">        this.key = &quot;&quot;;</span>
+<span class="nc" id="L51">        this.threshold = 0;</span>
+<span class="nc" id="L52">    }</span>
+
+    /**
+     * Returns the key of link annotation this constraint designates.
+     * @return key of link annotation
+     */
+    public String key() {
+<span class="nc" id="L59">        return key;</span>
+    }
+
+    /**
+     * Returns the threshold this constraint ensures as link annotated value.
+     *
+     * @return threshold as link annotated value
+     */
+    public double threshold() {
+<span class="nc" id="L68">        return threshold;</span>
+    }
+
+    @Override
+    public boolean isValid(Link link, LinkResourceService resourceService) {
+<span class="fc" id="L73">        double value = getAnnotatedValue(link, key);</span>
+
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        return value &lt;= threshold;</span>
+    }
+
+    @Override
+    public double cost(Link link, LinkResourceService resourceService) {
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (isValid(link, resourceService)) {</span>
+<span class="fc" id="L81">            return getAnnotatedValue(link, key);</span>
+        } else {
+<span class="fc" id="L83">            return -1;</span>
+        }
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L89">        return Objects.hash(key, threshold);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L95">            return true;</span>
+        }
+
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        if (!(obj instanceof AnnotationConstraint)) {</span>
+<span class="fc" id="L99">            return false;</span>
+        }
+
+<span class="fc" id="L102">        final AnnotationConstraint other = (AnnotationConstraint) obj;</span>
+<span class="fc bfc" id="L103" title="All 4 branches covered.">        return Objects.equals(this.key, other.key) &amp;&amp; Objects.equals(this.threshold, other.threshold);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L108">        return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L109">                .add(&quot;key&quot;, key)</span>
+<span class="fc" id="L110">                .add(&quot;threshold&quot;, threshold)</span>
+<span class="fc" id="L111">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

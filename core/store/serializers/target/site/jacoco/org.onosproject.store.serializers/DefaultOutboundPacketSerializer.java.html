@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultOutboundPacketSerializer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-serializers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.serializers</a> &gt; <span class="el_source">DefaultOutboundPacketSerializer.java</span></div><h1>DefaultOutboundPacketSerializer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.serializers;
+
+import java.nio.ByteBuffer;
+
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.packet.DefaultOutboundPacket;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
+/**
+ * Serializer for a default outbound packet.
+ */
+public class DefaultOutboundPacketSerializer extends Serializer&lt;DefaultOutboundPacket&gt; {
+
+    /**
+     * Creates {@link DefaultOutboundPacket} serializer instance.
+     */
+    public DefaultOutboundPacketSerializer() {
+        // non-null, immutable
+<span class="fc" id="L39">        super(false, true);</span>
+<span class="fc" id="L40">    }</span>
+
+    @Override
+    public DefaultOutboundPacket read(Kryo kryo, Input input,
+            Class&lt;DefaultOutboundPacket&gt; type) {
+<span class="nc" id="L45">        DeviceId sendThrough = (DeviceId) kryo.readClassAndObject(input);</span>
+<span class="nc" id="L46">        TrafficTreatment treatment = (TrafficTreatment) kryo.readClassAndObject(input);</span>
+<span class="nc" id="L47">        byte[] data = (byte[]) kryo.readClassAndObject(input);</span>
+<span class="nc" id="L48">        return new DefaultOutboundPacket(sendThrough, treatment, ByteBuffer.wrap(data));</span>
+    }
+
+    @Override
+    public void write(Kryo kryo, Output output, DefaultOutboundPacket object) {
+<span class="nc" id="L53">        kryo.writeClassAndObject(output, object.sendThrough());</span>
+<span class="nc" id="L54">        kryo.writeClassAndObject(output, object.treatment());</span>
+<span class="nc" id="L55">        kryo.writeClassAndObject(output, object.data().array());</span>
+<span class="nc" id="L56">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

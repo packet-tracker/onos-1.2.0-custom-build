@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>HostManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.host.impl</a> &gt; <span class="el_source">HostManager.java</span></div><h1>HostManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.host.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
+import org.onosproject.incubator.net.intf.InterfaceService;
+import org.onosproject.net.edge.EdgePortService;
+import org.onosproject.net.provider.AbstractListenerProviderRegistry;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigService;
+import org.onosproject.net.config.basics.BasicHostConfig;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.host.HostAdminService;
+import org.onosproject.net.host.HostDescription;
+import org.onosproject.net.host.HostEvent;
+import org.onosproject.net.host.HostListener;
+import org.onosproject.net.host.HostProvider;
+import org.onosproject.net.host.HostProviderRegistry;
+import org.onosproject.net.host.HostProviderService;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.host.HostStore;
+import org.onosproject.net.host.HostStoreDelegate;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.net.provider.AbstractProviderService;
+import org.slf4j.Logger;
+
+import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+/**
+ * Provides basic implementation of the host SB &amp;amp; NB APIs.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L66">public class HostManager</span>
+        extends AbstractListenerProviderRegistry&lt;HostEvent, HostListener, HostProvider, HostProviderService&gt;
+        implements HostService, HostAdminService, HostProviderRegistry {
+
+<span class="fc" id="L70">    private final Logger log = getLogger(getClass());</span>
+
+    public static final String HOST_ID_NULL = &quot;Host ID cannot be null&quot;;
+
+<span class="fc" id="L74">    private final NetworkConfigListener networkConfigListener = new InternalNetworkConfigListener();</span>
+
+<span class="fc" id="L76">    private HostStoreDelegate delegate = new InternalStoreDelegate();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostStore store;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PacketService packetService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigService networkConfigService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected InterfaceService interfaceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected EdgePortService edgePortService;
+
+    private HostMonitor monitor;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L100">        store.setDelegate(delegate);</span>
+<span class="fc" id="L101">        eventDispatcher.addSink(HostEvent.class, listenerRegistry);</span>
+<span class="fc" id="L102">        networkConfigService.addListener(networkConfigListener);</span>
+<span class="fc" id="L103">        monitor = new HostMonitor(packetService, this, interfaceService, edgePortService);</span>
+<span class="fc" id="L104">        monitor.start();</span>
+<span class="fc" id="L105">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L106">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L110">        store.unsetDelegate(delegate);</span>
+<span class="fc" id="L111">        eventDispatcher.removeSink(HostEvent.class);</span>
+<span class="fc" id="L112">        networkConfigService.removeListener(networkConfigListener);</span>
+<span class="fc" id="L113">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L114">    }</span>
+
+    @Override
+    protected HostProviderService createProviderService(HostProvider provider) {
+<span class="fc" id="L118">        monitor.registerHostProvider(provider);</span>
+<span class="fc" id="L119">        return new InternalHostProviderService(provider);</span>
+    }
+
+    @Override
+    public int getHostCount() {
+<span class="fc" id="L124">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L125">        return store.getHostCount();</span>
+    }
+
+    @Override
+    public Iterable&lt;Host&gt; getHosts() {
+<span class="fc" id="L130">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L131">        return store.getHosts();</span>
+    }
+
+    @Override
+    public Host getHost(HostId hostId) {
+<span class="fc" id="L136">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L137">        checkNotNull(hostId, HOST_ID_NULL);</span>
+<span class="fc" id="L138">        return store.getHost(hostId);</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getHostsByVlan(VlanId vlanId) {
+<span class="fc" id="L143">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L144">        return store.getHosts(vlanId);</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getHostsByMac(MacAddress mac) {
+<span class="fc" id="L149">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L150">        checkNotNull(mac, &quot;MAC address cannot be null&quot;);</span>
+<span class="fc" id="L151">        return store.getHosts(mac);</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getHostsByIp(IpAddress ip) {
+<span class="fc" id="L156">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L157">        checkNotNull(ip, &quot;IP address cannot be null&quot;);</span>
+<span class="fc" id="L158">        return store.getHosts(ip);</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getConnectedHosts(ConnectPoint connectPoint) {
+<span class="fc" id="L163">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L164">        checkNotNull(connectPoint, &quot;Connection point cannot be null&quot;);</span>
+<span class="fc" id="L165">        return store.getConnectedHosts(connectPoint);</span>
+    }
+
+    @Override
+    public Set&lt;Host&gt; getConnectedHosts(DeviceId deviceId) {
+<span class="fc" id="L170">        checkPermission(HOST_READ);</span>
+<span class="fc" id="L171">        checkNotNull(deviceId, &quot;Device ID cannot be null&quot;);</span>
+<span class="fc" id="L172">        return store.getConnectedHosts(deviceId);</span>
+    }
+
+    @Override
+    public void startMonitoringIp(IpAddress ip) {
+<span class="nc" id="L177">        checkPermission(HOST_EVENT);</span>
+<span class="nc" id="L178">        monitor.addMonitoringFor(ip);</span>
+<span class="nc" id="L179">    }</span>
+
+    @Override
+    public void stopMonitoringIp(IpAddress ip) {
+<span class="nc" id="L183">        checkPermission(HOST_EVENT);</span>
+<span class="nc" id="L184">        monitor.stopMonitoring(ip);</span>
+<span class="nc" id="L185">    }</span>
+
+    @Override
+    public void requestMac(IpAddress ip) {
+        // FIXME!!!! Auto-generated method stub
+<span class="nc" id="L190">    }</span>
+
+    @Override
+    public void removeHost(HostId hostId) {
+<span class="nc" id="L194">        checkNotNull(hostId, HOST_ID_NULL);</span>
+<span class="nc" id="L195">        HostEvent event = store.removeHost(hostId);</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (event != null) {</span>
+<span class="nc" id="L197">            post(event);</span>
+        }
+<span class="nc" id="L199">    }</span>
+
+    // Personalized host provider service issued to the supplied provider.
+    private class InternalHostProviderService
+            extends AbstractProviderService&lt;HostProvider&gt;
+            implements HostProviderService {
+<span class="fc" id="L205">        InternalHostProviderService(HostProvider provider) {</span>
+<span class="fc" id="L206">            super(provider);</span>
+<span class="fc" id="L207">        }</span>
+
+        @Override
+        public void hostDetected(HostId hostId, HostDescription hostDescription, boolean replaceIps) {
+<span class="fc" id="L211">            checkNotNull(hostId, HOST_ID_NULL);</span>
+<span class="fc" id="L212">            checkValidity();</span>
+<span class="fc" id="L213">            hostDescription = validateHost(hostDescription, hostId);</span>
+<span class="fc" id="L214">            HostEvent event = store.createOrUpdateHost(provider().id(), hostId,</span>
+                                                       hostDescription, replaceIps);
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">            if (event != null) {</span>
+<span class="fc" id="L217">                post(event);</span>
+            }
+<span class="fc" id="L219">        }</span>
+
+        // returns a HostDescription made from the union of the BasicHostConfig
+        // annotations if it exists
+        private HostDescription validateHost(HostDescription hostDescription, HostId hostId) {
+<span class="fc" id="L224">            BasicHostConfig cfg = networkConfigService.getConfig(hostId, BasicHostConfig.class);</span>
+<span class="pc bpc" id="L225" title="3 of 4 branches missed.">            checkState(cfg == null || cfg.isAllowed(), &quot;Host {} is not allowed&quot;, hostId);</span>
+
+<span class="fc" id="L227">            return BasicHostOperator.combine(cfg, hostDescription);</span>
+        }
+
+        @Override
+        public void hostVanished(HostId hostId) {
+<span class="fc" id="L232">            checkNotNull(hostId, HOST_ID_NULL);</span>
+<span class="fc" id="L233">            checkValidity();</span>
+<span class="fc" id="L234">            HostEvent event = store.removeHost(hostId);</span>
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">            if (event != null) {</span>
+<span class="fc" id="L236">                post(event);</span>
+            }
+<span class="fc" id="L238">        }</span>
+
+        @Override
+        public void removeIpFromHost(HostId hostId, IpAddress ipAddress) {
+<span class="nc" id="L242">            checkNotNull(hostId, HOST_ID_NULL);</span>
+<span class="nc" id="L243">            checkValidity();</span>
+<span class="nc" id="L244">            HostEvent event = store.removeIp(hostId, ipAddress);</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            if (event != null) {</span>
+<span class="nc" id="L246">                post(event);</span>
+            }
+<span class="nc" id="L248">        }</span>
+    }
+
+    // Store delegate to re-post events emitted from the store.
+<span class="fc" id="L252">    private class InternalStoreDelegate implements HostStoreDelegate {</span>
+        @Override
+        public void notify(HostEvent event) {
+<span class="nc" id="L255">            post(event);</span>
+<span class="nc" id="L256">        }</span>
+    }
+
+    // listens for NetworkConfigEvents of type BasicHostConfig and removes
+    // links that the config does not allow
+<span class="fc" id="L261">    private class InternalNetworkConfigListener implements NetworkConfigListener {</span>
+        @Override
+        public void event(NetworkConfigEvent event) {
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            if ((event.type() == NetworkConfigEvent.Type.CONFIG_ADDED ||</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">                    event.type() == NetworkConfigEvent.Type.CONFIG_UPDATED) &amp;&amp;</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">                    event.configClass().equals(BasicHostConfig.class)) {</span>
+<span class="nc" id="L267">                log.info(&quot;Detected Host network config event {}&quot;, event.type());</span>
+<span class="nc" id="L268">                kickOutBadHost(((HostId) event.subject()));</span>
+            }
+<span class="nc" id="L270">        }</span>
+    }
+
+    // checks if the specified host is allowed by the BasicHostConfig
+    // and if not, removes it
+    private void kickOutBadHost(HostId hostId) {
+<span class="nc" id="L276">        BasicHostConfig cfg = networkConfigService.getConfig(hostId, BasicHostConfig.class);</span>
+<span class="nc bnc" id="L277" title="All 4 branches missed.">        if (cfg != null &amp;&amp; !cfg.isAllowed()) {</span>
+<span class="nc" id="L278">            Host badHost = getHost(hostId);</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">            if (badHost != null) {</span>
+<span class="nc" id="L280">                removeHost(hostId);</span>
+            } else {
+<span class="nc" id="L282">                log.info(&quot;Failed removal: Host {} does not exist&quot;, hostId);</span>
+            }
+        }
+<span class="nc" id="L285">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

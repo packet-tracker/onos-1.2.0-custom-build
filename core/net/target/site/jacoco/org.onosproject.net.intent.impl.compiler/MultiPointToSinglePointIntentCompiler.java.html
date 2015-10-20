@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MultiPointToSinglePointIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">MultiPointToSinglePointIntentCompiler.java</span></div><h1>MultiPointToSinglePointIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentCompiler;
+import org.onosproject.net.intent.IntentException;
+import org.onosproject.net.intent.IntentExtensionService;
+import org.onosproject.net.intent.LinkCollectionIntent;
+import org.onosproject.net.intent.MultiPointToSinglePointIntent;
+import org.onosproject.net.intent.PointToPointIntent;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.onosproject.net.topology.PathService;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.onosproject.net.intent.constraint.PartialFailureConstraint.intentAllowsPartialFailure;
+
+
+/**
+ * An intent compiler for
+ * {@link org.onosproject.net.intent.MultiPointToSinglePointIntent}.
+ */
+@Component(immediate = true)
+<span class="fc" id="L54">public class MultiPointToSinglePointIntentCompiler</span>
+        implements IntentCompiler&lt;MultiPointToSinglePointIntent&gt; {
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentExtensionService intentManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PathService pathService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L68">        intentManager.registerCompiler(MultiPointToSinglePointIntent.class, this);</span>
+<span class="nc" id="L69">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L73">        intentManager.unregisterCompiler(PointToPointIntent.class);</span>
+<span class="nc" id="L74">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(MultiPointToSinglePointIntent intent, List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+<span class="fc" id="L79">        Map&lt;DeviceId, Link&gt; links = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L80">        ConnectPoint egressPoint = intent.egressPoint();</span>
+
+<span class="fc" id="L82">        final boolean allowMissingPaths = intentAllowsPartialFailure(intent);</span>
+<span class="fc" id="L83">        boolean partialTree = false;</span>
+<span class="fc" id="L84">        boolean anyMissingPaths = false;</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        for (ConnectPoint ingressPoint : intent.ingressPoints()) {</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">            if (ingressPoint.deviceId().equals(egressPoint.deviceId())) {</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">                if (deviceService.isAvailable(ingressPoint.deviceId())) {</span>
+<span class="fc" id="L88">                    partialTree = true;</span>
+                } else {
+<span class="nc" id="L90">                    anyMissingPaths = true;</span>
+                }
+
+<span class="nc" id="L93">                continue;</span>
+            }
+
+<span class="fc" id="L96">            Path path = getPath(ingressPoint, intent.egressPoint());</span>
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">            if (path != null) {</span>
+<span class="fc" id="L98">                partialTree = true;</span>
+
+<span class="fc bfc" id="L100" title="All 2 branches covered.">                for (Link link : path.links()) {</span>
+<span class="fc bfc" id="L101" title="All 2 branches covered.">                    if (links.containsKey(link.dst().deviceId())) {</span>
+                        // We've already reached the existing tree with the first
+                        // part of this path. Add the merging point with different
+                        // incoming port, but don't add the remainder of the path
+                        // in case it differs from the path we already have.
+<span class="fc" id="L106">                        links.put(link.src().deviceId(), link);</span>
+<span class="fc" id="L107">                        break;</span>
+                    }
+<span class="fc" id="L109">                    links.put(link.src().deviceId(), link);</span>
+<span class="fc" id="L110">                }</span>
+            } else {
+<span class="nc" id="L112">                anyMissingPaths = true;</span>
+            }
+<span class="fc" id="L114">        }</span>
+
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">        if (!partialTree) {</span>
+<span class="nc" id="L117">            throw new IntentException(&quot;Could not find any paths between ingress and egress points.&quot;);</span>
+<span class="pc bpc" id="L118" title="2 of 4 branches missed.">        } else if (!allowMissingPaths &amp;&amp; anyMissingPaths) {</span>
+<span class="nc" id="L119">            throw new IntentException(&quot;Missing some paths between ingress and egress ports.&quot;);</span>
+        }
+
+<span class="fc" id="L122">        Intent result = LinkCollectionIntent.builder()</span>
+<span class="fc" id="L123">                .appId(intent.appId())</span>
+<span class="fc" id="L124">                .selector(intent.selector())</span>
+<span class="fc" id="L125">                .treatment(intent.treatment())</span>
+<span class="fc" id="L126">                .links(Sets.newHashSet(links.values()))</span>
+<span class="fc" id="L127">                .ingressPoints(intent.ingressPoints())</span>
+<span class="fc" id="L128">                .egressPoints(ImmutableSet.of(intent.egressPoint()))</span>
+<span class="fc" id="L129">                .priority(intent.priority())</span>
+<span class="fc" id="L130">                .constraints(intent.constraints())</span>
+<span class="fc" id="L131">                .build();</span>
+
+<span class="fc" id="L133">        return Collections.singletonList(result);</span>
+    }
+
+    /**
+     * Computes a path between two ConnectPoints.
+     *
+     * @param one start of the path
+     * @param two end of the path
+     * @return Path between the two
+     */
+    private Path getPath(ConnectPoint one, ConnectPoint two) {
+<span class="fc" id="L144">        Set&lt;Path&gt; paths = pathService.getPaths(one.deviceId(), two.deviceId());</span>
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">        if (paths.isEmpty()) {</span>
+<span class="nc" id="L146">            return null;</span>
+        }
+        // TODO: let's be more intelligent about this eventually
+<span class="fc" id="L149">        return paths.iterator().next();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

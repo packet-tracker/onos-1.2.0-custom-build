@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpSpeaker.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.config</a> &gt; <span class="el_source">BgpSpeaker.java</span></div><h1>BgpSpeaker.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.config;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.MoreObjects;
+import org.onlab.packet.MacAddress;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.NetTools;
+import org.onosproject.net.PortNumber;
+
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Represents a BGP daemon in SDN network.
+ * &lt;p&gt;
+ * Each BGP speaker has a attachment point, which includes a switch DPID and a
+ * switch port. Each BGP speaker has one MAC address and several IP addresses,
+ * which are used to peer with BGP peers outside the SDN network. For each
+ * peer outside the SDN network, we configure a different IP address to BGP
+ * speaker inside the SDN network.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Each BGP speaker has a name, which is a unique identifying String that is
+ * used to reference this speaker in the configuration.
+ * &lt;/p&gt;
+ */
+public class BgpSpeaker {
+    private final String name;
+    private final ConnectPoint connectPoint;
+    private final MacAddress macAddress;
+    private List&lt;InterfaceAddress&gt; interfaceAddresses;
+
+    /**
+     * Class constructor used by the JSON library to create an object.
+     *
+     * @param name the name of the BGP speaker inside SDN network
+     * @param attachmentDpid the DPID where the BGP speaker is attached to
+     * @param attachmentPort the port where the BGP speaker is attached to
+     * @param macAddress the MAC address of the BGP speaker
+     */
+    @JsonCreator
+    public BgpSpeaker(@JsonProperty(&quot;name&quot;) String name,
+            @JsonProperty(&quot;attachmentDpid&quot;) String attachmentDpid,
+            @JsonProperty(&quot;attachmentPort&quot;) long attachmentPort,
+<span class="nc" id="L62">            @JsonProperty(&quot;macAddress&quot;) String macAddress) {</span>
+
+<span class="nc" id="L64">        this.name = name;</span>
+<span class="nc" id="L65">        this.macAddress = MacAddress.valueOf(macAddress);</span>
+<span class="nc" id="L66">        this.connectPoint = new ConnectPoint(</span>
+<span class="nc" id="L67">                DeviceId.deviceId(NetTools.dpidToUri(attachmentDpid)),</span>
+<span class="nc" id="L68">                PortNumber.portNumber(attachmentPort));</span>
+<span class="nc" id="L69">    }</span>
+
+    /**
+     * Sets the addresses we configured for the BGP speaker on all virtual
+     * {@link Interface}s.
+     *
+     * @param interfaceAddresses a list of IP addresses of the BGP speaker
+     * configured on all virtual interfaces
+     */
+    @JsonProperty(&quot;interfaceAddresses&quot;)
+    public void setInterfaceAddresses(
+            List&lt;InterfaceAddress&gt; interfaceAddresses) {
+<span class="nc" id="L81">        this.interfaceAddresses = interfaceAddresses;</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * Gets the BGP speaker name.
+     *
+     * @return the BGP speaker name
+     */
+    public String name() {
+<span class="nc" id="L90">        return name;</span>
+    }
+
+    /**
+     * Gets the connect point where the BGP speaker is attached.
+     *
+     * @return the connect point
+     */
+    public ConnectPoint connectPoint() {
+<span class="nc" id="L99">        return connectPoint;</span>
+    }
+
+    /**
+     * Gets the MAC address of the BGP speaker.
+     *
+     * @return the MAC address
+     */
+    public MacAddress macAddress() {
+<span class="nc" id="L108">        return macAddress;</span>
+    }
+
+    /**
+     * Gets all IP addresses configured on all {@link Interface}s of the
+     * BGP speaker.
+     *
+     * @return a list of IP addresses of the BGP speaker configured on all
+     * virtual interfaces
+     */
+    public List&lt;InterfaceAddress&gt; interfaceAddresses() {
+<span class="nc" id="L119">        return interfaceAddresses;</span>
+    }
+
+    @Override
+    public boolean equals(Object other) {
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if (!(other instanceof BgpSpeaker)) {</span>
+<span class="nc" id="L125">            return false;</span>
+        }
+
+<span class="nc" id="L128">        BgpSpeaker otherBgpSpeaker = (BgpSpeaker) other;</span>
+
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        return  name.equals(otherBgpSpeaker.name) &amp;&amp;</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">                connectPoint.equals(</span>
+                        otherBgpSpeaker.connectPoint) &amp;&amp;
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                macAddress.equals(otherBgpSpeaker.macAddress) &amp;&amp;</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">                interfaceAddresses.equals(otherBgpSpeaker.interfaceAddresses);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L139">        return Objects.hash(name, connectPoint, macAddress,</span>
+                interfaceAddresses);
+
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L146">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L147">                .add(&quot;speakerName&quot;, name)</span>
+<span class="nc" id="L148">                .add(&quot;connectPoint&quot;, connectPoint)</span>
+<span class="nc" id="L149">                .add(&quot;macAddress&quot;, macAddress)</span>
+<span class="nc" id="L150">                .add(&quot;interfaceAddresses&quot;, interfaceAddresses)</span>
+<span class="nc" id="L151">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

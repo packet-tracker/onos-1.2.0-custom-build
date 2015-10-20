@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MutableAdjacencyListsGraph.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">MutableAdjacencyListsGraph.java</span></div><h1>MutableAdjacencyListsGraph.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
+
+public class MutableAdjacencyListsGraph&lt;V extends Vertex, E extends Edge&lt;V&gt;&gt;
+implements MutableGraph&lt;V, E&gt; {
+<span class="fc" id="L29">    private Set&lt;V&gt; vertexes = new HashSet&lt;V&gt;();</span>
+<span class="fc" id="L30">    private Set&lt;E&gt; edges = new HashSet&lt;E&gt;();</span>
+
+<span class="fc" id="L32">    private SetMultimap&lt;V, E&gt; sources = HashMultimap.create();</span>
+<span class="fc" id="L33">    private SetMultimap&lt;V, E&gt; destinations = HashMultimap.create();</span>
+
+    /**
+     * Creates a graph comprising of the specified vertexes and edges.
+     *
+     * @param vertex   set of graph vertexes
+     * @param edge     set of graph edges
+     */
+<span class="fc" id="L41">    public MutableAdjacencyListsGraph(Set&lt;V&gt; vertex, Set&lt;E&gt; edge) {</span>
+<span class="fc" id="L42">        vertexes.addAll(vertex);</span>
+<span class="fc" id="L43">        edges.addAll(edge);</span>
+<span class="fc bfc" id="L44" title="All 2 branches covered.">        for (E e : edge) {</span>
+<span class="fc" id="L45">            sources.put(e.src(), e);</span>
+<span class="fc" id="L46">            vertexes.add(e.src());</span>
+<span class="fc" id="L47">            destinations.put(e.dst(), e);</span>
+<span class="fc" id="L48">            vertexes.add(e.dst());</span>
+<span class="fc" id="L49">        }</span>
+<span class="fc" id="L50">    }</span>
+
+    @Override
+    public Set&lt;V&gt; getVertexes() {
+<span class="fc" id="L54">        return vertexes;</span>
+    }
+
+    @Override
+    public Set&lt;E&gt; getEdges() {
+<span class="fc" id="L59">        return edges;</span>
+    }
+
+    @Override
+    public Set&lt;E&gt; getEdgesFrom(V src) {
+<span class="fc" id="L64">        return sources.get(src);</span>
+    }
+
+    @Override
+    public Set&lt;E&gt; getEdgesTo(V dst) {
+<span class="nc" id="L69">        return destinations.get(dst);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L75">            return true;</span>
+        }
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        if (obj instanceof MutableAdjacencyListsGraph) {</span>
+<span class="nc" id="L78">            MutableAdjacencyListsGraph that = (MutableAdjacencyListsGraph) obj;</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            return this.getClass() == that.getClass() &amp;&amp;</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">                    Objects.equals(this.vertexes, that.vertexes) &amp;&amp;</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">                    Objects.equals(this.edges, that.edges);</span>
+        }
+<span class="nc" id="L83">        return false;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L88">        return Objects.hash(vertexes, edges);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L93">        return toStringHelper(this)</span>
+<span class="nc" id="L94">                .add(&quot;vertexes&quot;, vertexes)</span>
+<span class="nc" id="L95">                .add(&quot;edges&quot;, edges)</span>
+<span class="nc" id="L96">                .toString();</span>
+    }
+
+
+    @Override
+    public void addVertex(V vertex) {
+<span class="pc bpc" id="L102" title="1 of 2 branches missed.">        if (vertexes != null) {</span>
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">              if (!vertexes.contains(vertex)) {</span>
+<span class="fc" id="L104">                    vertexes.add(vertex);</span>
+                }
+        }
+<span class="fc" id="L107">    }</span>
+
+    @Override
+    public void removeVertex(V vertex) {
+<span class="pc bpc" id="L111" title="2 of 4 branches missed.">        if (vertexes != null &amp;&amp; edges != null) {</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">            if (vertexes.contains(vertex)) {</span>
+<span class="fc" id="L113">                vertexes.remove(vertex);</span>
+<span class="fc" id="L114">                Set&lt;E&gt; srcEdgesList = sources.get(vertex);</span>
+<span class="fc" id="L115">                Set&lt;E&gt; dstEdgesList = destinations.get(vertex);</span>
+<span class="fc" id="L116">                edges.removeAll(srcEdgesList);</span>
+<span class="fc" id="L117">                edges.removeAll(dstEdgesList);</span>
+<span class="fc" id="L118">                sources.remove(vertex, srcEdgesList);</span>
+<span class="fc" id="L119">                sources.remove(vertex, dstEdgesList);</span>
+            }
+        }
+<span class="fc" id="L122">    }</span>
+
+    @Override
+    public void addEdge(E edge) {
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">        if (edges != null) {</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">                if (!edges.contains(edge)) {</span>
+<span class="fc" id="L128">                    edges.add(edge);</span>
+<span class="fc" id="L129">                    sources.put(edge.src(), edge);</span>
+<span class="fc" id="L130">                    destinations.put(edge.dst(), edge);</span>
+                }
+        }
+<span class="fc" id="L133">    }</span>
+
+    @Override
+    public void removeEdge(E edge) {
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">        if (edges != null) {</span>
+<span class="fc bfc" id="L138" title="All 2 branches covered.">            if (edges.contains(edge)) {</span>
+<span class="fc" id="L139">                edges.remove(edge);</span>
+<span class="fc" id="L140">                sources.remove(edge.src(), edge);</span>
+<span class="fc" id="L141">                destinations.remove(edge.dst(), edge);</span>
+            }
+        }
+<span class="fc" id="L144">    }</span>
+
+    @Override
+    public Graph&lt;V, E&gt; toImmutable() {
+<span class="nc" id="L148">        return null;</span>
+    }
+
+    /**
+     * Clear the graph.
+     */
+    public void clear() {
+<span class="fc" id="L155">        edges.clear();</span>
+<span class="fc" id="L156">        vertexes.clear();</span>
+<span class="fc" id="L157">        sources.clear();</span>
+<span class="fc" id="L158">        destinations.clear();</span>
+<span class="fc" id="L159">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

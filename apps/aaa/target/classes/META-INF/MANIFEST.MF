@@ -1,0 +1,33 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1445328518805
+Build-Jdk: 1.8.0_60
+Built-By: parallels
+Bundle-Description: ONOS authentication application
+Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
+Bundle-ManifestVersion: 2
+Bundle-Name: onos-app-aaa
+Bundle-SymbolicName: org.onosproject.onos-app-aaa
+Bundle-Version: 1.4.0.SNAPSHOT
+Created-By: Apache Maven Bundle Plugin
+Export-Package: org.onosproject.aaa;uses:="org.onlab.packet,org.onosproj
+ ect.core,org.onosproject.net.config,org.onosproject.net.config.basics,o
+ rg.onosproject.net.packet,org.onosproject.xosintegration";version="1.4.
+ 0"
+Import-Package: com.fasterxml.jackson.databind.node;version="[2.4,3)",co
+ m.google.common.collect;version="[18.0,19)",com.google.common.util.conc
+ urrent;version="[18.0,19)",org.onlab.packet;version="[1.4,2)",org.onosp
+ roject.core;version="[1.4,2)",org.onosproject.event;version="[1.4,2)",o
+ rg.onosproject.net;version="[1.4,2)",org.onosproject.net.config;version
+ ="[1.4,2)",org.onosproject.net.config.basics;version="[1.4,2)",org.onos
+ project.net.flow;version="[1.4,2)",org.onosproject.net.packet;version="
+ [1.4,2)",org.onosproject.xosintegration;version="[1.4,2)",org.slf4j;ver
+ sion="[1.7,2)"
+Require-Capability: osgi.service;effective:=active;filter:="(objectClass
+ =org.onosproject.net.packet.PacketService)",osgi.service;effective:=act
+ ive;filter:="(objectClass=org.onosproject.xosintegration.VoltTenantServ
+ ice)",osgi.service;effective:=active;filter:="(objectClass=org.onosproj
+ ect.net.config.NetworkConfigRegistry)",osgi.service;effective:=active;f
+ ilter:="(objectClass=org.onosproject.core.CoreService)",osgi.ee;filter:
+ ="(&(osgi.ee=JavaSE)(version=1.8))"
+Service-Component: OSGI-INF/org.onosproject.aaa.AAA.xml
+Tool: Bnd-2.4.0.201411031534

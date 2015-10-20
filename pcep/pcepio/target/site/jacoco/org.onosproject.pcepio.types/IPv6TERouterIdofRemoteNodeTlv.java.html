@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IPv6TERouterIdofRemoteNodeTlv.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">IPv6TERouterIdofRemoteNodeTlv.java</span></div><h1>IPv6TERouterIdofRemoteNodeTlv.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
+
+/**
+ * Provides IPv6 TE Router Id of Remote Node.  Reference :[RFC6119]/4.1.
+ */
+public class IPv6TERouterIdofRemoteNodeTlv implements PcepValueType {
+<span class="fc" id="L32">    protected static final Logger log = LoggerFactory.getLogger(IPv6TERouterIdofRemoteNodeTlv.class);</span>
+
+    public static final short TYPE = 1400; //TDB29
+    public static final short LENGTH = 20;
+    public static final byte VALUE_LENGTH = 18;
+
+<span class="fc" id="L38">    private static final byte[] NONE_VAL = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};</span>
+<span class="fc" id="L39">    public static final IPv6TERouterIdofRemoteNodeTlv NONE = new IPv6TERouterIdofRemoteNodeTlv(NONE_VAL);</span>
+
+<span class="fc" id="L41">    private static final byte[] NO_MASK_VAL = {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,</span>
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+<span class="fc" id="L44">    public static final IPv6TERouterIdofRemoteNodeTlv NO_MASK = new IPv6TERouterIdofRemoteNodeTlv(NO_MASK_VAL);</span>
+<span class="fc" id="L45">    public static final IPv6TERouterIdofRemoteNodeTlv FULL_MASK = NONE;</span>
+
+    private final byte[] rawValue;
+
+    /**
+     * constructor to initialize rawValue.
+     *
+     * @param rawValue IPv6TERouterIdofRemoteNodeTlv
+     */
+<span class="fc" id="L54">    public IPv6TERouterIdofRemoteNodeTlv(byte[] rawValue) {</span>
+<span class="fc" id="L55">        log.debug(&quot;IPv6TERouterIdofRemoteNodeTlv&quot;);</span>
+<span class="fc" id="L56">        this.rawValue = rawValue;</span>
+<span class="fc" id="L57">    }</span>
+
+    /**
+     * Returns newly created IPv6TERouterIdofRemoteNodeTlv object.
+     *
+     * @param raw IPv6 TE Router Id of RemoteNode
+     * @return object of IPv6TERouterIdofRemoteNodeTlv
+     */
+    public static IPv6TERouterIdofRemoteNodeTlv of(final byte[] raw) {
+        //check NONE_VAL
+<span class="fc" id="L67">        boolean bFoundNONE = true;</span>
+        //value starts from 3rd byte.
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        for (int i = 2; i &lt; 20; ++i) {</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">            if (NONE_VAL[i] != raw[i]) {</span>
+<span class="fc" id="L71">                bFoundNONE = false;</span>
+            }
+        }
+
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if (bFoundNONE) {</span>
+<span class="nc" id="L76">            return NONE;</span>
+        }
+
+        //check NO_MASK_VAL
+<span class="fc" id="L80">        boolean bFoundNoMask = true;</span>
+        //value starts from 3rd byte.
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        for (int i = 2; i &lt; 20; ++i) {</span>
+<span class="pc bpc" id="L83" title="1 of 2 branches missed.">            if (0xFF != raw[i]) {</span>
+<span class="fc" id="L84">                bFoundNoMask = false;</span>
+            }
+        }
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">        if (bFoundNoMask) {</span>
+<span class="nc" id="L88">            return NO_MASK;</span>
+        }
+
+<span class="fc" id="L91">        return new IPv6TERouterIdofRemoteNodeTlv(raw);</span>
+    }
+
+    /**
+     * Returns value of IPv6 TE Router Id of Remote Node.
+     *
+     * @return byte array value of rawValue
+     */
+    public byte[] getBytes() {
+<span class="nc" id="L100">        return rawValue;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L105">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L110">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="nc" id="L115">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L120">        return Objects.hash(rawValue);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L125" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L126">            return true;</span>
+        }
+<span class="fc bfc" id="L128" title="All 2 branches covered.">        if (obj instanceof IPv6TERouterIdofRemoteNodeTlv) {</span>
+<span class="fc" id="L129">            IPv6TERouterIdofRemoteNodeTlv other = (IPv6TERouterIdofRemoteNodeTlv) obj;</span>
+<span class="fc" id="L130">            return Objects.equals(rawValue, other.rawValue);</span>
+        }
+<span class="fc" id="L132">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="nc" id="L137">        int iStartIndex = c.writerIndex();</span>
+<span class="nc" id="L138">        c.writeShort(TYPE);</span>
+<span class="nc" id="L139">        c.writeShort(LENGTH);</span>
+<span class="nc" id="L140">        c.writeBytes(rawValue);</span>
+<span class="nc" id="L141">        return c.writerIndex() - iStartIndex;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of IPv6TERouterIdofRemoteNodeTlv.
+     *
+     * @param c input channel buffer
+     * @return object of IPv6TERouterIdofRemoteNodeTlv
+     */
+    public static IPv6TERouterIdofRemoteNodeTlv read20Bytes(ChannelBuffer c) {
+<span class="nc" id="L151">        byte[] yTemp = new byte[20];</span>
+<span class="nc" id="L152">        c.readBytes(yTemp, 0, 20);</span>
+<span class="nc" id="L153">        return IPv6TERouterIdofRemoteNodeTlv.of(yTemp);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L158">        ToStringHelper toStrHelper = MoreObjects.toStringHelper(getClass());</span>
+
+<span class="fc" id="L160">        toStrHelper.add(&quot;Type&quot;, TYPE);</span>
+<span class="fc" id="L161">        toStrHelper.add(&quot;Length&quot;, LENGTH);</span>
+
+<span class="fc" id="L163">        StringBuffer result = new StringBuffer();</span>
+<span class="fc bfc" id="L164" title="All 2 branches covered.">        for (byte b : rawValue) {</span>
+<span class="fc" id="L165">            result.append(String.format(&quot;%02X &quot;, b));</span>
+        }
+<span class="fc" id="L167">        toStrHelper.add(&quot;Value&quot;, result);</span>
+
+<span class="fc" id="L169">        return toStrHelper.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

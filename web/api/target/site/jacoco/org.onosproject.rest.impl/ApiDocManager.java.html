@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ApiDocManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.impl</a> &gt; <span class="el_source">ApiDocManager.java</span></div><h1>ApiDocManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.rest.ApiDocProvider;
+import org.onosproject.rest.ApiDocService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Implementation of the REST API documentation tracker.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L37">public class ApiDocManager implements ApiDocService {</span>
+
+<span class="nc" id="L39">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    // Set of doc providers
+<span class="nc" id="L42">    private final Map&lt;String, ApiDocProvider&gt; providers = Maps.newConcurrentMap();</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L46">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L47">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L51">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L52">    }</span>
+
+    @Override
+    public void register(ApiDocProvider provider) {
+<span class="nc" id="L56">        providers.put(provider.key(), provider);</span>
+<span class="nc" id="L57">    }</span>
+
+    @Override
+    public void unregister(ApiDocProvider provider) {
+<span class="nc" id="L61">        providers.remove(provider.name());</span>
+<span class="nc" id="L62">    }</span>
+
+    @Override
+    public Set&lt;ApiDocProvider&gt; getDocProviders() {
+<span class="nc" id="L66">        return ImmutableSet.copyOf(providers.values());</span>
+    }
+
+    @Override
+    public ApiDocProvider getDocProvider(String key) {
+<span class="nc" id="L71">        return providers.get(key);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

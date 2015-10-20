@@ -1,0 +1,1667 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>GossipDeviceStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.device.impl</a> &gt; <span class="el_source">GossipDeviceStore.java</span></div><h1>GossipDeviceStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.device.impl;
+
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
+import org.apache.commons.lang3.RandomUtils;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.ChassisId;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.NewConcurrentHashMap;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.mastership.MastershipTerm;
+import org.onosproject.mastership.MastershipTermService;
+import org.onosproject.net.Annotations;
+import org.onosproject.net.AnnotationsUtil;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.DefaultDevice;
+import org.onosproject.net.DefaultPort;
+import org.onosproject.net.Device;
+import org.onosproject.net.Device.Type;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.OchPort;
+import org.onosproject.net.OduCltPort;
+import org.onosproject.net.OmsPort;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.device.DefaultPortStatistics;
+import org.onosproject.net.device.DeviceClockService;
+import org.onosproject.net.device.DeviceDescription;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceStore;
+import org.onosproject.net.device.DeviceStoreDelegate;
+import org.onosproject.net.device.OchPortDescription;
+import org.onosproject.net.device.OduCltPortDescription;
+import org.onosproject.net.device.OmsPortDescription;
+import org.onosproject.net.device.PortDescription;
+import org.onosproject.net.device.PortStatistics;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.Timestamp;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.ClusterMessage;
+import org.onosproject.store.cluster.messaging.ClusterMessageHandler;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.impl.Timestamped;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.serializers.custom.DistributedStoreSerializers;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.MultiValuedTimestamp;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.WallClockTimestamp;
+import org.slf4j.Logger;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Predicates.notNull;
+import static com.google.common.base.Verify.verify;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static org.apache.commons.lang3.concurrent.ConcurrentUtils.createIfAbsentUnchecked;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.minPriority;
+import static org.onosproject.cluster.ControllerNodeToNodeId.toNodeId;
+import static org.onosproject.net.DefaultAnnotations.merge;
+import static org.onosproject.net.device.DeviceEvent.Type.*;
+import static org.onosproject.store.device.impl.GossipDeviceStoreMessageSubjects.*;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Manages inventory of infrastructure devices using gossip protocol to distribute
+ * information.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L121">public class GossipDeviceStore</span>
+        extends AbstractStore&lt;DeviceEvent, DeviceStoreDelegate&gt;
+        implements DeviceStore {
+
+<span class="fc" id="L125">    private final Logger log = getLogger(getClass());</span>
+
+    private static final String DEVICE_NOT_FOUND = &quot;Device with ID %s not found&quot;;
+    // Timeout in milliseconds to process device or ports on remote master node
+    private static final int REMOTE_MASTER_TIMEOUT = 1000;
+
+    // innerMap is used to lock a Device, thus instance should never be replaced.
+    // collection of Description given from various providers
+<span class="fc" id="L133">    private final ConcurrentMap&lt;DeviceId, Map&lt;ProviderId, DeviceDescriptions&gt;&gt;</span>
+<span class="fc" id="L134">            deviceDescs = Maps.newConcurrentMap();</span>
+
+    // cache of Device and Ports generated by compositing descriptions from providers
+<span class="fc" id="L137">    private final ConcurrentMap&lt;DeviceId, Device&gt; devices = Maps.newConcurrentMap();</span>
+<span class="fc" id="L138">    private final ConcurrentMap&lt;DeviceId, ConcurrentMap&lt;PortNumber, Port&gt;&gt; devicePorts = Maps.newConcurrentMap();</span>
+
+    private EventuallyConsistentMap&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; devicePortStats;
+    private EventuallyConsistentMap&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; devicePortDeltaStats;
+<span class="fc" id="L142">    private final EventuallyConsistentMapListener&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt;</span>
+            portStatsListener = new InternalPortStatsListener();
+
+    // to be updated under Device lock
+<span class="fc" id="L146">    private final Map&lt;DeviceId, Timestamp&gt; offline = Maps.newHashMap();</span>
+<span class="fc" id="L147">    private final Map&lt;DeviceId, Timestamp&gt; removalRequest = Maps.newHashMap();</span>
+
+    // available(=UP) devices
+<span class="fc" id="L150">    private final Set&lt;DeviceId&gt; availableDevices = Sets.newConcurrentHashSet();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceClockService deviceClockService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipTermService termService;
+
+
+<span class="fc" id="L171">    protected static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="fc" id="L174">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="fc" id="L175">                    .register(DistributedStoreSerializers.STORE_COMMON)</span>
+<span class="fc" id="L176">                    .nextId(DistributedStoreSerializers.STORE_CUSTOM_BEGIN)</span>
+<span class="fc" id="L177">                    .register(new InternalDeviceEventSerializer(), InternalDeviceEvent.class)</span>
+<span class="fc" id="L178">                    .register(new InternalDeviceOfflineEventSerializer(), InternalDeviceOfflineEvent.class)</span>
+<span class="fc" id="L179">                    .register(InternalDeviceRemovedEvent.class)</span>
+<span class="fc" id="L180">                    .register(new InternalPortEventSerializer(), InternalPortEvent.class)</span>
+<span class="fc" id="L181">                    .register(new InternalPortStatusEventSerializer(), InternalPortStatusEvent.class)</span>
+<span class="fc" id="L182">                    .register(DeviceAntiEntropyAdvertisement.class)</span>
+<span class="fc" id="L183">                    .register(DeviceFragmentId.class)</span>
+<span class="fc" id="L184">                    .register(PortFragmentId.class)</span>
+<span class="fc" id="L185">                    .register(DeviceInjectedEvent.class)</span>
+<span class="fc" id="L186">                    .register(PortInjectedEvent.class)</span>
+<span class="fc" id="L187">                    .build();</span>
+<span class="fc" id="L188">        }</span>
+    };
+
+    private ExecutorService executor;
+
+    private ScheduledExecutorService backgroundExecutor;
+
+    // TODO make these anti-entropy parameters configurable
+<span class="fc" id="L196">    private long initialDelaySec = 5;</span>
+<span class="fc" id="L197">    private long periodSec = 5;</span>
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L201">        executor = Executors.newCachedThreadPool(groupedThreads(&quot;onos/device&quot;, &quot;fg-%d&quot;));</span>
+
+<span class="fc" id="L203">        backgroundExecutor =</span>
+<span class="fc" id="L204">                newSingleThreadScheduledExecutor(minPriority(groupedThreads(&quot;onos/device&quot;, &quot;bg-%d&quot;)));</span>
+
+<span class="fc" id="L206">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.DEVICE_UPDATE, new InternalDeviceEventListener(), executor);
+<span class="fc" id="L208">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.DEVICE_OFFLINE,
+                new InternalDeviceOfflineEventListener(),
+                executor);
+<span class="fc" id="L212">        clusterCommunicator.addSubscriber(DEVICE_REMOVE_REQ,</span>
+                                          new InternalRemoveRequestListener(),
+                                          executor);
+<span class="fc" id="L215">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.DEVICE_REMOVED, new InternalDeviceRemovedEventListener(), executor);
+<span class="fc" id="L217">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.PORT_UPDATE, new InternalPortEventListener(), executor);
+<span class="fc" id="L219">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.PORT_STATUS_UPDATE, new InternalPortStatusEventListener(), executor);
+<span class="fc" id="L221">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.DEVICE_ADVERTISE,
+                new InternalDeviceAdvertisementListener(),
+                backgroundExecutor);
+<span class="fc" id="L225">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.DEVICE_INJECTED, new DeviceInjectedEventListener(), executor);
+<span class="fc" id="L227">        clusterCommunicator.addSubscriber(</span>
+                GossipDeviceStoreMessageSubjects.PORT_INJECTED, new PortInjectedEventListener(), executor);
+
+        // start anti-entropy thread
+<span class="fc" id="L231">        backgroundExecutor.scheduleAtFixedRate(new SendAdvertisementTask(),</span>
+                                               initialDelaySec, periodSec, TimeUnit.SECONDS);
+
+        // Create a distributed map for port stats.
+<span class="fc" id="L235">        KryoNamespace.Builder deviceDataSerializer = KryoNamespace.newBuilder()</span>
+<span class="fc" id="L236">                .register(KryoNamespaces.API)</span>
+<span class="fc" id="L237">                .register(DefaultPortStatistics.class)</span>
+<span class="fc" id="L238">                .register(DeviceId.class)</span>
+<span class="fc" id="L239">                .register(MultiValuedTimestamp.class)</span>
+<span class="fc" id="L240">                .register(WallClockTimestamp.class);</span>
+
+<span class="fc" id="L242">        devicePortStats = storageService.&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt;eventuallyConsistentMapBuilder()</span>
+<span class="fc" id="L243">                .withName(&quot;port-stats&quot;)</span>
+<span class="fc" id="L244">                .withSerializer(deviceDataSerializer)</span>
+<span class="fc" id="L245">                .withAntiEntropyPeriod(5, TimeUnit.SECONDS)</span>
+<span class="pc" id="L246">                .withTimestampProvider((k, v) -&gt; new WallClockTimestamp())</span>
+<span class="fc" id="L247">                .withTombstonesDisabled()</span>
+<span class="fc" id="L248">                .build();</span>
+<span class="fc" id="L249">        devicePortDeltaStats = storageService.&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt;</span>
+<span class="fc" id="L250">                eventuallyConsistentMapBuilder()</span>
+<span class="fc" id="L251">                .withName(&quot;port-stats-delta&quot;)</span>
+<span class="fc" id="L252">                .withSerializer(deviceDataSerializer)</span>
+<span class="fc" id="L253">                .withAntiEntropyPeriod(5, TimeUnit.SECONDS)</span>
+<span class="pc" id="L254">                .withTimestampProvider((k, v) -&gt; new WallClockTimestamp())</span>
+<span class="fc" id="L255">                .withTombstonesDisabled()</span>
+<span class="fc" id="L256">                .build();</span>
+<span class="fc" id="L257">        devicePortStats.addListener(portStatsListener);</span>
+<span class="fc" id="L258">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L259">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L263">        devicePortStats.destroy();</span>
+<span class="fc" id="L264">        devicePortDeltaStats.destroy();</span>
+<span class="fc" id="L265">        executor.shutdownNow();</span>
+
+<span class="fc" id="L267">        backgroundExecutor.shutdownNow();</span>
+        try {
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">            if (!backgroundExecutor.awaitTermination(5, TimeUnit.SECONDS)) {</span>
+<span class="nc" id="L270">                log.error(&quot;Timeout during executor shutdown&quot;);</span>
+            }
+<span class="nc" id="L272">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L273">            log.error(&quot;Error during executor shutdown&quot;, e);</span>
+<span class="fc" id="L274">        }</span>
+
+<span class="fc" id="L276">        deviceDescs.clear();</span>
+<span class="fc" id="L277">        devices.clear();</span>
+<span class="fc" id="L278">        devicePorts.clear();</span>
+<span class="fc" id="L279">        availableDevices.clear();</span>
+<span class="fc" id="L280">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L281">    }</span>
+
+    @Override
+    public int getDeviceCount() {
+<span class="fc" id="L285">        return devices.size();</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getDevices() {
+<span class="fc" id="L290">        return Collections.unmodifiableCollection(devices.values());</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getAvailableDevices() {
+<span class="nc" id="L295">        return FluentIterable.from(getDevices())</span>
+<span class="nc" id="L296">                .filter(input -&gt; isAvailable(input.id()));</span>
+    }
+
+    @Override
+    public Device getDevice(DeviceId deviceId) {
+<span class="fc" id="L301">        return devices.get(deviceId);</span>
+    }
+
+    @Override
+    public synchronized DeviceEvent createOrUpdateDevice(ProviderId providerId,
+                                                         DeviceId deviceId,
+                                                         DeviceDescription deviceDescription) {
+<span class="fc" id="L308">        NodeId localNode = clusterService.getLocalNode().id();</span>
+<span class="fc" id="L309">        NodeId deviceNode = mastershipService.getMasterFor(deviceId);</span>
+
+        // Process device update only if we're the master,
+        // otherwise signal the actual master.
+<span class="fc" id="L313">        DeviceEvent deviceEvent = null;</span>
+<span class="pc bpc" id="L314" title="1 of 2 branches missed.">        if (localNode.equals(deviceNode)) {</span>
+
+<span class="fc" id="L316">            final Timestamp newTimestamp = deviceClockService.getTimestamp(deviceId);</span>
+<span class="fc" id="L317">            final Timestamped&lt;DeviceDescription&gt; deltaDesc = new Timestamped&lt;&gt;(deviceDescription, newTimestamp);</span>
+            final Timestamped&lt;DeviceDescription&gt; mergedDesc;
+<span class="fc" id="L319">            final Map&lt;ProviderId, DeviceDescriptions&gt; device = getOrCreateDeviceDescriptionsMap(deviceId);</span>
+
+<span class="fc" id="L321">            synchronized (device) {</span>
+<span class="fc" id="L322">                deviceEvent = createOrUpdateDeviceInternal(providerId, deviceId, deltaDesc);</span>
+<span class="fc" id="L323">                mergedDesc = device.get(providerId).getDeviceDesc();</span>
+<span class="pc" id="L324">            }</span>
+
+<span class="fc bfc" id="L326" title="All 2 branches covered.">            if (deviceEvent != null) {</span>
+<span class="fc" id="L327">                log.debug(&quot;Notifying peers of a device update topology event for providerId: {} and deviceId: {}&quot;,</span>
+                         providerId, deviceId);
+<span class="fc" id="L329">                notifyPeers(new InternalDeviceEvent(providerId, deviceId, mergedDesc));</span>
+            }
+
+<span class="fc" id="L332">        } else {</span>
+            // FIXME Temporary hack for NPE (ONOS-1171).
+            // Proper fix is to implement forwarding to master on ConfigProvider
+            // redo ONOS-490
+<span class="nc bnc" id="L336" title="All 2 branches missed.">            if (deviceNode == null) {</span>
+                // silently ignore
+<span class="nc" id="L338">                return null;</span>
+            }
+
+
+<span class="nc" id="L342">            DeviceInjectedEvent deviceInjectedEvent = new DeviceInjectedEvent(</span>
+                    providerId, deviceId, deviceDescription);
+
+            // TODO check unicast return value
+<span class="nc" id="L346">            clusterCommunicator.unicast(deviceInjectedEvent, DEVICE_INJECTED, SERIALIZER::encode, deviceNode);</span>
+            /* error log:
+            log.warn(&quot;Failed to process injected device id: {} desc: {} &quot; +
+                            &quot;(cluster messaging failed: {})&quot;,
+                    deviceId, deviceDescription, e);
+            */
+        }
+
+<span class="fc" id="L354">        return deviceEvent;</span>
+    }
+
+    private DeviceEvent createOrUpdateDeviceInternal(ProviderId providerId,
+                                                     DeviceId deviceId,
+                                                     Timestamped&lt;DeviceDescription&gt; deltaDesc) {
+
+        // Collection of DeviceDescriptions for a Device
+<span class="fc" id="L362">        Map&lt;ProviderId, DeviceDescriptions&gt; device</span>
+<span class="fc" id="L363">                = getOrCreateDeviceDescriptionsMap(deviceId);</span>
+
+<span class="fc" id="L365">        synchronized (device) {</span>
+            // locking per device
+
+<span class="pc bpc" id="L368" title="1 of 2 branches missed.">            if (isDeviceRemoved(deviceId, deltaDesc.timestamp())) {</span>
+<span class="nc" id="L369">                log.debug(&quot;Ignoring outdated event: {}&quot;, deltaDesc);</span>
+<span class="nc" id="L370">                return null;</span>
+            }
+
+<span class="fc" id="L373">            DeviceDescriptions descs = getOrCreateProviderDeviceDescriptions(device, providerId, deltaDesc);</span>
+
+<span class="fc" id="L375">            final Device oldDevice = devices.get(deviceId);</span>
+            final Device newDevice;
+
+<span class="fc bfc" id="L378" title="All 2 branches covered.">            if (deltaDesc == descs.getDeviceDesc() ||</span>
+<span class="pc bpc" id="L379" title="1 of 2 branches missed.">                    deltaDesc.isNewer(descs.getDeviceDesc())) {</span>
+                // on new device or valid update
+<span class="fc" id="L381">                descs.putDeviceDesc(deltaDesc);</span>
+<span class="fc" id="L382">                newDevice = composeDevice(deviceId, device);</span>
+            } else {
+                // outdated event, ignored.
+<span class="nc" id="L385">                return null;</span>
+            }
+<span class="fc bfc" id="L387" title="All 2 branches covered.">            if (oldDevice == null) {</span>
+                // ADD
+<span class="fc" id="L389">                return createDevice(providerId, newDevice, deltaDesc.timestamp());</span>
+            } else {
+                // UPDATE or ignore (no change or stale)
+<span class="fc" id="L392">                return updateDevice(providerId, oldDevice, newDevice, deltaDesc.timestamp());</span>
+            }
+<span class="nc" id="L394">        }</span>
+    }
+
+    // Creates the device and returns the appropriate event if necessary.
+    // Guarded by deviceDescs value (=Device lock)
+    private DeviceEvent createDevice(ProviderId providerId,
+                                     Device newDevice, Timestamp timestamp) {
+
+        // update composed device cache
+<span class="fc" id="L403">        Device oldDevice = devices.putIfAbsent(newDevice.id(), newDevice);</span>
+<span class="pc bpc" id="L404" title="1 of 2 branches missed.">        verify(oldDevice == null,</span>
+               &quot;Unexpected Device in cache. PID:%s [old=%s, new=%s]&quot;,
+               providerId, oldDevice, newDevice);
+
+<span class="fc bfc" id="L408" title="All 2 branches covered.">        if (!providerId.isAncillary()) {</span>
+<span class="fc" id="L409">            markOnline(newDevice.id(), timestamp);</span>
+        }
+
+<span class="fc" id="L412">        return new DeviceEvent(DeviceEvent.Type.DEVICE_ADDED, newDevice, null);</span>
+    }
+
+    // Updates the device and returns the appropriate event if necessary.
+    // Guarded by deviceDescs value (=Device lock)
+    private DeviceEvent updateDevice(ProviderId providerId,
+                                     Device oldDevice,
+                                     Device newDevice, Timestamp newTimestamp) {
+        // We allow only certain attributes to trigger update
+<span class="fc" id="L421">        boolean propertiesChanged =</span>
+<span class="pc bpc" id="L422" title="1 of 2 branches missed.">                !Objects.equals(oldDevice.hwVersion(), newDevice.hwVersion()) ||</span>
+<span class="fc bfc" id="L423" title="All 2 branches covered.">                        !Objects.equals(oldDevice.swVersion(), newDevice.swVersion()) ||</span>
+<span class="fc bfc" id="L424" title="All 2 branches covered.">                        !Objects.equals(oldDevice.providerId(), newDevice.providerId());</span>
+<span class="fc" id="L425">        boolean annotationsChanged =</span>
+<span class="fc bfc" id="L426" title="All 2 branches covered.">                !AnnotationsUtil.isEqual(oldDevice.annotations(), newDevice.annotations());</span>
+
+        // Primary providers can respond to all changes, but ancillary ones
+        // should respond only to annotation changes.
+<span class="fc bfc" id="L430" title="All 4 branches covered.">        if ((providerId.isAncillary() &amp;&amp; annotationsChanged) ||</span>
+<span class="pc bpc" id="L431" title="1 of 6 branches missed.">                (!providerId.isAncillary() &amp;&amp; (propertiesChanged || annotationsChanged))) {</span>
+<span class="fc" id="L432">            boolean replaced = devices.replace(newDevice.id(), oldDevice, newDevice);</span>
+<span class="pc bpc" id="L433" title="1 of 2 branches missed.">            if (!replaced) {</span>
+<span class="nc" id="L434">                verify(replaced,</span>
+                       &quot;Replacing devices cache failed. PID:%s [expected:%s, found:%s, new=%s]&quot;,
+<span class="nc" id="L436">                       providerId, oldDevice, devices.get(newDevice.id())</span>
+                        , newDevice);
+            }
+<span class="fc bfc" id="L439" title="All 2 branches covered.">            if (!providerId.isAncillary()) {</span>
+<span class="fc" id="L440">                boolean wasOnline = availableDevices.contains(newDevice.id());</span>
+<span class="fc" id="L441">                markOnline(newDevice.id(), newTimestamp);</span>
+<span class="fc bfc" id="L442" title="All 2 branches covered.">                if (!wasOnline) {</span>
+<span class="fc" id="L443">                    notifyDelegateIfNotNull(new DeviceEvent(DEVICE_AVAILABILITY_CHANGED, newDevice, null));</span>
+                }
+            }
+
+<span class="fc" id="L447">            return new DeviceEvent(DeviceEvent.Type.DEVICE_UPDATED, newDevice, null);</span>
+        }
+<span class="fc" id="L449">        return null;</span>
+    }
+
+    @Override
+    public DeviceEvent markOffline(DeviceId deviceId) {
+<span class="fc" id="L454">        final Timestamp timestamp = deviceClockService.getTimestamp(deviceId);</span>
+<span class="fc" id="L455">        final DeviceEvent event = markOfflineInternal(deviceId, timestamp);</span>
+<span class="fc bfc" id="L456" title="All 2 branches covered.">        if (event != null) {</span>
+<span class="fc" id="L457">            log.debug(&quot;Notifying peers of a device offline topology event for deviceId: {} {}&quot;,</span>
+                     deviceId, timestamp);
+<span class="fc" id="L459">            notifyPeers(new InternalDeviceOfflineEvent(deviceId, timestamp));</span>
+        }
+<span class="fc" id="L461">        return event;</span>
+    }
+
+    private DeviceEvent markOfflineInternal(DeviceId deviceId, Timestamp timestamp) {
+
+<span class="fc" id="L466">        Map&lt;ProviderId, DeviceDescriptions&gt; providerDescs</span>
+<span class="fc" id="L467">                = getOrCreateDeviceDescriptionsMap(deviceId);</span>
+
+        // locking device
+<span class="fc" id="L470">        synchronized (providerDescs) {</span>
+
+            // accept off-line if given timestamp is newer than
+            // the latest Timestamp from Primary provider
+<span class="fc" id="L474">            DeviceDescriptions primDescs = getPrimaryDescriptions(providerDescs);</span>
+<span class="fc" id="L475">            Timestamp lastTimestamp = primDescs.getLatestTimestamp();</span>
+<span class="pc bpc" id="L476" title="1 of 2 branches missed.">            if (timestamp.compareTo(lastTimestamp) &lt;= 0) {</span>
+                // outdated event ignore
+<span class="nc" id="L478">                return null;</span>
+            }
+
+<span class="fc" id="L481">            offline.put(deviceId, timestamp);</span>
+
+<span class="fc" id="L483">            Device device = devices.get(deviceId);</span>
+<span class="fc bfc" id="L484" title="All 2 branches covered.">            if (device == null) {</span>
+<span class="fc" id="L485">                return null;</span>
+            }
+<span class="fc" id="L487">            boolean removed = availableDevices.remove(deviceId);</span>
+<span class="fc bfc" id="L488" title="All 2 branches covered.">            if (removed) {</span>
+<span class="fc" id="L489">                return new DeviceEvent(DEVICE_AVAILABILITY_CHANGED, device, null);</span>
+            }
+<span class="fc" id="L491">            return null;</span>
+<span class="nc" id="L492">        }</span>
+    }
+
+    /**
+     * Marks the device as available if the given timestamp is not outdated,
+     * compared to the time the device has been marked offline.
+     *
+     * @param deviceId  identifier of the device
+     * @param timestamp of the event triggering this change.
+     * @return true if availability change request was accepted and changed the state
+     */
+    // Guarded by deviceDescs value (=Device lock)
+    private boolean markOnline(DeviceId deviceId, Timestamp timestamp) {
+        // accept on-line if given timestamp is newer than
+        // the latest offline request Timestamp
+<span class="fc" id="L507">        Timestamp offlineTimestamp = offline.get(deviceId);</span>
+<span class="fc bfc" id="L508" title="All 2 branches covered.">        if (offlineTimestamp == null ||</span>
+<span class="pc bpc" id="L509" title="1 of 2 branches missed.">                offlineTimestamp.compareTo(timestamp) &lt; 0) {</span>
+
+<span class="fc" id="L511">            offline.remove(deviceId);</span>
+<span class="fc" id="L512">            return availableDevices.add(deviceId);</span>
+        }
+<span class="nc" id="L514">        return false;</span>
+    }
+
+    @Override
+    public synchronized List&lt;DeviceEvent&gt; updatePorts(ProviderId providerId,
+                                                      DeviceId deviceId,
+                                                      List&lt;PortDescription&gt; portDescriptions) {
+
+<span class="fc" id="L522">        NodeId localNode = clusterService.getLocalNode().id();</span>
+        // TODO: It might be negligible, but this will have negative impact to topology discovery performance,
+        // since it will trigger distributed store read.
+        // Also, it'll probably be better if side-way communication happened on ConfigurationProvider, etc.
+        // outside Device subsystem. so that we don't have to modify both Device and Link stores.
+        // If we don't care much about topology performance, then it might be OK.
+<span class="fc" id="L528">        NodeId deviceNode = mastershipService.getMasterFor(deviceId);</span>
+
+        // Process port update only if we're the master of the device,
+        // otherwise signal the actual master.
+<span class="fc" id="L532">        List&lt;DeviceEvent&gt; deviceEvents = null;</span>
+<span class="pc bpc" id="L533" title="1 of 2 branches missed.">        if (localNode.equals(deviceNode)) {</span>
+
+            final Timestamp newTimestamp;
+            try {
+<span class="fc" id="L537">                newTimestamp = deviceClockService.getTimestamp(deviceId);</span>
+<span class="nc" id="L538">            } catch (IllegalStateException e) {</span>
+<span class="nc" id="L539">                log.info(&quot;Timestamp was not available for device {}&quot;, deviceId);</span>
+<span class="nc" id="L540">                log.debug(&quot;  discarding {}&quot;, portDescriptions);</span>
+                // Failed to generate timestamp.
+
+                // Possible situation:
+                //  Device connected and became master for short period of time,
+                // but lost mastership before this instance had the chance to
+                // retrieve term information.
+
+                // Information dropped here is expected to be recoverable by
+                // device probing after mastership change
+
+<span class="nc" id="L551">                return Collections.emptyList();</span>
+<span class="fc" id="L552">            }</span>
+<span class="fc" id="L553">            log.debug(&quot;timestamp for {} {}&quot;, deviceId, newTimestamp);</span>
+
+<span class="fc" id="L555">            final Timestamped&lt;List&lt;PortDescription&gt;&gt; timestampedInput</span>
+                    = new Timestamped&lt;&gt;(portDescriptions, newTimestamp);
+            final Timestamped&lt;List&lt;PortDescription&gt;&gt; merged;
+
+<span class="fc" id="L559">            final Map&lt;ProviderId, DeviceDescriptions&gt; device = getOrCreateDeviceDescriptionsMap(deviceId);</span>
+
+<span class="fc" id="L561">            synchronized (device) {</span>
+<span class="fc" id="L562">                deviceEvents = updatePortsInternal(providerId, deviceId, timestampedInput);</span>
+<span class="fc" id="L563">                final DeviceDescriptions descs = device.get(providerId);</span>
+<span class="fc" id="L564">                List&lt;PortDescription&gt; mergedList =</span>
+<span class="fc" id="L565">                        FluentIterable.from(portDescriptions)</span>
+<span class="fc" id="L566">                                .transform(input -&gt;</span>
+                                    // lookup merged port description
+<span class="fc" id="L568">                                    descs.getPortDesc(input.portNumber()).value()</span>
+<span class="fc" id="L569">                                ).toList();</span>
+<span class="fc" id="L570">                merged = new Timestamped&lt;&gt;(mergedList, newTimestamp);</span>
+<span class="pc" id="L571">            }</span>
+
+<span class="pc bpc" id="L573" title="1 of 2 branches missed.">            if (!deviceEvents.isEmpty()) {</span>
+<span class="fc" id="L574">                log.debug(&quot;Notifying peers of a ports update topology event for providerId: {} and deviceId: {}&quot;,</span>
+                         providerId, deviceId);
+<span class="fc" id="L576">                notifyPeers(new InternalPortEvent(providerId, deviceId, merged));</span>
+            }
+
+<span class="fc" id="L579">        } else {</span>
+            // FIXME Temporary hack for NPE (ONOS-1171).
+            // Proper fix is to implement forwarding to master on ConfigProvider
+            // redo ONOS-490
+<span class="nc bnc" id="L583" title="All 2 branches missed.">            if (deviceNode == null) {</span>
+                // silently ignore
+<span class="nc" id="L585">                return Collections.emptyList();</span>
+            }
+
+<span class="nc" id="L588">            PortInjectedEvent portInjectedEvent = new PortInjectedEvent(providerId, deviceId, portDescriptions);</span>
+
+            //TODO check unicast return value
+<span class="nc" id="L591">            clusterCommunicator.unicast(portInjectedEvent, PORT_INJECTED, SERIALIZER::encode, deviceNode);</span>
+            /* error log:
+            log.warn(&quot;Failed to process injected ports of device id: {} &quot; +
+                            &quot;(cluster messaging failed: {})&quot;,
+                    deviceId, e);
+            */
+        }
+
+<span class="pc bpc" id="L599" title="1 of 2 branches missed.">        return deviceEvents == null ? Collections.emptyList() : deviceEvents;</span>
+    }
+
+    private List&lt;DeviceEvent&gt; updatePortsInternal(ProviderId providerId,
+                                                  DeviceId deviceId,
+                                                  Timestamped&lt;List&lt;PortDescription&gt;&gt; portDescriptions) {
+
+<span class="fc" id="L606">        Device device = devices.get(deviceId);</span>
+<span class="pc bpc" id="L607" title="1 of 2 branches missed.">        checkArgument(device != null, DEVICE_NOT_FOUND, deviceId);</span>
+
+<span class="fc" id="L609">        Map&lt;ProviderId, DeviceDescriptions&gt; descsMap = deviceDescs.get(deviceId);</span>
+<span class="pc bpc" id="L610" title="1 of 2 branches missed.">        checkArgument(descsMap != null, DEVICE_NOT_FOUND, deviceId);</span>
+
+<span class="fc" id="L612">        List&lt;DeviceEvent&gt; events = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L613">        synchronized (descsMap) {</span>
+
+<span class="pc bpc" id="L615" title="1 of 2 branches missed.">            if (isDeviceRemoved(deviceId, portDescriptions.timestamp())) {</span>
+<span class="nc" id="L616">                log.debug(&quot;Ignoring outdated events: {}&quot;, portDescriptions);</span>
+<span class="nc" id="L617">                return Collections.emptyList();</span>
+            }
+
+<span class="fc" id="L620">            DeviceDescriptions descs = descsMap.get(providerId);</span>
+            // every provider must provide DeviceDescription.
+<span class="pc bpc" id="L622" title="1 of 2 branches missed.">            checkArgument(descs != null,</span>
+                          &quot;Device description for Device ID %s from Provider %s was not found&quot;,
+                          deviceId, providerId);
+
+<span class="fc" id="L626">            Map&lt;PortNumber, Port&gt; ports = getPortMap(deviceId);</span>
+
+<span class="fc" id="L628">            final Timestamp newTimestamp = portDescriptions.timestamp();</span>
+
+            // Add new ports
+<span class="fc" id="L631">            Set&lt;PortNumber&gt; processed = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L632" title="All 2 branches covered.">            for (PortDescription portDescription : portDescriptions.value()) {</span>
+<span class="fc" id="L633">                final PortNumber number = portDescription.portNumber();</span>
+<span class="fc" id="L634">                processed.add(number);</span>
+
+<span class="fc" id="L636">                final Port oldPort = ports.get(number);</span>
+                final Port newPort;
+
+
+<span class="fc" id="L640">                final Timestamped&lt;PortDescription&gt; existingPortDesc = descs.getPortDesc(number);</span>
+<span class="fc bfc" id="L641" title="All 2 branches covered.">                if (existingPortDesc == null ||</span>
+<span class="pc bpc" id="L642" title="1 of 2 branches missed.">                        newTimestamp.compareTo(existingPortDesc.timestamp()) &gt;= 0) {</span>
+                    // on new port or valid update
+                    // update description
+<span class="fc" id="L645">                    descs.putPortDesc(new Timestamped&lt;&gt;(portDescription,</span>
+<span class="fc" id="L646">                                                        portDescriptions.timestamp()));</span>
+<span class="fc" id="L647">                    newPort = composePort(device, number, descsMap);</span>
+                } else {
+                    // outdated event, ignored.
+                    continue;
+                }
+
+<span class="fc bfc" id="L653" title="All 2 branches covered.">                events.add(oldPort == null ?</span>
+<span class="fc" id="L654">                                   createPort(device, newPort, ports) :</span>
+<span class="fc" id="L655">                                   updatePort(device, oldPort, newPort, ports));</span>
+<span class="fc" id="L656">            }</span>
+
+<span class="fc" id="L658">            events.addAll(pruneOldPorts(device, ports, processed));</span>
+<span class="pc" id="L659">        }</span>
+<span class="fc" id="L660">        return FluentIterable.from(events).filter(notNull()).toList();</span>
+    }
+
+    // Creates a new port based on the port description adds it to the map and
+    // Returns corresponding event.
+    // Guarded by deviceDescs value (=Device lock)
+    private DeviceEvent createPort(Device device, Port newPort,
+                                   Map&lt;PortNumber, Port&gt; ports) {
+<span class="fc" id="L668">        ports.put(newPort.number(), newPort);</span>
+<span class="fc" id="L669">        return new DeviceEvent(PORT_ADDED, device, newPort);</span>
+    }
+
+    // Checks if the specified port requires update and if so, it replaces the
+    // existing entry in the map and returns corresponding event.
+    // Guarded by deviceDescs value (=Device lock)
+    private DeviceEvent updatePort(Device device, Port oldPort,
+                                   Port newPort,
+                                   Map&lt;PortNumber, Port&gt; ports) {
+<span class="fc bfc" id="L678" title="All 2 branches covered.">        if (oldPort.isEnabled() != newPort.isEnabled() ||</span>
+<span class="pc bpc" id="L679" title="1 of 2 branches missed.">                oldPort.type() != newPort.type() ||</span>
+<span class="pc bpc" id="L680" title="1 of 2 branches missed.">                oldPort.portSpeed() != newPort.portSpeed() ||</span>
+<span class="fc bfc" id="L681" title="All 2 branches covered.">                !AnnotationsUtil.isEqual(oldPort.annotations(), newPort.annotations())) {</span>
+<span class="fc" id="L682">            ports.put(oldPort.number(), newPort);</span>
+<span class="fc" id="L683">            return new DeviceEvent(PORT_UPDATED, device, newPort);</span>
+        }
+<span class="fc" id="L685">        return null;</span>
+    }
+
+    // Prunes the specified list of ports based on which ports are in the
+    // processed list and returns list of corresponding events.
+    // Guarded by deviceDescs value (=Device lock)
+    private List&lt;DeviceEvent&gt; pruneOldPorts(Device device,
+                                            Map&lt;PortNumber, Port&gt; ports,
+                                            Set&lt;PortNumber&gt; processed) {
+<span class="fc" id="L694">        List&lt;DeviceEvent&gt; events = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L695">        Iterator&lt;Entry&lt;PortNumber, Port&gt;&gt; iterator = ports.entrySet().iterator();</span>
+<span class="fc bfc" id="L696" title="All 2 branches covered.">        while (iterator.hasNext()) {</span>
+<span class="fc" id="L697">            Entry&lt;PortNumber, Port&gt; e = iterator.next();</span>
+<span class="fc" id="L698">            PortNumber portNumber = e.getKey();</span>
+<span class="fc bfc" id="L699" title="All 2 branches covered.">            if (!processed.contains(portNumber)) {</span>
+<span class="fc" id="L700">                events.add(new DeviceEvent(PORT_REMOVED, device, e.getValue()));</span>
+<span class="fc" id="L701">                iterator.remove();</span>
+            }
+<span class="fc" id="L703">        }</span>
+<span class="fc" id="L704">        return events;</span>
+    }
+
+    // Gets the map of ports for the specified device; if one does not already
+    // exist, it creates and registers a new one.
+    private ConcurrentMap&lt;PortNumber, Port&gt; getPortMap(DeviceId deviceId) {
+<span class="fc" id="L710">        return createIfAbsentUnchecked(devicePorts, deviceId,</span>
+<span class="fc" id="L711">                                       NewConcurrentHashMap.&lt;PortNumber, Port&gt;ifNeeded());</span>
+    }
+
+    private Map&lt;ProviderId, DeviceDescriptions&gt; getOrCreateDeviceDescriptionsMap(
+            DeviceId deviceId) {
+        Map&lt;ProviderId, DeviceDescriptions&gt; r;
+<span class="fc" id="L717">        r = deviceDescs.get(deviceId);</span>
+<span class="fc bfc" id="L718" title="All 2 branches covered.">        if (r == null) {</span>
+<span class="fc" id="L719">            r = new HashMap&lt;&gt;();</span>
+            final Map&lt;ProviderId, DeviceDescriptions&gt; concurrentlyAdded;
+<span class="fc" id="L721">            concurrentlyAdded = deviceDescs.putIfAbsent(deviceId, r);</span>
+<span class="pc bpc" id="L722" title="1 of 2 branches missed.">            if (concurrentlyAdded != null) {</span>
+<span class="nc" id="L723">                r = concurrentlyAdded;</span>
+            }
+        }
+<span class="fc" id="L726">        return r;</span>
+    }
+
+    // Guarded by deviceDescs value (=Device lock)
+    private DeviceDescriptions getOrCreateProviderDeviceDescriptions(
+            Map&lt;ProviderId, DeviceDescriptions&gt; device,
+            ProviderId providerId, Timestamped&lt;DeviceDescription&gt; deltaDesc) {
+<span class="fc" id="L733">        synchronized (device) {</span>
+<span class="fc" id="L734">            DeviceDescriptions r = device.get(providerId);</span>
+<span class="fc bfc" id="L735" title="All 2 branches covered.">            if (r == null) {</span>
+<span class="fc" id="L736">                r = new DeviceDescriptions(deltaDesc);</span>
+<span class="fc" id="L737">                device.put(providerId, r);</span>
+            }
+<span class="fc" id="L739">            return r;</span>
+<span class="nc" id="L740">        }</span>
+    }
+
+    @Override
+    public synchronized DeviceEvent updatePortStatus(ProviderId providerId,
+                                                     DeviceId deviceId,
+                                                     PortDescription portDescription) {
+        final Timestamp newTimestamp;
+        try {
+<span class="fc" id="L749">            newTimestamp = deviceClockService.getTimestamp(deviceId);</span>
+<span class="nc" id="L750">        } catch (IllegalStateException e) {</span>
+<span class="nc" id="L751">            log.info(&quot;Timestamp was not available for device {}&quot;, deviceId);</span>
+<span class="nc" id="L752">            log.debug(&quot;  discarding {}&quot;, portDescription);</span>
+            // Failed to generate timestamp. Ignoring.
+            // See updatePorts comment
+<span class="nc" id="L755">            return null;</span>
+<span class="fc" id="L756">        }</span>
+<span class="fc" id="L757">        final Timestamped&lt;PortDescription&gt; deltaDesc</span>
+                = new Timestamped&lt;&gt;(portDescription, newTimestamp);
+        final DeviceEvent event;
+        final Timestamped&lt;PortDescription&gt; mergedDesc;
+<span class="fc" id="L761">        final Map&lt;ProviderId, DeviceDescriptions&gt; device = getOrCreateDeviceDescriptionsMap(deviceId);</span>
+<span class="fc" id="L762">        synchronized (device) {</span>
+<span class="fc" id="L763">            event = updatePortStatusInternal(providerId, deviceId, deltaDesc);</span>
+<span class="fc" id="L764">            mergedDesc = device.get(providerId)</span>
+<span class="fc" id="L765">                    .getPortDesc(portDescription.portNumber());</span>
+<span class="pc" id="L766">        }</span>
+<span class="fc bfc" id="L767" title="All 2 branches covered.">        if (event != null) {</span>
+<span class="fc" id="L768">            log.debug(&quot;Notifying peers of a port status update topology event for providerId: {} and deviceId: {}&quot;,</span>
+                     providerId, deviceId);
+<span class="fc" id="L770">            notifyPeers(new InternalPortStatusEvent(providerId, deviceId, mergedDesc));</span>
+        }
+<span class="fc" id="L772">        return event;</span>
+    }
+
+    private DeviceEvent updatePortStatusInternal(ProviderId providerId, DeviceId deviceId,
+                                                 Timestamped&lt;PortDescription&gt; deltaDesc) {
+<span class="fc" id="L777">        Device device = devices.get(deviceId);</span>
+<span class="pc bpc" id="L778" title="1 of 2 branches missed.">        checkArgument(device != null, DEVICE_NOT_FOUND, deviceId);</span>
+
+<span class="fc" id="L780">        Map&lt;ProviderId, DeviceDescriptions&gt; descsMap = deviceDescs.get(deviceId);</span>
+<span class="pc bpc" id="L781" title="1 of 2 branches missed.">        checkArgument(descsMap != null, DEVICE_NOT_FOUND, deviceId);</span>
+
+<span class="fc" id="L783">        synchronized (descsMap) {</span>
+
+<span class="pc bpc" id="L785" title="1 of 2 branches missed.">            if (isDeviceRemoved(deviceId, deltaDesc.timestamp())) {</span>
+<span class="nc" id="L786">                log.debug(&quot;Ignoring outdated event: {}&quot;, deltaDesc);</span>
+<span class="nc" id="L787">                return null;</span>
+            }
+
+<span class="fc" id="L790">            DeviceDescriptions descs = descsMap.get(providerId);</span>
+            // assuming all providers must to give DeviceDescription
+<span class="pc bpc" id="L792" title="1 of 2 branches missed.">            verify(descs != null,</span>
+                   &quot;Device description for Device ID %s from Provider %s was not found&quot;,
+                   deviceId, providerId);
+
+<span class="fc" id="L796">            ConcurrentMap&lt;PortNumber, Port&gt; ports = getPortMap(deviceId);</span>
+<span class="fc" id="L797">            final PortNumber number = deltaDesc.value().portNumber();</span>
+<span class="fc" id="L798">            final Port oldPort = ports.get(number);</span>
+            final Port newPort;
+
+<span class="fc" id="L801">            final Timestamped&lt;PortDescription&gt; existingPortDesc = descs.getPortDesc(number);</span>
+<span class="fc bfc" id="L802" title="All 2 branches covered.">            if (existingPortDesc == null ||</span>
+<span class="pc bpc" id="L803" title="1 of 2 branches missed.">                    deltaDesc.isNewer(existingPortDesc)) {</span>
+                // on new port or valid update
+                // update description
+<span class="fc" id="L806">                descs.putPortDesc(deltaDesc);</span>
+<span class="fc" id="L807">                newPort = composePort(device, number, descsMap);</span>
+            } else {
+                // same or outdated event, ignored.
+<span class="nc" id="L810">                log.trace(&quot;ignore same or outdated {} &gt;= {}&quot;, existingPortDesc, deltaDesc);</span>
+<span class="nc" id="L811">                return null;</span>
+            }
+
+<span class="fc bfc" id="L814" title="All 2 branches covered.">            if (oldPort == null) {</span>
+<span class="fc" id="L815">                return createPort(device, newPort, ports);</span>
+            } else {
+<span class="fc" id="L817">                return updatePort(device, oldPort, newPort, ports);</span>
+            }
+<span class="nc" id="L819">        }</span>
+    }
+
+    @Override
+    public List&lt;Port&gt; getPorts(DeviceId deviceId) {
+<span class="fc" id="L824">        Map&lt;PortNumber, Port&gt; ports = devicePorts.get(deviceId);</span>
+<span class="fc bfc" id="L825" title="All 2 branches covered.">        if (ports == null) {</span>
+<span class="fc" id="L826">            return Collections.emptyList();</span>
+        }
+<span class="fc" id="L828">        return ImmutableList.copyOf(ports.values());</span>
+    }
+
+    @Override
+    public DeviceEvent updatePortStatistics(ProviderId providerId, DeviceId deviceId,
+                                            Collection&lt;PortStatistics&gt; newStatsCollection) {
+
+<span class="nc" id="L835">        Map&lt;PortNumber, PortStatistics&gt; prvStatsMap = devicePortStats.get(deviceId);</span>
+<span class="nc" id="L836">        Map&lt;PortNumber, PortStatistics&gt; newStatsMap = Maps.newHashMap();</span>
+<span class="nc" id="L837">        Map&lt;PortNumber, PortStatistics&gt; deltaStatsMap = Maps.newHashMap();</span>
+
+<span class="nc bnc" id="L839" title="All 2 branches missed.">        if (prvStatsMap != null) {</span>
+<span class="nc bnc" id="L840" title="All 2 branches missed.">            for (PortStatistics newStats : newStatsCollection) {</span>
+<span class="nc" id="L841">                PortNumber port = PortNumber.portNumber(newStats.port());</span>
+<span class="nc" id="L842">                PortStatistics prvStats = prvStatsMap.get(port);</span>
+<span class="nc" id="L843">                DefaultPortStatistics.Builder builder = DefaultPortStatistics.builder();</span>
+<span class="nc" id="L844">                PortStatistics deltaStats = builder.build();</span>
+<span class="nc bnc" id="L845" title="All 2 branches missed.">                if (prvStats != null) {</span>
+<span class="nc" id="L846">                    deltaStats = calcDeltaStats(deviceId, prvStats, newStats);</span>
+                }
+<span class="nc" id="L848">                deltaStatsMap.put(port, deltaStats);</span>
+<span class="nc" id="L849">                newStatsMap.put(port, newStats);</span>
+<span class="nc" id="L850">            }</span>
+        } else {
+<span class="nc bnc" id="L852" title="All 2 branches missed.">            for (PortStatistics newStats : newStatsCollection) {</span>
+<span class="nc" id="L853">                PortNumber port = PortNumber.portNumber(newStats.port());</span>
+<span class="nc" id="L854">                newStatsMap.put(port, newStats);</span>
+<span class="nc" id="L855">            }</span>
+        }
+<span class="nc" id="L857">        devicePortDeltaStats.put(deviceId, deltaStatsMap);</span>
+<span class="nc" id="L858">        devicePortStats.put(deviceId, newStatsMap);</span>
+        // DeviceEvent returns null because of InternalPortStatsListener usage
+<span class="nc" id="L860">        return null;</span>
+    }
+
+    /**
+     * Calculate delta statistics by subtracting previous from new statistics.
+     *
+     * @param deviceId device identifier
+     * @param prvStats previous port statistics
+     * @param newStats new port statistics
+     * @return PortStatistics
+     */
+    public PortStatistics calcDeltaStats(DeviceId deviceId, PortStatistics prvStats, PortStatistics newStats) {
+        // calculate time difference
+        long deltaStatsSec, deltaStatsNano;
+<span class="nc bnc" id="L874" title="All 2 branches missed.">        if (newStats.durationNano() &lt; prvStats.durationNano()) {</span>
+<span class="nc" id="L875">            deltaStatsNano = newStats.durationNano() - prvStats.durationNano() + TimeUnit.SECONDS.toNanos(1);</span>
+<span class="nc" id="L876">            deltaStatsSec = newStats.durationSec() - prvStats.durationSec() - 1L;</span>
+        } else {
+<span class="nc" id="L878">            deltaStatsNano = newStats.durationNano() - prvStats.durationNano();</span>
+<span class="nc" id="L879">            deltaStatsSec = newStats.durationSec() - prvStats.durationSec();</span>
+        }
+<span class="nc" id="L881">        DefaultPortStatistics.Builder builder = DefaultPortStatistics.builder();</span>
+<span class="nc" id="L882">        DefaultPortStatistics deltaStats = builder.setDeviceId(deviceId)</span>
+<span class="nc" id="L883">                .setPort(newStats.port())</span>
+<span class="nc" id="L884">                .setPacketsReceived(newStats.packetsReceived() - prvStats.packetsReceived())</span>
+<span class="nc" id="L885">                .setPacketsSent(newStats.packetsSent() - prvStats.packetsSent())</span>
+<span class="nc" id="L886">                .setBytesReceived(newStats.bytesReceived() - prvStats.bytesReceived())</span>
+<span class="nc" id="L887">                .setBytesSent(newStats.bytesSent() - prvStats.bytesSent())</span>
+<span class="nc" id="L888">                .setPacketsRxDropped(newStats.packetsRxDropped() - prvStats.packetsRxDropped())</span>
+<span class="nc" id="L889">                .setPacketsTxDropped(newStats.packetsTxDropped() - prvStats.packetsTxDropped())</span>
+<span class="nc" id="L890">                .setPacketsRxErrors(newStats.packetsRxErrors() - prvStats.packetsRxErrors())</span>
+<span class="nc" id="L891">                .setPacketsTxErrors(newStats.packetsTxErrors() - prvStats.packetsTxErrors())</span>
+<span class="nc" id="L892">                .setDurationSec(deltaStatsSec)</span>
+<span class="nc" id="L893">                .setDurationNano(deltaStatsNano)</span>
+<span class="nc" id="L894">                .build();</span>
+<span class="nc" id="L895">        return deltaStats;</span>
+    }
+
+    @Override
+    public List&lt;PortStatistics&gt; getPortStatistics(DeviceId deviceId) {
+<span class="nc" id="L900">        Map&lt;PortNumber, PortStatistics&gt; portStats = devicePortStats.get(deviceId);</span>
+<span class="nc bnc" id="L901" title="All 2 branches missed.">        if (portStats == null) {</span>
+<span class="nc" id="L902">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L904">        return ImmutableList.copyOf(portStats.values());</span>
+    }
+
+    @Override
+    public List&lt;PortStatistics&gt; getPortDeltaStatistics(DeviceId deviceId) {
+<span class="nc" id="L909">        Map&lt;PortNumber, PortStatistics&gt; portStats = devicePortDeltaStats.get(deviceId);</span>
+<span class="nc bnc" id="L910" title="All 2 branches missed.">        if (portStats == null) {</span>
+<span class="nc" id="L911">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L913">        return ImmutableList.copyOf(portStats.values());</span>
+    }
+
+    @Override
+    public Port getPort(DeviceId deviceId, PortNumber portNumber) {
+<span class="fc" id="L918">        Map&lt;PortNumber, Port&gt; ports = devicePorts.get(deviceId);</span>
+<span class="pc bpc" id="L919" title="1 of 2 branches missed.">        return ports == null ? null : ports.get(portNumber);</span>
+    }
+
+    @Override
+    public boolean isAvailable(DeviceId deviceId) {
+<span class="fc" id="L924">        return availableDevices.contains(deviceId);</span>
+    }
+
+    @Override
+    public synchronized DeviceEvent removeDevice(DeviceId deviceId) {
+<span class="fc" id="L929">        final NodeId myId = clusterService.getLocalNode().id();</span>
+<span class="fc" id="L930">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+
+        // if there exist a master, forward
+        // if there is no master, try to become one and process
+
+<span class="fc" id="L935">        boolean relinquishAtEnd = false;</span>
+<span class="pc bpc" id="L936" title="1 of 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L937">            final MastershipRole myRole = mastershipService.getLocalRole(deviceId);</span>
+<span class="nc bnc" id="L938" title="All 2 branches missed.">            if (myRole != MastershipRole.NONE) {</span>
+<span class="nc" id="L939">                relinquishAtEnd = true;</span>
+            }
+<span class="nc" id="L941">            log.debug(&quot;Temporarily requesting role for {} to remove&quot;, deviceId);</span>
+<span class="nc" id="L942">            mastershipService.requestRoleFor(deviceId);</span>
+<span class="nc" id="L943">            MastershipTerm term = termService.getMastershipTerm(deviceId);</span>
+<span class="nc bnc" id="L944" title="All 4 branches missed.">            if (term != null &amp;&amp; myId.equals(term.master())) {</span>
+<span class="nc" id="L945">                master = myId;</span>
+            }
+        }
+
+<span class="pc bpc" id="L949" title="1 of 2 branches missed.">        if (!myId.equals(master)) {</span>
+<span class="nc" id="L950">            log.debug(&quot;{} has control of {}, forwarding remove request&quot;,</span>
+                      master, deviceId);
+
+            // TODO check unicast return value
+<span class="nc" id="L954">            clusterCommunicator.unicast(deviceId, DEVICE_REMOVE_REQ, SERIALIZER::encode, master);</span>
+             /* error log:
+             log.error(&quot;Failed to forward {} remove request to {}&quot;, deviceId, master, e);
+             */
+
+            // event will be triggered after master processes it.
+<span class="nc" id="L960">            return null;</span>
+        }
+
+        // I have control..
+
+<span class="fc" id="L965">        Timestamp timestamp = deviceClockService.getTimestamp(deviceId);</span>
+<span class="fc" id="L966">        DeviceEvent event = removeDeviceInternal(deviceId, timestamp);</span>
+<span class="pc bpc" id="L967" title="1 of 2 branches missed.">        if (event != null) {</span>
+<span class="fc" id="L968">            log.debug(&quot;Notifying peers of a device removed topology event for deviceId: {}&quot;,</span>
+                      deviceId);
+<span class="fc" id="L970">            notifyPeers(new InternalDeviceRemovedEvent(deviceId, timestamp));</span>
+        }
+<span class="pc bpc" id="L972" title="1 of 2 branches missed.">        if (relinquishAtEnd) {</span>
+<span class="nc" id="L973">            log.debug(&quot;Relinquishing temporary role acquired for {}&quot;, deviceId);</span>
+<span class="nc" id="L974">            mastershipService.relinquishMastership(deviceId);</span>
+        }
+<span class="fc" id="L976">        return event;</span>
+    }
+
+    private DeviceEvent removeDeviceInternal(DeviceId deviceId,
+                                             Timestamp timestamp) {
+
+<span class="fc" id="L982">        Map&lt;ProviderId, DeviceDescriptions&gt; descs = getOrCreateDeviceDescriptionsMap(deviceId);</span>
+<span class="fc" id="L983">        synchronized (descs) {</span>
+            // accept removal request if given timestamp is newer than
+            // the latest Timestamp from Primary provider
+<span class="fc" id="L986">            DeviceDescriptions primDescs = getPrimaryDescriptions(descs);</span>
+<span class="fc" id="L987">            Timestamp lastTimestamp = primDescs.getLatestTimestamp();</span>
+<span class="pc bpc" id="L988" title="1 of 2 branches missed.">            if (timestamp.compareTo(lastTimestamp) &lt;= 0) {</span>
+                // outdated event ignore
+<span class="nc" id="L990">                return null;</span>
+            }
+<span class="fc" id="L992">            removalRequest.put(deviceId, timestamp);</span>
+
+<span class="fc" id="L994">            Device device = devices.remove(deviceId);</span>
+            // should DEVICE_REMOVED carry removed ports?
+<span class="fc" id="L996">            Map&lt;PortNumber, Port&gt; ports = devicePorts.get(deviceId);</span>
+<span class="pc bpc" id="L997" title="1 of 2 branches missed.">            if (ports != null) {</span>
+<span class="fc" id="L998">                ports.clear();</span>
+            }
+<span class="fc" id="L1000">            markOfflineInternal(deviceId, timestamp);</span>
+<span class="fc" id="L1001">            descs.clear();</span>
+<span class="pc bpc" id="L1002" title="1 of 2 branches missed.">            return device == null ? null :</span>
+                    new DeviceEvent(DeviceEvent.Type.DEVICE_REMOVED, device, null);
+<span class="nc" id="L1004">        }</span>
+    }
+
+    /**
+     * Checks if given timestamp is superseded by removal request
+     * with more recent timestamp.
+     *
+     * @param deviceId         identifier of a device
+     * @param timestampToCheck timestamp of an event to check
+     * @return true if device is already removed
+     */
+    private boolean isDeviceRemoved(DeviceId deviceId, Timestamp timestampToCheck) {
+<span class="fc" id="L1016">        Timestamp removalTimestamp = removalRequest.get(deviceId);</span>
+<span class="fc bfc" id="L1017" title="All 2 branches covered.">        if (removalTimestamp != null &amp;&amp;</span>
+<span class="pc bpc" id="L1018" title="1 of 2 branches missed.">                removalTimestamp.compareTo(timestampToCheck) &gt;= 0) {</span>
+            // removalRequest is more recent
+<span class="nc" id="L1020">            return true;</span>
+        }
+<span class="fc" id="L1022">        return false;</span>
+    }
+
+    /**
+     * Returns a Device, merging description given from multiple Providers.
+     *
+     * @param deviceId      device identifier
+     * @param providerDescs Collection of Descriptions from multiple providers
+     * @return Device instance
+     */
+    private Device composeDevice(DeviceId deviceId,
+                                 Map&lt;ProviderId, DeviceDescriptions&gt; providerDescs) {
+
+<span class="pc bpc" id="L1035" title="1 of 2 branches missed.">        checkArgument(!providerDescs.isEmpty(), &quot;No device descriptions supplied&quot;);</span>
+
+<span class="fc" id="L1037">        ProviderId primary = pickPrimaryPID(providerDescs);</span>
+
+<span class="fc" id="L1039">        DeviceDescriptions desc = providerDescs.get(primary);</span>
+
+<span class="fc" id="L1041">        final DeviceDescription base = desc.getDeviceDesc().value();</span>
+<span class="fc" id="L1042">        Type type = base.type();</span>
+<span class="fc" id="L1043">        String manufacturer = base.manufacturer();</span>
+<span class="fc" id="L1044">        String hwVersion = base.hwVersion();</span>
+<span class="fc" id="L1045">        String swVersion = base.swVersion();</span>
+<span class="fc" id="L1046">        String serialNumber = base.serialNumber();</span>
+<span class="fc" id="L1047">        ChassisId chassisId = base.chassisId();</span>
+<span class="fc" id="L1048">        DefaultAnnotations annotations = DefaultAnnotations.builder().build();</span>
+<span class="fc" id="L1049">        annotations = merge(annotations, base.annotations());</span>
+
+<span class="fc bfc" id="L1051" title="All 2 branches covered.">        for (Entry&lt;ProviderId, DeviceDescriptions&gt; e : providerDescs.entrySet()) {</span>
+<span class="fc bfc" id="L1052" title="All 2 branches covered.">            if (e.getKey().equals(primary)) {</span>
+<span class="fc" id="L1053">                continue;</span>
+            }
+            // Note: should keep track of Description timestamp in the future
+            // and only merge conflicting keys when timestamp is newer.
+            // Currently assuming there will never be a key conflict between
+            // providers
+
+            // annotation merging. not so efficient, should revisit later
+<span class="fc" id="L1061">            annotations = merge(annotations, e.getValue().getDeviceDesc().value().annotations());</span>
+<span class="fc" id="L1062">        }</span>
+
+<span class="fc" id="L1064">        return new DefaultDevice(primary, deviceId, type, manufacturer,</span>
+                                 hwVersion, swVersion, serialNumber,
+                                 chassisId, annotations);
+    }
+
+    private Port buildTypedPort(Device device, PortNumber number, boolean isEnabled,
+                                 PortDescription description, Annotations annotations) {
+<span class="pc bpc" id="L1071" title="3 of 4 branches missed.">        switch (description.type()) {</span>
+            case OMS:
+<span class="nc" id="L1073">                OmsPortDescription omsDesc = (OmsPortDescription) description;</span>
+<span class="nc" id="L1074">                return new OmsPort(device, number, isEnabled, omsDesc.minFrequency(),</span>
+<span class="nc" id="L1075">                        omsDesc.maxFrequency(), omsDesc.grid(), annotations);</span>
+            case OCH:
+<span class="nc" id="L1077">                OchPortDescription ochDesc = (OchPortDescription) description;</span>
+<span class="nc" id="L1078">                return new OchPort(device, number, isEnabled, ochDesc.signalType(),</span>
+<span class="nc" id="L1079">                        ochDesc.isTunable(), ochDesc.lambda(), annotations);</span>
+            case ODUCLT:
+<span class="nc" id="L1081">                OduCltPortDescription oduDesc = (OduCltPortDescription) description;</span>
+<span class="nc" id="L1082">                return new OduCltPort(device, number, isEnabled, oduDesc.signalType(), annotations);</span>
+            default:
+<span class="fc" id="L1084">                return new DefaultPort(device, number, isEnabled, description.type(),</span>
+<span class="fc" id="L1085">                        description.portSpeed(), annotations);</span>
+        }
+    }
+
+    /**
+     * Returns a Port, merging description given from multiple Providers.
+     *
+     * @param device   device the port is on
+     * @param number   port number
+     * @param descsMap Collection of Descriptions from multiple providers
+     * @return Port instance
+     */
+    private Port composePort(Device device, PortNumber number,
+                             Map&lt;ProviderId, DeviceDescriptions&gt; descsMap) {
+
+<span class="fc" id="L1100">        ProviderId primary = pickPrimaryPID(descsMap);</span>
+<span class="fc" id="L1101">        DeviceDescriptions primDescs = descsMap.get(primary);</span>
+        // if no primary, assume not enabled
+<span class="fc" id="L1103">        boolean isEnabled = false;</span>
+<span class="fc" id="L1104">        DefaultAnnotations annotations = DefaultAnnotations.builder().build();</span>
+<span class="fc" id="L1105">        Timestamp newest = null;</span>
+<span class="fc" id="L1106">        final Timestamped&lt;PortDescription&gt; portDesc = primDescs.getPortDesc(number);</span>
+<span class="fc bfc" id="L1107" title="All 2 branches covered.">        if (portDesc != null) {</span>
+<span class="fc" id="L1108">            isEnabled = portDesc.value().isEnabled();</span>
+<span class="fc" id="L1109">            annotations = merge(annotations, portDesc.value().annotations());</span>
+<span class="fc" id="L1110">            newest = portDesc.timestamp();</span>
+        }
+<span class="fc" id="L1112">        Port updated = null;</span>
+<span class="fc bfc" id="L1113" title="All 2 branches covered.">        for (Entry&lt;ProviderId, DeviceDescriptions&gt; e : descsMap.entrySet()) {</span>
+<span class="fc bfc" id="L1114" title="All 2 branches covered.">            if (e.getKey().equals(primary)) {</span>
+<span class="fc" id="L1115">                continue;</span>
+            }
+            // Note: should keep track of Description timestamp in the future
+            // and only merge conflicting keys when timestamp is newer.
+            // Currently assuming there will never be a key conflict between
+            // providers
+
+            // annotation merging. not so efficient, should revisit later
+<span class="fc" id="L1123">            final Timestamped&lt;PortDescription&gt; otherPortDesc = e.getValue().getPortDesc(number);</span>
+<span class="fc bfc" id="L1124" title="All 2 branches covered.">            if (otherPortDesc != null) {</span>
+<span class="pc bpc" id="L1125" title="1 of 4 branches missed.">                if (newest != null &amp;&amp; newest.isNewerThan(otherPortDesc.timestamp())) {</span>
+<span class="nc" id="L1126">                    continue;</span>
+                }
+<span class="fc" id="L1128">                annotations = merge(annotations, otherPortDesc.value().annotations());</span>
+<span class="fc" id="L1129">                PortDescription other = otherPortDesc.value();</span>
+<span class="fc" id="L1130">                updated = buildTypedPort(device, number, isEnabled, other, annotations);</span>
+<span class="fc" id="L1131">                newest = otherPortDesc.timestamp();</span>
+            }
+<span class="fc" id="L1133">        }</span>
+<span class="fc bfc" id="L1134" title="All 2 branches covered.">        if (portDesc == null) {</span>
+<span class="pc bpc" id="L1135" title="1 of 2 branches missed.">            return updated == null ? new DefaultPort(device, number, false, annotations) : updated;</span>
+        }
+<span class="fc" id="L1137">        PortDescription current = portDesc.value();</span>
+<span class="fc bfc" id="L1138" title="All 2 branches covered.">        return updated == null</span>
+<span class="fc" id="L1139">                ? buildTypedPort(device, number, isEnabled, current, annotations)</span>
+                : updated;
+    }
+
+    /**
+     * @return primary ProviderID, or randomly chosen one if none exists
+     */
+    private ProviderId pickPrimaryPID(
+            Map&lt;ProviderId, DeviceDescriptions&gt; providerDescs) {
+<span class="fc" id="L1148">        ProviderId fallBackPrimary = null;</span>
+<span class="fc bfc" id="L1149" title="All 2 branches covered.">        for (Entry&lt;ProviderId, DeviceDescriptions&gt; e : providerDescs.entrySet()) {</span>
+<span class="fc bfc" id="L1150" title="All 2 branches covered.">            if (!e.getKey().isAncillary()) {</span>
+<span class="fc" id="L1151">                return e.getKey();</span>
+<span class="pc bpc" id="L1152" title="1 of 2 branches missed.">            } else if (fallBackPrimary == null) {</span>
+                // pick randomly as a fallback in case there is no primary
+<span class="fc" id="L1154">                fallBackPrimary = e.getKey();</span>
+            }
+<span class="fc" id="L1156">        }</span>
+<span class="fc" id="L1157">        return fallBackPrimary;</span>
+    }
+
+    private DeviceDescriptions getPrimaryDescriptions(
+            Map&lt;ProviderId, DeviceDescriptions&gt; providerDescs) {
+<span class="fc" id="L1162">        ProviderId pid = pickPrimaryPID(providerDescs);</span>
+<span class="fc" id="L1163">        return providerDescs.get(pid);</span>
+    }
+
+    private void unicastMessage(NodeId recipient, MessageSubject subject, Object event) throws IOException {
+<span class="nc" id="L1167">        clusterCommunicator.unicast(event, subject, SERIALIZER::encode, recipient);</span>
+<span class="nc" id="L1168">    }</span>
+
+    private void broadcastMessage(MessageSubject subject, Object event) {
+<span class="fc" id="L1171">        clusterCommunicator.broadcast(event, subject, SERIALIZER::encode);</span>
+<span class="fc" id="L1172">    }</span>
+
+    private void notifyPeers(InternalDeviceEvent event) {
+<span class="fc" id="L1175">        broadcastMessage(GossipDeviceStoreMessageSubjects.DEVICE_UPDATE, event);</span>
+<span class="fc" id="L1176">    }</span>
+
+    private void notifyPeers(InternalDeviceOfflineEvent event) {
+<span class="fc" id="L1179">        broadcastMessage(GossipDeviceStoreMessageSubjects.DEVICE_OFFLINE, event);</span>
+<span class="fc" id="L1180">    }</span>
+
+    private void notifyPeers(InternalDeviceRemovedEvent event) {
+<span class="fc" id="L1183">        broadcastMessage(GossipDeviceStoreMessageSubjects.DEVICE_REMOVED, event);</span>
+<span class="fc" id="L1184">    }</span>
+
+    private void notifyPeers(InternalPortEvent event) {
+<span class="fc" id="L1187">        broadcastMessage(GossipDeviceStoreMessageSubjects.PORT_UPDATE, event);</span>
+<span class="fc" id="L1188">    }</span>
+
+    private void notifyPeers(InternalPortStatusEvent event) {
+<span class="fc" id="L1191">        broadcastMessage(GossipDeviceStoreMessageSubjects.PORT_STATUS_UPDATE, event);</span>
+<span class="fc" id="L1192">    }</span>
+
+    private void notifyPeer(NodeId recipient, InternalDeviceEvent event) {
+        try {
+<span class="nc" id="L1196">            unicastMessage(recipient, GossipDeviceStoreMessageSubjects.DEVICE_UPDATE, event);</span>
+<span class="nc" id="L1197">        } catch (IOException e) {</span>
+<span class="nc" id="L1198">            log.error(&quot;Failed to send&quot; + event + &quot; to &quot; + recipient, e);</span>
+<span class="nc" id="L1199">        }</span>
+<span class="nc" id="L1200">    }</span>
+
+    private void notifyPeer(NodeId recipient, InternalDeviceOfflineEvent event) {
+        try {
+<span class="nc" id="L1204">            unicastMessage(recipient, GossipDeviceStoreMessageSubjects.DEVICE_OFFLINE, event);</span>
+<span class="nc" id="L1205">        } catch (IOException e) {</span>
+<span class="nc" id="L1206">            log.error(&quot;Failed to send&quot; + event + &quot; to &quot; + recipient, e);</span>
+<span class="nc" id="L1207">        }</span>
+<span class="nc" id="L1208">    }</span>
+
+    private void notifyPeer(NodeId recipient, InternalDeviceRemovedEvent event) {
+        try {
+<span class="nc" id="L1212">            unicastMessage(recipient, GossipDeviceStoreMessageSubjects.DEVICE_REMOVED, event);</span>
+<span class="nc" id="L1213">        } catch (IOException e) {</span>
+<span class="nc" id="L1214">            log.error(&quot;Failed to send&quot; + event + &quot; to &quot; + recipient, e);</span>
+<span class="nc" id="L1215">        }</span>
+<span class="nc" id="L1216">    }</span>
+
+    private void notifyPeer(NodeId recipient, InternalPortEvent event) {
+        try {
+<span class="nc" id="L1220">            unicastMessage(recipient, GossipDeviceStoreMessageSubjects.PORT_UPDATE, event);</span>
+<span class="nc" id="L1221">        } catch (IOException e) {</span>
+<span class="nc" id="L1222">            log.error(&quot;Failed to send&quot; + event + &quot; to &quot; + recipient, e);</span>
+<span class="nc" id="L1223">        }</span>
+<span class="nc" id="L1224">    }</span>
+
+    private void notifyPeer(NodeId recipient, InternalPortStatusEvent event) {
+        try {
+<span class="nc" id="L1228">            unicastMessage(recipient, GossipDeviceStoreMessageSubjects.PORT_STATUS_UPDATE, event);</span>
+<span class="nc" id="L1229">        } catch (IOException e) {</span>
+<span class="nc" id="L1230">            log.error(&quot;Failed to send&quot; + event + &quot; to &quot; + recipient, e);</span>
+<span class="nc" id="L1231">        }</span>
+<span class="nc" id="L1232">    }</span>
+
+    private DeviceAntiEntropyAdvertisement createAdvertisement() {
+<span class="nc" id="L1235">        final NodeId self = clusterService.getLocalNode().id();</span>
+
+<span class="nc" id="L1237">        final int numDevices = deviceDescs.size();</span>
+<span class="nc" id="L1238">        Map&lt;DeviceFragmentId, Timestamp&gt; adDevices = new HashMap&lt;&gt;(numDevices);</span>
+<span class="nc" id="L1239">        final int portsPerDevice = 8; // random factor to minimize reallocation</span>
+<span class="nc" id="L1240">        Map&lt;PortFragmentId, Timestamp&gt; adPorts = new HashMap&lt;&gt;(numDevices * portsPerDevice);</span>
+<span class="nc" id="L1241">        Map&lt;DeviceId, Timestamp&gt; adOffline = new HashMap&lt;&gt;(numDevices);</span>
+
+<span class="nc" id="L1243">        deviceDescs.forEach((deviceId, devDescs) -&gt; {</span>
+
+            // for each Device...
+<span class="nc" id="L1246">            synchronized (devDescs) {</span>
+
+                // send device offline timestamp
+<span class="nc" id="L1249">                Timestamp lOffline = this.offline.get(deviceId);</span>
+<span class="nc bnc" id="L1250" title="All 2 branches missed.">                if (lOffline != null) {</span>
+<span class="nc" id="L1251">                    adOffline.put(deviceId, lOffline);</span>
+                }
+
+                for (Entry&lt;ProviderId, DeviceDescriptions&gt;
+<span class="nc bnc" id="L1255" title="All 2 branches missed.">                        prov : devDescs.entrySet()) {</span>
+
+                    // for each Provider Descriptions...
+<span class="nc" id="L1258">                    final ProviderId provId = prov.getKey();</span>
+<span class="nc" id="L1259">                    final DeviceDescriptions descs = prov.getValue();</span>
+
+<span class="nc" id="L1261">                    adDevices.put(new DeviceFragmentId(deviceId, provId),</span>
+<span class="nc" id="L1262">                                  descs.getDeviceDesc().timestamp());</span>
+
+                    for (Entry&lt;PortNumber, Timestamped&lt;PortDescription&gt;&gt;
+<span class="nc bnc" id="L1265" title="All 2 branches missed.">                            portDesc : descs.getPortDescs().entrySet()) {</span>
+
+<span class="nc" id="L1267">                        final PortNumber number = portDesc.getKey();</span>
+<span class="nc" id="L1268">                        adPorts.put(new PortFragmentId(deviceId, provId, number),</span>
+<span class="nc" id="L1269">                                    portDesc.getValue().timestamp());</span>
+<span class="nc" id="L1270">                    }</span>
+<span class="nc" id="L1271">                }</span>
+<span class="nc" id="L1272">            }</span>
+<span class="nc" id="L1273">        });</span>
+
+<span class="nc" id="L1275">        return new DeviceAntiEntropyAdvertisement(self, adDevices, adPorts, adOffline);</span>
+    }
+
+    /**
+     * Responds to anti-entropy advertisement message.
+     * &lt;p/&gt;
+     * Notify sender about out-dated information using regular replication message.
+     * Send back advertisement to sender if not in sync.
+     *
+     * @param advertisement to respond to
+     */
+    private void handleAdvertisement(DeviceAntiEntropyAdvertisement advertisement) {
+
+<span class="nc" id="L1288">        final NodeId sender = advertisement.sender();</span>
+
+<span class="nc" id="L1290">        Map&lt;DeviceFragmentId, Timestamp&gt; devAds = new HashMap&lt;&gt;(advertisement.deviceFingerPrints());</span>
+<span class="nc" id="L1291">        Map&lt;PortFragmentId, Timestamp&gt; portAds = new HashMap&lt;&gt;(advertisement.ports());</span>
+<span class="nc" id="L1292">        Map&lt;DeviceId, Timestamp&gt; offlineAds = new HashMap&lt;&gt;(advertisement.offline());</span>
+
+        // Fragments to request
+<span class="nc" id="L1295">        Collection&lt;DeviceFragmentId&gt; reqDevices = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L1296">        Collection&lt;PortFragmentId&gt; reqPorts = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L1298" title="All 2 branches missed.">        for (Entry&lt;DeviceId, Map&lt;ProviderId, DeviceDescriptions&gt;&gt; de : deviceDescs.entrySet()) {</span>
+<span class="nc" id="L1299">            final DeviceId deviceId = de.getKey();</span>
+<span class="nc" id="L1300">            final Map&lt;ProviderId, DeviceDescriptions&gt; lDevice = de.getValue();</span>
+
+<span class="nc" id="L1302">            synchronized (lDevice) {</span>
+                // latestTimestamp across provider
+                // Note: can be null initially
+<span class="nc" id="L1305">                Timestamp localLatest = offline.get(deviceId);</span>
+
+                // handle device Ads
+<span class="nc bnc" id="L1308" title="All 2 branches missed.">                for (Entry&lt;ProviderId, DeviceDescriptions&gt; prov : lDevice.entrySet()) {</span>
+<span class="nc" id="L1309">                    final ProviderId provId = prov.getKey();</span>
+<span class="nc" id="L1310">                    final DeviceDescriptions lDeviceDescs = prov.getValue();</span>
+
+<span class="nc" id="L1312">                    final DeviceFragmentId devFragId = new DeviceFragmentId(deviceId, provId);</span>
+
+
+<span class="nc" id="L1315">                    Timestamped&lt;DeviceDescription&gt; lProvDevice = lDeviceDescs.getDeviceDesc();</span>
+<span class="nc" id="L1316">                    Timestamp advDevTimestamp = devAds.get(devFragId);</span>
+
+<span class="nc bnc" id="L1318" title="All 4 branches missed.">                    if (advDevTimestamp == null || lProvDevice.isNewerThan(</span>
+                            advDevTimestamp)) {
+                        // remote does not have it or outdated, suggest
+<span class="nc" id="L1321">                        notifyPeer(sender, new InternalDeviceEvent(provId, deviceId, lProvDevice));</span>
+<span class="nc bnc" id="L1322" title="All 2 branches missed.">                    } else if (!lProvDevice.timestamp().equals(advDevTimestamp)) {</span>
+                        // local is outdated, request
+<span class="nc" id="L1324">                        reqDevices.add(devFragId);</span>
+                    }
+
+                    // handle port Ads
+                    for (Entry&lt;PortNumber, Timestamped&lt;PortDescription&gt;&gt;
+<span class="nc bnc" id="L1329" title="All 2 branches missed.">                            pe : lDeviceDescs.getPortDescs().entrySet()) {</span>
+
+<span class="nc" id="L1331">                        final PortNumber num = pe.getKey();</span>
+<span class="nc" id="L1332">                        final Timestamped&lt;PortDescription&gt; lPort = pe.getValue();</span>
+
+<span class="nc" id="L1334">                        final PortFragmentId portFragId = new PortFragmentId(deviceId, provId, num);</span>
+
+<span class="nc" id="L1336">                        Timestamp advPortTimestamp = portAds.get(portFragId);</span>
+<span class="nc bnc" id="L1337" title="All 4 branches missed.">                        if (advPortTimestamp == null || lPort.isNewerThan(</span>
+                                advPortTimestamp)) {
+                            // remote does not have it or outdated, suggest
+<span class="nc" id="L1340">                            notifyPeer(sender, new InternalPortStatusEvent(provId, deviceId, lPort));</span>
+<span class="nc bnc" id="L1341" title="All 2 branches missed.">                        } else if (!lPort.timestamp().equals(advPortTimestamp)) {</span>
+                            // local is outdated, request
+<span class="nc" id="L1343">                            log.trace(&quot;need update {} &lt; {}&quot;, lPort.timestamp(), advPortTimestamp);</span>
+<span class="nc" id="L1344">                            reqPorts.add(portFragId);</span>
+                        }
+
+                        // remove port Ad already processed
+<span class="nc" id="L1348">                        portAds.remove(portFragId);</span>
+<span class="nc" id="L1349">                    } // end local port loop</span>
+
+                    // remove device Ad already processed
+<span class="nc" id="L1352">                    devAds.remove(devFragId);</span>
+
+                    // find latest and update
+<span class="nc" id="L1355">                    final Timestamp providerLatest = lDeviceDescs.getLatestTimestamp();</span>
+<span class="nc bnc" id="L1356" title="All 2 branches missed.">                    if (localLatest == null ||</span>
+<span class="nc bnc" id="L1357" title="All 2 branches missed.">                            providerLatest.compareTo(localLatest) &gt; 0) {</span>
+<span class="nc" id="L1358">                        localLatest = providerLatest;</span>
+                    }
+<span class="nc" id="L1360">                } // end local provider loop</span>
+
+                // checking if remote timestamp is more recent.
+<span class="nc" id="L1363">                Timestamp rOffline = offlineAds.get(deviceId);</span>
+<span class="nc bnc" id="L1364" title="All 2 branches missed.">                if (rOffline != null &amp;&amp;</span>
+<span class="nc bnc" id="L1365" title="All 2 branches missed.">                        rOffline.compareTo(localLatest) &gt; 0) {</span>
+                    // remote offline timestamp suggests that the
+                    // device is off-line
+<span class="nc" id="L1368">                    markOfflineInternal(deviceId, rOffline);</span>
+                }
+
+<span class="nc" id="L1371">                Timestamp lOffline = offline.get(deviceId);</span>
+<span class="nc bnc" id="L1372" title="All 4 branches missed.">                if (lOffline != null &amp;&amp; rOffline == null) {</span>
+                    // locally offline, but remote is online, suggest offline
+<span class="nc" id="L1374">                    notifyPeer(sender, new InternalDeviceOfflineEvent(deviceId, lOffline));</span>
+                }
+
+                // remove device offline Ad already processed
+<span class="nc" id="L1378">                offlineAds.remove(deviceId);</span>
+<span class="nc" id="L1379">            } // end local device loop</span>
+<span class="nc" id="L1380">        } // device lock</span>
+
+        // If there is any Ads left, request them
+<span class="nc" id="L1383">        log.trace(&quot;Ads left {}, {}&quot;, devAds, portAds);</span>
+<span class="nc" id="L1384">        reqDevices.addAll(devAds.keySet());</span>
+<span class="nc" id="L1385">        reqPorts.addAll(portAds.keySet());</span>
+
+<span class="nc bnc" id="L1387" title="All 4 branches missed.">        if (reqDevices.isEmpty() &amp;&amp; reqPorts.isEmpty()) {</span>
+<span class="nc" id="L1388">            log.trace(&quot;Nothing to request to remote peer {}&quot;, sender);</span>
+<span class="nc" id="L1389">            return;</span>
+        }
+
+<span class="nc" id="L1392">        log.debug(&quot;Need to sync {} {}&quot;, reqDevices, reqPorts);</span>
+
+        // 2-way Anti-Entropy for now
+        try {
+<span class="nc" id="L1396">            unicastMessage(sender, DEVICE_ADVERTISE, createAdvertisement());</span>
+<span class="nc" id="L1397">        } catch (IOException e) {</span>
+<span class="nc" id="L1398">            log.error(&quot;Failed to send response advertisement to &quot; + sender, e);</span>
+<span class="nc" id="L1399">        }</span>
+
+// Sketch of 3-way Anti-Entropy
+//        DeviceAntiEntropyRequest request = new DeviceAntiEntropyRequest(self, reqDevices, reqPorts);
+//        ClusterMessage message = new ClusterMessage(
+//                clusterService.getLocalNode().id(),
+//                GossipDeviceStoreMessageSubjects.DEVICE_REQUEST,
+//                SERIALIZER.encode(request));
+//
+//        try {
+//            clusterCommunicator.unicast(message, advertisement.sender());
+//        } catch (IOException e) {
+//            log.error(&quot;Failed to send advertisement reply to &quot;
+//                      + advertisement.sender(), e);
+//        }
+<span class="nc" id="L1414">    }</span>
+
+    private void notifyDelegateIfNotNull(DeviceEvent event) {
+<span class="pc bpc" id="L1417" title="1 of 2 branches missed.">        if (event != null) {</span>
+<span class="fc" id="L1418">            notifyDelegate(event);</span>
+        }
+<span class="fc" id="L1420">    }</span>
+
+<span class="fc" id="L1422">    private final class SendAdvertisementTask implements Runnable {</span>
+
+        @Override
+        public void run() {
+<span class="nc bnc" id="L1426" title="All 2 branches missed.">            if (Thread.currentThread().isInterrupted()) {</span>
+<span class="nc" id="L1427">                log.debug(&quot;Interrupted, quitting&quot;);</span>
+<span class="nc" id="L1428">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L1432">                final NodeId self = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L1433">                Set&lt;ControllerNode&gt; nodes = clusterService.getNodes();</span>
+
+<span class="nc" id="L1435">                ImmutableList&lt;NodeId&gt; nodeIds = FluentIterable.from(nodes)</span>
+<span class="nc" id="L1436">                        .transform(toNodeId())</span>
+<span class="nc" id="L1437">                        .toList();</span>
+
+<span class="nc bnc" id="L1439" title="All 4 branches missed.">                if (nodeIds.size() == 1 &amp;&amp; nodeIds.get(0).equals(self)) {</span>
+<span class="nc" id="L1440">                    log.trace(&quot;No other peers in the cluster.&quot;);</span>
+<span class="nc" id="L1441">                    return;</span>
+                }
+
+                NodeId peer;
+                do {
+<span class="nc" id="L1446">                    int idx = RandomUtils.nextInt(0, nodeIds.size());</span>
+<span class="nc" id="L1447">                    peer = nodeIds.get(idx);</span>
+<span class="nc bnc" id="L1448" title="All 2 branches missed.">                } while (peer.equals(self));</span>
+
+<span class="nc" id="L1450">                DeviceAntiEntropyAdvertisement ad = createAdvertisement();</span>
+
+<span class="nc bnc" id="L1452" title="All 2 branches missed.">                if (Thread.currentThread().isInterrupted()) {</span>
+<span class="nc" id="L1453">                    log.debug(&quot;Interrupted, quitting&quot;);</span>
+<span class="nc" id="L1454">                    return;</span>
+                }
+
+                try {
+<span class="nc" id="L1458">                    unicastMessage(peer, DEVICE_ADVERTISE, ad);</span>
+<span class="nc" id="L1459">                } catch (IOException e) {</span>
+<span class="nc" id="L1460">                    log.debug(&quot;Failed to send anti-entropy advertisement to {}&quot;, peer);</span>
+<span class="nc" id="L1461">                    return;</span>
+<span class="nc" id="L1462">                }</span>
+<span class="nc" id="L1463">            } catch (Exception e) {</span>
+                // catch all Exception to avoid Scheduled task being suppressed.
+<span class="nc" id="L1465">                log.error(&quot;Exception thrown while sending advertisement&quot;, e);</span>
+<span class="nc" id="L1466">            }</span>
+<span class="nc" id="L1467">        }</span>
+    }
+
+<span class="fc" id="L1470">    private final class InternalDeviceEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1474">            log.debug(&quot;Received device update event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1475">            InternalDeviceEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1477">            ProviderId providerId = event.providerId();</span>
+<span class="nc" id="L1478">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1479">            Timestamped&lt;DeviceDescription&gt; deviceDescription = event.deviceDescription();</span>
+
+            try {
+<span class="nc" id="L1482">                notifyDelegateIfNotNull(createOrUpdateDeviceInternal(providerId, deviceId, deviceDescription));</span>
+<span class="nc" id="L1483">            } catch (Exception e) {</span>
+<span class="nc" id="L1484">                log.warn(&quot;Exception thrown handling device update&quot;, e);</span>
+<span class="nc" id="L1485">            }</span>
+<span class="nc" id="L1486">        }</span>
+    }
+
+<span class="fc" id="L1489">    private final class InternalDeviceOfflineEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1493">            log.debug(&quot;Received device offline event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1494">            InternalDeviceOfflineEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1496">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1497">            Timestamp timestamp = event.timestamp();</span>
+
+            try {
+<span class="nc" id="L1500">                notifyDelegateIfNotNull(markOfflineInternal(deviceId, timestamp));</span>
+<span class="nc" id="L1501">            } catch (Exception e) {</span>
+<span class="nc" id="L1502">                log.warn(&quot;Exception thrown handling device offline&quot;, e);</span>
+<span class="nc" id="L1503">            }</span>
+<span class="nc" id="L1504">        }</span>
+    }
+
+<span class="fc" id="L1507">    private final class InternalRemoveRequestListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1511">            log.debug(&quot;Received device remove request from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1512">            DeviceId did = SERIALIZER.decode(message.payload());</span>
+
+            try {
+<span class="nc" id="L1515">                removeDevice(did);</span>
+<span class="nc" id="L1516">            } catch (Exception e) {</span>
+<span class="nc" id="L1517">                log.warn(&quot;Exception thrown handling device remove&quot;, e);</span>
+<span class="nc" id="L1518">            }</span>
+<span class="nc" id="L1519">        }</span>
+    }
+
+<span class="fc" id="L1522">    private final class InternalDeviceRemovedEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1526">            log.debug(&quot;Received device removed event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1527">            InternalDeviceRemovedEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1529">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1530">            Timestamp timestamp = event.timestamp();</span>
+
+            try {
+<span class="nc" id="L1533">                notifyDelegateIfNotNull(removeDeviceInternal(deviceId, timestamp));</span>
+<span class="nc" id="L1534">            } catch (Exception e) {</span>
+<span class="nc" id="L1535">                log.warn(&quot;Exception thrown handling device removed&quot;, e);</span>
+<span class="nc" id="L1536">            }</span>
+<span class="nc" id="L1537">        }</span>
+    }
+
+<span class="fc" id="L1540">    private final class InternalPortEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+
+<span class="nc" id="L1545">            log.debug(&quot;Received port update event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1546">            InternalPortEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1548">            ProviderId providerId = event.providerId();</span>
+<span class="nc" id="L1549">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1550">            Timestamped&lt;List&lt;PortDescription&gt;&gt; portDescriptions = event.portDescriptions();</span>
+
+<span class="nc bnc" id="L1552" title="All 2 branches missed.">            if (getDevice(deviceId) == null) {</span>
+<span class="nc" id="L1553">                log.debug(&quot;{} not found on this node yet, ignoring.&quot;, deviceId);</span>
+                // Note: dropped information will be recovered by anti-entropy
+<span class="nc" id="L1555">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L1559">                notifyDelegate(updatePortsInternal(providerId, deviceId, portDescriptions));</span>
+<span class="nc" id="L1560">            } catch (Exception e) {</span>
+<span class="nc" id="L1561">                log.warn(&quot;Exception thrown handling port update&quot;, e);</span>
+<span class="nc" id="L1562">            }</span>
+<span class="nc" id="L1563">        }</span>
+    }
+
+<span class="fc" id="L1566">    private final class InternalPortStatusEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+
+<span class="nc" id="L1571">            log.debug(&quot;Received port status update event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1572">            InternalPortStatusEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1574">            ProviderId providerId = event.providerId();</span>
+<span class="nc" id="L1575">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1576">            Timestamped&lt;PortDescription&gt; portDescription = event.portDescription();</span>
+
+<span class="nc bnc" id="L1578" title="All 2 branches missed.">            if (getDevice(deviceId) == null) {</span>
+<span class="nc" id="L1579">                log.debug(&quot;{} not found on this node yet, ignoring.&quot;, deviceId);</span>
+                // Note: dropped information will be recovered by anti-entropy
+<span class="nc" id="L1581">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L1585">                notifyDelegateIfNotNull(updatePortStatusInternal(providerId, deviceId, portDescription));</span>
+<span class="nc" id="L1586">            } catch (Exception e) {</span>
+<span class="nc" id="L1587">                log.warn(&quot;Exception thrown handling port update&quot;, e);</span>
+<span class="nc" id="L1588">            }</span>
+<span class="nc" id="L1589">        }</span>
+    }
+
+<span class="fc" id="L1592">    private final class InternalDeviceAdvertisementListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1596">            log.trace(&quot;Received Device Anti-Entropy advertisement from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1597">            DeviceAntiEntropyAdvertisement advertisement = SERIALIZER.decode(message.payload());</span>
+            try {
+<span class="nc" id="L1599">                handleAdvertisement(advertisement);</span>
+<span class="nc" id="L1600">            } catch (Exception e) {</span>
+<span class="nc" id="L1601">                log.warn(&quot;Exception thrown handling Device advertisements.&quot;, e);</span>
+<span class="nc" id="L1602">            }</span>
+<span class="nc" id="L1603">        }</span>
+    }
+
+<span class="fc" id="L1606">    private final class DeviceInjectedEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1610">            log.debug(&quot;Received injected device event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1611">            DeviceInjectedEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1613">            ProviderId providerId = event.providerId();</span>
+<span class="nc" id="L1614">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1615">            DeviceDescription deviceDescription = event.deviceDescription();</span>
+<span class="nc bnc" id="L1616" title="All 2 branches missed.">            if (!deviceClockService.isTimestampAvailable(deviceId)) {</span>
+                // workaround for ONOS-1208
+<span class="nc" id="L1618">                log.warn(&quot;Not ready to accept update. Dropping {}&quot;, deviceDescription);</span>
+<span class="nc" id="L1619">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L1623">                createOrUpdateDevice(providerId, deviceId, deviceDescription);</span>
+<span class="nc" id="L1624">            } catch (Exception e) {</span>
+<span class="nc" id="L1625">                log.warn(&quot;Exception thrown handling device injected event.&quot;, e);</span>
+<span class="nc" id="L1626">            }</span>
+<span class="nc" id="L1627">        }</span>
+    }
+
+<span class="fc" id="L1630">    private final class PortInjectedEventListener</span>
+            implements ClusterMessageHandler {
+        @Override
+        public void handle(ClusterMessage message) {
+<span class="nc" id="L1634">            log.debug(&quot;Received injected port event from peer: {}&quot;, message.sender());</span>
+<span class="nc" id="L1635">            PortInjectedEvent event = SERIALIZER.decode(message.payload());</span>
+
+<span class="nc" id="L1637">            ProviderId providerId = event.providerId();</span>
+<span class="nc" id="L1638">            DeviceId deviceId = event.deviceId();</span>
+<span class="nc" id="L1639">            List&lt;PortDescription&gt; portDescriptions = event.portDescriptions();</span>
+<span class="nc bnc" id="L1640" title="All 2 branches missed.">            if (!deviceClockService.isTimestampAvailable(deviceId)) {</span>
+                // workaround for ONOS-1208
+<span class="nc" id="L1642">                log.warn(&quot;Not ready to accept update. Dropping {}&quot;, portDescriptions);</span>
+<span class="nc" id="L1643">                return;</span>
+            }
+
+            try {
+<span class="nc" id="L1647">                updatePorts(providerId, deviceId, portDescriptions);</span>
+<span class="nc" id="L1648">            } catch (Exception e) {</span>
+<span class="nc" id="L1649">                log.warn(&quot;Exception thrown handling port injected event.&quot;, e);</span>
+<span class="nc" id="L1650">            }</span>
+<span class="nc" id="L1651">        }</span>
+    }
+
+<span class="fc" id="L1654">    private class InternalPortStatsListener</span>
+            implements EventuallyConsistentMapListener&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; event) {
+<span class="nc bnc" id="L1658" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc" id="L1659">                Device device = devices.get(event.key());</span>
+<span class="nc bnc" id="L1660" title="All 2 branches missed.">                if (device != null) {</span>
+<span class="nc" id="L1661">                    delegate.notify(new DeviceEvent(PORT_STATS_UPDATED, device));</span>
+                }
+            }
+<span class="nc" id="L1664">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

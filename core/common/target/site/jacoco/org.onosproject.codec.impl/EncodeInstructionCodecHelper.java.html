@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EncodeInstructionCodecHelper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">EncodeInstructionCodecHelper.java</span></div><h1>EncodeInstructionCodecHelper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction;
+import org.onosproject.net.flow.instructions.L2ModificationInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction;
+import org.onosproject.net.flow.instructions.L4ModificationInstruction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * JSON encoding of Instructions.
+ */
+public final class EncodeInstructionCodecHelper {
+<span class="fc" id="L35">    protected static final Logger log = LoggerFactory.getLogger(EncodeInstructionCodecHelper.class);</span>
+    private final Instruction instruction;
+    private final CodecContext context;
+
+    /**
+     * Creates an instruction object encoder.
+     *
+     * @param instruction instruction to encode
+     * @param context codec context for the encoding
+     */
+<span class="fc" id="L45">    public EncodeInstructionCodecHelper(Instruction instruction, CodecContext context) {</span>
+<span class="fc" id="L46">        this.instruction = instruction;</span>
+<span class="fc" id="L47">        this.context = context;</span>
+<span class="fc" id="L48">    }</span>
+
+
+    /**
+     * Encode an L0 modification instruction.
+     *
+     * @param result json node that the instruction attributes are added to
+     */
+    private void encodeL0(ObjectNode result) {
+<span class="fc" id="L57">        L0ModificationInstruction instruction =</span>
+                (L0ModificationInstruction) this.instruction;
+<span class="fc" id="L59">        result.put(InstructionCodec.SUBTYPE, instruction.subtype().name());</span>
+
+<span class="pc bpc" id="L61" title="1 of 3 branches missed.">        switch (instruction.subtype()) {</span>
+            case LAMBDA:
+<span class="fc" id="L63">                final L0ModificationInstruction.ModLambdaInstruction modLambdaInstruction =</span>
+                        (L0ModificationInstruction.ModLambdaInstruction) instruction;
+<span class="fc" id="L65">                result.put(InstructionCodec.LAMBDA, modLambdaInstruction.lambda());</span>
+<span class="fc" id="L66">                break;</span>
+
+            case OCH:
+<span class="fc" id="L69">                L0ModificationInstruction.ModOchSignalInstruction ochSignalInstruction =</span>
+                        (L0ModificationInstruction.ModOchSignalInstruction) instruction;
+<span class="fc" id="L71">                OchSignal ochSignal = ochSignalInstruction.lambda();</span>
+<span class="fc" id="L72">                result.put(InstructionCodec.GRID_TYPE, ochSignal.gridType().name());</span>
+<span class="fc" id="L73">                result.put(InstructionCodec.CHANNEL_SPACING, ochSignal.channelSpacing().name());</span>
+<span class="fc" id="L74">                result.put(InstructionCodec.SPACING_MULTIPLIER, ochSignal.spacingMultiplier());</span>
+<span class="fc" id="L75">                result.put(InstructionCodec.SLOT_GRANULARITY, ochSignal.slotGranularity());</span>
+<span class="fc" id="L76">                break;</span>
+
+            default:
+<span class="nc" id="L79">                log.info(&quot;Cannot convert L0 subtype of {}&quot;, instruction.subtype());</span>
+        }
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * Encode an L2 modification instruction.
+     *
+     * @param result json node that the instruction attributes are added to
+     */
+    private void encodeL2(ObjectNode result) {
+<span class="fc" id="L89">        L2ModificationInstruction instruction =</span>
+                (L2ModificationInstruction) this.instruction;
+<span class="fc" id="L91">        result.put(InstructionCodec.SUBTYPE, instruction.subtype().name());</span>
+
+<span class="pc bpc" id="L93" title="2 of 7 branches missed.">        switch (instruction.subtype()) {</span>
+            case ETH_SRC:
+            case ETH_DST:
+<span class="fc" id="L96">                final L2ModificationInstruction.ModEtherInstruction modEtherInstruction =</span>
+                        (L2ModificationInstruction.ModEtherInstruction) instruction;
+<span class="fc" id="L98">                result.put(InstructionCodec.MAC, modEtherInstruction.mac().toString());</span>
+<span class="fc" id="L99">                break;</span>
+
+            case VLAN_ID:
+<span class="fc" id="L102">                final L2ModificationInstruction.ModVlanIdInstruction modVlanIdInstruction =</span>
+                        (L2ModificationInstruction.ModVlanIdInstruction) instruction;
+<span class="fc" id="L104">                result.put(InstructionCodec.VLAN_ID, modVlanIdInstruction.vlanId().toShort());</span>
+<span class="fc" id="L105">                break;</span>
+
+            case VLAN_PCP:
+<span class="fc" id="L108">                final L2ModificationInstruction.ModVlanPcpInstruction modVlanPcpInstruction =</span>
+                        (L2ModificationInstruction.ModVlanPcpInstruction) instruction;
+<span class="fc" id="L110">                result.put(InstructionCodec.VLAN_PCP, modVlanPcpInstruction.vlanPcp());</span>
+<span class="fc" id="L111">                break;</span>
+
+            case MPLS_LABEL:
+<span class="fc" id="L114">                final L2ModificationInstruction.ModMplsLabelInstruction modMplsLabelInstruction =</span>
+                        (L2ModificationInstruction.ModMplsLabelInstruction) instruction;
+<span class="fc" id="L116">                result.put(InstructionCodec.MPLS_LABEL, modMplsLabelInstruction.mplsLabel().toInt());</span>
+<span class="fc" id="L117">                break;</span>
+
+            case MPLS_PUSH:
+<span class="fc" id="L120">                final L2ModificationInstruction.PushHeaderInstructions pushHeaderInstructions =</span>
+                        (L2ModificationInstruction.PushHeaderInstructions) instruction;
+
+<span class="fc" id="L123">                result.put(InstructionCodec.ETHERNET_TYPE,</span>
+<span class="fc" id="L124">                           pushHeaderInstructions.ethernetType().toShort());</span>
+<span class="fc" id="L125">                break;</span>
+
+            case TUNNEL_ID:
+<span class="nc" id="L128">                final L2ModificationInstruction.ModTunnelIdInstruction modTunnelIdInstruction =</span>
+                        (L2ModificationInstruction.ModTunnelIdInstruction) instruction;
+<span class="nc" id="L130">                result.put(InstructionCodec.TUNNEL_ID, modTunnelIdInstruction.tunnelId());</span>
+<span class="nc" id="L131">                break;</span>
+
+            default:
+<span class="nc" id="L134">                log.info(&quot;Cannot convert L2 subtype of {}&quot;, instruction.subtype());</span>
+                break;
+        }
+<span class="fc" id="L137">    }</span>
+
+    /**
+     * Encode an L3 modification instruction.
+     *
+     * @param result json node that the instruction attributes are added to
+     */
+    private void encodeL3(ObjectNode result) {
+<span class="fc" id="L145">        L3ModificationInstruction instruction =</span>
+                (L3ModificationInstruction) this.instruction;
+<span class="fc" id="L147">        result.put(InstructionCodec.SUBTYPE, instruction.subtype().name());</span>
+<span class="pc bpc" id="L148" title="1 of 3 branches missed.">        switch (instruction.subtype()) {</span>
+            case IPV4_SRC:
+            case IPV4_DST:
+            case IPV6_SRC:
+            case IPV6_DST:
+<span class="fc" id="L153">                final L3ModificationInstruction.ModIPInstruction modIPInstruction =</span>
+                        (L3ModificationInstruction.ModIPInstruction) instruction;
+<span class="fc" id="L155">                result.put(InstructionCodec.IP, modIPInstruction.ip().toString());</span>
+<span class="fc" id="L156">                break;</span>
+
+            case IPV6_FLABEL:
+                final L3ModificationInstruction.ModIPv6FlowLabelInstruction
+<span class="fc" id="L160">                        modFlowLabelInstruction =</span>
+                        (L3ModificationInstruction.ModIPv6FlowLabelInstruction) instruction;
+<span class="fc" id="L162">                result.put(InstructionCodec.FLOW_LABEL, modFlowLabelInstruction.flowLabel());</span>
+<span class="fc" id="L163">                break;</span>
+
+            default:
+<span class="nc" id="L166">                log.info(&quot;Cannot convert L3 subtype of {}&quot;, instruction.subtype());</span>
+                break;
+        }
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * Encode a L4 modification instruction.
+     *
+     * @param result json node that the instruction attributes are added to
+     */
+    private void encodeL4(ObjectNode result) {
+<span class="nc" id="L177">        L4ModificationInstruction instruction =</span>
+                (L4ModificationInstruction) this.instruction;
+<span class="nc" id="L179">        result.put(InstructionCodec.SUBTYPE, instruction.subtype().name());</span>
+<span class="pc bnc" id="L180" title="All 3 branches missed.">        switch (instruction.subtype()) {</span>
+            case TCP_DST:
+            case TCP_SRC:
+<span class="nc" id="L183">                final L4ModificationInstruction.ModTransportPortInstruction modTcpPortInstruction =</span>
+                        (L4ModificationInstruction.ModTransportPortInstruction) instruction;
+<span class="nc" id="L185">                result.put(InstructionCodec.TCP_PORT, modTcpPortInstruction.port().toInt());</span>
+<span class="nc" id="L186">                break;</span>
+
+            case UDP_DST:
+            case UDP_SRC:
+<span class="nc" id="L190">                final L4ModificationInstruction.ModTransportPortInstruction modUdpPortInstruction =</span>
+                        (L4ModificationInstruction.ModTransportPortInstruction) instruction;
+<span class="nc" id="L192">                result.put(InstructionCodec.UDP_PORT, modUdpPortInstruction.port().toInt());</span>
+<span class="nc" id="L193">                break;</span>
+
+            default:
+<span class="nc" id="L196">                log.info(&quot;Cannot convert L4 subtype of {}&quot;, instruction.subtype());</span>
+                break;
+        }
+<span class="nc" id="L199">    }</span>
+
+    /**
+     * Encodes the given instruction into JSON.
+     *
+     * @return JSON object node representing the instruction
+     */
+    public ObjectNode encode() {
+<span class="fc" id="L207">        final ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="fc" id="L208">                .put(InstructionCodec.TYPE, instruction.type().toString());</span>
+
+<span class="pc bpc" id="L210" title="2 of 7 branches missed.">        switch (instruction.type()) {</span>
+            case OUTPUT:
+<span class="fc" id="L212">                final Instructions.OutputInstruction outputInstruction =</span>
+                        (Instructions.OutputInstruction) instruction;
+<span class="fc" id="L214">                result.put(InstructionCodec.PORT, outputInstruction.port().toLong());</span>
+<span class="fc" id="L215">                break;</span>
+
+            case DROP:
+            case NOACTION:
+<span class="fc" id="L219">                break;</span>
+
+            case L0MODIFICATION:
+<span class="fc" id="L222">                encodeL0(result);</span>
+<span class="fc" id="L223">                break;</span>
+
+            case L2MODIFICATION:
+<span class="fc" id="L226">                encodeL2(result);</span>
+<span class="fc" id="L227">                break;</span>
+
+            case L3MODIFICATION:
+<span class="fc" id="L230">                encodeL3(result);</span>
+<span class="fc" id="L231">                break;</span>
+
+            case L4MODIFICATION:
+<span class="nc" id="L234">                encodeL4(result);</span>
+<span class="nc" id="L235">                break;</span>
+
+            default:
+<span class="nc" id="L238">                log.info(&quot;Cannot convert instruction type of {}&quot;, instruction.type());</span>
+                break;
+        }
+<span class="fc" id="L241">        return result;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

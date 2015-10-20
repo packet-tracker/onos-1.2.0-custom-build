@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalPathIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">OpticalPathIntentCompiler.java</span></div><h1>OpticalPathIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import com.google.common.collect.Lists;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Link;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.instructions.Instructions;
+import org.onosproject.net.intent.FlowRuleIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentCompiler;
+import org.onosproject.net.intent.IntentExtensionService;
+import org.onosproject.net.intent.OpticalPathIntent;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
+@Component(immediate = true)
+<span class="fc" id="L51">public class OpticalPathIntentCompiler implements IntentCompiler&lt;OpticalPathIntent&gt; {</span>
+
+<span class="fc" id="L53">    private static final Logger log = LoggerFactory.getLogger(OpticalPathIntentCompiler.class);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentExtensionService intentManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    private ApplicationId appId;
+
+    @Activate
+    public void activate() {
+<span class="fc" id="L65">        appId = coreService.registerApplication(&quot;org.onosproject.net.intent&quot;);</span>
+<span class="fc" id="L66">        intentManager.registerCompiler(OpticalPathIntent.class, this);</span>
+<span class="fc" id="L67">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L71">        intentManager.unregisterCompiler(OpticalPathIntent.class);</span>
+<span class="fc" id="L72">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(OpticalPathIntent intent, List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+<span class="fc" id="L77">        log.debug(&quot;Compiling optical path intent between {} and {}&quot;, intent.src(), intent.dst());</span>
+
+        // Create rules for forward and reverse path
+<span class="fc" id="L80">        List&lt;FlowRule&gt; rules = createRules(intent);</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">        if (intent.isBidirectional()) {</span>
+<span class="nc" id="L82">            rules.addAll(createReverseRules(intent));</span>
+        }
+
+<span class="fc" id="L85">        return Collections.singletonList(new FlowRuleIntent(appId, rules, intent.resources()));</span>
+    }
+
+    /**
+     * Create rules for the forward path of the intent.
+     *
+     * @param intent the intent
+     * @return list of flow rules
+     */
+    private List&lt;FlowRule&gt; createRules(OpticalPathIntent intent) {
+<span class="fc" id="L95">        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();</span>
+<span class="fc" id="L96">        selectorBuilder.matchInPort(intent.src().port());</span>
+
+<span class="fc" id="L98">        List&lt;FlowRule&gt; rules = new LinkedList&lt;&gt;();</span>
+<span class="fc" id="L99">        ConnectPoint current = intent.src();</span>
+
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        for (Link link : intent.path().links()) {</span>
+<span class="fc" id="L102">            TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L103">            treatmentBuilder.add(Instructions.modL0Lambda(intent.lambda()));</span>
+<span class="fc" id="L104">            treatmentBuilder.setOutput(link.src().port());</span>
+
+<span class="fc" id="L106">            FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="fc" id="L107">                    .forDevice(current.deviceId())</span>
+<span class="fc" id="L108">                    .withSelector(selectorBuilder.build())</span>
+<span class="fc" id="L109">                    .withTreatment(treatmentBuilder.build())</span>
+<span class="fc" id="L110">                    .withPriority(intent.priority())</span>
+<span class="fc" id="L111">                    .fromApp(appId)</span>
+<span class="fc" id="L112">                    .makePermanent()</span>
+<span class="fc" id="L113">                    .build();</span>
+
+<span class="fc" id="L115">            rules.add(rule);</span>
+
+<span class="fc" id="L117">            current = link.dst();</span>
+<span class="fc" id="L118">            selectorBuilder.matchInPort(link.dst().port());</span>
+<span class="fc" id="L119">            selectorBuilder.add(Criteria.matchLambda(intent.lambda()));</span>
+<span class="fc" id="L120">            selectorBuilder.add(Criteria.matchOchSignalType(intent.signalType()));</span>
+<span class="fc" id="L121">        }</span>
+
+        // Build the egress ROADM rule
+<span class="fc" id="L124">        TrafficTreatment.Builder treatmentLast = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L125">        treatmentLast.setOutput(intent.dst().port());</span>
+
+<span class="fc" id="L127">        FlowRule rule = new DefaultFlowRule.Builder()</span>
+<span class="fc" id="L128">                .forDevice(intent.dst().deviceId())</span>
+<span class="fc" id="L129">                .withSelector(selectorBuilder.build())</span>
+<span class="fc" id="L130">                .withTreatment(treatmentLast.build())</span>
+<span class="fc" id="L131">                .withPriority(intent.priority())</span>
+<span class="fc" id="L132">                .fromApp(appId)</span>
+<span class="fc" id="L133">                .makePermanent()</span>
+<span class="fc" id="L134">                .build();</span>
+<span class="fc" id="L135">        rules.add(rule);</span>
+
+<span class="fc" id="L137">        return rules;</span>
+    }
+
+    /**
+     * Create rules for the reverse path of the intent.
+     *
+     * @param intent the intent
+     * @return list of flow rules
+     */
+    private List&lt;FlowRule&gt; createReverseRules(OpticalPathIntent intent) {
+<span class="nc" id="L147">        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();</span>
+<span class="nc" id="L148">        selectorBuilder.matchInPort(intent.dst().port());</span>
+
+<span class="nc" id="L150">        List&lt;FlowRule&gt; rules = new LinkedList&lt;&gt;();</span>
+<span class="nc" id="L151">        ConnectPoint current = intent.dst();</span>
+
+<span class="nc bnc" id="L153" title="All 2 branches missed.">        for (Link link : Lists.reverse(intent.path().links())) {</span>
+<span class="nc" id="L154">            TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L155">            treatmentBuilder.add(Instructions.modL0Lambda(intent.lambda()));</span>
+<span class="nc" id="L156">            treatmentBuilder.setOutput(link.dst().port());</span>
+
+<span class="nc" id="L158">            FlowRule rule = DefaultFlowRule.builder()</span>
+<span class="nc" id="L159">                    .forDevice(current.deviceId())</span>
+<span class="nc" id="L160">                    .withSelector(selectorBuilder.build())</span>
+<span class="nc" id="L161">                    .withTreatment(treatmentBuilder.build())</span>
+<span class="nc" id="L162">                    .withPriority(intent.priority())</span>
+<span class="nc" id="L163">                    .fromApp(appId)</span>
+<span class="nc" id="L164">                    .makePermanent()</span>
+<span class="nc" id="L165">                    .build();</span>
+
+<span class="nc" id="L167">            rules.add(rule);</span>
+
+<span class="nc" id="L169">            current = link.src();</span>
+<span class="nc" id="L170">            selectorBuilder.matchInPort(link.src().port());</span>
+<span class="nc" id="L171">            selectorBuilder.add(Criteria.matchLambda(intent.lambda()));</span>
+<span class="nc" id="L172">            selectorBuilder.add(Criteria.matchOchSignalType(intent.signalType()));</span>
+<span class="nc" id="L173">        }</span>
+
+        // Build the egress ROADM rule
+<span class="nc" id="L176">        TrafficTreatment.Builder treatmentLast = DefaultTrafficTreatment.builder();</span>
+<span class="nc" id="L177">        treatmentLast.setOutput(intent.src().port());</span>
+
+<span class="nc" id="L179">        FlowRule rule = new DefaultFlowRule.Builder()</span>
+<span class="nc" id="L180">                .forDevice(intent.src().deviceId())</span>
+<span class="nc" id="L181">                .withSelector(selectorBuilder.build())</span>
+<span class="nc" id="L182">                .withTreatment(treatmentLast.build())</span>
+<span class="nc" id="L183">                .withPriority(intent.priority())</span>
+<span class="nc" id="L184">                .fromApp(appId)</span>
+<span class="nc" id="L185">                .makePermanent()</span>
+<span class="nc" id="L186">                .build();</span>
+<span class="nc" id="L187">        rules.add(rule);</span>
+
+<span class="nc" id="L189">        return rules;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Intent.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent</a> &gt; <span class="el_source">Intent.java</span></div><h1>Intent.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent;
+
+import java.util.Collection;
+import java.util.Objects;
+
+import com.google.common.annotations.Beta;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.IdGenerator;
+import org.onosproject.net.NetworkResource;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
+/**
+ * Abstraction of an application level intent.
+ * &lt;p&gt;
+ * Make sure that an Intent should be immutable when a new type is defined.
+ * &lt;/p&gt;
+ */
+@Beta
+public abstract class Intent {
+
+    private final IntentId id;
+
+    private final ApplicationId appId;
+    private final Key key;
+
+    private final int priority;
+    public static final int DEFAULT_INTENT_PRIORITY = 100;
+    public static final int MAX_PRIORITY = (1 &lt;&lt; 16) - 1;
+    public static final int MIN_PRIORITY = 1;
+
+    private final Collection&lt;NetworkResource&gt; resources;
+
+    private static IdGenerator idGenerator;
+
+    /**
+     * Constructor for serializer.
+     */
+<span class="fc" id="L56">    protected Intent() {</span>
+<span class="fc" id="L57">        this.id = null;</span>
+<span class="fc" id="L58">        this.appId = null;</span>
+<span class="fc" id="L59">        this.key = null;</span>
+<span class="fc" id="L60">        this.resources = null;</span>
+<span class="fc" id="L61">        this.priority = DEFAULT_INTENT_PRIORITY;</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * Creates a new intent.
+     *
+     * @param appId     application identifier
+     * @param key       optional key
+     * @param resources required network resources (optional)
+     * @param priority  flow rule priority
+     */
+    protected Intent(ApplicationId appId,
+                     Key key,
+                     Collection&lt;NetworkResource&gt; resources,
+<span class="fc" id="L75">                     int priority) {</span>
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        checkState(idGenerator != null, &quot;Id generator is not bound.&quot;);</span>
+<span class="pc bpc" id="L77" title="2 of 4 branches missed.">        checkArgument(priority &lt;= MAX_PRIORITY &amp;&amp; priority &gt;= MIN_PRIORITY);</span>
+<span class="fc" id="L78">        this.id = IntentId.valueOf(idGenerator.getNewId());</span>
+<span class="fc" id="L79">        this.appId = checkNotNull(appId, &quot;Application ID cannot be null&quot;);</span>
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">        this.key = (key != null) ? key : Key.of(id.fingerprint(), appId);</span>
+<span class="fc" id="L81">        this.priority = priority;</span>
+<span class="fc" id="L82">        this.resources = checkNotNull(resources);</span>
+<span class="fc" id="L83">    }</span>
+
+    /**
+     * Abstract builder for intents.
+     */
+<span class="fc" id="L88">    public abstract static class Builder {</span>
+        protected ApplicationId appId;
+        protected Key key;
+<span class="fc" id="L91">        protected int priority = Intent.DEFAULT_INTENT_PRIORITY;</span>
+
+        /**
+         * Sets the application id for the intent that will be built.
+         *
+         * @param appId application id to use for built intent
+         * @return this builder
+         */
+        public Builder appId(ApplicationId appId) {
+<span class="fc" id="L100">            this.appId = appId;</span>
+<span class="fc" id="L101">            return this;</span>
+        }
+
+        /**
+         * Sets the key for the intent that will be built.
+         *
+         * @param key key to use for built intent
+         * @return this builder
+         */
+        public Builder key(Key key) {
+<span class="nc" id="L111">            this.key = key;</span>
+<span class="nc" id="L112">            return this;</span>
+        }
+
+        /**
+         * Sets the priority for the intent that will be built.
+         *
+         * @param priority priority to use for built intent
+         * @return this builder
+         */
+        public Builder priority(int priority) {
+<span class="fc" id="L122">            this.priority = priority;</span>
+<span class="fc" id="L123">            return this;</span>
+        }
+
+    }
+
+    /**
+     * Returns the intent identifier.
+     *
+     * @return intent fingerprint
+     */
+    public IntentId id() {
+<span class="fc" id="L134">        return id;</span>
+    }
+
+    /**
+     * Returns the identifier of the application that requested the intent.
+     *
+     * @return application identifier
+     */
+    public ApplicationId appId() {
+<span class="fc" id="L143">        return appId;</span>
+    }
+
+    /**
+     * Returns the priority of the intent.
+     *
+     * @return intent priority
+     */
+    public int priority() {
+<span class="fc" id="L152">        return priority;</span>
+    }
+
+    /**
+     * Returns the collection of resources required for this intent.
+     *
+     * @return collection of resources; may be null
+     */
+    public Collection&lt;NetworkResource&gt; resources() {
+<span class="fc" id="L161">        return resources;</span>
+    }
+
+    /**
+     * Indicates whether or not the intent is installable.
+     *
+     * @return true if installable
+     */
+    public boolean isInstallable() {
+<span class="fc" id="L170">        return false;</span>
+    }
+
+    @Override
+    public final int hashCode() {
+<span class="fc" id="L175">        return id.hashCode();</span>
+    }
+
+    @Override
+    public final boolean equals(Object obj) {
+<span class="fc bfc" id="L180" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L181">            return true;</span>
+        }
+<span class="fc bfc" id="L183" title="All 4 branches covered.">        if (obj == null || getClass() != obj.getClass()) {</span>
+<span class="fc" id="L184">            return false;</span>
+        }
+<span class="fc" id="L186">        final Intent other = (Intent) obj;</span>
+<span class="fc" id="L187">        return this.id().equals(other.id());</span>
+    }
+
+    /**
+     * Binds an id generator for unique intent id generation.
+     *
+     * Note: A generator cannot be bound if there is already a generator bound.
+     *
+     * @param newIdGenerator id generator
+     */
+    public static void bindIdGenerator(IdGenerator newIdGenerator) {
+<span class="pc bpc" id="L198" title="1 of 2 branches missed.">        checkState(idGenerator == null, &quot;Id generator is already bound.&quot;);</span>
+<span class="fc" id="L199">        idGenerator = checkNotNull(newIdGenerator);</span>
+<span class="fc" id="L200">    }</span>
+
+    /**
+     * Unbinds an id generator.
+     *
+     * Note: The caller must provide the old id generator to succeed.
+     *
+     * @param oldIdGenerator the current id generator
+     */
+    public static void unbindIdGenerator(IdGenerator oldIdGenerator) {
+<span class="pc bpc" id="L210" title="1 of 2 branches missed.">        if (Objects.equals(idGenerator, oldIdGenerator)) {</span>
+<span class="fc" id="L211">            idGenerator = null;</span>
+        }
+<span class="fc" id="L213">    }</span>
+
+    public Key key() {
+<span class="fc" id="L216">        return key;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

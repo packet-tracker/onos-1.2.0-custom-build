@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>StateMachine.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-aaa</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.aaa</a> &gt; <span class="el_source">StateMachine.java</span></div><h1>StateMachine.java</h1><pre class="source lang-java linenums">/*
+ *
+ * Copyright 2015 AT&amp;T Foundry
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package org.onosproject.aaa;
+
+import java.util.BitSet;
+import java.util.Map;
+
+import org.onlab.packet.MacAddress;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.xosintegration.VoltTenant;
+import org.onosproject.xosintegration.VoltTenantService;
+import org.slf4j.Logger;
+
+import com.google.common.collect.Maps;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * AAA Finite State Machine.
+ */
+
+class StateMachine {
+    //INDEX to identify the state in the transition table
+    static final int STATE_IDLE = 0;
+    static final int STATE_STARTED = 1;
+    static final int STATE_PENDING = 2;
+    static final int STATE_AUTHORIZED = 3;
+    static final int STATE_UNAUTHORIZED = 4;
+
+    //INDEX to identify the transition in the transition table
+    static final int TRANSITION_START = 0; // --&gt; started
+    static final int TRANSITION_REQUEST_ACCESS = 1;
+    static final int TRANSITION_AUTHORIZE_ACCESS = 2;
+    static final int TRANSITION_DENY_ACCESS = 3;
+    static final int TRANSITION_LOGOFF = 4;
+
+    //map of access identifiers (issued at EAPOL START)
+<span class="fc" id="L54">    static BitSet bitSet = new BitSet();</span>
+    private final VoltTenantService voltService;
+
+<span class="fc" id="L57">    private int identifier = -1;</span>
+    private byte challengeIdentifier;
+    private byte[] challengeState;
+    private byte[] username;
+    private byte[] requestAuthenticator;
+
+    // Supplicant connectivity info
+    private ConnectPoint supplicantConnectpoint;
+    private MacAddress supplicantAddress;
+    private short vlanId;
+
+<span class="fc" id="L68">    private String sessionId = null;</span>
+
+<span class="fc" id="L70">    private final Logger log = getLogger(getClass());</span>
+
+
+<span class="fc" id="L73">    private State[] states = {</span>
+            new Idle(), new Started(), new Pending(), new Authorized(), new Unauthorized()
+    };
+
+
+    //State transition table
+    /*
+
+                state       IDLE    |   STARTED         |   PENDING         |   AUTHORIZED  |   UNAUTHORIZED
+             ////
+       input
+       ----------------------------------------------------------------------------------------------------
+
+       START                STARTED |   _               |   _               |   _           |   _
+
+       REQUEST_ACCESS       _       |   PENDING         |   _               |   _           |   _
+
+       AUTHORIZE_ACCESS     _       |   _               |   AUTHORIZED      |   _           |   _
+
+       DENY_ACCESS          _       |   -               |   UNAUTHORIZED    |   _           |   _
+
+       LOGOFF               _       |   _               |   _               |   IDLE        |   IDLE
+     */
+
+<span class="fc" id="L97">    private int[] idleTransition =</span>
+            {STATE_STARTED, STATE_IDLE, STATE_IDLE, STATE_IDLE, STATE_IDLE};
+<span class="fc" id="L99">    private int[] startedTransition =</span>
+            {STATE_STARTED, STATE_PENDING, STATE_STARTED, STATE_STARTED, STATE_STARTED};
+<span class="fc" id="L101">    private int[] pendingTransition =</span>
+            {STATE_PENDING, STATE_PENDING, STATE_AUTHORIZED, STATE_UNAUTHORIZED, STATE_PENDING};
+<span class="fc" id="L103">    private int[] authorizedTransition =</span>
+            {STATE_AUTHORIZED, STATE_AUTHORIZED, STATE_AUTHORIZED, STATE_AUTHORIZED, STATE_IDLE};
+<span class="fc" id="L105">    private int[] unauthorizedTransition =</span>
+            {STATE_UNAUTHORIZED, STATE_UNAUTHORIZED, STATE_UNAUTHORIZED, STATE_UNAUTHORIZED, STATE_IDLE};
+
+    //THE TRANSITION TABLE
+<span class="fc" id="L109">    private int[][] transition =</span>
+            {idleTransition, startedTransition, pendingTransition, authorizedTransition,
+                    unauthorizedTransition};
+
+<span class="fc" id="L113">    private int currentState = STATE_IDLE;</span>
+
+    // Maps of state machines. Each state machine is represented by an
+    // unique identifier on the switch: dpid + port number
+    private static Map&lt;String, StateMachine&gt; sessionIdMap;
+    private static Map&lt;Integer, StateMachine&gt; identifierMap;
+
+    public static void initializeMaps() {
+<span class="fc" id="L121">        sessionIdMap = Maps.newConcurrentMap();</span>
+<span class="fc" id="L122">        identifierMap = Maps.newConcurrentMap();</span>
+<span class="fc" id="L123">    }</span>
+
+    public static void destroyMaps() {
+<span class="fc" id="L126">        sessionIdMap = null;</span>
+<span class="fc" id="L127">        identifierMap = null;</span>
+<span class="fc" id="L128">    }</span>
+
+    public static StateMachine lookupStateMachineById(byte identifier) {
+<span class="fc" id="L131">        return identifierMap.get((int) identifier);</span>
+    }
+
+    public static StateMachine lookupStateMachineBySessionId(String sessionId) {
+<span class="fc" id="L135">        return sessionIdMap.get(sessionId);</span>
+    }    /**
+     * State Machine Constructor.
+     *
+     * @param sessionId   session Id represented by the switch dpid +  port number
+     * @param voltService volt service reference
+     */
+<span class="fc" id="L142">    public StateMachine(String sessionId, VoltTenantService voltService) {</span>
+<span class="fc" id="L143">        log.info(&quot;Creating a new state machine for {}&quot;, sessionId);</span>
+<span class="fc" id="L144">        this.sessionId = sessionId;</span>
+<span class="fc" id="L145">        this.voltService = voltService;</span>
+<span class="fc" id="L146">        sessionIdMap.put(sessionId, this);</span>
+<span class="fc" id="L147">    }</span>
+
+    /**
+     * Gets the connect point for the supplicant side.
+     *
+     * @return supplicant connect point
+     */
+    public ConnectPoint supplicantConnectpoint() {
+<span class="fc" id="L155">        return supplicantConnectpoint;</span>
+    }
+
+    /**
+     * Sets the supplicant side connect point.
+     *
+     * @param supplicantConnectpoint supplicant select point.
+     */
+    public void setSupplicantConnectpoint(ConnectPoint supplicantConnectpoint) {
+<span class="fc" id="L164">        this.supplicantConnectpoint = supplicantConnectpoint;</span>
+<span class="fc" id="L165">    }</span>
+
+    /**
+     * Gets the MAC address of the supplicant.
+     *
+     * @return supplicant MAC address
+     */
+    public MacAddress supplicantAddress() {
+<span class="fc" id="L173">        return supplicantAddress;</span>
+    }
+
+    /**
+     * Sets the supplicant MAC address.
+     *
+     * @param supplicantAddress new supplicant MAC address
+     */
+    public void setSupplicantAddress(MacAddress supplicantAddress) {
+<span class="fc" id="L182">        this.supplicantAddress = supplicantAddress;</span>
+<span class="fc" id="L183">    }</span>
+
+    /**
+     * Gets the client's Vlan ID.
+     *
+     * @return client vlan ID
+     */
+    public short vlanId() {
+<span class="fc" id="L191">        return vlanId;</span>
+    }
+
+    /**
+     * Sets the client's vlan ID.
+     *
+     * @param vlanId new client vlan ID
+     */
+    public void setVlanId(short vlanId) {
+<span class="fc" id="L200">        this.vlanId = vlanId;</span>
+<span class="fc" id="L201">    }</span>
+
+    /**
+     * Gets the client id that is requesting for access.
+     *
+     * @return The client id.
+     */
+    public String sessionId() {
+<span class="nc" id="L209">        return this.sessionId;</span>
+    }
+
+    /**
+     * Create the identifier for the state machine (happens when goes to STARTED state).
+     */
+    private void createIdentifier() throws StateMachineException {
+<span class="fc" id="L216">        log.debug(&quot;Creating Identifier.&quot;);</span>
+        int index;
+
+        try {
+            //find the first available spot for identifier assignment
+<span class="fc" id="L221">            index = StateMachine.bitSet.nextClearBit(0);</span>
+
+            //there is a limit of 256 identifiers
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">            if (index == 256) {</span>
+<span class="nc" id="L225">                throw new StateMachineException(&quot;Cannot handle any new identifier. Limit is 256.&quot;);</span>
+            }
+<span class="nc" id="L227">        } catch (IndexOutOfBoundsException e) {</span>
+<span class="nc" id="L228">            throw new StateMachineException(e.getMessage());</span>
+<span class="fc" id="L229">        }</span>
+
+<span class="fc" id="L231">        log.info(&quot;Assigning identifier {}&quot;, index);</span>
+<span class="fc" id="L232">        StateMachine.bitSet.set(index);</span>
+<span class="fc" id="L233">        this.identifier = index;</span>
+<span class="fc" id="L234">    }</span>
+
+    /**
+     * Set the challenge identifier and the state issued by the RADIUS.
+     *
+     * @param challengeIdentifier The challenge identifier set into the EAP packet from the RADIUS message.
+     * @param challengeState      The challenge state from the RADIUS.
+     */
+    protected void setChallengeInfo(byte challengeIdentifier, byte[] challengeState) {
+<span class="fc" id="L243">        this.challengeIdentifier = challengeIdentifier;</span>
+<span class="fc" id="L244">        this.challengeState = challengeState;</span>
+<span class="fc" id="L245">    }</span>
+
+    /**
+     * Set the challenge identifier issued by the RADIUS on the access challenge request.
+     *
+     * @param challengeIdentifier The challenge identifier set into the EAP packet from the RADIUS message.
+     */
+    protected void setChallengeIdentifier(byte challengeIdentifier) {
+<span class="nc" id="L253">        log.info(&quot;Set Challenge Identifier to {}&quot;, challengeIdentifier);</span>
+<span class="nc" id="L254">        this.challengeIdentifier = challengeIdentifier;</span>
+<span class="nc" id="L255">    }</span>
+
+    /**
+     * Gets the challenge EAP identifier set by the RADIUS.
+     *
+     * @return The challenge EAP identifier.
+     */
+    protected byte challengeIdentifier() {
+<span class="fc" id="L263">        return this.challengeIdentifier;</span>
+    }
+
+
+    /**
+     * Set the challenge state info issued by the RADIUS.
+     *
+     * @param challengeState The challenge state from the RADIUS.
+     */
+    protected void setChallengeState(byte[] challengeState) {
+<span class="nc" id="L273">        log.info(&quot;Set Challenge State&quot;);</span>
+<span class="nc" id="L274">        this.challengeState = challengeState;</span>
+<span class="nc" id="L275">    }</span>
+
+    /**
+     * Gets the challenge state set by the RADIUS.
+     *
+     * @return The challenge state.
+     */
+    protected byte[] challengeState() {
+<span class="fc" id="L283">        return this.challengeState;</span>
+    }
+
+    /**
+     * Set the username.
+     *
+     * @param username The username sent to the RADIUS upon access request.
+     */
+    protected void setUsername(byte[] username) {
+<span class="fc" id="L292">        this.username = username;</span>
+<span class="fc" id="L293">    }</span>
+
+
+    /**
+     * Gets the username.
+     *
+     * @return The requestAuthenticator.
+     */
+    protected byte[] requestAuthenticator() {
+<span class="nc" id="L302">        return this.requestAuthenticator;</span>
+    }
+
+    /**
+     * Sets the authenticator.
+     *
+     * @param authenticator The username sent to the RADIUS upon access request.
+     */
+    protected void setRequestAuthenticator(byte[] authenticator) {
+<span class="fc" id="L311">        this.requestAuthenticator = authenticator;</span>
+<span class="fc" id="L312">    }</span>
+
+
+    /**
+     * Gets the username.
+     *
+     * @return The username.
+     */
+    protected byte[] username() {
+<span class="fc" id="L321">        return this.username;</span>
+    }
+
+    /**
+     * Return the identifier of the state machine.
+     *
+     * @return The state machine identifier.
+     */
+    public byte identifier() {
+<span class="fc" id="L330">        return (byte) this.identifier;</span>
+    }
+
+
+    protected void deleteIdentifier() {
+<span class="fc bfc" id="L335" title="All 2 branches covered.">        if (this.identifier != -1) {</span>
+<span class="fc" id="L336">            log.info(&quot;Freeing up &quot; + this.identifier);</span>
+            //this state machine should be deleted and free up the identifier
+<span class="fc" id="L338">            StateMachine.bitSet.clear(this.identifier);</span>
+<span class="fc" id="L339">            this.identifier = -1;</span>
+        }
+<span class="fc" id="L341">    }</span>
+
+
+    /**
+     * Move to the next state.
+     *
+     * @param msg message
+     */
+    private void next(int msg) {
+<span class="fc" id="L350">        currentState = transition[currentState][msg];</span>
+<span class="fc" id="L351">        log.info(&quot;Current State &quot; + currentState);</span>
+<span class="fc" id="L352">    }</span>
+
+    /**
+     * Client has requested the start action to allow network access.
+     *
+     * @throws StateMachineException if authentication protocol is violated
+     */
+    public void start() throws StateMachineException {
+<span class="fc" id="L360">        states[currentState].start();</span>
+        //move to the next state
+<span class="fc" id="L362">        next(TRANSITION_START);</span>
+<span class="fc" id="L363">        createIdentifier();</span>
+<span class="fc" id="L364">        identifierMap.put(identifier, this);</span>
+<span class="fc" id="L365">    }</span>
+
+    /**
+     * An Identification information has been sent by the supplicant.
+     * Move to the next state if possible.
+     *
+     * @throws StateMachineException if authentication protocol is violated
+     */
+    public void requestAccess() throws StateMachineException {
+<span class="fc" id="L374">        states[currentState].requestAccess();</span>
+        //move to the next state
+<span class="fc" id="L376">        next(TRANSITION_REQUEST_ACCESS);</span>
+<span class="fc" id="L377">    }</span>
+
+    /**
+     * RADIUS has accepted the identification.
+     * Move to the next state if possible.
+     *
+     * @throws StateMachineException if authentication protocol is violated
+     */
+    public void authorizeAccess() throws StateMachineException {
+<span class="fc" id="L386">        states[currentState].radiusAccepted();</span>
+        //move to the next state
+<span class="fc" id="L388">        next(TRANSITION_AUTHORIZE_ACCESS);</span>
+
+<span class="pc bpc" id="L390" title="1 of 2 branches missed.">        if (voltService != null) {</span>
+<span class="nc" id="L391">            voltService.addTenant(</span>
+<span class="nc" id="L392">                    VoltTenant.builder()</span>
+<span class="nc" id="L393">                            .withHumanReadableName(&quot;VCPE-&quot; + this.identifier)</span>
+<span class="nc" id="L394">                            .withId(this.identifier)</span>
+<span class="nc" id="L395">                            .withProviderService(1)</span>
+<span class="nc" id="L396">                            .withServiceSpecificId(String.valueOf(this.identifier))</span>
+<span class="nc" id="L397">                            .withPort(this.supplicantConnectpoint)</span>
+<span class="nc" id="L398">                            .withVlanId(String.valueOf(this.vlanId)).build());</span>
+        }
+
+<span class="fc" id="L401">        deleteIdentifier();</span>
+<span class="fc" id="L402">    }</span>
+
+    /**
+     * RADIUS has denied the identification.
+     * Move to the next state if possible.
+     *
+     * @throws StateMachineException if authentication protocol is violated
+     */
+    public void denyAccess() throws StateMachineException {
+<span class="fc" id="L411">        states[currentState].radiusDenied();</span>
+        //move to the next state
+<span class="fc" id="L413">        next(TRANSITION_DENY_ACCESS);</span>
+<span class="fc" id="L414">        deleteIdentifier();</span>
+<span class="fc" id="L415">    }</span>
+
+    /**
+     * Logoff request has been requested.
+     * Move to the next state if possible.
+     *
+     * @throws StateMachineException if authentication protocol is violated
+     */
+    public void logoff() throws StateMachineException {
+<span class="fc" id="L424">        states[currentState].logoff();</span>
+        //move to the next state
+<span class="fc" id="L426">        next(TRANSITION_LOGOFF);</span>
+<span class="fc" id="L427">    }</span>
+
+    /**
+     * Gets the current state.
+     *
+     * @return The current state. Could be STATE_IDLE, STATE_STARTED, STATE_PENDING, STATE_AUTHORIZED,
+     * STATE_UNAUTHORIZED.
+     */
+    public int state() {
+<span class="fc" id="L436">        return currentState;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L441">        return (&quot;sessionId: &quot; + this.sessionId) + &quot;\t&quot; + (&quot;identifier: &quot; + this.identifier) + &quot;\t&quot; +</span>
+                (&quot;state: &quot; + this.currentState);
+    }
+
+<span class="fc" id="L445">    abstract class State {</span>
+<span class="fc" id="L446">        private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L448">        private String name = &quot;State&quot;;</span>
+
+        public void start() throws StateMachineInvalidTransitionException {
+<span class="fc" id="L451">            log.warn(&quot;START transition from this state is not allowed.&quot;);</span>
+<span class="fc" id="L452">        }</span>
+
+        public void requestAccess() throws StateMachineInvalidTransitionException {
+<span class="fc" id="L455">            log.warn(&quot;REQUEST ACCESS transition from this state is not allowed.&quot;);</span>
+<span class="fc" id="L456">        }</span>
+
+        public void radiusAccepted() throws StateMachineInvalidTransitionException {
+<span class="fc" id="L459">            log.warn(&quot;AUTHORIZE ACCESS transition from this state is not allowed.&quot;);</span>
+<span class="fc" id="L460">        }</span>
+
+        public void radiusDenied() throws StateMachineInvalidTransitionException {
+<span class="fc" id="L463">            log.warn(&quot;DENY ACCESS transition from this state is not allowed.&quot;);</span>
+<span class="fc" id="L464">        }</span>
+
+        public void logoff() throws StateMachineInvalidTransitionException {
+<span class="fc" id="L467">            log.warn(&quot;LOGOFF transition from this state is not allowed.&quot;);</span>
+<span class="fc" id="L468">        }</span>
+    }
+
+    /**
+     * Idle state: supplicant is logged of from the network.
+     */
+<span class="fc" id="L474">    class Idle extends State {</span>
+<span class="fc" id="L475">        private final Logger log = getLogger(getClass());</span>
+<span class="fc" id="L476">        private String name = &quot;IDLE_STATE&quot;;</span>
+
+        public void start() {
+<span class="fc" id="L479">            log.info(&quot;Moving from IDLE state to STARTED state.&quot;);</span>
+<span class="fc" id="L480">        }</span>
+    }
+
+    /**
+     * Started state: supplicant has entered the network and informed the authenticator.
+     */
+<span class="fc" id="L486">    class Started extends State {</span>
+<span class="fc" id="L487">        private final Logger log = getLogger(getClass());</span>
+<span class="fc" id="L488">        private String name = &quot;STARTED_STATE&quot;;</span>
+
+        public void requestAccess() {
+<span class="fc" id="L491">            log.info(&quot;Moving from STARTED state to PENDING state.&quot;);</span>
+<span class="fc" id="L492">        }</span>
+    }
+
+    /**
+     * Pending state: supplicant has been identified by the authenticator but has not access yet.
+     */
+<span class="fc" id="L498">    class Pending extends State {</span>
+<span class="fc" id="L499">        private final Logger log = getLogger(getClass());</span>
+<span class="fc" id="L500">        private String name = &quot;PENDING_STATE&quot;;</span>
+
+        public void radiusAccepted() {
+<span class="fc" id="L503">            log.info(&quot;Moving from PENDING state to AUTHORIZED state.&quot;);</span>
+<span class="fc" id="L504">        }</span>
+
+        public void radiusDenied() {
+<span class="fc" id="L507">            log.info(&quot;Moving from PENDING state to UNAUTHORIZED state.&quot;);</span>
+<span class="fc" id="L508">        }</span>
+    }
+
+    /**
+     * Authorized state: supplicant port has been accepted, access is granted.
+     */
+<span class="fc" id="L514">    class Authorized extends State {</span>
+<span class="fc" id="L515">        private final Logger log = getLogger(getClass());</span>
+<span class="fc" id="L516">        private String name = &quot;AUTHORIZED_STATE&quot;;</span>
+
+        public void logoff() {
+
+<span class="fc" id="L520">            log.info(&quot;Moving from AUTHORIZED state to IDLE state.&quot;);</span>
+<span class="fc" id="L521">        }</span>
+    }
+
+    /**
+     * Unauthorized state: supplicant port has been rejected, access is denied.
+     */
+<span class="fc" id="L527">    class Unauthorized extends State {</span>
+<span class="fc" id="L528">        private final Logger log = getLogger(getClass());</span>
+<span class="fc" id="L529">        private String name = &quot;UNAUTHORIZED_STATE&quot;;</span>
+
+        public void logoff() {
+<span class="fc" id="L532">            log.info(&quot;Moving from UNAUTHORIZED state to IDLE state.&quot;);</span>
+<span class="fc" id="L533">        }</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

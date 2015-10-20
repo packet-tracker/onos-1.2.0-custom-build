@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>AnnotationKeys.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">AnnotationKeys.java</span></div><h1>AnnotationKeys.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+/**
+ * Collection of keys for annotation.
+ * &lt;p&gt;
+ * Number of the annotation keys have been deprecated as the use of annotations
+ * is being phased out and instead network configuration subsystem is being
+ * phased-in for majority of model meta-data.
+ * &lt;/p&gt;
+ */
+public final class AnnotationKeys {
+
+
+    // Prohibit instantiation
+<span class="nc" id="L30">    private AnnotationKeys() {</span>
+<span class="nc" id="L31">    }</span>
+
+    /**
+     * Annotation key for instance name.
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String NAME = &quot;name&quot;;
+
+    /**
+     * Annotation key for instance type (e.g. host type).
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String TYPE = &quot;type&quot;;
+
+    /**
+     * Annotation key for latitude (e.g. latitude of device).
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String LATITUDE = &quot;latitude&quot;;
+
+    /**
+     * Annotation key for longitute (e.g. longitude of device).
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String LONGITUDE = &quot;longitude&quot;;
+
+    /**
+     * Annotation key for southbound protocol.
+     */
+    public static final String PROTOCOL = &quot;protocol&quot;;
+
+    /**
+     * Annotation key for the device driver name.
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String DRIVER = &quot;driver&quot;;
+
+    /**
+     * Annotation key for durable links.
+     */
+    public static final String DURABLE = &quot;durable&quot;;
+
+    /**
+     * Annotation key for latency.
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String LATENCY = &quot;latency&quot;;
+
+    /**
+     * Annotation key for bandwidth.
+     * The value for this key is interpreted as Mbps.
+     *
+     * @deprecated since Cardinal
+     */
+    @Deprecated
+    public static final String BANDWIDTH = &quot;bandwidth&quot;;
+
+    /**
+     * Annotation key for the number of optical waves.
+     */
+    public static final String OPTICAL_WAVES = &quot;optical.waves&quot;;
+
+    /**
+     * Annotation key for the port name.
+     */
+    public static final String PORT_NAME = &quot;portName&quot;;
+
+    /**
+     * Annotation key for the router ID.
+     */
+    public static final String ROUTER_ID = &quot;routerId&quot;;
+
+    public static final String STATIC_LAMBDA = &quot;staticLambda&quot;;
+
+    public static final String STATIC_PORT = &quot;staticPort&quot;;
+
+    /**
+     * Annotation key for device location.
+     */
+    public static final String RACK_ADDRESS = &quot;rackAddress&quot;;
+
+    /**
+     * Annotation key for device owner.
+     */
+    public static final String OWNER = &quot;owner&quot;;
+
+    /**
+     * Annotation key for the channel id.
+     */
+    public static final String CHANNEL_ID = &quot;channelId&quot;;
+
+    /**
+     * Annotation key for the management address.
+     */
+    public static final String MANAGEMENT_ADDRESS = &quot;managementAddress&quot;;
+
+    /**
+     * Returns the value annotated object for the specified annotation key.
+     * The annotated value is expected to be String that can be parsed as double.
+     * If parsing fails, the returned value will be 1.0.
+     *
+     * @param annotated annotated object whose annotated value is obtained
+     * @param key       key of annotation
+     * @return double value of annotated object for the specified key
+     */
+    public static double getAnnotatedValue(Annotated annotated, String key) {
+        double value;
+        try {
+<span class="fc" id="L151">            value = Double.parseDouble(annotated.annotations().value(key));</span>
+<span class="nc" id="L152">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L153">            value = 1.0;</span>
+<span class="fc" id="L154">        }</span>
+<span class="fc" id="L155">        return value;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BasicHostOperator.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.host.impl</a> &gt; <span class="el_source">BasicHostOperator.java</span></div><h1>BasicHostOperator.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.host.impl;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+import org.slf4j.Logger;
+import org.onosproject.net.config.ConfigOperator;
+import org.onosproject.net.config.basics.BasicHostConfig;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.SparseAnnotations;
+import org.onosproject.net.host.DefaultHostDescription;
+import org.onosproject.net.host.HostDescription;
+
+/**
+ * Implementations of merge policies for various sources of host configuration
+ * information. This includes applications, provides, and network configurations.
+ */
+public final class BasicHostOperator implements ConfigOperator {
+
+    protected static final double DEFAULT_COORD = -1.0;
+<span class="fc" id="L36">    private static final Logger log = getLogger(BasicHostOperator.class);</span>
+
+<span class="nc" id="L38">    private BasicHostOperator() {</span>
+<span class="nc" id="L39">    }</span>
+
+    /**
+     * Generates a HostDescription containing fields from a HostDescription and
+     * a HostConfig.
+     *
+     * @param cfg the host config entity from network config
+     * @param descr a HostDescription
+     * @return HostDescription based on both sources
+     */
+    public static HostDescription combine(BasicHostConfig cfg, HostDescription descr) {
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        if (cfg == null) {</span>
+<span class="fc" id="L51">            return descr;</span>
+        }
+<span class="fc" id="L53">        SparseAnnotations sa = combine(cfg, descr.annotations());</span>
+<span class="fc" id="L54">        return new DefaultHostDescription(descr.hwAddress(), descr.vlan(), descr.location(),</span>
+<span class="fc" id="L55">                descr.ipAddress(), sa);</span>
+    }
+
+    /**
+     * Generates an annotation from an existing annotation and HostConfig.
+     *
+     * @param cfg the device config entity from network config
+     * @param an the annotation
+     * @return annotation combining both sources
+     */
+    public static SparseAnnotations combine(BasicHostConfig cfg, SparseAnnotations an) {
+<span class="fc" id="L66">        DefaultAnnotations.Builder newBuilder = DefaultAnnotations.builder();</span>
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">        if (cfg.name() != null) {</span>
+<span class="fc" id="L68">            newBuilder.set(AnnotationKeys.NAME, cfg.name());</span>
+        }
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        if (cfg.latitude() != DEFAULT_COORD) {</span>
+<span class="fc" id="L71">            newBuilder.set(AnnotationKeys.LATITUDE, Double.toString(cfg.latitude()));</span>
+        }
+<span class="pc bpc" id="L73" title="1 of 2 branches missed.">        if (cfg.longitude() != DEFAULT_COORD) {</span>
+<span class="nc" id="L74">            newBuilder.set(AnnotationKeys.LONGITUDE, Double.toString(cfg.longitude()));</span>
+        }
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if (cfg.rackAddress() != null) {</span>
+<span class="nc" id="L77">            newBuilder.set(AnnotationKeys.RACK_ADDRESS, cfg.rackAddress());</span>
+        }
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">        if (cfg.owner() != null) {</span>
+<span class="nc" id="L80">            newBuilder.set(AnnotationKeys.OWNER, cfg.owner());</span>
+        }
+<span class="fc" id="L82">        return DefaultAnnotations.union(an, newBuilder.build());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ChannelSpacing.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">ChannelSpacing.java</span></div><h1>ChannelSpacing.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import org.onlab.util.Frequency;
+
+/**
+ * Represents interval frequency between two neighboring wavelengths.
+ */
+<span class="pc" id="L23">public enum ChannelSpacing {</span>
+<span class="fc" id="L24">    CHL_100GHZ(100),        // 100 GHz</span>
+<span class="fc" id="L25">    CHL_50GHZ(50),          // 50 GHz</span>
+<span class="fc" id="L26">    CHL_25GHZ(25),          // 25 GHz</span>
+<span class="fc" id="L27">    CHL_12P5GHZ(12.5),      // 12.5 GHz</span>
+<span class="fc" id="L28">    CHL_6P25GHZ(6.5);       // 6.25 GHz</span>
+
+    private final Frequency frequency;
+
+    /**
+     * Creates an instance with the specified interval in GHz.
+     *
+     * @param value interval of neighboring wavelengths in GHz.
+     */
+<span class="fc" id="L37">    ChannelSpacing(double value) {</span>
+<span class="fc" id="L38">        this.frequency = Frequency.ofGHz(value);</span>
+<span class="fc" id="L39">    }</span>
+
+    public Frequency frequency() {
+<span class="nc" id="L42">        return frequency;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

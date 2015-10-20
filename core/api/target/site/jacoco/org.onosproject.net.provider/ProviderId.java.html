@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ProviderId.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.provider</a> &gt; <span class="el_source">ProviderId.java</span></div><h1>ProviderId.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.provider;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * External identity of a {@link org.onosproject.net.provider.Provider} family.
+ * It also carriers two designations of external characteristics, the URI
+ * scheme and primary/ancillary indicator.
+ * &lt;p&gt;
+ * The device URI scheme is used to determine applicability of a provider to
+ * operations on a specific device. The ancillary indicator serves to designate
+ * a provider as a primary or ancillary.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * A {@link org.onosproject.net.provider.ProviderRegistry} uses this designation
+ * to permit only one primary provider per device URI scheme. Multiple
+ * ancillary providers can register with the same device URI scheme however.
+ * &lt;/p&gt;
+ */
+public class ProviderId {
+
+    /**
+     * Represents no provider ID.
+     */
+<span class="fc" id="L43">    public static final ProviderId NONE = new ProviderId(&quot;none&quot;, &quot;none&quot;);</span>
+
+    private final String scheme;
+    private final String id;
+    private final boolean ancillary;
+
+    // For serialization
+<span class="nc" id="L50">    private ProviderId() {</span>
+<span class="nc" id="L51">        scheme = null;</span>
+<span class="nc" id="L52">        id = null;</span>
+<span class="nc" id="L53">        ancillary = false;</span>
+<span class="nc" id="L54">    }</span>
+
+    /**
+     * Creates a new primary provider identifier from the specified string.
+     * The providers are expected to follow the reverse DNS convention, e.g.
+     * {@code org.onosproject.provider.of.device}
+     *
+     * @param scheme device URI scheme to which this provider is bound, e.g. &quot;of&quot;, &quot;snmp&quot;
+     * @param id     string identifier
+     */
+    public ProviderId(String scheme, String id) {
+<span class="fc" id="L65">        this(scheme, id, false);</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * Creates a new provider identifier from the specified string.
+     * The providers are expected to follow the reverse DNS convention, e.g.
+     * {@code org.onosproject.provider.of.device}
+     *
+     * @param scheme    device URI scheme to which this provider is bound, e.g. &quot;of&quot;, &quot;snmp&quot;
+     * @param id        string identifier
+     * @param ancillary ancillary provider indicator
+     */
+<span class="fc" id="L77">    public ProviderId(String scheme, String id, boolean ancillary) {</span>
+<span class="fc" id="L78">        this.scheme = checkNotNull(scheme, &quot;Scheme cannot be null&quot;);</span>
+<span class="fc" id="L79">        this.id = checkNotNull(id, &quot;ID cannot be null&quot;);</span>
+<span class="fc" id="L80">        this.ancillary = ancillary;</span>
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * Returns the device URI scheme to which this provider is bound.
+     *
+     * @return device URI scheme
+     */
+    public String scheme() {
+<span class="fc" id="L89">        return scheme;</span>
+    }
+
+    /**
+     * Returns the device URI scheme specific id portion.
+     *
+     * @return id
+     */
+    public String id() {
+<span class="nc" id="L98">        return id;</span>
+    }
+
+    /**
+     * Indicates whether this identifier designates an ancillary providers.
+     *
+     * @return true if the provider is ancillary; false if primary
+     */
+    public boolean isAncillary() {
+<span class="fc" id="L107">        return ancillary;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L112">        return Objects.hash(scheme, id);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L117" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L118">            return true;</span>
+        }
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if (obj instanceof ProviderId) {</span>
+<span class="fc" id="L121">            final ProviderId other = (ProviderId) obj;</span>
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            return Objects.equals(this.scheme, other.scheme) &amp;&amp;</span>
+<span class="pc bpc" id="L123" title="1 of 4 branches missed.">                    Objects.equals(this.id, other.id) &amp;&amp;</span>
+                    this.ancillary == other.ancillary;
+        }
+<span class="fc" id="L126">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L131">        return toStringHelper(this).add(&quot;scheme&quot;, scheme).add(&quot;id&quot;, id)</span>
+<span class="fc" id="L132">                .add(&quot;ancillary&quot;, ancillary).toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ClusterCommunicationManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.cluster.messaging.impl</a> &gt; <span class="el_source">ClusterCommunicationManager.java</span></div><h1>ClusterCommunicationManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.cluster.messaging.impl;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.Tools;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.cluster.messaging.ClusterMessage;
+import org.onosproject.store.cluster.messaging.ClusterMessageHandler;
+import org.onosproject.store.cluster.messaging.Endpoint;
+import org.onosproject.store.cluster.messaging.MessageSubject;
+import org.onosproject.store.cluster.messaging.MessagingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+@Component(immediate = true)
+@Service
+<span class="nc" id="L50">public class ClusterCommunicationManager</span>
+        implements ClusterCommunicationService {
+
+<span class="nc" id="L53">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private ClusterService clusterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MessagingService messagingService;
+
+    private NodeId localNodeId;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L65">        localNodeId = clusterService.getLocalNode().id();</span>
+<span class="nc" id="L66">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L67">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L71">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L72">    }</span>
+
+    @Override
+    public &lt;M&gt; void broadcast(M message,
+                              MessageSubject subject,
+                              Function&lt;M, byte[]&gt; encoder) {
+<span class="nc" id="L78">        multicast(message,</span>
+                  subject,
+                  encoder,
+<span class="nc" id="L81">                  clusterService.getNodes()</span>
+<span class="nc" id="L82">                      .stream()</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">                      .filter(node -&gt; !Objects.equal(node, clusterService.getLocalNode()))</span>
+<span class="nc" id="L84">                      .map(ControllerNode::id)</span>
+<span class="nc" id="L85">                      .collect(Collectors.toSet()));</span>
+<span class="nc" id="L86">    }</span>
+
+    @Override
+    public &lt;M&gt; void broadcastIncludeSelf(M message,
+                                         MessageSubject subject,
+                                         Function&lt;M, byte[]&gt; encoder) {
+<span class="nc" id="L92">        multicast(message,</span>
+                  subject,
+                  encoder,
+<span class="nc" id="L95">                  clusterService.getNodes()</span>
+<span class="nc" id="L96">                      .stream()</span>
+<span class="nc" id="L97">                      .map(ControllerNode::id)</span>
+<span class="nc" id="L98">                      .collect(Collectors.toSet()));</span>
+<span class="nc" id="L99">    }</span>
+
+    @Override
+    public &lt;M&gt; CompletableFuture&lt;Void&gt; unicast(M message,
+                                               MessageSubject subject,
+                                               Function&lt;M, byte[]&gt; encoder,
+                                               NodeId toNodeId) {
+        try {
+<span class="nc" id="L107">            byte[] payload = new ClusterMessage(</span>
+                    localNodeId,
+                    subject,
+<span class="nc" id="L110">                    encoder.apply(message)).getBytes();</span>
+<span class="nc" id="L111">            return doUnicast(subject, payload, toNodeId);</span>
+<span class="nc" id="L112">        } catch (Exception e) {</span>
+<span class="nc" id="L113">            return Tools.exceptionalFuture(e);</span>
+        }
+    }
+
+    @Override
+    public &lt;M&gt; void multicast(M message,
+                              MessageSubject subject,
+                              Function&lt;M, byte[]&gt; encoder,
+                              Set&lt;NodeId&gt; nodes) {
+<span class="nc" id="L122">        byte[] payload = new ClusterMessage(</span>
+                localNodeId,
+                subject,
+<span class="nc" id="L125">                encoder.apply(message)).getBytes();</span>
+<span class="nc" id="L126">        nodes.forEach(nodeId -&gt; doUnicast(subject, payload, nodeId));</span>
+<span class="nc" id="L127">    }</span>
+
+    @Override
+    public &lt;M, R&gt; CompletableFuture&lt;R&gt; sendAndReceive(M message,
+                                                      MessageSubject subject,
+                                                      Function&lt;M, byte[]&gt; encoder,
+                                                      Function&lt;byte[], R&gt; decoder,
+                                                      NodeId toNodeId) {
+        try {
+<span class="nc" id="L136">            ClusterMessage envelope = new ClusterMessage(</span>
+<span class="nc" id="L137">                    clusterService.getLocalNode().id(),</span>
+                    subject,
+<span class="nc" id="L139">                    encoder.apply(message));</span>
+<span class="nc" id="L140">            return sendAndReceive(subject, envelope.getBytes(), toNodeId).thenApply(decoder);</span>
+<span class="nc" id="L141">        } catch (Exception e) {</span>
+<span class="nc" id="L142">            return Tools.exceptionalFuture(e);</span>
+        }
+    }
+
+    private CompletableFuture&lt;Void&gt; doUnicast(MessageSubject subject, byte[] payload, NodeId toNodeId) {
+<span class="nc" id="L147">        ControllerNode node = clusterService.getNode(toNodeId);</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        checkArgument(node != null, &quot;Unknown nodeId: %s&quot;, toNodeId);</span>
+<span class="nc" id="L149">        Endpoint nodeEp = new Endpoint(node.ip(), node.tcpPort());</span>
+<span class="nc" id="L150">        return messagingService.sendAsync(nodeEp, subject.value(), payload);</span>
+    }
+
+    private CompletableFuture&lt;byte[]&gt; sendAndReceive(MessageSubject subject, byte[] payload, NodeId toNodeId) {
+<span class="nc" id="L154">        ControllerNode node = clusterService.getNode(toNodeId);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        checkArgument(node != null, &quot;Unknown nodeId: %s&quot;, toNodeId);</span>
+<span class="nc" id="L156">        Endpoint nodeEp = new Endpoint(node.ip(), node.tcpPort());</span>
+<span class="nc" id="L157">        return messagingService.sendAndReceive(nodeEp, subject.value(), payload);</span>
+    }
+
+    @Override
+    public void addSubscriber(MessageSubject subject,
+                              ClusterMessageHandler subscriber,
+                              ExecutorService executor) {
+<span class="nc" id="L164">        messagingService.registerHandler(subject.value(),</span>
+                new InternalClusterMessageHandler(subscriber),
+                executor);
+<span class="nc" id="L167">    }</span>
+
+    @Override
+    public void removeSubscriber(MessageSubject subject) {
+<span class="nc" id="L171">        messagingService.unregisterHandler(subject.value());</span>
+<span class="nc" id="L172">    }</span>
+
+    @Override
+    public &lt;M, R&gt; void addSubscriber(MessageSubject subject,
+            Function&lt;byte[], M&gt; decoder,
+            Function&lt;M, R&gt; handler,
+            Function&lt;R, byte[]&gt; encoder,
+            Executor executor) {
+<span class="nc" id="L180">        messagingService.registerHandler(subject.value(),</span>
+                new InternalMessageResponder&lt;M, R&gt;(decoder, encoder, m -&gt; {
+<span class="nc" id="L182">                    CompletableFuture&lt;R&gt; responseFuture = new CompletableFuture&lt;&gt;();</span>
+<span class="nc" id="L183">                    executor.execute(() -&gt; {</span>
+                        try {
+<span class="nc" id="L185">                            responseFuture.complete(handler.apply(m));</span>
+<span class="nc" id="L186">                        } catch (Exception e) {</span>
+<span class="nc" id="L187">                            responseFuture.completeExceptionally(e);</span>
+<span class="nc" id="L188">                        }</span>
+<span class="nc" id="L189">                    });</span>
+<span class="nc" id="L190">                    return responseFuture;</span>
+                }));
+<span class="nc" id="L192">    }</span>
+
+    @Override
+    public &lt;M, R&gt; void addSubscriber(MessageSubject subject,
+            Function&lt;byte[], M&gt; decoder,
+            Function&lt;M, CompletableFuture&lt;R&gt;&gt; handler,
+            Function&lt;R, byte[]&gt; encoder) {
+<span class="nc" id="L199">        messagingService.registerHandler(subject.value(),</span>
+                new InternalMessageResponder&lt;&gt;(decoder, encoder, handler));
+<span class="nc" id="L201">    }</span>
+
+    @Override
+    public &lt;M&gt; void addSubscriber(MessageSubject subject,
+            Function&lt;byte[], M&gt; decoder,
+            Consumer&lt;M&gt; handler,
+            Executor executor) {
+<span class="nc" id="L208">        messagingService.registerHandler(subject.value(),</span>
+                new InternalMessageConsumer&lt;&gt;(decoder, handler),
+                executor);
+<span class="nc" id="L211">    }</span>
+
+    private class InternalClusterMessageHandler implements Function&lt;byte[], byte[]&gt; {
+        private ClusterMessageHandler handler;
+
+<span class="nc" id="L216">        public InternalClusterMessageHandler(ClusterMessageHandler handler) {</span>
+<span class="nc" id="L217">            this.handler = handler;</span>
+<span class="nc" id="L218">        }</span>
+
+        @Override
+        public byte[] apply(byte[] bytes) {
+<span class="nc" id="L222">            ClusterMessage message = ClusterMessage.fromBytes(bytes);</span>
+<span class="nc" id="L223">            handler.handle(message);</span>
+<span class="nc" id="L224">            return message.response();</span>
+        }
+    }
+
+    private class InternalMessageResponder&lt;M, R&gt; implements Function&lt;byte[], CompletableFuture&lt;byte[]&gt;&gt; {
+        private final Function&lt;byte[], M&gt; decoder;
+        private final Function&lt;R, byte[]&gt; encoder;
+        private final Function&lt;M, CompletableFuture&lt;R&gt;&gt; handler;
+
+        public InternalMessageResponder(Function&lt;byte[], M&gt; decoder,
+                                        Function&lt;R, byte[]&gt; encoder,
+<span class="nc" id="L235">                                        Function&lt;M, CompletableFuture&lt;R&gt;&gt; handler) {</span>
+<span class="nc" id="L236">            this.decoder = decoder;</span>
+<span class="nc" id="L237">            this.encoder = encoder;</span>
+<span class="nc" id="L238">            this.handler = handler;</span>
+<span class="nc" id="L239">        }</span>
+
+        @Override
+        public CompletableFuture&lt;byte[]&gt; apply(byte[] bytes) {
+<span class="nc" id="L243">            return handler.apply(decoder.apply(ClusterMessage.fromBytes(bytes).payload())).thenApply(encoder);</span>
+        }
+    }
+
+    private class InternalMessageConsumer&lt;M&gt; implements Consumer&lt;byte[]&gt; {
+        private final Function&lt;byte[], M&gt; decoder;
+        private final Consumer&lt;M&gt; consumer;
+
+<span class="nc" id="L251">        public InternalMessageConsumer(Function&lt;byte[], M&gt; decoder, Consumer&lt;M&gt; consumer) {</span>
+<span class="nc" id="L252">            this.decoder = decoder;</span>
+<span class="nc" id="L253">            this.consumer = consumer;</span>
+<span class="nc" id="L254">        }</span>
+
+        @Override
+        public void accept(byte[] bytes) {
+<span class="nc" id="L258">            consumer.accept(decoder.apply(ClusterMessage.fromBytes(bytes).payload()));</span>
+<span class="nc" id="L259">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

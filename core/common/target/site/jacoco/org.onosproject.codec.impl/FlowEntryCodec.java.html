@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowEntryCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">FlowEntryCodec.java</span></div><h1>FlowEntryCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Flow entry JSON codec.
+ */
+<span class="fc" id="L32">public final class FlowEntryCodec extends JsonCodec&lt;FlowEntry&gt; {</span>
+
+    @Override
+    public ObjectNode encode(FlowEntry flowEntry, CodecContext context) {
+<span class="nc" id="L36">        checkNotNull(flowEntry, &quot;Flow entry cannot be null&quot;);</span>
+
+<span class="nc" id="L38">        CoreService service = context.getService(CoreService.class);</span>
+
+<span class="nc" id="L40">        final ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="nc" id="L41">                .put(&quot;id&quot;, Long.toString(flowEntry.id().value()))</span>
+<span class="nc" id="L42">                .put(&quot;appId&quot;, service.getAppId(flowEntry.appId()).name())</span>
+<span class="nc" id="L43">                .put(&quot;groupId&quot;, flowEntry.groupId().id())</span>
+<span class="nc" id="L44">                .put(&quot;priority&quot;, flowEntry.priority())</span>
+<span class="nc" id="L45">                .put(&quot;timeout&quot;, flowEntry.timeout())</span>
+<span class="nc" id="L46">                .put(&quot;isPermanent&quot;, flowEntry.isPermanent())</span>
+<span class="nc" id="L47">                .put(&quot;deviceId&quot;, flowEntry.deviceId().toString())</span>
+<span class="nc" id="L48">                .put(&quot;state&quot;, flowEntry.state().toString())</span>
+<span class="nc" id="L49">                .put(&quot;life&quot;, flowEntry.life())</span>
+<span class="nc" id="L50">                .put(&quot;packets&quot;, flowEntry.packets())</span>
+<span class="nc" id="L51">                .put(&quot;bytes&quot;, flowEntry.bytes())</span>
+<span class="nc" id="L52">                .put(&quot;lastSeen&quot;, flowEntry.lastSeen());</span>
+
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        if (flowEntry.treatment() != null) {</span>
+<span class="nc" id="L55">            final JsonCodec&lt;TrafficTreatment&gt; treatmentCodec =</span>
+<span class="nc" id="L56">                    context.codec(TrafficTreatment.class);</span>
+<span class="nc" id="L57">            result.set(&quot;treatment&quot;, treatmentCodec.encode(flowEntry.treatment(), context));</span>
+        }
+
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        if (flowEntry.selector() != null) {</span>
+<span class="nc" id="L61">            final JsonCodec&lt;TrafficSelector&gt; selectorCodec =</span>
+<span class="nc" id="L62">                    context.codec(TrafficSelector.class);</span>
+<span class="nc" id="L63">            result.set(&quot;selector&quot;, selectorCodec.encode(flowEntry.selector(), context));</span>
+        }
+
+<span class="nc" id="L66">        return result;</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

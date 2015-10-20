@@ -1,0 +1,604 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>LLDPLinkProvider.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-lldp-provider</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.provider.lldp.impl</a> &gt; <span class="el_source">LLDPLinkProvider.java</span></div><h1>LLDPLinkProvider.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.provider.lldp.impl;
+
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Modified;
+import org.apache.felix.scr.annotations.Property;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.packet.Ethernet;
+import org.onosproject.cfg.ComponentConfigService;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.mastership.MastershipEvent;
+import org.onosproject.mastership.MastershipListener;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.Port;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.link.DefaultLinkDescription;
+import org.onosproject.net.link.LinkProvider;
+import org.onosproject.net.link.LinkProviderRegistry;
+import org.onosproject.net.link.LinkProviderService;
+import org.onosproject.net.link.LinkService;
+import org.onosproject.net.packet.PacketContext;
+import org.onosproject.net.packet.PacketPriority;
+import org.onosproject.net.packet.PacketProcessor;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+
+import java.io.IOException;
+import java.util.Dictionary;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.onlab.packet.Ethernet.TYPE_BSN;
+import static org.onlab.packet.Ethernet.TYPE_LLDP;
+import static org.onlab.util.Tools.get;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onosproject.net.Link.Type.DIRECT;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Provider which uses LLDP and BDDP packets to detect network infrastructure links.
+ */
+@Component(immediate = true)
+public class LLDPLinkProvider extends AbstractProvider implements LinkProvider {
+
+    private static final String PROVIDER_NAME = &quot;org.onosproject.provider.lldp&quot;;
+
+    private static final String FORMAT =
+            &quot;Settings: enabled={}, useBDDP={}, probeRate={}, &quot; +
+                    &quot;staleLinkAge={}, lldpSuppression={}&quot;;
+
+<span class="fc" id="L89">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkProviderRegistry providerRegistry;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkService linkService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PacketService packetService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService masterService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ComponentConfigService cfgService;
+
+    private LinkProviderService providerService;
+
+    private ScheduledExecutorService executor;
+
+    // TODO: Add sanity checking for the configurable params based on the delays
+    private static final long DEVICE_SYNC_DELAY = 5;
+    private static final long LINK_PRUNER_DELAY = 3;
+
+    private static final String PROP_ENABLED = &quot;enabled&quot;;
+<span class="fc" id="L121">    @Property(name = PROP_ENABLED, boolValue = true,</span>
+            label = &quot;If false, link discovery is disabled&quot;)
+    private boolean enabled = false;
+
+    private static final String PROP_USE_BDDP = &quot;useBDDP&quot;;
+<span class="fc" id="L126">    @Property(name = PROP_USE_BDDP, boolValue = true,</span>
+            label = &quot;Use BDDP for link discovery&quot;)
+    private boolean useBDDP = true;
+
+    private static final String PROP_PROBE_RATE = &quot;probeRate&quot;;
+    private static final int DEFAULT_PROBE_RATE = 3_000;
+<span class="fc" id="L132">    @Property(name = PROP_PROBE_RATE, intValue = DEFAULT_PROBE_RATE,</span>
+            label = &quot;LLDP and BDDP probe rate specified in millis&quot;)
+    private int probeRate = DEFAULT_PROBE_RATE;
+
+    private static final String PROP_STALE_LINK_AGE = &quot;staleLinkAge&quot;;
+    private static final int DEFAULT_STALE_LINK_AGE = 10_000;
+<span class="fc" id="L138">    @Property(name = PROP_STALE_LINK_AGE, intValue = DEFAULT_STALE_LINK_AGE,</span>
+            label = &quot;Number of millis beyond which links will be considered stale&quot;)
+    private int staleLinkAge = DEFAULT_STALE_LINK_AGE;
+
+    // FIXME: convert to use network config subsystem instead
+    private static final String PROP_LLDP_SUPPRESSION = &quot;lldpSuppression&quot;;
+    private static final String DEFAULT_LLDP_SUPPRESSION_CONFIG = &quot;../config/lldp_suppression.json&quot;;
+<span class="fc" id="L145">    @Property(name = PROP_LLDP_SUPPRESSION, value = DEFAULT_LLDP_SUPPRESSION_CONFIG,</span>
+            label = &quot;Path to LLDP suppression configuration file&quot;)
+    private String lldpSuppression = DEFAULT_LLDP_SUPPRESSION_CONFIG;
+
+<span class="fc" id="L149">    private final DiscoveryContext context = new InternalDiscoveryContext();</span>
+<span class="fc" id="L150">    private final InternalRoleListener roleListener = new InternalRoleListener();</span>
+<span class="fc" id="L151">    private final InternalDeviceListener deviceListener = new InternalDeviceListener();</span>
+<span class="fc" id="L152">    private final InternalPacketProcessor packetProcessor = new InternalPacketProcessor();</span>
+
+    // Device link discovery helpers.
+<span class="fc" id="L155">    protected final Map&lt;DeviceId, LinkDiscovery&gt; discoverers = new ConcurrentHashMap&lt;&gt;();</span>
+
+    // Most recent time a tracked link was seen; links are tracked if their
+    // destination connection point is mastered by this controller instance.
+<span class="fc" id="L159">    private final Map&lt;LinkKey, Long&gt; linkTimes = Maps.newConcurrentMap();</span>
+
+    private SuppressionRules rules;
+    private ApplicationId appId;
+
+    /**
+     * Creates an OpenFlow link provider.
+     */
+    public LLDPLinkProvider() {
+<span class="fc" id="L168">        super(new ProviderId(&quot;lldp&quot;, PROVIDER_NAME));</span>
+<span class="fc" id="L169">    }</span>
+
+    @Activate
+    public void activate(ComponentContext context) {
+<span class="fc" id="L173">        cfgService.registerProperties(getClass());</span>
+<span class="fc" id="L174">        appId = coreService.registerApplication(PROVIDER_NAME);</span>
+<span class="fc" id="L175">        modified(context);</span>
+<span class="fc" id="L176">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L177">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="fc" id="L181">        cfgService.unregisterProperties(getClass(), false);</span>
+<span class="fc" id="L182">        disable();</span>
+<span class="fc" id="L183">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L184">    }</span>
+
+    @Modified
+    public void modified(ComponentContext context) {
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">        Dictionary&lt;?, ?&gt; properties = context != null ? context.getProperties() : new Properties();</span>
+
+        boolean newEnabled, newUseBddp;
+        int newProbeRate, newStaleLinkAge;
+        String newLldpSuppression;
+        try {
+<span class="fc" id="L194">            String s = get(properties, PROP_ENABLED);</span>
+<span class="pc bpc" id="L195" title="3 of 4 branches missed.">            newEnabled = isNullOrEmpty(s) || Boolean.parseBoolean(s.trim());</span>
+
+<span class="fc" id="L197">            s = get(properties, PROP_USE_BDDP);</span>
+<span class="pc bpc" id="L198" title="3 of 4 branches missed.">            newUseBddp = isNullOrEmpty(s) || Boolean.parseBoolean(s.trim());</span>
+
+<span class="fc" id="L200">            s = get(properties, PROP_PROBE_RATE);</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">            newProbeRate = isNullOrEmpty(s) ? probeRate : Integer.parseInt(s.trim());</span>
+
+<span class="fc" id="L203">            s = get(properties, PROP_STALE_LINK_AGE);</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">            newStaleLinkAge = isNullOrEmpty(s) ? staleLinkAge : Integer.parseInt(s.trim());</span>
+
+<span class="fc" id="L206">            s = get(properties, PROP_LLDP_SUPPRESSION);</span>
+<span class="pc bpc" id="L207" title="1 of 2 branches missed.">            newLldpSuppression = isNullOrEmpty(s) ? DEFAULT_LLDP_SUPPRESSION_CONFIG : s;</span>
+
+<span class="nc" id="L209">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L210">            log.warn(e.getMessage());</span>
+<span class="nc" id="L211">            newEnabled = enabled;</span>
+<span class="nc" id="L212">            newUseBddp = useBDDP;</span>
+<span class="nc" id="L213">            newProbeRate = probeRate;</span>
+<span class="nc" id="L214">            newStaleLinkAge = staleLinkAge;</span>
+<span class="nc" id="L215">            newLldpSuppression = lldpSuppression;</span>
+<span class="fc" id="L216">        }</span>
+
+<span class="fc" id="L218">        boolean wasEnabled = enabled;</span>
+
+<span class="fc" id="L220">        enabled = newEnabled;</span>
+<span class="fc" id="L221">        useBDDP = newUseBddp;</span>
+<span class="fc" id="L222">        probeRate = newProbeRate;</span>
+<span class="fc" id="L223">        staleLinkAge = newStaleLinkAge;</span>
+<span class="fc" id="L224">        lldpSuppression = newLldpSuppression;</span>
+
+<span class="pc bpc" id="L226" title="2 of 4 branches missed.">        if (!wasEnabled &amp;&amp; enabled) {</span>
+<span class="fc" id="L227">            enable();</span>
+<span class="nc bnc" id="L228" title="All 4 branches missed.">        } else if (wasEnabled &amp;&amp; !enabled) {</span>
+<span class="nc" id="L229">            disable();</span>
+        }
+
+<span class="fc" id="L232">        log.info(FORMAT, enabled, useBDDP, probeRate, staleLinkAge, lldpSuppression);</span>
+<span class="fc" id="L233">    }</span>
+
+    /**
+     * Enables link discovery processing.
+     */
+    private void enable() {
+<span class="fc" id="L239">        providerService = providerRegistry.register(this);</span>
+<span class="fc" id="L240">        masterService.addListener(roleListener);</span>
+<span class="fc" id="L241">        deviceService.addListener(deviceListener);</span>
+<span class="fc" id="L242">        packetService.addProcessor(packetProcessor, PacketProcessor.advisor(0));</span>
+
+<span class="fc" id="L244">        loadSuppressionRules();</span>
+<span class="fc" id="L245">        loadDevices();</span>
+
+<span class="fc" id="L247">        executor = newSingleThreadScheduledExecutor(groupedThreads(&quot;onos/link&quot;, &quot;discovery-%d&quot;));</span>
+<span class="fc" id="L248">        executor.scheduleAtFixedRate(new SyncDeviceInfoTask(),</span>
+                                     DEVICE_SYNC_DELAY, DEVICE_SYNC_DELAY, SECONDS);
+<span class="fc" id="L250">        executor.scheduleAtFixedRate(new LinkPrunerTask(),</span>
+                                     LINK_PRUNER_DELAY, LINK_PRUNER_DELAY, SECONDS);
+
+<span class="fc" id="L253">        requestIntercepts();</span>
+<span class="fc" id="L254">    }</span>
+
+    /**
+     * Disables link discovery processing.
+     */
+    private void disable() {
+<span class="fc" id="L260">        withdrawIntercepts();</span>
+
+<span class="fc" id="L262">        providerRegistry.unregister(this);</span>
+<span class="fc" id="L263">        masterService.removeListener(roleListener);</span>
+<span class="fc" id="L264">        deviceService.removeListener(deviceListener);</span>
+<span class="fc" id="L265">        packetService.removeProcessor(packetProcessor);</span>
+
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">        if (executor != null) {</span>
+<span class="fc" id="L268">            executor.shutdownNow();</span>
+        }
+<span class="fc" id="L270">        discoverers.values().forEach(LinkDiscovery::stop);</span>
+<span class="fc" id="L271">        discoverers.clear();</span>
+
+<span class="fc" id="L273">        providerService = null;</span>
+<span class="fc" id="L274">    }</span>
+
+    /**
+     * Loads available devices and registers their ports to be probed.
+     */
+    private void loadDevices() {
+<span class="pc bpc" id="L280" title="1 of 2 branches missed.">        for (Device device : deviceService.getAvailableDevices()) {</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">            if (rules.isSuppressed(device)) {</span>
+<span class="nc" id="L282">                log.debug(&quot;LinkDiscovery from {} disabled by configuration&quot;, device.id());</span>
+<span class="nc" id="L283">                continue;</span>
+            }
+<span class="nc" id="L285">            LinkDiscovery ld = new LinkDiscovery(device, context);</span>
+<span class="nc" id="L286">            discoverers.put(device.id(), ld);</span>
+<span class="nc" id="L287">            addPorts(ld, device.id());</span>
+<span class="nc" id="L288">        }</span>
+<span class="fc" id="L289">    }</span>
+
+    /**
+     * Adds ports of the specified device to the specified discovery helper.
+     */
+    private void addPorts(LinkDiscovery discoverer, DeviceId deviceId) {
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        for (Port p : deviceService.getPorts(deviceId)) {</span>
+<span class="nc bnc" id="L296" title="All 2 branches missed.">            if (rules.isSuppressed(p)) {</span>
+<span class="nc" id="L297">                continue;</span>
+            }
+<span class="nc bnc" id="L299" title="All 2 branches missed.">            if (!p.number().isLogical()) {</span>
+<span class="nc" id="L300">                discoverer.addPort(p);</span>
+            }
+<span class="nc" id="L302">        }</span>
+<span class="nc" id="L303">    }</span>
+
+
+    /**
+     * Loads LLDP suppression rules.
+     */
+    private void loadSuppressionRules() {
+        // FIXME: convert to use network configuration
+<span class="fc" id="L311">        SuppressionRulesStore store = new SuppressionRulesStore(lldpSuppression);</span>
+        try {
+<span class="nc" id="L313">            log.info(&quot;Reading suppression rules from {}&quot;, lldpSuppression);</span>
+<span class="nc" id="L314">            rules = store.read();</span>
+<span class="fc" id="L315">        } catch (IOException e) {</span>
+<span class="fc" id="L316">            log.info(&quot;Failed to load {}, using built-in rules&quot;, lldpSuppression);</span>
+            // default rule to suppress ROADM to maintain compatibility
+<span class="fc" id="L318">            rules = new SuppressionRules(ImmutableSet.of(),</span>
+<span class="fc" id="L319">                                         EnumSet.of(Device.Type.ROADM),</span>
+<span class="fc" id="L320">                                         ImmutableMap.of());</span>
+<span class="nc" id="L321">        }</span>
+
+        // should refresh discoverers when we need dynamic reconfiguration
+<span class="fc" id="L324">    }</span>
+
+    /**
+     * Requests packet intercepts.
+     */
+    private void requestIntercepts() {
+<span class="fc" id="L330">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="fc" id="L331">        selector.matchEthType(TYPE_LLDP);</span>
+<span class="fc" id="L332">        packetService.requestPackets(selector.build(), PacketPriority.CONTROL, appId);</span>
+
+<span class="fc" id="L334">        selector.matchEthType(TYPE_BSN);</span>
+<span class="pc bpc" id="L335" title="1 of 2 branches missed.">        if (useBDDP) {</span>
+<span class="fc" id="L336">            packetService.requestPackets(selector.build(), PacketPriority.CONTROL, appId);</span>
+        } else {
+<span class="nc" id="L338">            packetService.cancelPackets(selector.build(), PacketPriority.CONTROL, appId);</span>
+        }
+<span class="fc" id="L340">    }</span>
+
+    /**
+     * Withdraws packet intercepts.
+     */
+    private void withdrawIntercepts() {
+<span class="fc" id="L346">        TrafficSelector.Builder selector = DefaultTrafficSelector.builder();</span>
+<span class="fc" id="L347">        selector.matchEthType(TYPE_LLDP);</span>
+<span class="fc" id="L348">        packetService.cancelPackets(selector.build(), PacketPriority.CONTROL, appId);</span>
+<span class="fc" id="L349">        selector.matchEthType(TYPE_BSN);</span>
+<span class="fc" id="L350">        packetService.cancelPackets(selector.build(), PacketPriority.CONTROL, appId);</span>
+<span class="fc" id="L351">    }</span>
+
+    /**
+     * Processes device mastership role changes.
+     */
+<span class="fc" id="L356">    private class InternalRoleListener implements MastershipListener {</span>
+        @Override
+        public void event(MastershipEvent event) {
+<span class="nc bnc" id="L359" title="All 2 branches missed.">            if (MastershipEvent.Type.BACKUPS_CHANGED.equals(event.type())) {</span>
+                // only need new master events
+<span class="nc" id="L361">                return;</span>
+            }
+
+<span class="nc" id="L364">            DeviceId deviceId = event.subject();</span>
+<span class="nc" id="L365">            Device device = deviceService.getDevice(deviceId);</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">            if (device == null) {</span>
+<span class="nc" id="L367">                log.debug(&quot;Device {} doesn't exist, or isn't there yet&quot;, deviceId);</span>
+<span class="nc" id="L368">                return;</span>
+            }
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (rules.isSuppressed(device)) {</span>
+<span class="nc" id="L371">                return;</span>
+            }
+<span class="nc" id="L373">            discoverers.computeIfAbsent(deviceId, k -&gt; new LinkDiscovery(device, context));</span>
+<span class="nc" id="L374">        }</span>
+
+    }
+
+    /**
+     * Processes device events.
+     */
+<span class="fc" id="L381">    private class InternalDeviceListener implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+            LinkDiscovery ld;
+<span class="fc" id="L385">            Device device = event.subject();</span>
+<span class="fc" id="L386">            Port port = event.port();</span>
+<span class="pc bpc" id="L387" title="1 of 2 branches missed.">            if (device == null) {</span>
+<span class="nc" id="L388">                log.error(&quot;Device is null.&quot;);</span>
+<span class="nc" id="L389">                return;</span>
+            }
+<span class="fc" id="L391">            log.trace(&quot;{} {} {}&quot;, event.type(), event.subject(), event);</span>
+<span class="fc" id="L392">            final DeviceId deviceId = device.id();</span>
+<span class="pc bpc" id="L393" title="4 of 7 branches missed.">            switch (event.type()) {</span>
+                case DEVICE_ADDED:
+                case DEVICE_UPDATED:
+<span class="fc" id="L396">                    synchronized (discoverers) {</span>
+<span class="fc" id="L397">                        ld = discoverers.get(deviceId);</span>
+<span class="pc bpc" id="L398" title="1 of 2 branches missed.">                        if (ld == null) {</span>
+<span class="pc bpc" id="L399" title="2 of 4 branches missed.">                            if (rules != null &amp;&amp; rules.isSuppressed(device)) {</span>
+<span class="nc" id="L400">                                log.debug(&quot;LinkDiscovery from {} disabled by configuration&quot;, device.id());</span>
+<span class="nc" id="L401">                                return;</span>
+                            }
+<span class="fc" id="L403">                            log.debug(&quot;Device added ({}) {}&quot;, event.type(), deviceId);</span>
+<span class="fc" id="L404">                            discoverers.put(deviceId, new LinkDiscovery(device, context));</span>
+                        } else {
+<span class="nc bnc" id="L406" title="All 2 branches missed.">                            if (ld.isStopped()) {</span>
+<span class="nc" id="L407">                                log.debug(&quot;Device restarted ({}) {}&quot;, event.type(), deviceId);</span>
+<span class="nc" id="L408">                                ld.start();</span>
+                            }
+                        }
+<span class="pc" id="L411">                    }</span>
+<span class="fc" id="L412">                    break;</span>
+                case PORT_ADDED:
+                case PORT_UPDATED:
+<span class="fc bfc" id="L415" title="All 2 branches covered.">                    if (port.isEnabled()) {</span>
+<span class="fc" id="L416">                        ld = discoverers.get(deviceId);</span>
+<span class="pc bpc" id="L417" title="1 of 2 branches missed.">                        if (ld == null) {</span>
+<span class="nc" id="L418">                            return;</span>
+                        }
+<span class="pc bpc" id="L420" title="1 of 2 branches missed.">                        if (rules.isSuppressed(port)) {</span>
+<span class="nc" id="L421">                            log.debug(&quot;LinkDiscovery from {}@{} disabled by configuration&quot;,</span>
+<span class="nc" id="L422">                                      port.number(), device.id());</span>
+<span class="nc" id="L423">                            return;</span>
+                        }
+<span class="pc bpc" id="L425" title="1 of 2 branches missed.">                        if (!port.number().isLogical()) {</span>
+<span class="fc" id="L426">                            log.debug(&quot;Port added {}&quot;, port);</span>
+<span class="fc" id="L427">                            ld.addPort(port);</span>
+                        }
+                    } else {
+<span class="fc" id="L430">                        log.debug(&quot;Port down {}&quot;, port);</span>
+<span class="fc" id="L431">                        ConnectPoint point = new ConnectPoint(deviceId, port.number());</span>
+<span class="fc" id="L432">                        providerService.linksVanished(point);</span>
+                    }
+<span class="fc" id="L434">                    break;</span>
+                case PORT_REMOVED:
+<span class="nc" id="L436">                    log.debug(&quot;Port removed {}&quot;, port);</span>
+<span class="nc" id="L437">                    ConnectPoint point = new ConnectPoint(deviceId, port.number());</span>
+<span class="nc" id="L438">                    providerService.linksVanished(point);</span>
+
+<span class="nc" id="L440">                    break;</span>
+                case DEVICE_REMOVED:
+                case DEVICE_SUSPENDED:
+<span class="fc" id="L443">                    log.debug(&quot;Device removed {}&quot;, deviceId);</span>
+<span class="fc" id="L444">                    ld = discoverers.get(deviceId);</span>
+<span class="pc bpc" id="L445" title="1 of 2 branches missed.">                    if (ld == null) {</span>
+<span class="nc" id="L446">                        return;</span>
+                    }
+<span class="fc" id="L448">                    ld.stop();</span>
+<span class="fc" id="L449">                    providerService.linksVanished(deviceId);</span>
+<span class="fc" id="L450">                    break;</span>
+                case DEVICE_AVAILABILITY_CHANGED:
+<span class="nc" id="L452">                    ld = discoverers.get(deviceId);</span>
+<span class="nc bnc" id="L453" title="All 2 branches missed.">                    if (ld == null) {</span>
+<span class="nc" id="L454">                        return;</span>
+                    }
+<span class="nc bnc" id="L456" title="All 2 branches missed.">                    if (deviceService.isAvailable(deviceId)) {</span>
+<span class="nc" id="L457">                        log.debug(&quot;Device up {}&quot;, deviceId);</span>
+<span class="nc" id="L458">                        ld.start();</span>
+                    } else {
+<span class="nc" id="L460">                        providerService.linksVanished(deviceId);</span>
+<span class="nc" id="L461">                        log.debug(&quot;Device down {}&quot;, deviceId);</span>
+<span class="nc" id="L462">                        ld.stop();</span>
+                    }
+<span class="nc" id="L464">                    break;</span>
+                case PORT_STATS_UPDATED:
+<span class="nc" id="L466">                    break;</span>
+                default:
+<span class="nc" id="L468">                    log.debug(&quot;Unknown event {}&quot;, event);</span>
+            }
+<span class="fc" id="L470">        }</span>
+    }
+
+    /**
+     * Processes incoming packets.
+     */
+<span class="fc" id="L476">    private class InternalPacketProcessor implements PacketProcessor {</span>
+        @Override
+        public void process(PacketContext context) {
+<span class="pc bpc" id="L479" title="2 of 4 branches missed.">            if (context == null || context.isHandled()) {</span>
+<span class="nc" id="L480">                return;</span>
+            }
+
+<span class="fc" id="L483">            Ethernet eth = context.inPacket().parsed();</span>
+<span class="pc bpc" id="L484" title="4 of 6 branches missed.">            if (eth == null || (eth.getEtherType() != TYPE_LLDP &amp;&amp; eth.getEtherType() != TYPE_BSN)) {</span>
+<span class="nc" id="L485">                return;</span>
+            }
+
+<span class="fc" id="L488">            LinkDiscovery ld = discoverers.get(context.inPacket().receivedFrom().deviceId());</span>
+<span class="fc bfc" id="L489" title="All 2 branches covered.">            if (ld == null) {</span>
+<span class="fc" id="L490">                return;</span>
+            }
+
+<span class="pc bpc" id="L493" title="1 of 2 branches missed.">            if (ld.handleLLDP(context)) {</span>
+<span class="fc" id="L494">                context.block();</span>
+            }
+<span class="fc" id="L496">        }</span>
+    }
+
+    /**
+     * Auxiliary task to keep device ports up to date.
+     */
+<span class="fc" id="L502">    private final class SyncDeviceInfoTask implements Runnable {</span>
+        @Override
+        public void run() {
+<span class="nc bnc" id="L505" title="All 2 branches missed.">            if (Thread.currentThread().isInterrupted()) {</span>
+<span class="nc" id="L506">                log.info(&quot;Interrupted, quitting&quot;);</span>
+<span class="nc" id="L507">                return;</span>
+            }
+            // check what deviceService sees, to see if we are missing anything
+            try {
+<span class="nc bnc" id="L511" title="All 2 branches missed.">                for (Device dev : deviceService.getDevices()) {</span>
+<span class="nc bnc" id="L512" title="All 2 branches missed.">                    if (rules.isSuppressed(dev)) {</span>
+<span class="nc" id="L513">                        continue;</span>
+                    }
+<span class="nc" id="L515">                    DeviceId did = dev.id();</span>
+<span class="nc" id="L516">                    synchronized (discoverers) {</span>
+<span class="nc" id="L517">                        LinkDiscovery ld = discoverers</span>
+<span class="nc" id="L518">                                .computeIfAbsent(did, k -&gt; new LinkDiscovery(dev, context));</span>
+<span class="nc" id="L519">                        addPorts(ld, did);</span>
+<span class="nc" id="L520">                    }</span>
+<span class="nc" id="L521">                }</span>
+<span class="nc" id="L522">            } catch (Exception e) {</span>
+                // Catch all exceptions to avoid task being suppressed
+<span class="nc" id="L524">                log.error(&quot;Exception thrown during synchronization process&quot;, e);</span>
+<span class="nc" id="L525">            }</span>
+<span class="nc" id="L526">        }</span>
+    }
+
+    /**
+     * Auxiliary task for pruning stale links.
+     */
+<span class="fc" id="L532">    private class LinkPrunerTask implements Runnable {</span>
+        @Override
+        public void run() {
+<span class="nc bnc" id="L535" title="All 2 branches missed.">            if (Thread.currentThread().isInterrupted()) {</span>
+<span class="nc" id="L536">                log.info(&quot;Interrupted, quitting&quot;);</span>
+<span class="nc" id="L537">                return;</span>
+            }
+
+            try {
+                // TODO: There is still a slight possibility of mastership
+                // change occurring right with link going stale. This will
+                // result in the stale link not being pruned.
+<span class="nc" id="L544">                Maps.filterEntries(linkTimes, e -&gt; {</span>
+<span class="nc bnc" id="L545" title="All 2 branches missed.">                    if (!masterService.isLocalMaster(e.getKey().dst().deviceId())) {</span>
+<span class="nc" id="L546">                        return true;</span>
+                    }
+<span class="nc bnc" id="L548" title="All 2 branches missed.">                    if (isStale(e.getValue())) {</span>
+<span class="nc" id="L549">                        providerService.linkVanished(new DefaultLinkDescription(e.getKey().src(),</span>
+<span class="nc" id="L550">                                                                                e.getKey().dst(),</span>
+                                                                                DIRECT));
+<span class="nc" id="L552">                        return true;</span>
+                    }
+<span class="nc" id="L554">                    return false;</span>
+<span class="nc" id="L555">                }).clear();</span>
+
+<span class="nc" id="L557">            } catch (Exception e) {</span>
+                // Catch all exceptions to avoid task being suppressed
+<span class="nc" id="L559">                log.error(&quot;Exception thrown during link pruning process&quot;, e);</span>
+<span class="nc" id="L560">            }</span>
+<span class="nc" id="L561">        }</span>
+
+        private boolean isStale(long lastSeen) {
+<span class="nc bnc" id="L564" title="All 2 branches missed.">            return lastSeen &lt; System.currentTimeMillis() - staleLinkAge;</span>
+        }
+    }
+
+    /**
+     * Provides processing context for the device link discovery helpers.
+     */
+<span class="fc" id="L571">    private class InternalDiscoveryContext implements DiscoveryContext {</span>
+        @Override
+        public MastershipService mastershipService() {
+<span class="fc" id="L574">            return masterService;</span>
+        }
+
+        @Override
+        public LinkProviderService providerService() {
+<span class="fc" id="L579">            return providerService;</span>
+        }
+
+        @Override
+        public PacketService packetService() {
+<span class="fc" id="L584">            return packetService;</span>
+        }
+
+        @Override
+        public long probeRate() {
+<span class="nc" id="L589">            return probeRate;</span>
+        }
+
+        @Override
+        public boolean useBDDP() {
+<span class="fc" id="L594">            return useBDDP;</span>
+        }
+
+        @Override
+        public void touchLink(LinkKey key) {
+<span class="fc" id="L599">            linkTimes.put(key, System.currentTimeMillis());</span>
+<span class="fc" id="L600">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

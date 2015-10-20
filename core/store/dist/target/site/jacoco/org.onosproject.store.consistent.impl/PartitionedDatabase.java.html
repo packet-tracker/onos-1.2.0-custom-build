@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PartitionedDatabase.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.consistent.impl</a> &gt; <span class="el_source">PartitionedDatabase.java</span></div><h1>PartitionedDatabase.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.consistent.impl;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import net.kuujo.copycat.Task;
+import net.kuujo.copycat.cluster.Cluster;
+import net.kuujo.copycat.resource.ResourceState;
+import org.onosproject.store.service.DatabaseUpdate;
+import org.onosproject.store.service.Transaction;
+import org.onosproject.store.service.Versioned;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkState;
+
+/**
+ * A database that partitions the keys across one or more database partitions.
+ */
+public class PartitionedDatabase implements Database {
+
+    private final String name;
+    private final Partitioner&lt;String&gt; partitioner;
+    private final List&lt;Database&gt; partitions;
+<span class="nc" id="L52">    private final AtomicBoolean isOpen = new AtomicBoolean(false);</span>
+    private static final String DB_NOT_OPEN = &quot;Partitioned Database is not open&quot;;
+    private TransactionManager transactionManager;
+
+    public PartitionedDatabase(
+            String name,
+<span class="nc" id="L58">            Collection&lt;Database&gt; partitions) {</span>
+<span class="nc" id="L59">        this.name = name;</span>
+<span class="nc" id="L60">        this.partitions = partitions</span>
+<span class="nc" id="L61">                .stream()</span>
+<span class="nc" id="L62">                .sorted((db1, db2) -&gt; db1.name().compareTo(db2.name()))</span>
+<span class="nc" id="L63">                .collect(Collectors.toList());</span>
+<span class="nc" id="L64">        this.partitioner = new SimpleKeyHashPartitioner(this.partitions);</span>
+<span class="nc" id="L65">    }</span>
+
+    /**
+     * Returns the databases for individual partitions.
+     * @return list of database partitions
+     */
+    public List&lt;Database&gt; getPartitions() {
+<span class="nc" id="L72">        return partitions;</span>
+    }
+
+    /**
+     * Returns true if the database is open.
+     * @return true if open, false otherwise
+     */
+    @Override
+    public boolean isOpen() {
+<span class="nc" id="L81">        return isOpen.get();</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Set&lt;String&gt;&gt; maps() {
+<span class="nc" id="L86">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L87">        Set&lt;String&gt; mapNames = Sets.newConcurrentHashSet();</span>
+<span class="nc" id="L88">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L89">                .stream()</span>
+<span class="nc" id="L90">                .map(db -&gt; db.maps().thenApply(mapNames::addAll))</span>
+<span class="nc" id="L91">                .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L92">            .thenApply(v -&gt; mapNames);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Map&lt;String, Long&gt;&gt; counters() {
+<span class="nc" id="L97">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L98">        Map&lt;String, Long&gt; counters = Maps.newConcurrentMap();</span>
+<span class="nc" id="L99">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L100">                .stream()</span>
+<span class="nc" id="L101">                .map(db -&gt; db.counters()</span>
+<span class="nc" id="L102">                        .thenApply(m -&gt; {</span>
+<span class="nc" id="L103">                            counters.putAll(m);</span>
+<span class="nc" id="L104">                            return null;</span>
+                        }))
+<span class="nc" id="L106">                .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L107">            .thenApply(v -&gt; counters);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Integer&gt; mapSize(String mapName) {
+<span class="nc" id="L112">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L113">        AtomicInteger totalSize = new AtomicInteger(0);</span>
+<span class="nc" id="L114">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L115">                                               .stream()</span>
+<span class="nc" id="L116">                                               .map(p -&gt; p.mapSize(mapName).thenApply(totalSize::addAndGet))</span>
+<span class="nc" id="L117">                                               .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L118">                .thenApply(v -&gt; totalSize.get());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; mapIsEmpty(String mapName) {
+<span class="nc" id="L123">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        return mapSize(mapName).thenApply(size -&gt; size == 0);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; mapContainsKey(String mapName, String key) {
+<span class="nc" id="L129">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L130">        return partitioner.getPartition(mapName, key).mapContainsKey(mapName, key);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; mapContainsValue(String mapName, byte[] value) {
+<span class="nc" id="L135">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L136">        AtomicBoolean containsValue = new AtomicBoolean(false);</span>
+<span class="nc" id="L137">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L138">                                               .stream()</span>
+<span class="nc" id="L139">                                               .map(p -&gt; p.mapContainsValue(mapName, value)</span>
+<span class="nc" id="L140">                                                       .thenApply(v -&gt; containsValue.compareAndSet(false, v)))</span>
+<span class="nc" id="L141">                                               .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L142">                .thenApply(v -&gt; containsValue.get());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Versioned&lt;byte[]&gt;&gt; mapGet(String mapName, String key) {
+<span class="nc" id="L147">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L148">        return partitioner.getPartition(mapName, key).mapGet(mapName, key);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Result&lt;UpdateResult&lt;String, byte[]&gt;&gt;&gt; mapUpdate(
+            String mapName, String key, Match&lt;byte[]&gt; valueMatch,
+            Match&lt;Long&gt; versionMatch, byte[] value) {
+<span class="nc" id="L155">        return partitioner.getPartition(mapName, key).mapUpdate(mapName, key, valueMatch, versionMatch, value);</span>
+
+    }
+
+    @Override
+    public CompletableFuture&lt;Result&lt;Void&gt;&gt; mapClear(String mapName) {
+<span class="nc" id="L161">        AtomicBoolean isLocked = new AtomicBoolean(false);</span>
+<span class="nc" id="L162">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L163">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L164">                    .stream()</span>
+<span class="nc" id="L165">                    .map(p -&gt; p.mapClear(mapName)</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">                            .thenApply(v -&gt; isLocked.compareAndSet(false, Result.Status.LOCKED == v.status())))</span>
+<span class="nc" id="L167">                    .toArray(CompletableFuture[]::new))</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">                .thenApply(v -&gt; isLocked.get() ? Result.locked() : Result.ok(null));</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Set&lt;String&gt;&gt; mapKeySet(String mapName) {
+<span class="nc" id="L173">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L174">        Set&lt;String&gt; keySet = Sets.newConcurrentHashSet();</span>
+<span class="nc" id="L175">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L176">                    .stream()</span>
+<span class="nc" id="L177">                    .map(p -&gt; p.mapKeySet(mapName).thenApply(keySet::addAll))</span>
+<span class="nc" id="L178">                    .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L179">                .thenApply(v -&gt; keySet);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Collection&lt;Versioned&lt;byte[]&gt;&gt;&gt; mapValues(String mapName) {
+<span class="nc" id="L184">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L185">        List&lt;Versioned&lt;byte[]&gt;&gt; values = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="nc" id="L186">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L187">                    .stream()</span>
+<span class="nc" id="L188">                    .map(p -&gt; p.mapValues(mapName).thenApply(values::addAll))</span>
+<span class="nc" id="L189">                    .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L190">                .thenApply(v -&gt; values);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Set&lt;Entry&lt;String, Versioned&lt;byte[]&gt;&gt;&gt;&gt; mapEntrySet(String mapName) {
+<span class="nc" id="L195">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L196">        Set&lt;Entry&lt;String, Versioned&lt;byte[]&gt;&gt;&gt; entrySet = Sets.newConcurrentHashSet();</span>
+<span class="nc" id="L197">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L198">                                               .stream()</span>
+<span class="nc" id="L199">                                               .map(p -&gt; p.mapEntrySet(mapName).thenApply(entrySet::addAll))</span>
+<span class="nc" id="L200">                                               .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L201">                .thenApply(v -&gt; entrySet);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Long&gt; counterGet(String counterName) {
+<span class="nc" id="L206">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L207">        return partitioner.getPartition(counterName, counterName).counterGet(counterName);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Long&gt; counterAddAndGet(String counterName, long delta) {
+<span class="nc" id="L212">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L213">        return partitioner.getPartition(counterName, counterName).counterAddAndGet(counterName, delta);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Long&gt; counterGetAndAdd(String counterName, long delta) {
+<span class="nc" id="L218">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L219">        return partitioner.getPartition(counterName, counterName).counterGetAndAdd(counterName, delta);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Void&gt; counterSet(String counterName, long value) {
+<span class="nc" id="L224">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L225">        return partitioner.getPartition(counterName, counterName).counterSet(counterName, value);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; counterCompareAndSet(String counterName, long expectedValue, long updateValue) {
+<span class="nc" id="L230">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L231">        return partitioner.getPartition(counterName, counterName).</span>
+<span class="nc" id="L232">                counterCompareAndSet(counterName, expectedValue, updateValue);</span>
+
+    }
+
+    @Override
+    public CompletableFuture&lt;Long&gt; queueSize(String queueName) {
+<span class="nc" id="L238">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L239">        return partitioner.getPartition(queueName, queueName).queueSize(queueName);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Void&gt; queuePush(String queueName, byte[] entry) {
+<span class="nc" id="L244">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L245">        return partitioner.getPartition(queueName, queueName).queuePush(queueName, entry);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;byte[]&gt; queuePop(String queueName) {
+<span class="nc" id="L250">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L251">        return partitioner.getPartition(queueName, queueName).queuePop(queueName);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;byte[]&gt; queuePeek(String queueName) {
+<span class="nc" id="L256">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L257">        return partitioner.getPartition(queueName, queueName).queuePeek(queueName);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;CommitResponse&gt; prepareAndCommit(Transaction transaction) {
+<span class="nc" id="L262">        Map&lt;Database, Transaction&gt; subTransactions = createSubTransactions(transaction);</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        if (subTransactions.isEmpty()) {</span>
+<span class="nc" id="L264">            return CompletableFuture.completedFuture(CommitResponse.success(ImmutableList.of()));</span>
+<span class="nc bnc" id="L265" title="All 2 branches missed.">        } else if (subTransactions.size() == 1) {</span>
+<span class="nc" id="L266">            Entry&lt;Database, Transaction&gt; entry =</span>
+<span class="nc" id="L267">                    subTransactions.entrySet().iterator().next();</span>
+<span class="nc" id="L268">            return entry.getKey().prepareAndCommit(entry.getValue());</span>
+        } else {
+<span class="nc bnc" id="L270" title="All 2 branches missed.">            if (transactionManager == null) {</span>
+<span class="nc" id="L271">                throw new IllegalStateException(&quot;TransactionManager is not initialized&quot;);</span>
+            }
+<span class="nc" id="L273">            return transactionManager.execute(transaction);</span>
+        }
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; prepare(Transaction transaction) {
+<span class="nc" id="L279">        Map&lt;Database, Transaction&gt; subTransactions = createSubTransactions(transaction);</span>
+<span class="nc" id="L280">        AtomicBoolean status = new AtomicBoolean(true);</span>
+<span class="nc" id="L281">        return CompletableFuture.allOf(subTransactions.entrySet()</span>
+<span class="nc" id="L282">                .stream()</span>
+<span class="nc" id="L283">                                               .map(entry -&gt; entry</span>
+<span class="nc" id="L284">                                                       .getKey()</span>
+<span class="nc" id="L285">                        .prepare(entry.getValue())</span>
+<span class="nc" id="L286">                        .thenApply(v -&gt; status.compareAndSet(true, v)))</span>
+<span class="nc" id="L287">                .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L288">            .thenApply(v -&gt; status.get());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;CommitResponse&gt; commit(Transaction transaction) {
+<span class="nc" id="L293">        Map&lt;Database, Transaction&gt; subTransactions = createSubTransactions(transaction);</span>
+<span class="nc" id="L294">        AtomicBoolean success = new AtomicBoolean(true);</span>
+<span class="nc" id="L295">        List&lt;UpdateResult&lt;String, byte[]&gt;&gt; allUpdates = Lists.newArrayList();</span>
+<span class="nc" id="L296">        return CompletableFuture.allOf(subTransactions.entrySet()</span>
+<span class="nc" id="L297">                                               .stream()</span>
+<span class="nc" id="L298">                                               .map(entry -&gt; entry.getKey().commit(entry.getValue())</span>
+<span class="nc" id="L299">                                                       .thenAccept(response -&gt; {</span>
+<span class="nc bnc" id="L300" title="All 4 branches missed.">                                                           success.set(success.get() &amp;&amp; response.success());</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">                                                           if (success.get()) {</span>
+<span class="nc" id="L302">                                                               allUpdates.addAll(response.updates());</span>
+                                                           }
+<span class="nc" id="L304">                                                       }))</span>
+<span class="nc" id="L305">                                               .toArray(CompletableFuture[]::new))</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">                               .thenApply(v -&gt; success.get() ?</span>
+<span class="nc" id="L307">                                       CommitResponse.success(allUpdates) : CommitResponse.failure());</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Boolean&gt; rollback(Transaction transaction) {
+<span class="nc" id="L312">        Map&lt;Database, Transaction&gt; subTransactions = createSubTransactions(transaction);</span>
+<span class="nc" id="L313">        return CompletableFuture.allOf(subTransactions.entrySet()</span>
+<span class="nc" id="L314">                .stream()</span>
+<span class="nc" id="L315">                .map(entry -&gt; entry.getKey().rollback(entry.getValue()))</span>
+<span class="nc" id="L316">                                               .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L317">            .thenApply(v -&gt; true);</span>
+    }
+
+    @Override
+    public CompletableFuture&lt;Database&gt; open() {
+<span class="nc" id="L322">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L323">                    .stream()</span>
+<span class="nc" id="L324">                    .map(Database::open)</span>
+<span class="nc" id="L325">                    .toArray(CompletableFuture[]::new))</span>
+<span class="nc" id="L326">                .thenApply(v -&gt; {</span>
+<span class="nc" id="L327">                    isOpen.set(true);</span>
+<span class="nc" id="L328">                    return this;</span>
+                });
+    }
+
+    @Override
+    public CompletableFuture&lt;Void&gt; close() {
+<span class="nc" id="L334">        checkState(isOpen.get(), DB_NOT_OPEN);</span>
+<span class="nc" id="L335">        return CompletableFuture.allOf(partitions</span>
+<span class="nc" id="L336">                .stream()</span>
+<span class="nc" id="L337">                .map(database -&gt; database.close())</span>
+<span class="nc" id="L338">                .toArray(CompletableFuture[]::new));</span>
+    }
+
+    @Override
+    public boolean isClosed() {
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        return !isOpen.get();</span>
+    }
+
+    @Override
+    public String name() {
+<span class="nc" id="L348">        return name;</span>
+    }
+
+    @Override
+    public Cluster cluster() {
+<span class="nc" id="L353">        throw new UnsupportedOperationException();</span>
+    }
+
+    @Override
+    public Database addStartupTask(Task&lt;CompletableFuture&lt;Void&gt;&gt; task) {
+<span class="nc" id="L358">        throw new UnsupportedOperationException();</span>
+    }
+
+    @Override
+    public Database addShutdownTask(Task&lt;CompletableFuture&lt;Void&gt;&gt; task) {
+<span class="nc" id="L363">        throw new UnsupportedOperationException();</span>
+    }
+
+    @Override
+    public ResourceState state() {
+<span class="nc" id="L368">        throw new UnsupportedOperationException();</span>
+    }
+
+    private Map&lt;Database, Transaction&gt; createSubTransactions(
+            Transaction transaction) {
+<span class="nc" id="L373">        Map&lt;Database, List&lt;DatabaseUpdate&gt;&gt; perPartitionUpdates = Maps.newHashMap();</span>
+<span class="nc bnc" id="L374" title="All 2 branches missed.">        for (DatabaseUpdate update : transaction.updates()) {</span>
+<span class="nc" id="L375">            Database partition = partitioner.getPartition(update.mapName(), update.key());</span>
+<span class="nc" id="L376">            List&lt;DatabaseUpdate&gt; partitionUpdates =</span>
+<span class="nc" id="L377">                    perPartitionUpdates.computeIfAbsent(partition, k -&gt; Lists.newLinkedList());</span>
+<span class="nc" id="L378">            partitionUpdates.add(update);</span>
+<span class="nc" id="L379">        }</span>
+<span class="nc" id="L380">        Map&lt;Database, Transaction&gt; subTransactions = Maps.newHashMap();</span>
+<span class="nc" id="L381">        perPartitionUpdates.forEach((k, v) -&gt; subTransactions.put(k, new DefaultTransaction(transaction.id(), v)));</span>
+<span class="nc" id="L382">        return subTransactions;</span>
+    }
+
+    protected void setTransactionManager(TransactionManager transactionManager) {
+<span class="nc" id="L386">        this.transactionManager = transactionManager;</span>
+<span class="nc" id="L387">    }</span>
+
+    @Override
+    public void registerConsumer(Consumer&lt;StateMachineUpdate&gt; consumer) {
+<span class="nc" id="L391">        partitions.forEach(p -&gt; p.registerConsumer(consumer));</span>
+<span class="nc" id="L392">    }</span>
+
+    @Override
+    public void unregisterConsumer(Consumer&lt;StateMachineUpdate&gt; consumer) {
+<span class="nc" id="L396">        partitions.forEach(p -&gt; p.unregisterConsumer(consumer));</span>
+<span class="nc" id="L397">    }</span>
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConsistentResourceStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.newresource.impl</a> &gt; <span class="el_source">ConsistentResourceStore.java</span></div><h1>ConsistentResourceStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.newresource.impl;
+
+import com.google.common.annotations.Beta;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.newresource.ResourceConsumer;
+import org.onosproject.net.newresource.ResourcePath;
+import org.onosproject.net.newresource.ResourceStore;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.TransactionContext;
+import org.onosproject.store.service.TransactionException;
+import org.onosproject.store.service.TransactionalMap;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Implementation of ResourceStore using TransactionalMap.
+ */
+@Component(immediate = true, enabled = false)
+@Service
+@Beta
+<span class="nc" id="L58">public class ConsistentResourceStore implements ResourceStore {</span>
+<span class="nc" id="L59">    private static final Logger log = LoggerFactory.getLogger(ConsistentResourceStore.class);</span>
+
+    private static final String CONSUMER_MAP = &quot;onos-resource-consumers&quot;;
+    private static final String CHILD_MAP = &quot;onos-resource-children&quot;;
+<span class="nc" id="L63">    private static final Serializer SERIALIZER = Serializer.using(</span>
+<span class="nc" id="L64">            Arrays.asList(KryoNamespaces.BASIC, KryoNamespaces.API));</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService service;
+
+    private ConsistentMap&lt;ResourcePath, ResourceConsumer&gt; consumerMap;
+    private ConsistentMap&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; childMap;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L74">        consumerMap = service.&lt;ResourcePath, ResourceConsumer&gt;consistentMapBuilder()</span>
+<span class="nc" id="L75">                .withName(CONSUMER_MAP)</span>
+<span class="nc" id="L76">                .withSerializer(SERIALIZER)</span>
+<span class="nc" id="L77">                .build();</span>
+<span class="nc" id="L78">        childMap = service.&lt;ResourcePath, List&lt;ResourcePath&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L79">                .withName(CHILD_MAP)</span>
+<span class="nc" id="L80">                .withSerializer(SERIALIZER)</span>
+<span class="nc" id="L81">                .build();</span>
+<span class="nc" id="L82">    }</span>
+
+    @Override
+    public Optional&lt;ResourceConsumer&gt; getConsumer(ResourcePath resource) {
+<span class="nc" id="L86">        checkNotNull(resource);</span>
+
+<span class="nc" id="L88">        Versioned&lt;ResourceConsumer&gt; consumer = consumerMap.get(resource);</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        if (consumer == null) {</span>
+<span class="nc" id="L90">            return Optional.empty();</span>
+        }
+
+<span class="nc" id="L93">        return Optional.of(consumer.value());</span>
+    }
+
+    @Override
+    public boolean register(List&lt;ResourcePath&gt; resources) {
+<span class="nc" id="L98">        checkNotNull(resources);</span>
+
+<span class="nc" id="L100">        TransactionContext tx = service.transactionContextBuilder().build();</span>
+<span class="nc" id="L101">        tx.begin();</span>
+
+        try {
+<span class="nc" id="L104">            TransactionalMap&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; childTxMap =</span>
+<span class="nc" id="L105">                    tx.getTransactionalMap(CHILD_MAP, SERIALIZER);</span>
+
+<span class="nc" id="L107">            Map&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; resourceMap = resources.stream()</span>
+<span class="nc" id="L108">                    .filter(x -&gt; x.parent().isPresent())</span>
+<span class="nc" id="L109">                    .collect(Collectors.groupingBy(x -&gt; x.parent().get()));</span>
+
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            for (Map.Entry&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; entry: resourceMap.entrySet()) {</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                if (!isRegistered(childTxMap, entry.getKey())) {</span>
+<span class="nc" id="L113">                    return abortTransaction(tx);</span>
+                }
+
+<span class="nc bnc" id="L116" title="All 2 branches missed.">                if (!appendValues(childTxMap, entry.getKey(), entry.getValue())) {</span>
+<span class="nc" id="L117">                    return abortTransaction(tx);</span>
+                }
+<span class="nc" id="L119">            }</span>
+
+<span class="nc" id="L121">            return commitTransaction(tx);</span>
+<span class="nc" id="L122">        } catch (TransactionException e) {</span>
+<span class="nc" id="L123">            log.error(&quot;Exception thrown, abort the transaction&quot;, e);</span>
+<span class="nc" id="L124">            return abortTransaction(tx);</span>
+        }
+    }
+
+    @Override
+    public boolean unregister(List&lt;ResourcePath&gt; resources) {
+<span class="nc" id="L130">        checkNotNull(resources);</span>
+
+<span class="nc" id="L132">        TransactionContext tx = service.transactionContextBuilder().build();</span>
+<span class="nc" id="L133">        tx.begin();</span>
+
+        try {
+<span class="nc" id="L136">            TransactionalMap&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; childTxMap =</span>
+<span class="nc" id="L137">                    tx.getTransactionalMap(CHILD_MAP, SERIALIZER);</span>
+<span class="nc" id="L138">            TransactionalMap&lt;ResourcePath, ResourceConsumer&gt; consumerTxMap =</span>
+<span class="nc" id="L139">                    tx.getTransactionalMap(CONSUMER_MAP, SERIALIZER);</span>
+
+<span class="nc" id="L141">            Map&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; resourceMap = resources.stream()</span>
+<span class="nc" id="L142">                    .filter(x -&gt; x.parent().isPresent())</span>
+<span class="nc" id="L143">                    .collect(Collectors.groupingBy(x -&gt; x.parent().get()));</span>
+
+            // even if one of the resources is allocated to a consumer,
+            // all unregistrations are regarded as failure
+<span class="nc bnc" id="L147" title="All 2 branches missed.">            for (Map.Entry&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; entry: resourceMap.entrySet()) {</span>
+<span class="nc bnc" id="L148" title="All 4 branches missed.">                if (entry.getValue().stream().anyMatch(x -&gt; consumerTxMap.get(x) != null)) {</span>
+<span class="nc" id="L149">                    return abortTransaction(tx);</span>
+                }
+
+<span class="nc bnc" id="L152" title="All 2 branches missed.">                if (!removeValues(childTxMap, entry.getKey(), entry.getValue())) {</span>
+<span class="nc" id="L153">                    return abortTransaction(tx);</span>
+                }
+<span class="nc" id="L155">            }</span>
+
+<span class="nc" id="L157">            return commitTransaction(tx);</span>
+<span class="nc" id="L158">        } catch (TransactionException e) {</span>
+<span class="nc" id="L159">            log.error(&quot;Exception thrown, abort the transaction&quot;, e);</span>
+<span class="nc" id="L160">            return abortTransaction(tx);</span>
+        }
+    }
+
+    @Override
+    public boolean allocate(List&lt;ResourcePath&gt; resources, ResourceConsumer consumer) {
+<span class="nc" id="L166">        checkNotNull(resources);</span>
+<span class="nc" id="L167">        checkNotNull(consumer);</span>
+
+<span class="nc" id="L169">        TransactionContext tx = service.transactionContextBuilder().build();</span>
+<span class="nc" id="L170">        tx.begin();</span>
+
+        try {
+<span class="nc" id="L173">            TransactionalMap&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; childTxMap =</span>
+<span class="nc" id="L174">                    tx.getTransactionalMap(CHILD_MAP, SERIALIZER);</span>
+<span class="nc" id="L175">            TransactionalMap&lt;ResourcePath, ResourceConsumer&gt; consumerTxMap =</span>
+<span class="nc" id="L176">                    tx.getTransactionalMap(CONSUMER_MAP, SERIALIZER);</span>
+
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            for (ResourcePath resource: resources) {</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">                if (!isRegistered(childTxMap, resource)) {</span>
+<span class="nc" id="L180">                    return abortTransaction(tx);</span>
+                }
+
+<span class="nc" id="L183">                ResourceConsumer oldValue = consumerTxMap.put(resource, consumer);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                if (oldValue != null) {</span>
+<span class="nc" id="L185">                    return abortTransaction(tx);</span>
+                }
+<span class="nc" id="L187">            }</span>
+
+<span class="nc" id="L189">            return commitTransaction(tx);</span>
+<span class="nc" id="L190">        } catch (TransactionException e) {</span>
+<span class="nc" id="L191">            log.error(&quot;Exception thrown, abort the transaction&quot;, e);</span>
+<span class="nc" id="L192">            return abortTransaction(tx);</span>
+        }
+    }
+
+    @Override
+    public boolean release(List&lt;ResourcePath&gt; resources, List&lt;ResourceConsumer&gt; consumers) {
+<span class="nc" id="L198">        checkNotNull(resources);</span>
+<span class="nc" id="L199">        checkNotNull(consumers);</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        checkArgument(resources.size() == consumers.size());</span>
+
+<span class="nc" id="L202">        TransactionContext tx = service.transactionContextBuilder().build();</span>
+<span class="nc" id="L203">        tx.begin();</span>
+
+        try {
+<span class="nc" id="L206">            TransactionalMap&lt;ResourcePath, ResourceConsumer&gt; consumerTxMap =</span>
+<span class="nc" id="L207">                    tx.getTransactionalMap(CONSUMER_MAP, SERIALIZER);</span>
+<span class="nc" id="L208">            Iterator&lt;ResourcePath&gt; resourceIte = resources.iterator();</span>
+<span class="nc" id="L209">            Iterator&lt;ResourceConsumer&gt; consumerIte = consumers.iterator();</span>
+
+<span class="nc bnc" id="L211" title="All 4 branches missed.">            while (resourceIte.hasNext() &amp;&amp; consumerIte.hasNext()) {</span>
+<span class="nc" id="L212">                ResourcePath resource = resourceIte.next();</span>
+<span class="nc" id="L213">                ResourceConsumer consumer = consumerIte.next();</span>
+
+                // if this single release fails (because the resource is allocated to another consumer,
+                // the whole release fails
+<span class="nc bnc" id="L217" title="All 2 branches missed.">                if (!consumerTxMap.remove(resource, consumer)) {</span>
+<span class="nc" id="L218">                    return abortTransaction(tx);</span>
+                }
+<span class="nc" id="L220">            }</span>
+
+<span class="nc" id="L222">            return commitTransaction(tx);</span>
+<span class="nc" id="L223">        } catch (TransactionException e) {</span>
+<span class="nc" id="L224">            log.error(&quot;Exception thrown, abort the transaction&quot;, e);</span>
+<span class="nc" id="L225">            return abortTransaction(tx);</span>
+        }
+    }
+
+    @Override
+    public Collection&lt;ResourcePath&gt; getResources(ResourceConsumer consumer) {
+<span class="nc" id="L231">        checkNotNull(consumer);</span>
+
+        // NOTE: getting all entries may become performance bottleneck
+        // TODO: revisit for better backend data structure
+<span class="nc" id="L235">        return consumerMap.entrySet().stream()</span>
+<span class="nc" id="L236">                .filter(x -&gt; x.getValue().value().equals(consumer))</span>
+<span class="nc" id="L237">                .map(Map.Entry::getKey)</span>
+<span class="nc" id="L238">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public &lt;T&gt; Collection&lt;ResourcePath&gt; getAllocatedResources(ResourcePath parent, Class&lt;T&gt; cls) {
+<span class="nc" id="L243">        checkNotNull(parent);</span>
+<span class="nc" id="L244">        checkNotNull(cls);</span>
+
+<span class="nc" id="L246">        Versioned&lt;List&lt;ResourcePath&gt;&gt; children = childMap.get(parent);</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">        if (children == null) {</span>
+<span class="nc" id="L248">            return Collections.emptyList();</span>
+        }
+
+<span class="nc" id="L251">        return children.value().stream()</span>
+<span class="nc" id="L252">                .filter(x -&gt; x.lastComponent().getClass().equals(cls))</span>
+<span class="nc" id="L253">                .filter(consumerMap::containsKey)</span>
+<span class="nc" id="L254">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * Abort the transaction.
+     *
+     * @param tx transaction context
+     * @return always false
+     */
+    private boolean abortTransaction(TransactionContext tx) {
+<span class="nc" id="L264">        tx.abort();</span>
+<span class="nc" id="L265">        return false;</span>
+    }
+
+    /**
+     * Commit the transaction.
+     *
+     * @param tx transaction context
+     * @return always true
+     */
+    private boolean commitTransaction(TransactionContext tx) {
+<span class="nc" id="L275">        tx.commit();</span>
+<span class="nc" id="L276">        return true;</span>
+    }
+
+    /**
+     * Appends the values to the existing values associated with the specified key.
+     * If the map already has all the given values, appending will not happen.
+     *
+     * @param map map holding multiple values for a key
+     * @param key key specifying values
+     * @param values values to be appended
+     * @param &lt;K&gt; type of the key
+     * @param &lt;V&gt; type of the element of the list
+     * @return true if the operation succeeds, false otherwise.
+     */
+    private &lt;K, V&gt; boolean appendValues(TransactionalMap&lt;K, List&lt;V&gt;&gt; map, K key, List&lt;V&gt; values) {
+<span class="nc" id="L291">        List&lt;V&gt; oldValues = map.get(key);</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if (oldValues == null) {</span>
+<span class="nc" id="L293">            return map.replace(key, oldValues, new ArrayList&lt;&gt;(values));</span>
+        }
+
+<span class="nc" id="L296">        LinkedHashSet&lt;V&gt; oldSet = new LinkedHashSet&lt;&gt;(oldValues);</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        if (oldSet.containsAll(values)) {</span>
+            // don't write to map because all values are already stored
+<span class="nc" id="L299">            return true;</span>
+        }
+
+<span class="nc" id="L302">        oldSet.addAll(values);</span>
+<span class="nc" id="L303">        return map.replace(key, oldValues, new ArrayList&lt;&gt;(oldSet));</span>
+    }
+
+    /**
+     * Removes the values from the existing values associated with the specified key.
+     * If the map doesn't contain the given values, removal will not happen.
+     *
+     * @param map map holding multiple values for a key
+     * @param key key specifying values
+     * @param values values to be removed
+     * @param &lt;K&gt; type of the key
+     * @param &lt;V&gt; type of the element of the list
+     * @return true if the operation succeeds, false otherwise
+     */
+    private &lt;K, V&gt; boolean removeValues(TransactionalMap&lt;K, List&lt;V&gt;&gt; map, K key, List&lt;V&gt; values) {
+<span class="nc" id="L318">        List&lt;V&gt; oldValues = map.get(key);</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">        if (oldValues == null) {</span>
+<span class="nc" id="L320">            return map.replace(key, oldValues, new ArrayList&lt;&gt;());</span>
+        }
+
+<span class="nc" id="L323">        LinkedHashSet&lt;V&gt; oldSet = new LinkedHashSet&lt;&gt;(oldValues);</span>
+<span class="nc bnc" id="L324" title="All 4 branches missed.">        if (values.stream().allMatch(x -&gt; !oldSet.contains(x))) {</span>
+            // don't write map because none of the values are stored
+<span class="nc" id="L326">            return true;</span>
+        }
+
+<span class="nc" id="L329">        oldSet.removeAll(values);</span>
+<span class="nc" id="L330">        return map.replace(key, oldValues, new ArrayList&lt;&gt;(oldSet));</span>
+    }
+
+    /**
+     * Checks if the specified resource is registered as a child of a resource in the map.
+     *
+     * @param map map storing parent - child relationship of resources
+     * @param resource resource to be checked
+     * @return true if the resource is registered, false otherwise.
+     */
+    private boolean isRegistered(TransactionalMap&lt;ResourcePath, List&lt;ResourcePath&gt;&gt; map, ResourcePath resource) {
+        // root is always regarded to be registered
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if (resource.isRoot()) {</span>
+<span class="nc" id="L343">            return true;</span>
+        }
+
+<span class="nc" id="L346">        List&lt;ResourcePath&gt; value = map.get(resource.parent().get());</span>
+<span class="nc bnc" id="L347" title="All 4 branches missed.">        return value != null &amp;&amp; value.contains(resource);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

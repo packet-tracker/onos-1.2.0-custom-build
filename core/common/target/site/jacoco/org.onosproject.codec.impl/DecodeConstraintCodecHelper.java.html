@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DecodeConstraintCodecHelper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">DecodeConstraintCodecHelper.java</span></div><h1>DecodeConstraintCodecHelper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.stream.IntStream;
+
+import org.onlab.util.Bandwidth;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.IndexedLambda;
+import org.onosproject.net.Link;
+import org.onosproject.net.intent.Constraint;
+import org.onosproject.net.intent.constraint.AnnotationConstraint;
+import org.onosproject.net.intent.constraint.AsymmetricPathConstraint;
+import org.onosproject.net.intent.constraint.BandwidthConstraint;
+import org.onosproject.net.intent.constraint.LambdaConstraint;
+import org.onosproject.net.intent.constraint.LatencyConstraint;
+import org.onosproject.net.intent.constraint.LinkTypeConstraint;
+import org.onosproject.net.intent.constraint.ObstacleConstraint;
+import org.onosproject.net.intent.constraint.WaypointConstraint;
+import org.onosproject.net.resource.link.BandwidthResource;
+import org.onosproject.net.resource.link.LambdaResource;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static org.onlab.util.Tools.nullIsIllegal;
+
+/**
+ * Constraint JSON decoder.
+ */
+public final class DecodeConstraintCodecHelper {
+    private final ObjectNode json;
+
+    /**
+     * Constructs a constraint decoder.
+     *
+     * @param json object node to decode
+     */
+<span class="fc" id="L54">    public DecodeConstraintCodecHelper(ObjectNode json) {</span>
+<span class="fc" id="L55">        this.json = json;</span>
+<span class="fc" id="L56">    }</span>
+
+    /**
+     * Decodes a link type constraint.
+     *
+     * @return link type constraint object.
+     */
+    private Constraint decodeLinkTypeConstraint() {
+<span class="fc" id="L64">        boolean inclusive = nullIsIllegal(json.get(ConstraintCodec.INCLUSIVE),</span>
+<span class="fc" id="L65">                ConstraintCodec.INCLUSIVE + ConstraintCodec.MISSING_MEMBER_MESSAGE).asBoolean();</span>
+
+<span class="fc" id="L67">        JsonNode types = nullIsIllegal(json.get(ConstraintCodec.TYPES),</span>
+                ConstraintCodec.TYPES + ConstraintCodec.MISSING_MEMBER_MESSAGE);
+<span class="pc bpc" id="L69" title="1 of 2 branches missed.">        if (types.size() &lt; 1) {</span>
+<span class="nc" id="L70">            throw new IllegalArgumentException(</span>
+                    &quot;types array in link constraint must have at least one value&quot;);
+        }
+
+<span class="fc" id="L74">        ArrayList&lt;Link.Type&gt; typesEntries = new ArrayList&lt;&gt;(types.size());</span>
+<span class="fc" id="L75">        IntStream.range(0, types.size())</span>
+<span class="fc" id="L76">                .forEach(index -&gt;</span>
+<span class="fc" id="L77">                        typesEntries.add(Link.Type.valueOf(types.get(index).asText())));</span>
+
+<span class="fc" id="L79">        return new LinkTypeConstraint(inclusive,</span>
+<span class="fc" id="L80">                typesEntries.toArray(new Link.Type[types.size()]));</span>
+    }
+
+    /**
+     * Decodes an annotation constraint.
+     *
+     * @return annotation constraint object.
+     */
+    private Constraint decodeAnnotationConstraint() {
+<span class="fc" id="L89">        String key = nullIsIllegal(json.get(ConstraintCodec.KEY),</span>
+                ConstraintCodec.KEY + ConstraintCodec.MISSING_MEMBER_MESSAGE)
+<span class="fc" id="L91">                .asText();</span>
+<span class="fc" id="L92">        double threshold = nullIsIllegal(json.get(ConstraintCodec.THRESHOLD),</span>
+                ConstraintCodec.THRESHOLD + ConstraintCodec.MISSING_MEMBER_MESSAGE)
+<span class="fc" id="L94">                .asDouble();</span>
+
+<span class="fc" id="L96">        return new AnnotationConstraint(key, threshold);</span>
+    }
+
+    /**
+     * Decodes a lambda constraint.
+     *
+     * @return lambda constraint object.
+     */
+    private Constraint decodeLambdaConstraint() {
+<span class="fc" id="L105">        long lambda = nullIsIllegal(json.get(ConstraintCodec.LAMBDA),</span>
+                ConstraintCodec.LAMBDA + ConstraintCodec.MISSING_MEMBER_MESSAGE)
+<span class="fc" id="L107">                .asLong();</span>
+
+<span class="fc" id="L109">        return new LambdaConstraint(LambdaResource.valueOf(new IndexedLambda(lambda)));</span>
+    }
+
+    /**
+     * Decodes a latency constraint.
+     *
+     * @return latency constraint object.
+     */
+    private Constraint decodeLatencyConstraint() {
+<span class="fc" id="L118">        long latencyMillis = nullIsIllegal(json.get(ConstraintCodec.LATENCY_MILLIS),</span>
+                ConstraintCodec.LATENCY_MILLIS + ConstraintCodec.MISSING_MEMBER_MESSAGE)
+<span class="fc" id="L120">                .asLong();</span>
+
+<span class="fc" id="L122">        return new LatencyConstraint(Duration.ofMillis(latencyMillis));</span>
+    }
+
+    /**
+     * Decodes an obstacle constraint.
+     *
+     * @return obstacle constraint object.
+     */
+    private Constraint decodeObstacleConstraint() {
+<span class="fc" id="L131">        JsonNode obstacles = nullIsIllegal(json.get(ConstraintCodec.OBSTACLES),</span>
+                ConstraintCodec.OBSTACLES + ConstraintCodec.MISSING_MEMBER_MESSAGE);
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (obstacles.size() &lt; 1) {</span>
+<span class="nc" id="L134">            throw new IllegalArgumentException(</span>
+                    &quot;obstacles array in obstacles constraint must have at least one value&quot;);
+        }
+
+<span class="fc" id="L138">        ArrayList&lt;DeviceId&gt; obstacleEntries = new ArrayList&lt;&gt;(obstacles.size());</span>
+<span class="fc" id="L139">        IntStream.range(0, obstacles.size())</span>
+<span class="fc" id="L140">                .forEach(index -&gt;</span>
+<span class="fc" id="L141">                        obstacleEntries.add(DeviceId.deviceId(obstacles.get(index).asText())));</span>
+
+<span class="fc" id="L143">        return new ObstacleConstraint(</span>
+<span class="fc" id="L144">                obstacleEntries.toArray(new DeviceId[obstacles.size()]));</span>
+    }
+
+    /**
+     * Decodes a waypoint constraint.
+     *
+     * @return waypoint constraint object.
+     */
+    private Constraint decodeWaypointConstraint() {
+<span class="fc" id="L153">        JsonNode waypoints = nullIsIllegal(json.get(ConstraintCodec.WAYPOINTS),</span>
+                ConstraintCodec.WAYPOINTS + ConstraintCodec.MISSING_MEMBER_MESSAGE);
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">        if (waypoints.size() &lt; 1) {</span>
+<span class="nc" id="L156">            throw new IllegalArgumentException(</span>
+                    &quot;obstacles array in obstacles constraint must have at least one value&quot;);
+        }
+
+<span class="fc" id="L160">        ArrayList&lt;DeviceId&gt; waypointEntries = new ArrayList&lt;&gt;(waypoints.size());</span>
+<span class="fc" id="L161">        IntStream.range(0, waypoints.size())</span>
+<span class="fc" id="L162">                .forEach(index -&gt;</span>
+<span class="fc" id="L163">                        waypointEntries.add(DeviceId.deviceId(waypoints.get(index).asText())));</span>
+
+<span class="fc" id="L165">        return new WaypointConstraint(</span>
+<span class="fc" id="L166">                waypointEntries.toArray(new DeviceId[waypoints.size()]));</span>
+    }
+
+    /**
+     * Decodes an asymmetric path constraint.
+     *
+     * @return asymmetric path constraint object.
+     */
+    private Constraint decodeAsymmetricPathConstraint() {
+<span class="fc" id="L175">        return new AsymmetricPathConstraint();</span>
+    }
+
+    /**
+     * Decodes a bandwidth constraint.
+     *
+     * @return bandwidth constraint object.
+     */
+    private Constraint decodeBandwidthConstraint() {
+<span class="fc" id="L184">        double bandwidth = nullIsIllegal(json.get(ConstraintCodec.BANDWIDTH),</span>
+                ConstraintCodec.BANDWIDTH + ConstraintCodec.MISSING_MEMBER_MESSAGE)
+<span class="fc" id="L186">                .asDouble();</span>
+
+<span class="fc" id="L188">        return new BandwidthConstraint(new BandwidthResource(Bandwidth.bps(bandwidth)));</span>
+    }
+
+    /**
+     * Decodes the given constraint.
+     *
+     * @return constraint object.
+     */
+    public Constraint decode() {
+<span class="fc" id="L197">        final String type = nullIsIllegal(json.get(ConstraintCodec.TYPE),</span>
+                ConstraintCodec.TYPE + ConstraintCodec.MISSING_MEMBER_MESSAGE)
+<span class="fc" id="L199">                .asText();</span>
+
+<span class="fc bfc" id="L201" title="All 2 branches covered.">        if (type.equals(BandwidthConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L202">            return decodeBandwidthConstraint();</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        } else if (type.equals(LambdaConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L204">            return decodeLambdaConstraint();</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        } else if (type.equals(LinkTypeConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L206">            return decodeLinkTypeConstraint();</span>
+<span class="fc bfc" id="L207" title="All 2 branches covered.">        } else if (type.equals(AnnotationConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L208">            return decodeAnnotationConstraint();</span>
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        } else if (type.equals(LatencyConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L210">            return decodeLatencyConstraint();</span>
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        } else if (type.equals(ObstacleConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L212">            return decodeObstacleConstraint();</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">        } else if (type.equals(WaypointConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L214">            return decodeWaypointConstraint();</span>
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        } else if (type.equals(AsymmetricPathConstraint.class.getSimpleName())) {</span>
+<span class="fc" id="L216">            return decodeAsymmetricPathConstraint();</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        } else if (type.equals(LinkTypeConstraint.class.getSimpleName())) {</span>
+<span class="nc" id="L218">            return decodeLinkTypeConstraint();</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">        } else if (type.equals(AnnotationConstraint.class.getSimpleName())) {</span>
+<span class="nc" id="L220">            return decodeAnnotationConstraint();</span>
+        }
+<span class="nc" id="L222">        throw new IllegalArgumentException(&quot;Instruction type &quot;</span>
+                + type + &quot; is not supported&quot;);
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

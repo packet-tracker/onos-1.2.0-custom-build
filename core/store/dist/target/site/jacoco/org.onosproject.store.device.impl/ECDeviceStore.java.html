@@ -1,0 +1,785 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ECDeviceStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.device.impl</a> &gt; <span class="el_source">ECDeviceStore.java</span></div><h1>ECDeviceStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.device.impl;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Verify.verify;
+import static org.onosproject.net.DefaultAnnotations.merge;
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onlab.packet.ChassisId;
+import org.onlab.util.KryoNamespace;
+import org.onlab.util.SharedExecutors;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.mastership.MastershipService;
+import org.onosproject.mastership.MastershipTermService;
+import org.onosproject.net.Annotations;
+import org.onosproject.net.AnnotationsUtil;
+import org.onosproject.net.DefaultAnnotations;
+import org.onosproject.net.DefaultDevice;
+import org.onosproject.net.DefaultPort;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.MastershipRole;
+import org.onosproject.net.OchPort;
+import org.onosproject.net.OduCltPort;
+import org.onosproject.net.OmsPort;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.Device.Type;
+import org.onosproject.net.device.DefaultPortStatistics;
+import org.onosproject.net.device.DeviceClockService;
+import org.onosproject.net.device.DeviceDescription;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceStore;
+import org.onosproject.net.device.DeviceStoreDelegate;
+import org.onosproject.net.device.OchPortDescription;
+import org.onosproject.net.device.OduCltPortDescription;
+import org.onosproject.net.device.OmsPortDescription;
+import org.onosproject.net.device.PortDescription;
+import org.onosproject.net.device.PortStatistics;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.ClusterCommunicationService;
+import org.onosproject.store.impl.MastershipBasedTimestamp;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.onosproject.store.serializers.custom.DistributedStoreSerializers;
+import org.onosproject.store.service.DistributedSet;
+import org.onosproject.store.service.EventuallyConsistentMap;
+import org.onosproject.store.service.EventuallyConsistentMapEvent;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.SetEvent;
+import org.onosproject.store.service.SetEventListener;
+import org.onosproject.store.service.WallClockTimestamp;
+
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.PUT;
+import static org.onosproject.store.service.EventuallyConsistentMapEvent.Type.REMOVE;
+
+import org.onosproject.store.service.EventuallyConsistentMapListener;
+import org.onosproject.store.service.StorageService;
+import org.slf4j.Logger;
+
+import static org.onosproject.net.device.DeviceEvent.Type.*;
+import static org.onosproject.store.device.impl.GossipDeviceStoreMessageSubjects.DEVICE_INJECTED;
+import static org.onosproject.store.device.impl.GossipDeviceStoreMessageSubjects.DEVICE_REMOVE_REQ;
+import static org.onosproject.store.device.impl.GossipDeviceStoreMessageSubjects.PORT_INJECTED;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.Futures;
+
+/**
+ * Manages the inventory of devices using a {@code EventuallyConsistentMap}.
+ */
+@Component(immediate = true, enabled = false)
+@Service
+<span class="nc" id="L112">public class ECDeviceStore</span>
+    extends AbstractStore&lt;DeviceEvent, DeviceStoreDelegate&gt;
+    implements DeviceStore {
+
+<span class="nc" id="L116">    private final Logger log = getLogger(getClass());</span>
+
+    private static final String DEVICE_NOT_FOUND = &quot;Device with ID %s not found&quot;;
+
+<span class="nc" id="L120">    private final Map&lt;DeviceId, Device&gt; devices = Maps.newConcurrentMap();</span>
+<span class="nc" id="L121">    private final Map&lt;DeviceId, Map&lt;PortNumber, Port&gt;&gt; devicePorts = Maps.newConcurrentMap();</span>
+<span class="nc" id="L122">    Set&lt;DeviceId&gt; pendingAvailableChangeUpdates = Sets.newConcurrentHashSet();</span>
+
+    private EventuallyConsistentMap&lt;DeviceKey, DeviceDescription&gt; deviceDescriptions;
+    private EventuallyConsistentMap&lt;PortKey, PortDescription&gt; portDescriptions;
+    private EventuallyConsistentMap&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; devicePortStats;
+    private EventuallyConsistentMap&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; devicePortDeltaStats;
+
+    private DistributedSet&lt;DeviceId&gt; availableDevices;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipService mastershipService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MastershipTermService mastershipTermService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceClockService deviceClockService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterCommunicationService clusterCommunicator;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterService clusterService;
+
+    private NodeId localNodeId;
+<span class="nc" id="L150">    private EventuallyConsistentMapListener&lt;DeviceKey, DeviceDescription&gt; deviceUpdateListener =</span>
+            new InternalDeviceChangeEventListener();
+<span class="nc" id="L152">    private EventuallyConsistentMapListener&lt;PortKey, PortDescription&gt; portUpdateListener =</span>
+            new InternalPortChangeEventListener();
+<span class="nc" id="L154">    private final EventuallyConsistentMapListener&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; portStatsListener =</span>
+            new InternalPortStatsListener();
+<span class="nc" id="L156">    private final SetEventListener&lt;DeviceId&gt; deviceStatusTracker =</span>
+            new InternalDeviceStatusTracker();
+
+<span class="nc" id="L159">    protected static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L162">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L163">                    .register(DistributedStoreSerializers.STORE_COMMON)</span>
+<span class="nc" id="L164">                    .nextId(DistributedStoreSerializers.STORE_CUSTOM_BEGIN)</span>
+<span class="nc" id="L165">                    .register(DeviceInjectedEvent.class)</span>
+<span class="nc" id="L166">                    .register(PortInjectedEvent.class)</span>
+<span class="nc" id="L167">                    .build();</span>
+<span class="nc" id="L168">        }</span>
+    };
+
+<span class="nc" id="L171">    protected static final KryoNamespace.Builder SERIALIZER_BUILDER = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L172">            .register(KryoNamespaces.API)</span>
+<span class="nc" id="L173">            .register(DeviceKey.class)</span>
+<span class="nc" id="L174">            .register(PortKey.class)</span>
+<span class="nc" id="L175">            .register(DeviceKey.class)</span>
+<span class="nc" id="L176">            .register(PortKey.class)</span>
+<span class="nc" id="L177">            .register(MastershipBasedTimestamp.class);</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L181">        localNodeId = clusterService.getLocalNode().id();</span>
+
+<span class="nc" id="L183">        deviceDescriptions = storageService.&lt;DeviceKey, DeviceDescription&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L184">                .withName(&quot;onos-device-descriptions&quot;)</span>
+<span class="nc" id="L185">                .withSerializer(SERIALIZER_BUILDER)</span>
+<span class="nc" id="L186">                .withTimestampProvider((k, v) -&gt; {</span>
+                    try {
+<span class="nc" id="L188">                        return deviceClockService.getTimestamp(k.deviceId());</span>
+<span class="nc" id="L189">                    } catch (IllegalStateException e) {</span>
+<span class="nc" id="L190">                        return null;</span>
+                    }
+<span class="nc" id="L192">                }).build();</span>
+
+<span class="nc" id="L194">        portDescriptions = storageService.&lt;PortKey, PortDescription&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L195">                .withName(&quot;onos-port-descriptions&quot;)</span>
+<span class="nc" id="L196">                .withSerializer(SERIALIZER_BUILDER)</span>
+<span class="nc" id="L197">                .withTimestampProvider((k, v) -&gt; {</span>
+                    try {
+<span class="nc" id="L199">                        return deviceClockService.getTimestamp(k.deviceId());</span>
+<span class="nc" id="L200">                    } catch (IllegalStateException e) {</span>
+<span class="nc" id="L201">                        return null;</span>
+                    }
+<span class="nc" id="L203">                }).build();</span>
+
+<span class="nc" id="L205">        devicePortStats = storageService.&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt;eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L206">                .withName(&quot;onos-port-stats&quot;)</span>
+<span class="nc" id="L207">                .withSerializer(SERIALIZER_BUILDER)</span>
+<span class="nc" id="L208">                .withAntiEntropyPeriod(5, TimeUnit.SECONDS)</span>
+<span class="nc" id="L209">                .withTimestampProvider((k, v) -&gt; new WallClockTimestamp())</span>
+<span class="nc" id="L210">                .withTombstonesDisabled()</span>
+<span class="nc" id="L211">                .build();</span>
+
+<span class="nc" id="L213">        devicePortDeltaStats = storageService.&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt;</span>
+<span class="nc" id="L214">                eventuallyConsistentMapBuilder()</span>
+<span class="nc" id="L215">                .withName(&quot;onos-port-stats-delta&quot;)</span>
+<span class="nc" id="L216">                .withSerializer(SERIALIZER_BUILDER)</span>
+<span class="nc" id="L217">                .withAntiEntropyPeriod(5, TimeUnit.SECONDS)</span>
+<span class="nc" id="L218">                .withTimestampProvider((k, v) -&gt; new WallClockTimestamp())</span>
+<span class="nc" id="L219">                .withTombstonesDisabled()</span>
+<span class="nc" id="L220">                .build();</span>
+
+<span class="nc" id="L222">        clusterCommunicator.addSubscriber(DEVICE_INJECTED,</span>
+                SERIALIZER::decode,
+                this::injectDevice,
+                SERIALIZER::encode,
+<span class="nc" id="L226">                SharedExecutors.getPoolThreadExecutor());</span>
+
+<span class="nc" id="L228">        clusterCommunicator.addSubscriber(PORT_INJECTED,</span>
+                SERIALIZER::decode,
+                this::injectPort,
+                SERIALIZER::encode,
+<span class="nc" id="L232">                SharedExecutors.getPoolThreadExecutor());</span>
+
+<span class="nc" id="L234">        availableDevices = storageService.&lt;DeviceId&gt;setBuilder()</span>
+<span class="nc" id="L235">                .withName(&quot;onos-online-devices&quot;)</span>
+<span class="nc" id="L236">                .withSerializer(Serializer.using(KryoNamespaces.API))</span>
+<span class="nc" id="L237">                .withPartitionsDisabled()</span>
+<span class="nc" id="L238">                .withRelaxedReadConsistency()</span>
+<span class="nc" id="L239">                .build();</span>
+
+<span class="nc" id="L241">        deviceDescriptions.addListener(deviceUpdateListener);</span>
+<span class="nc" id="L242">        portDescriptions.addListener(portUpdateListener);</span>
+<span class="nc" id="L243">        devicePortStats.addListener(portStatsListener);</span>
+<span class="nc" id="L244">        availableDevices.addListener(deviceStatusTracker);</span>
+<span class="nc" id="L245">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L246">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L250">        devicePortStats.removeListener(portStatsListener);</span>
+<span class="nc" id="L251">        deviceDescriptions.removeListener(deviceUpdateListener);</span>
+<span class="nc" id="L252">        portDescriptions.removeListener(portUpdateListener);</span>
+<span class="nc" id="L253">        availableDevices.removeListener(deviceStatusTracker);</span>
+<span class="nc" id="L254">        devicePortStats.destroy();</span>
+<span class="nc" id="L255">        devicePortDeltaStats.destroy();</span>
+<span class="nc" id="L256">        deviceDescriptions.destroy();</span>
+<span class="nc" id="L257">        portDescriptions.destroy();</span>
+<span class="nc" id="L258">        devices.clear();</span>
+<span class="nc" id="L259">        devicePorts.clear();</span>
+<span class="nc" id="L260">        clusterCommunicator.removeSubscriber(DEVICE_INJECTED);</span>
+<span class="nc" id="L261">        clusterCommunicator.removeSubscriber(PORT_INJECTED);</span>
+<span class="nc" id="L262">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L263">    }</span>
+
+    @Override
+    public Iterable&lt;Device&gt; getDevices() {
+<span class="nc" id="L267">        return devices.values();</span>
+    }
+
+    @Override
+    public int getDeviceCount() {
+<span class="nc" id="L272">        return devices.size();</span>
+    }
+
+    @Override
+    public Device getDevice(DeviceId deviceId) {
+<span class="nc" id="L277">        return devices.get(deviceId);</span>
+    }
+
+    @Override
+    public DeviceEvent createOrUpdateDevice(ProviderId providerId,
+            DeviceId deviceId,
+            DeviceDescription deviceDescription) {
+<span class="nc" id="L284">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if (localNodeId.equals(master)) {</span>
+<span class="nc" id="L286">            deviceDescriptions.put(new DeviceKey(providerId, deviceId), deviceDescription);</span>
+<span class="nc" id="L287">            return refreshDeviceCache(providerId, deviceId);</span>
+        } else {
+<span class="nc" id="L289">            DeviceInjectedEvent deviceInjectedEvent = new DeviceInjectedEvent(providerId, deviceId, deviceDescription);</span>
+<span class="nc" id="L290">            return Futures.getUnchecked(</span>
+<span class="nc" id="L291">                    clusterCommunicator.sendAndReceive(deviceInjectedEvent,</span>
+                            DEVICE_INJECTED,
+                            SERIALIZER::encode,
+                            SERIALIZER::decode,
+                            master));
+        }
+    }
+
+    private DeviceEvent refreshDeviceCache(ProviderId providerId, DeviceId deviceId) {
+<span class="nc" id="L300">        AtomicReference&lt;DeviceEvent.Type&gt; eventType = new AtomicReference&lt;&gt;();</span>
+<span class="nc" id="L301">        Device device = devices.compute(deviceId, (k, existingDevice) -&gt; {</span>
+<span class="nc" id="L302">            Device newDevice = composeDevice(deviceId);</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">            if (existingDevice == null) {</span>
+<span class="nc" id="L304">                eventType.set(DEVICE_ADDED);</span>
+            } else {
+                // We allow only certain attributes to trigger update
+<span class="nc" id="L307">                boolean propertiesChanged =</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">                        !Objects.equals(existingDevice.hwVersion(), newDevice.hwVersion()) ||</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">                                !Objects.equals(existingDevice.swVersion(), newDevice.swVersion()) ||</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">                                !Objects.equals(existingDevice.providerId(), newDevice.providerId());</span>
+<span class="nc" id="L311">                boolean annotationsChanged =</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">                        !AnnotationsUtil.isEqual(existingDevice.annotations(), newDevice.annotations());</span>
+
+                // Primary providers can respond to all changes, but ancillary ones
+                // should respond only to annotation changes.
+<span class="nc bnc" id="L316" title="All 4 branches missed.">                if ((providerId.isAncillary() &amp;&amp; annotationsChanged) ||</span>
+<span class="nc bnc" id="L317" title="All 6 branches missed.">                        (!providerId.isAncillary() &amp;&amp; (propertiesChanged || annotationsChanged))) {</span>
+<span class="nc" id="L318">                    boolean replaced = devices.replace(deviceId, existingDevice, newDevice);</span>
+<span class="nc" id="L319">                    verify(replaced, &quot;Replacing devices cache failed. PID:%s [expected:%s, found:%s, new=%s]&quot;,</span>
+<span class="nc" id="L320">                            providerId, existingDevice, devices.get(deviceId), newDevice);</span>
+<span class="nc" id="L321">                    eventType.set(DEVICE_UPDATED);</span>
+                }
+            }
+<span class="nc" id="L324">            return newDevice;</span>
+        });
+<span class="nc bnc" id="L326" title="All 4 branches missed.">        if (eventType.get() != null &amp;&amp; !providerId.isAncillary()) {</span>
+<span class="nc" id="L327">            markOnline(deviceId);</span>
+        }
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        return eventType.get() != null ? new DeviceEvent(eventType.get(), device) : null;</span>
+    }
+
+    /**
+     * Returns the primary providerId for a device.
+     * @param deviceId device identifier
+     * @return primary providerId
+     */
+    private Set&lt;ProviderId&gt; getAllProviders(DeviceId deviceId) {
+<span class="nc" id="L338">        return deviceDescriptions.keySet()</span>
+<span class="nc" id="L339">                                 .stream()</span>
+<span class="nc" id="L340">                                 .filter(deviceKey -&gt; deviceKey.deviceId().equals(deviceId))</span>
+<span class="nc" id="L341">                                 .map(deviceKey -&gt; deviceKey.providerId())</span>
+<span class="nc" id="L342">                                 .collect(Collectors.toSet());</span>
+    }
+
+    /**
+     * Returns the identifier for all providers for a device.
+     * @param deviceId device identifier
+     * @return set of provider identifiers
+     */
+    private ProviderId getPrimaryProviderId(DeviceId deviceId) {
+<span class="nc" id="L351">        Set&lt;ProviderId&gt; allProviderIds = getAllProviders(deviceId);</span>
+<span class="nc" id="L352">        return allProviderIds.stream()</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">                             .filter(p -&gt; !p.isAncillary())</span>
+<span class="nc" id="L354">                             .findFirst()</span>
+<span class="nc" id="L355">                             .orElse(Iterables.getFirst(allProviderIds, null));</span>
+    }
+
+    /**
+     * Returns a Device, merging descriptions from multiple Providers.
+     *
+     * @param deviceId      device identifier
+     * @return Device instance
+     */
+    private Device composeDevice(DeviceId deviceId) {
+
+<span class="nc" id="L366">        ProviderId primaryProviderId = getPrimaryProviderId(deviceId);</span>
+<span class="nc" id="L367">        DeviceDescription primaryDeviceDescription =</span>
+<span class="nc" id="L368">                deviceDescriptions.get(new DeviceKey(primaryProviderId, deviceId));</span>
+
+<span class="nc" id="L370">        Type type = primaryDeviceDescription.type();</span>
+<span class="nc" id="L371">        String manufacturer = primaryDeviceDescription.manufacturer();</span>
+<span class="nc" id="L372">        String hwVersion = primaryDeviceDescription.hwVersion();</span>
+<span class="nc" id="L373">        String swVersion = primaryDeviceDescription.swVersion();</span>
+<span class="nc" id="L374">        String serialNumber = primaryDeviceDescription.serialNumber();</span>
+<span class="nc" id="L375">        ChassisId chassisId = primaryDeviceDescription.chassisId();</span>
+<span class="nc" id="L376">        DefaultAnnotations annotations = mergeAnnotations(deviceId);</span>
+
+<span class="nc" id="L378">        return new DefaultDevice(primaryProviderId, deviceId, type, manufacturer,</span>
+                                 hwVersion, swVersion, serialNumber,
+                                 chassisId, annotations);
+    }
+
+    private DeviceEvent purgeDeviceCache(DeviceId deviceId) {
+<span class="nc" id="L384">        Device removedDevice = devices.remove(deviceId);</span>
+<span class="nc bnc" id="L385" title="All 2 branches missed.">        if (removedDevice != null) {</span>
+<span class="nc" id="L386">            getAllProviders(deviceId).forEach(p -&gt; deviceDescriptions.remove(new DeviceKey(p, deviceId)));</span>
+<span class="nc" id="L387">            return new DeviceEvent(DEVICE_REMOVED, removedDevice);</span>
+        }
+<span class="nc" id="L389">        return null;</span>
+    }
+
+    private boolean markOnline(DeviceId deviceId) {
+<span class="nc" id="L393">        return availableDevices.add(deviceId);</span>
+    }
+
+    @Override
+    public DeviceEvent markOffline(DeviceId deviceId) {
+<span class="nc" id="L398">        availableDevices.remove(deviceId);</span>
+        // set update listener will raise the event.
+<span class="nc" id="L400">        return null;</span>
+    }
+
+    @Override
+    public List&lt;DeviceEvent&gt; updatePorts(ProviderId providerId,
+            DeviceId deviceId,
+            List&lt;PortDescription&gt; descriptions) {
+<span class="nc" id="L407">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+<span class="nc" id="L408">        List&lt;DeviceEvent&gt; deviceEvents = null;</span>
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        if (localNodeId.equals(master)) {</span>
+<span class="nc" id="L410">            descriptions.forEach(description -&gt; {</span>
+<span class="nc" id="L411">                PortKey portKey = new PortKey(providerId, deviceId, description.portNumber());</span>
+<span class="nc" id="L412">                portDescriptions.put(portKey, description);</span>
+<span class="nc" id="L413">            });</span>
+<span class="nc" id="L414">            deviceEvents = refreshDevicePortCache(providerId, deviceId, Optional.empty());</span>
+        } else {
+<span class="nc bnc" id="L416" title="All 2 branches missed.">            if (master == null) {</span>
+<span class="nc" id="L417">                return Collections.emptyList();</span>
+            }
+<span class="nc" id="L419">            PortInjectedEvent portInjectedEvent = new PortInjectedEvent(providerId, deviceId, descriptions);</span>
+<span class="nc" id="L420">            deviceEvents = Futures.getUnchecked(</span>
+<span class="nc" id="L421">                    clusterCommunicator.sendAndReceive(portInjectedEvent,</span>
+                                    PORT_INJECTED,
+                                    SERIALIZER::encode,
+                                    SERIALIZER::decode,
+                                    master));
+        }
+<span class="nc bnc" id="L427" title="All 2 branches missed.">        return deviceEvents == null ? Collections.emptyList() : deviceEvents;</span>
+    }
+
+    private List&lt;DeviceEvent&gt; refreshDevicePortCache(ProviderId providerId,
+            DeviceId deviceId,
+            Optional&lt;PortNumber&gt; portNumber) {
+<span class="nc" id="L433">        Device device = devices.get(deviceId);</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">        checkArgument(device != null, DEVICE_NOT_FOUND, deviceId);</span>
+<span class="nc" id="L435">        List&lt;DeviceEvent&gt; events = Lists.newArrayList();</span>
+
+<span class="nc" id="L437">        Map&lt;PortNumber, Port&gt; ports = devicePorts.computeIfAbsent(deviceId, key -&gt; Maps.newConcurrentMap());</span>
+<span class="nc" id="L438">        List&lt;PortDescription&gt; descriptions = Lists.newArrayList();</span>
+<span class="nc" id="L439">        portDescriptions.entrySet().forEach(e -&gt; {</span>
+<span class="nc" id="L440">            PortKey key = e.getKey();</span>
+<span class="nc" id="L441">            PortDescription value = e.getValue();</span>
+<span class="nc bnc" id="L442" title="All 4 branches missed.">            if (key.deviceId().equals(deviceId) &amp;&amp; key.providerId().equals(providerId)) {</span>
+<span class="nc bnc" id="L443" title="All 2 branches missed.">                if (portNumber.isPresent()) {</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">                    if (portNumber.get().equals(key.portNumber())) {</span>
+<span class="nc" id="L445">                        descriptions.add(value);</span>
+                    }
+                } else {
+<span class="nc" id="L448">                    descriptions.add(value);</span>
+                }
+            }
+<span class="nc" id="L451">        });</span>
+
+<span class="nc bnc" id="L453" title="All 2 branches missed.">        for (PortDescription description : descriptions) {</span>
+<span class="nc" id="L454">            final PortNumber number = description.portNumber();</span>
+<span class="nc" id="L455">            ports.compute(number, (k, existingPort) -&gt; {</span>
+<span class="nc" id="L456">                Port newPort = composePort(device, number);</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">                if (existingPort == null) {</span>
+<span class="nc" id="L458">                    events.add(new DeviceEvent(PORT_ADDED, device, newPort));</span>
+                } else {
+<span class="nc bnc" id="L460" title="All 2 branches missed.">                    if (existingPort.isEnabled() != newPort.isEnabled() ||</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">                            existingPort.type() != newPort.type() ||</span>
+<span class="nc bnc" id="L462" title="All 2 branches missed.">                            existingPort.portSpeed() != newPort.portSpeed() ||</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">                            !AnnotationsUtil.isEqual(existingPort.annotations(), newPort.annotations())) {</span>
+<span class="nc" id="L464">                        events.add(new DeviceEvent(PORT_UPDATED, device, newPort));</span>
+                    }
+                }
+<span class="nc" id="L467">                return newPort;</span>
+            });
+<span class="nc" id="L469">        }</span>
+
+<span class="nc" id="L471">        return events;</span>
+    }
+
+    /**
+     * Returns a Port, merging descriptions from multiple Providers.
+     *
+     * @param device   device the port is on
+     * @param number   port number
+     * @return Port instance
+     */
+    private Port composePort(Device device, PortNumber number) {
+
+<span class="nc" id="L483">        Map&lt;ProviderId, PortDescription&gt; descriptions = Maps.newHashMap();</span>
+<span class="nc" id="L484">        portDescriptions.entrySet().forEach(entry -&gt; {</span>
+<span class="nc" id="L485">            PortKey portKey = entry.getKey();</span>
+<span class="nc bnc" id="L486" title="All 4 branches missed.">            if (portKey.deviceId().equals(device.id()) &amp;&amp; portKey.portNumber().equals(number)) {</span>
+<span class="nc" id="L487">                descriptions.put(portKey.providerId(), entry.getValue());</span>
+            }
+<span class="nc" id="L489">        });</span>
+<span class="nc" id="L490">        ProviderId primary = getPrimaryProviderId(device.id());</span>
+<span class="nc" id="L491">        PortDescription primaryDescription = descriptions.get(primary);</span>
+
+        // if no primary, assume not enabled
+<span class="nc" id="L494">        boolean isEnabled = false;</span>
+<span class="nc" id="L495">        DefaultAnnotations annotations = DefaultAnnotations.builder().build();</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">        if (primaryDescription != null) {</span>
+<span class="nc" id="L497">            isEnabled = primaryDescription.isEnabled();</span>
+<span class="nc" id="L498">            annotations = merge(annotations, primaryDescription.annotations());</span>
+        }
+<span class="nc" id="L500">        Port updated = null;</span>
+<span class="nc bnc" id="L501" title="All 2 branches missed.">        for (Entry&lt;ProviderId, PortDescription&gt; e : descriptions.entrySet()) {</span>
+<span class="nc bnc" id="L502" title="All 2 branches missed.">            if (e.getKey().equals(primary)) {</span>
+<span class="nc" id="L503">                continue;</span>
+            }
+<span class="nc" id="L505">            annotations = merge(annotations, e.getValue().annotations());</span>
+<span class="nc" id="L506">            updated = buildTypedPort(device, number, isEnabled, e.getValue(), annotations);</span>
+<span class="nc" id="L507">        }</span>
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if (primaryDescription == null) {</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">            return updated == null ? new DefaultPort(device, number, false, annotations) : updated;</span>
+        }
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        return updated == null</span>
+<span class="nc" id="L512">                ? buildTypedPort(device, number, isEnabled, primaryDescription, annotations)</span>
+                : updated;
+    }
+
+    private Port buildTypedPort(Device device, PortNumber number, boolean isEnabled,
+            PortDescription description, Annotations annotations) {
+<span class="nc bnc" id="L518" title="All 4 branches missed.">        switch (description.type()) {</span>
+        case OMS:
+<span class="nc" id="L520">            OmsPortDescription omsDesc = (OmsPortDescription) description;</span>
+<span class="nc" id="L521">            return new OmsPort(device, number, isEnabled, omsDesc.minFrequency(),</span>
+<span class="nc" id="L522">                    omsDesc.maxFrequency(), omsDesc.grid(), annotations);</span>
+        case OCH:
+<span class="nc" id="L524">            OchPortDescription ochDesc = (OchPortDescription) description;</span>
+<span class="nc" id="L525">            return new OchPort(device, number, isEnabled, ochDesc.signalType(),</span>
+<span class="nc" id="L526">                    ochDesc.isTunable(), ochDesc.lambda(), annotations);</span>
+        case ODUCLT:
+<span class="nc" id="L528">            OduCltPortDescription oduDesc = (OduCltPortDescription) description;</span>
+<span class="nc" id="L529">            return new OduCltPort(device, number, isEnabled, oduDesc.signalType(), annotations);</span>
+        default:
+<span class="nc" id="L531">            return new DefaultPort(device, number, isEnabled, description.type(),</span>
+<span class="nc" id="L532">                    description.portSpeed(), annotations);</span>
+        }
+    }
+
+    @Override
+    public DeviceEvent updatePortStatus(ProviderId providerId,
+            DeviceId deviceId,
+            PortDescription portDescription) {
+<span class="nc" id="L540">        portDescriptions.put(new PortKey(providerId, deviceId, portDescription.portNumber()), portDescription);</span>
+<span class="nc" id="L541">        List&lt;DeviceEvent&gt; events =</span>
+<span class="nc" id="L542">                refreshDevicePortCache(providerId, deviceId, Optional.of(portDescription.portNumber()));</span>
+<span class="nc" id="L543">        return Iterables.getFirst(events, null);</span>
+    }
+
+    @Override
+    public List&lt;Port&gt; getPorts(DeviceId deviceId) {
+<span class="nc" id="L548">        return ImmutableList.copyOf(devicePorts.getOrDefault(deviceId, Maps.newHashMap()).values());</span>
+    }
+
+    @Override
+    public Port getPort(DeviceId deviceId, PortNumber portNumber) {
+<span class="nc" id="L553">        return devicePorts.getOrDefault(deviceId, Maps.newHashMap()).get(portNumber);</span>
+    }
+
+    @Override
+    public DeviceEvent updatePortStatistics(ProviderId providerId,
+            DeviceId deviceId,
+            Collection&lt;PortStatistics&gt; newStatsCollection) {
+
+<span class="nc" id="L561">        Map&lt;PortNumber, PortStatistics&gt; prvStatsMap = devicePortStats.get(deviceId);</span>
+<span class="nc" id="L562">        Map&lt;PortNumber, PortStatistics&gt; newStatsMap = Maps.newHashMap();</span>
+<span class="nc" id="L563">        Map&lt;PortNumber, PortStatistics&gt; deltaStatsMap = Maps.newHashMap();</span>
+
+<span class="nc bnc" id="L565" title="All 2 branches missed.">        if (prvStatsMap != null) {</span>
+<span class="nc bnc" id="L566" title="All 2 branches missed.">            for (PortStatistics newStats : newStatsCollection) {</span>
+<span class="nc" id="L567">                PortNumber port = PortNumber.portNumber(newStats.port());</span>
+<span class="nc" id="L568">                PortStatistics prvStats = prvStatsMap.get(port);</span>
+<span class="nc" id="L569">                DefaultPortStatistics.Builder builder = DefaultPortStatistics.builder();</span>
+<span class="nc" id="L570">                PortStatistics deltaStats = builder.build();</span>
+<span class="nc bnc" id="L571" title="All 2 branches missed.">                if (prvStats != null) {</span>
+<span class="nc" id="L572">                    deltaStats = calcDeltaStats(deviceId, prvStats, newStats);</span>
+                }
+<span class="nc" id="L574">                deltaStatsMap.put(port, deltaStats);</span>
+<span class="nc" id="L575">                newStatsMap.put(port, newStats);</span>
+<span class="nc" id="L576">            }</span>
+        } else {
+<span class="nc bnc" id="L578" title="All 2 branches missed.">            for (PortStatistics newStats : newStatsCollection) {</span>
+<span class="nc" id="L579">                PortNumber port = PortNumber.portNumber(newStats.port());</span>
+<span class="nc" id="L580">                newStatsMap.put(port, newStats);</span>
+<span class="nc" id="L581">            }</span>
+        }
+<span class="nc" id="L583">        devicePortDeltaStats.put(deviceId, deltaStatsMap);</span>
+<span class="nc" id="L584">        devicePortStats.put(deviceId, newStatsMap);</span>
+        // DeviceEvent returns null because of InternalPortStatsListener usage
+<span class="nc" id="L586">        return null;</span>
+    }
+
+    /**
+     * Calculate delta statistics by subtracting previous from new statistics.
+     *
+     * @param deviceId device indentifier
+     * @param prvStats previous port statistics
+     * @param newStats new port statistics
+     * @return PortStatistics
+     */
+    public PortStatistics calcDeltaStats(DeviceId deviceId, PortStatistics prvStats, PortStatistics newStats) {
+        // calculate time difference
+        long deltaStatsSec, deltaStatsNano;
+<span class="nc bnc" id="L600" title="All 2 branches missed.">        if (newStats.durationNano() &lt; prvStats.durationNano()) {</span>
+<span class="nc" id="L601">            deltaStatsNano = newStats.durationNano() - prvStats.durationNano() + TimeUnit.SECONDS.toNanos(1);</span>
+<span class="nc" id="L602">            deltaStatsSec = newStats.durationSec() - prvStats.durationSec() - 1L;</span>
+        } else {
+<span class="nc" id="L604">            deltaStatsNano = newStats.durationNano() - prvStats.durationNano();</span>
+<span class="nc" id="L605">            deltaStatsSec = newStats.durationSec() - prvStats.durationSec();</span>
+        }
+<span class="nc" id="L607">        DefaultPortStatistics.Builder builder = DefaultPortStatistics.builder();</span>
+<span class="nc" id="L608">        DefaultPortStatistics deltaStats = builder.setDeviceId(deviceId)</span>
+<span class="nc" id="L609">                .setPort(newStats.port())</span>
+<span class="nc" id="L610">                .setPacketsReceived(newStats.packetsReceived() - prvStats.packetsReceived())</span>
+<span class="nc" id="L611">                .setPacketsSent(newStats.packetsSent() - prvStats.packetsSent())</span>
+<span class="nc" id="L612">                .setBytesReceived(newStats.bytesReceived() - prvStats.bytesReceived())</span>
+<span class="nc" id="L613">                .setBytesSent(newStats.bytesSent() - prvStats.bytesSent())</span>
+<span class="nc" id="L614">                .setPacketsRxDropped(newStats.packetsRxDropped() - prvStats.packetsRxDropped())</span>
+<span class="nc" id="L615">                .setPacketsTxDropped(newStats.packetsTxDropped() - prvStats.packetsTxDropped())</span>
+<span class="nc" id="L616">                .setPacketsRxErrors(newStats.packetsRxErrors() - prvStats.packetsRxErrors())</span>
+<span class="nc" id="L617">                .setPacketsTxErrors(newStats.packetsTxErrors() - prvStats.packetsTxErrors())</span>
+<span class="nc" id="L618">                .setDurationSec(deltaStatsSec)</span>
+<span class="nc" id="L619">                .setDurationNano(deltaStatsNano)</span>
+<span class="nc" id="L620">                .build();</span>
+<span class="nc" id="L621">        return deltaStats;</span>
+    }
+
+    @Override
+    public List&lt;PortStatistics&gt; getPortStatistics(DeviceId deviceId) {
+<span class="nc" id="L626">        Map&lt;PortNumber, PortStatistics&gt; portStats = devicePortStats.get(deviceId);</span>
+<span class="nc bnc" id="L627" title="All 2 branches missed.">        if (portStats == null) {</span>
+<span class="nc" id="L628">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L630">        return ImmutableList.copyOf(portStats.values());</span>
+    }
+
+    @Override
+    public List&lt;PortStatistics&gt; getPortDeltaStatistics(DeviceId deviceId) {
+<span class="nc" id="L635">        Map&lt;PortNumber, PortStatistics&gt; portStats = devicePortDeltaStats.get(deviceId);</span>
+<span class="nc bnc" id="L636" title="All 2 branches missed.">        if (portStats == null) {</span>
+<span class="nc" id="L637">            return Collections.emptyList();</span>
+        }
+<span class="nc" id="L639">        return ImmutableList.copyOf(portStats.values());</span>
+    }
+
+    @Override
+    public boolean isAvailable(DeviceId deviceId) {
+<span class="nc" id="L644">        return availableDevices.contains(deviceId);</span>
+    }
+
+    @Override
+    public Iterable&lt;Device&gt; getAvailableDevices() {
+<span class="nc bnc" id="L649" title="All 2 branches missed.">        return Iterables.filter(Iterables.transform(availableDevices, devices::get), d -&gt; d != null);</span>
+    }
+
+    @Override
+    public DeviceEvent removeDevice(DeviceId deviceId) {
+<span class="nc" id="L654">        NodeId master = mastershipService.getMasterFor(deviceId);</span>
+        // if there exist a master, forward
+        // if there is no master, try to become one and process
+<span class="nc" id="L657">        boolean relinquishAtEnd = false;</span>
+<span class="nc bnc" id="L658" title="All 2 branches missed.">        if (master == null) {</span>
+<span class="nc" id="L659">            final MastershipRole myRole = mastershipService.getLocalRole(deviceId);</span>
+<span class="nc bnc" id="L660" title="All 2 branches missed.">            if (myRole != MastershipRole.NONE) {</span>
+<span class="nc" id="L661">                relinquishAtEnd = true;</span>
+            }
+<span class="nc" id="L663">            log.debug(&quot;Temporarily requesting role for {} to remove&quot;, deviceId);</span>
+<span class="nc" id="L664">            MastershipRole role = Futures.getUnchecked(mastershipService.requestRoleFor(deviceId));</span>
+<span class="nc bnc" id="L665" title="All 2 branches missed.">            if (role == MastershipRole.MASTER) {</span>
+<span class="nc" id="L666">                master = localNodeId;</span>
+            }
+        }
+
+<span class="nc bnc" id="L670" title="All 2 branches missed.">        if (!localNodeId.equals(master)) {</span>
+<span class="nc" id="L671">            log.debug(&quot;{} has control of {}, forwarding remove request&quot;,</span>
+                      master, deviceId);
+
+<span class="nc" id="L674">            clusterCommunicator.unicast(deviceId, DEVICE_REMOVE_REQ, SERIALIZER::encode, master)</span>
+<span class="nc" id="L675">                               .whenComplete((r, e) -&gt; {</span>
+<span class="nc bnc" id="L676" title="All 2 branches missed.">                                   if (e != null) {</span>
+<span class="nc" id="L677">                                       log.error(&quot;Failed to forward {} remove request to its master&quot;, deviceId, e);</span>
+                                   }
+<span class="nc" id="L679">                               });</span>
+<span class="nc" id="L680">            return null;</span>
+        }
+
+        // I have control..
+<span class="nc" id="L684">        DeviceEvent event = null;</span>
+<span class="nc" id="L685">        final DeviceKey deviceKey = new DeviceKey(getPrimaryProviderId(deviceId), deviceId);</span>
+<span class="nc" id="L686">        DeviceDescription removedDeviceDescription =</span>
+<span class="nc" id="L687">                deviceDescriptions.remove(deviceKey);</span>
+<span class="nc bnc" id="L688" title="All 2 branches missed.">        if (removedDeviceDescription != null) {</span>
+<span class="nc" id="L689">            event = purgeDeviceCache(deviceId);</span>
+        }
+
+<span class="nc bnc" id="L692" title="All 2 branches missed.">        if (relinquishAtEnd) {</span>
+<span class="nc" id="L693">            log.debug(&quot;Relinquishing temporary role acquired for {}&quot;, deviceId);</span>
+<span class="nc" id="L694">            mastershipService.relinquishMastership(deviceId);</span>
+        }
+<span class="nc" id="L696">        return event;</span>
+    }
+
+    private DeviceEvent injectDevice(DeviceInjectedEvent event) {
+<span class="nc" id="L700">        return createOrUpdateDevice(event.providerId(), event.deviceId(), event.deviceDescription());</span>
+    }
+
+    private List&lt;DeviceEvent&gt; injectPort(PortInjectedEvent event) {
+<span class="nc" id="L704">        return updatePorts(event.providerId(), event.deviceId(), event.portDescriptions());</span>
+    }
+
+    private DefaultAnnotations mergeAnnotations(DeviceId deviceId) {
+<span class="nc" id="L708">        ProviderId primaryProviderId = getPrimaryProviderId(deviceId);</span>
+<span class="nc" id="L709">        DeviceDescription primaryDeviceDescription =</span>
+<span class="nc" id="L710">                deviceDescriptions.get(new DeviceKey(primaryProviderId, deviceId));</span>
+<span class="nc" id="L711">        DefaultAnnotations annotations = DefaultAnnotations.builder().build();</span>
+<span class="nc" id="L712">        annotations = merge(annotations, primaryDeviceDescription.annotations());</span>
+<span class="nc bnc" id="L713" title="All 2 branches missed.">        for (ProviderId providerId : getAllProviders(deviceId)) {</span>
+<span class="nc bnc" id="L714" title="All 2 branches missed.">            if (!providerId.equals(primaryProviderId)) {</span>
+<span class="nc" id="L715">                annotations = merge(annotations,</span>
+<span class="nc" id="L716">                                    deviceDescriptions.get(new DeviceKey(providerId, deviceId)).annotations());</span>
+            }
+<span class="nc" id="L718">        }</span>
+<span class="nc" id="L719">        return annotations;</span>
+    }
+
+<span class="nc" id="L722">    private class InternalDeviceStatusTracker implements SetEventListener&lt;DeviceId&gt; {</span>
+        @Override
+        public void event(SetEvent&lt;DeviceId&gt; event) {
+<span class="nc" id="L725">            final DeviceId deviceId = event.entry();</span>
+<span class="nc" id="L726">            final Device device = devices.get(deviceId);</span>
+<span class="nc bnc" id="L727" title="All 2 branches missed.">            if (device != null) {</span>
+<span class="nc" id="L728">                notifyDelegate(new DeviceEvent(DEVICE_AVAILABILITY_CHANGED, device));</span>
+            } else {
+<span class="nc" id="L730">                pendingAvailableChangeUpdates.add(deviceId);</span>
+            }
+<span class="nc" id="L732">        }</span>
+    }
+
+<span class="nc" id="L735">    private class InternalDeviceChangeEventListener</span>
+        implements EventuallyConsistentMapListener&lt;DeviceKey, DeviceDescription&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;DeviceKey, DeviceDescription&gt; event) {
+<span class="nc" id="L739">            DeviceId deviceId = event.key().deviceId();</span>
+<span class="nc" id="L740">            ProviderId providerId = event.key().providerId();</span>
+<span class="nc bnc" id="L741" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc" id="L742">                notifyDelegate(refreshDeviceCache(providerId, deviceId));</span>
+<span class="nc bnc" id="L743" title="All 2 branches missed.">                if (pendingAvailableChangeUpdates.remove(deviceId)) {</span>
+<span class="nc" id="L744">                    notifyDelegate(new DeviceEvent(DEVICE_AVAILABILITY_CHANGED, devices.get(deviceId)));</span>
+                }
+<span class="nc bnc" id="L746" title="All 2 branches missed.">            } else if (event.type() == REMOVE) {</span>
+<span class="nc" id="L747">                notifyDelegate(purgeDeviceCache(deviceId));</span>
+            }
+<span class="nc" id="L749">        }</span>
+    }
+
+<span class="nc" id="L752">    private class InternalPortChangeEventListener</span>
+        implements EventuallyConsistentMapListener&lt;PortKey, PortDescription&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;PortKey, PortDescription&gt; event) {
+<span class="nc" id="L756">            DeviceId deviceId = event.key().deviceId();</span>
+<span class="nc" id="L757">            ProviderId providerId = event.key().providerId();</span>
+<span class="nc" id="L758">            PortNumber portNumber = event.key().portNumber();</span>
+<span class="nc bnc" id="L759" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc bnc" id="L760" title="All 2 branches missed.">                if (devices.containsKey(deviceId)) {</span>
+<span class="nc" id="L761">                    List&lt;DeviceEvent&gt; events = refreshDevicePortCache(providerId, deviceId, Optional.of(portNumber));</span>
+<span class="nc bnc" id="L762" title="All 2 branches missed.">                    for (DeviceEvent deviceEvent : events) {</span>
+<span class="nc" id="L763">                        notifyDelegate(deviceEvent);</span>
+<span class="nc" id="L764">                    }</span>
+<span class="nc" id="L765">                }</span>
+<span class="nc bnc" id="L766" title="All 2 branches missed.">            } else if (event.type() == REMOVE) {</span>
+<span class="nc" id="L767">                log.warn(&quot;Unexpected port removed event&quot;);</span>
+            }
+<span class="nc" id="L769">        }</span>
+    }
+
+<span class="nc" id="L772">    private class InternalPortStatsListener</span>
+        implements EventuallyConsistentMapListener&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; {
+        @Override
+        public void event(EventuallyConsistentMapEvent&lt;DeviceId, Map&lt;PortNumber, PortStatistics&gt;&gt; event) {
+<span class="nc bnc" id="L776" title="All 2 branches missed.">            if (event.type() == PUT) {</span>
+<span class="nc" id="L777">                Device device = devices.get(event.key());</span>
+<span class="nc bnc" id="L778" title="All 2 branches missed.">                if (device != null) {</span>
+<span class="nc" id="L779">                    delegate.notify(new DeviceEvent(PORT_STATS_UPDATED, device));</span>
+                }
+            }
+<span class="nc" id="L782">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

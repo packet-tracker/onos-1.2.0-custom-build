@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>InternalDeviceEventSerializer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.device.impl</a> &gt; <span class="el_source">InternalDeviceEventSerializer.java</span></div><h1>InternalDeviceEventSerializer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.device.impl;
+
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceDescription;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.store.impl.Timestamped;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
+/**
+ * Kryo Serializer for {@link InternalDeviceEvent}.
+ */
+public class InternalDeviceEventSerializer extends Serializer&lt;InternalDeviceEvent&gt; {
+
+    /**
+     * Creates a serializer for {@link InternalDeviceEvent}.
+     */
+    public InternalDeviceEventSerializer() {
+        // does not accept null
+<span class="fc" id="L38">        super(false);</span>
+<span class="fc" id="L39">    }</span>
+
+    @Override
+    public void write(Kryo kryo, Output output, InternalDeviceEvent event) {
+<span class="nc" id="L43">        kryo.writeClassAndObject(output, event.providerId());</span>
+<span class="nc" id="L44">        kryo.writeClassAndObject(output, event.deviceId());</span>
+<span class="nc" id="L45">        kryo.writeClassAndObject(output, event.deviceDescription());</span>
+<span class="nc" id="L46">    }</span>
+
+    @Override
+    public InternalDeviceEvent read(Kryo kryo, Input input,
+                               Class&lt;InternalDeviceEvent&gt; type) {
+<span class="nc" id="L51">        ProviderId providerId = (ProviderId) kryo.readClassAndObject(input);</span>
+<span class="nc" id="L52">        DeviceId deviceId = (DeviceId) kryo.readClassAndObject(input);</span>
+
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L55">        Timestamped&lt;DeviceDescription&gt; deviceDescription</span>
+<span class="nc" id="L56">            = (Timestamped&lt;DeviceDescription&gt;) kryo.readClassAndObject(input);</span>
+
+<span class="nc" id="L58">        return new InternalDeviceEvent(providerId, deviceId, deviceDescription);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

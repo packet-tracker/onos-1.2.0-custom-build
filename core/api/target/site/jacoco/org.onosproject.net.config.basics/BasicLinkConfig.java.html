@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BasicLinkConfig.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.config.basics</a> &gt; <span class="el_source">BasicLinkConfig.java</span></div><h1>BasicLinkConfig.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.config.basics;
+
+import org.onosproject.net.Link;
+import org.onosproject.net.LinkKey;
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.time.Duration;
+
+/**
+ * Basic configuration for network infrastructure link.
+ */
+<span class="nc" id="L27">public class BasicLinkConfig extends AllowedEntityConfig&lt;LinkKey&gt; {</span>
+
+    public static final String TYPE = &quot;type&quot;;
+    public static final String LATENCY = &quot;latency&quot;;
+    public static final String BANDWIDTH = &quot;bandwidth&quot;;
+    public static final String IS_DURABLE = &quot;durable&quot;;
+
+    /**
+     * Returns the link type.
+     *
+     * @return link type override
+     */
+    public Link.Type type() {
+<span class="nc" id="L40">        return get(TYPE, Link.Type.DIRECT, Link.Type.class);</span>
+    }
+
+    /**
+     * Sets the link type.
+     *
+     * @param type link type override
+     * @return self
+     */
+    public BasicLinkConfig type(Link.Type type) {
+<span class="nc" id="L50">        return (BasicLinkConfig) setOrClear(TYPE, type);</span>
+    }
+
+    /**
+     * Returns link latency in terms of nanos.
+     *
+     * @return link latency; -1 if not set
+     */
+    public Duration latency() {
+<span class="nc" id="L59">        return Duration.ofNanos(get(LATENCY, -1));</span>
+    }
+
+    /**
+     * Sets the link latency.
+     *
+     * @param latency new latency; null to clear
+     * @return self
+     */
+    public BasicLinkConfig latency(Duration latency) {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        Long nanos = latency == null ? null : latency.toNanos();</span>
+<span class="nc" id="L70">        return (BasicLinkConfig) setOrClear(LATENCY, nanos);</span>
+    }
+
+    /**
+     * Returns link bandwidth in terms of Mbps.
+     *
+     * @return link bandwidth; -1 if not set
+     */
+    public long bandwidth() {
+<span class="nc" id="L79">        return get(BANDWIDTH, -1);</span>
+    }
+
+    /**
+     * Sets the link bandwidth.
+     *
+     * @param bandwidth new bandwidth; null to clear
+     * @return self
+     */
+    public BasicLinkConfig bandwidth(Long bandwidth) {
+<span class="nc" id="L89">        return (BasicLinkConfig) setOrClear(BANDWIDTH, bandwidth);</span>
+    }
+
+    /**
+     * Returns if link is durable in the network model or not.
+     *
+     * @return true for durable, false otherwise
+     */
+    public Boolean isDurable() {
+<span class="nc" id="L98">        JsonNode res = object.path(IS_DURABLE);</span>
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if (res.isMissingNode()) {</span>
+<span class="nc" id="L100">            return null;</span>
+        }
+<span class="nc" id="L102">        return res.asBoolean();</span>
+    }
+
+    /**
+     * Sets durability for this link.
+     *
+     * @param isDurable true for durable, false otherwise
+     * @return this BasicLinkConfig
+     */
+    public BasicLinkConfig isDurable(Boolean isDurable) {
+<span class="nc" id="L112">        return (BasicLinkConfig) setOrClear(IS_DURABLE, isDurable);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Heap.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.graph</a> &gt; <span class="el_source">Heap.java</span></div><h1>Heap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.graph;
+
+import com.google.common.collect.ImmutableList;
+
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Implementation of an array-backed heap structure whose sense of order is
+ * imposed by the provided comparator.
+ * &lt;p&gt;
+ * While this provides similar functionality to {@link java.util.PriorityQueue}
+ * data structure, one key difference is that external entities can control
+ * when to restore the heap property, which is done through invocation of the
+ * {@link #heapify} method.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * This class is not thread-safe and care must be taken to prevent concurrent
+ * modifications.
+ * &lt;/p&gt;
+ *
+ * @param &lt;T&gt; type of the items on the heap
+ */
+public class Heap&lt;T&gt; {
+
+    private final List&lt;T&gt; data;
+    private final Comparator&lt;T&gt; comparator;
+
+    /**
+     * Creates a new heap backed by the specified list. In the interest of
+     * efficiency, the list should be array-backed. Also, for the same reason,
+     * the data is not copied and therefore, the caller must assure that the
+     * backing data is not altered in any way.
+     *
+     * @param data       backing data list
+     * @param comparator comparator for ordering the heap items
+     */
+<span class="fc" id="L58">    public Heap(List&lt;T&gt; data, Comparator&lt;T&gt; comparator) {</span>
+<span class="fc" id="L59">        this.data = checkNotNull(data, &quot;Data cannot be null&quot;);</span>
+<span class="fc" id="L60">        this.comparator = checkNotNull(comparator, &quot;Comparator cannot be null&quot;);</span>
+<span class="fc" id="L61">        heapify();</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     * Restores the heap property by re-arranging the elements in the backing
+     * array as necessary following any heap modifications.
+     */
+    public void heapify() {
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        for (int i = data.size() / 2; i &gt;= 0; i--) {</span>
+<span class="fc" id="L70">            heapify(i);</span>
+        }
+<span class="fc" id="L72">    }</span>
+
+    /**
+     * Returns the current size of the heap.
+     *
+     * @return number of items in the heap
+     */
+    public int size() {
+<span class="fc" id="L80">        return data.size();</span>
+    }
+
+    /**
+     * Returns true if there are no items in the heap.
+     *
+     * @return true if heap is empty
+     */
+    public boolean isEmpty() {
+<span class="fc" id="L89">        return data.isEmpty();</span>
+    }
+
+    /**
+     * Returns the most extreme item in the heap.
+     *
+     * @return heap extreme or null if the heap is empty
+     */
+    public T extreme() {
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        return data.isEmpty() ? null : data.get(0);</span>
+    }
+
+    /**
+     * Extracts and returns the most extreme item from the heap.
+     *
+     * @return heap extreme or null if the heap is empty
+     */
+    public T extractExtreme() {
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if (!isEmpty()) {</span>
+<span class="fc" id="L108">            T extreme = extreme();</span>
+
+<span class="fc" id="L110">            data.set(0, data.get(data.size() - 1));</span>
+<span class="fc" id="L111">            data.remove(data.size() - 1);</span>
+<span class="fc" id="L112">            heapify();</span>
+<span class="fc" id="L113">            return extreme;</span>
+        }
+<span class="fc" id="L115">        return null;</span>
+    }
+
+    /**
+     * Inserts the specified item into the heap and returns the modified heap.
+     *
+     * @param item item to be inserted
+     * @return the heap self
+     * @throws IllegalArgumentException if the heap is already full
+     */
+    public Heap&lt;T&gt; insert(T item) {
+<span class="fc" id="L126">        data.add(item);</span>
+<span class="fc" id="L127">        bubbleUp();</span>
+<span class="fc" id="L128">        return this;</span>
+    }
+
+    /**
+     * Returns iterator to traverse the heap level-by-level. This iterator
+     * does not permit removal of items.
+     *
+     * @return non-destructive heap iterator
+     */
+    public Iterator&lt;T&gt; iterator() {
+<span class="fc" id="L138">        return ImmutableList.copyOf(data).iterator();</span>
+    }
+
+    // Bubbles up the last item in the heap to its proper position to restore
+    // the heap property.
+    private void bubbleUp() {
+<span class="fc" id="L144">        int child = data.size() - 1;</span>
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">        while (child &gt; 0) {</span>
+<span class="fc" id="L146">            int parent = child / 2;</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">            if (comparator.compare(data.get(child), data.get(parent)) &lt; 0) {</span>
+<span class="fc" id="L148">                break;</span>
+            }
+<span class="fc" id="L150">            swap(child, parent);</span>
+<span class="fc" id="L151">            child = parent;</span>
+<span class="fc" id="L152">        }</span>
+<span class="fc" id="L153">    }</span>
+
+    // Restores the heap property of the specified heap layer.
+    private void heapify(int i) {
+<span class="fc" id="L157">        int left = 2 * i + 1;</span>
+<span class="fc" id="L158">        int right = 2 * i;</span>
+<span class="fc" id="L159">        int extreme = i;</span>
+
+<span class="fc bfc" id="L161" title="All 2 branches covered.">        if (left &lt; data.size() &amp;&amp;</span>
+<span class="fc bfc" id="L162" title="All 2 branches covered.">                comparator.compare(data.get(extreme), data.get(left)) &lt; 0) {</span>
+<span class="fc" id="L163">            extreme = left;</span>
+        }
+
+<span class="fc bfc" id="L166" title="All 2 branches covered.">        if (right &lt; data.size() &amp;&amp;</span>
+<span class="fc bfc" id="L167" title="All 2 branches covered.">                comparator.compare(data.get(extreme), data.get(right)) &lt; 0) {</span>
+<span class="fc" id="L168">            extreme = right;</span>
+        }
+
+<span class="fc bfc" id="L171" title="All 2 branches covered.">        if (extreme != i) {</span>
+<span class="fc" id="L172">            swap(i, extreme);</span>
+<span class="fc" id="L173">            heapify(extreme);</span>
+        }
+<span class="fc" id="L175">    }</span>
+
+    // Swaps two heap items identified by their respective indexes.
+    private void swap(int i, int k) {
+<span class="fc" id="L179">        T aux = data.get(i);</span>
+<span class="fc" id="L180">        data.set(i, data.get(k));</span>
+<span class="fc" id="L181">        data.set(k, aux);</span>
+<span class="fc" id="L182">    }</span>
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L187">            return true;</span>
+        }
+<span class="fc bfc" id="L189" title="All 2 branches covered.">        if (obj instanceof Heap) {</span>
+<span class="fc" id="L190">            Heap that = (Heap) obj;</span>
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">            return this.getClass() == that.getClass() &amp;&amp;</span>
+<span class="fc bfc" id="L192" title="All 2 branches covered.">                    Objects.equals(this.comparator, that.comparator) &amp;&amp;</span>
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">                    Objects.deepEquals(this.data, that.data);</span>
+        }
+<span class="fc" id="L195">        return false;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L200">        return Objects.hash(comparator, data);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L205">        return toStringHelper(this)</span>
+<span class="fc" id="L206">                .add(&quot;data&quot;, data)</span>
+<span class="fc" id="L207">                .add(&quot;comparator&quot;, comparator)</span>
+<span class="fc" id="L208">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

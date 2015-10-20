@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpNotification.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpNotification.java</span></div><h1>BgpNotification.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * A class for handling BGP NOTIFICATION messages.
+ */
+final class BgpNotification {
+<span class="nc" id="L28">    private static final Logger log =</span>
+<span class="nc" id="L29">        LoggerFactory.getLogger(BgpNotification.class);</span>
+
+    /**
+     * Default constructor.
+     * &lt;p&gt;
+     * The constructor is private to prevent creating an instance of
+     * this utility class.
+     */
+<span class="nc" id="L37">    private BgpNotification() {</span>
+<span class="nc" id="L38">    }</span>
+
+    /**
+     * Processes BGP NOTIFICATION message.
+     *
+     * @param bgpSession the BGP Session to use
+     * @param ctx the Channel Handler Context
+     * @param message the message to process
+     */
+    static void processBgpNotification(BgpSession bgpSession,
+                                       ChannelHandlerContext ctx,
+                                       ChannelBuffer message) {
+<span class="nc" id="L50">        int minLength =</span>
+            BgpConstants.BGP_NOTIFICATION_MIN_LENGTH - BgpConstants.BGP_HEADER_LENGTH;
+<span class="nc bnc" id="L52" title="All 2 branches missed.">        if (message.readableBytes() &lt; minLength) {</span>
+<span class="nc" id="L53">            log.debug(&quot;BGP RX NOTIFICATION Error from {}: &quot; +</span>
+                      &quot;Message length {} too short. Must be at least {}&quot;,
+<span class="nc" id="L55">                      bgpSession.remoteInfo().address(),</span>
+<span class="nc" id="L56">                      message.readableBytes(), minLength);</span>
+            //
+            // ERROR: Bad Message Length
+            //
+            // NOTE: We do NOT send NOTIFICATION in response to a notification
+<span class="nc" id="L61">            return;</span>
+        }
+
+        //
+        // Parse the NOTIFICATION message
+        //
+<span class="nc" id="L67">        int errorCode = message.readUnsignedByte();</span>
+<span class="nc" id="L68">        int errorSubcode = message.readUnsignedByte();</span>
+<span class="nc" id="L69">        int dataLength = message.readableBytes();</span>
+
+<span class="nc" id="L71">        log.debug(&quot;BGP RX NOTIFICATION message from {}: Error Code {} &quot; +</span>
+                  &quot;Error Subcode {} Data Length {}&quot;,
+<span class="nc" id="L73">                  bgpSession.remoteInfo().address(), errorCode, errorSubcode,</span>
+<span class="nc" id="L74">                  dataLength);</span>
+
+        //
+        // NOTE: If the peer sent a NOTIFICATION, we leave it to the peer to
+        // close the connection.
+        //
+
+        // Start the Session Timeout timer
+<span class="nc" id="L82">        bgpSession.restartSessionTimeoutTimer(ctx);</span>
+<span class="nc" id="L83">    }</span>
+
+    /**
+     * Prepares BGP NOTIFICATION message.
+     *
+     * @param errorCode the BGP NOTIFICATION Error Code
+     * @param errorSubcode the BGP NOTIFICATION Error Subcode if applicable,
+     * otherwise BgpConstants.Notifications.ERROR_SUBCODE_UNSPECIFIC
+     * @param data the BGP NOTIFICATION Data if applicable, otherwise null
+     * @return the message to transmit (BGP header included)
+     */
+    static ChannelBuffer prepareBgpNotification(int errorCode,
+                                                int errorSubcode,
+                                                ChannelBuffer data) {
+<span class="nc" id="L97">        ChannelBuffer message =</span>
+<span class="nc" id="L98">            ChannelBuffers.buffer(BgpConstants.BGP_MESSAGE_MAX_LENGTH);</span>
+
+        //
+        // Prepare the NOTIFICATION message payload
+        //
+<span class="nc" id="L103">        message.writeByte(errorCode);</span>
+<span class="nc" id="L104">        message.writeByte(errorSubcode);</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (data != null) {</span>
+<span class="nc" id="L106">            message.writeBytes(data);</span>
+        }
+<span class="nc" id="L108">        return BgpMessage.prepareBgpMessage(BgpConstants.BGP_TYPE_NOTIFICATION,</span>
+                                            message);
+    }
+
+    /**
+     * Prepares BGP NOTIFICATION message: Bad Message Length.
+     *
+     * @param length the erroneous Length field
+     * @return the message to transmit (BGP header included)
+     */
+    static ChannelBuffer prepareBgpNotificationBadMessageLength(int length) {
+<span class="nc" id="L119">        int errorCode = BgpConstants.Notifications.MessageHeaderError.ERROR_CODE;</span>
+<span class="nc" id="L120">        int errorSubcode = BgpConstants.Notifications.MessageHeaderError.BAD_MESSAGE_LENGTH;</span>
+<span class="nc" id="L121">        ChannelBuffer data = ChannelBuffers.buffer(2);</span>
+<span class="nc" id="L122">        data.writeShort(length);</span>
+
+<span class="nc" id="L124">        return prepareBgpNotification(errorCode, errorSubcode, data);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

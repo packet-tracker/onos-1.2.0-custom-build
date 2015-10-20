@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MetricsManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.metrics</a> &gt; <span class="el_source">MetricsManager.java</span></div><h1>MetricsManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.metrics;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Metric;
+import com.codahale.metrics.MetricFilter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
+/**
+ * This class holds the Metrics registry for ONOS.
+ * All metrics (Counter, Histogram, Timer, Meter, Gauge) use a hierarchical
+ * string-based naming scheme: COMPONENT.FEATURE.NAME.
+ * Example: &quot;Topology.Counters.TopologyUpdates&quot;.
+ * The COMPONENT and FEATURE names have to be registered in advance before
+ * a metric can be created. Example:
+ * &lt;pre&gt;
+ *   &lt;code&gt;
+ *     private final MetricsManager.MetricsComponent COMPONENT =
+ *         MetricsManager.registerComponent(&quot;Topology&quot;);
+ *     private final MetricsManager.MetricsFeature FEATURE =
+ *         COMPONENT.registerFeature(&quot;Counters&quot;);
+ *     private final Counter counterTopologyUpdates =
+ *         MetricsManager.createCounter(COMPONENT, FEATURE, &quot;TopologyUpdates&quot;);
+ *   &lt;/code&gt;
+ * &lt;/pre&gt;
+ * Gauges are slightly different because they are not created directly in
+ * this class, but are allocated by the caller and passed in for registration:
+ * &lt;pre&gt;
+ *   &lt;code&gt;
+ *     private final Gauge&amp;lt;Long&amp;gt; gauge =
+ *         new {@literal Gauge&amp;lt;Long&amp;gt}() {
+ *             {@literal @}Override
+ *             public Long getValue() {
+ *                 return gaugeValue;
+ *             }
+ *         };
+ *     MetricsManager.registerMetric(COMPONENT, FEATURE, GAUGE_NAME, gauge);
+ *   &lt;/code&gt;
+ * &lt;/pre&gt;
+ */
+<span class="nc" id="L63">public class MetricsManager implements MetricsService {</span>
+
+    /**
+     * Registry to hold the Components defined in the system.
+     */
+<span class="nc" id="L68">    private ConcurrentMap&lt;String, MetricsComponent&gt; componentsRegistry =</span>
+        new ConcurrentHashMap&lt;&gt;();
+
+    /**
+     * Registry for the Metrics objects created in the system.
+     */
+<span class="nc" id="L74">    private MetricRegistry metricsRegistry = new MetricRegistry();</span>
+
+    /**
+     * Clears the internal state.
+     */
+    protected void clear() {
+<span class="nc" id="L80">        this.componentsRegistry = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="nc" id="L81">        this.metricsRegistry = new MetricRegistry();</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * Registers a component.
+     *
+     * @param name name of the Component to register
+     * @return MetricsComponent object that can be used to create Metrics.
+     */
+    @Override
+    public MetricsComponent registerComponent(final String name) {
+<span class="nc" id="L92">        MetricsComponent component = componentsRegistry.get(name);</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        if (component == null) {</span>
+<span class="nc" id="L94">            final MetricsComponent createdComponent =</span>
+                new MetricsComponent(name);
+<span class="nc" id="L96">            component = componentsRegistry.putIfAbsent(name, createdComponent);</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">            if (component == null) {</span>
+<span class="nc" id="L98">                component = createdComponent;</span>
+            }
+        }
+<span class="nc" id="L101">        return component;</span>
+    }
+
+    /**
+     * Generates a name for a Metric from its component and feature.
+     *
+     * @param component component the metric is defined in
+     * @param feature feature the metric is defined in
+     * @param metricName local name of the metric
+     *
+     * @return full name of the metric
+     */
+    private String generateName(final MetricsComponent component,
+                                final MetricsFeature feature,
+                                final String metricName) {
+<span class="nc" id="L116">        return MetricRegistry.name(component.getName(),</span>
+<span class="nc" id="L117">                                   feature.getName(),</span>
+                                   metricName);
+    }
+
+    /**
+     * Creates a Counter metric.
+     *
+     * @param component component the Counter is defined in
+     * @param feature feature the Counter is defined in
+     * @param metricName local name of the metric
+     * @return the created Counter Meteric
+     */
+    @Override
+    public Counter createCounter(final MetricsComponent component,
+                                 final MetricsFeature feature,
+                                 final String metricName) {
+<span class="nc" id="L133">        final String name = generateName(component, feature, metricName);</span>
+<span class="nc" id="L134">        return metricsRegistry.counter(name);</span>
+    }
+
+    /**
+     * Creates a Histogram metric.
+     *
+     * @param component component the Histogram is defined in
+     * @param feature feature the Histogram is defined in
+     * @param metricName local name of the metric
+     * @return the created Histogram Metric
+     */
+    @Override
+    public Histogram createHistogram(final MetricsComponent component,
+                                     final MetricsFeature feature,
+                                     final String metricName) {
+<span class="nc" id="L149">        final String name = generateName(component, feature, metricName);</span>
+<span class="nc" id="L150">        return metricsRegistry.histogram(name);</span>
+    }
+
+    /**
+     * Creates a Timer metric.
+     *
+     * @param component component the Timer is defined in
+     * @param feature feature the Timer is defined in
+     * @param metricName local name of the metric
+     * @return the created Timer Metric
+     */
+    @Override
+    public Timer createTimer(final MetricsComponent component,
+                             final MetricsFeature feature,
+                             final String metricName) {
+<span class="nc" id="L165">        final String name = generateName(component, feature, metricName);</span>
+<span class="nc" id="L166">        return metricsRegistry.timer(name);</span>
+    }
+
+    /**
+     * Creates a Meter metric.
+     *
+     * @param component component the Meter is defined in
+     * @param feature feature the Meter is defined in
+     * @param metricName local name of the metric
+     * @return the created Meter Metric
+     */
+    @Override
+    public Meter createMeter(final MetricsComponent component,
+                             final MetricsFeature feature,
+                             final String metricName) {
+<span class="nc" id="L181">        final String name = generateName(component, feature, metricName);</span>
+<span class="nc" id="L182">        return metricsRegistry.meter(name);</span>
+    }
+
+    /**
+     * Registers an already created Metric.  This is used for situation where a
+     * caller needs to allocate its own Metric, but still register it with the
+     * system.
+     *
+     * @param &lt;T&gt; Metric type
+     * @param component component the Metric is defined in
+     * @param feature feature the Metric is defined in
+     * @param metricName local name of the metric
+     * @param metric Metric to register
+     * @return the registered Metric
+     */
+    @Override
+    public &lt;T extends Metric&gt; T registerMetric(
+                                        final MetricsComponent component,
+                                        final MetricsFeature feature,
+                                        final String metricName,
+                                        final T metric) {
+<span class="nc" id="L203">        final String name = generateName(component, feature, metricName);</span>
+<span class="nc" id="L204">        metricsRegistry.register(name, metric);</span>
+<span class="nc" id="L205">        return metric;</span>
+    }
+
+    /**
+     * Removes the metric with the given name.
+     *
+     * @param component component the Metric is defined in
+     * @param feature feature the Metric is defined in
+     * @param metricName local name of the metric
+     * @return true if the metric existed and was removed, otherwise false
+     */
+    @Override
+    public boolean removeMetric(final MetricsComponent component,
+                                final MetricsFeature feature,
+                                final String metricName) {
+<span class="nc" id="L220">        final String name = generateName(component, feature, metricName);</span>
+<span class="nc" id="L221">        return metricsRegistry.remove(name);</span>
+    }
+
+    /**
+     * Fetches the existing Timers.
+     *
+     * @param filter filter to use to select Timers
+     * @return a map of the Timers that match the filter, with the key as the
+     *         name String to the Timer.
+     */
+    @Override
+    public Map&lt;String, Timer&gt; getTimers(final MetricFilter filter) {
+<span class="nc" id="L233">        return metricsRegistry.getTimers(filter);</span>
+    }
+
+    /**
+     * Fetches the existing Gauges.
+     *
+     * @param filter filter to use to select Gauges
+     * @return a map of the Gauges that match the filter, with the key as the
+     *         name String to the Gauge.
+     */
+    @Override
+    public Map&lt;String, Gauge&gt; getGauges(final MetricFilter filter) {
+<span class="nc" id="L245">        return metricsRegistry.getGauges(filter);</span>
+    }
+
+    /**
+     * Fetches the existing Counters.
+     *
+     * @param filter filter to use to select Counters
+     * @return a map of the Counters that match the filter, with the key as the
+     *         name String to the Counter.
+     */
+    @Override
+    public Map&lt;String, Counter&gt; getCounters(final MetricFilter filter) {
+<span class="nc" id="L257">        return metricsRegistry.getCounters(filter);</span>
+    }
+
+    /**
+     * Fetches the existing Meters.
+     *
+     * @param filter filter to use to select Meters
+     * @return a map of the Meters that match the filter, with the key as the
+     *         name String to the Meter.
+     */
+    @Override
+    public Map&lt;String, Meter&gt; getMeters(final MetricFilter filter) {
+<span class="nc" id="L269">        return metricsRegistry.getMeters(filter);</span>
+    }
+
+    /**
+     * Fetches the existing Histograms.
+     *
+     * @param filter filter to use to select Histograms
+     * @return a map of the Histograms that match the filter, with the key as
+     *         the name String to the Histogram.
+     */
+    @Override
+    public Map&lt;String, Histogram&gt; getHistograms(final MetricFilter filter) {
+<span class="nc" id="L281">        return metricsRegistry.getHistograms(filter);</span>
+    }
+
+    /**
+     * Removes all Metrics that match a given filter.
+     *
+     * @param filter filter to use to select the Metrics to remove.
+     */
+    @Override
+    public void removeMatching(final MetricFilter filter) {
+<span class="nc" id="L291">        metricsRegistry.removeMatching(filter);</span>
+<span class="nc" id="L292">    }</span>
+
+    /**
+     * Fetches the existing Meters.
+     *
+     *
+     * @return a map of all metrics with the key as the
+     *         name String to the Meter.
+     */
+    public Map&lt;String, Metric&gt; getMetrics() {
+<span class="nc" id="L302">        return metricsRegistry.getMetrics();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

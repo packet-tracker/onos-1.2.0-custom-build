@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConsistentIntentSetMultimap.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.resource.impl</a> &gt; <span class="el_source">ConsistentIntentSetMultimap.java</span></div><h1>ConsistentIntentSetMultimap.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.resource.impl;
+
+import com.google.common.annotations.Beta;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.intent.IntentId;
+import org.onosproject.net.resource.device.IntentSetMultimap;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.service.ConsistentMap;
+import org.onosproject.store.service.Serializer;
+import org.onosproject.store.service.StorageService;
+import org.onosproject.store.service.Versioned;
+import org.slf4j.Logger;
+
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * A collection that maps Intent IDs as keys to values as Intent IDs,
+ * where each key may associated with multiple values without duplication.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+@Beta
+<span class="nc" id="L47">public class ConsistentIntentSetMultimap implements IntentSetMultimap {</span>
+<span class="nc" id="L48">    private final Logger log = getLogger(getClass());</span>
+
+    private static final String INTENT_MAPPING = &quot;IntentMapping&quot;;
+
+<span class="nc" id="L52">    private static final Serializer SERIALIZER = Serializer.using(KryoNamespaces.API);</span>
+
+    private ConsistentMap&lt;IntentId, Set&lt;IntentId&gt;&gt; intentMapping;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected StorageService storageService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L64">        intentMapping = storageService.&lt;IntentId, Set&lt;IntentId&gt;&gt;consistentMapBuilder()</span>
+<span class="nc" id="L65">                .withName(INTENT_MAPPING)</span>
+<span class="nc" id="L66">                .withSerializer(SERIALIZER)</span>
+<span class="nc" id="L67">                .build();</span>
+<span class="nc" id="L68">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L69">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L73">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L74">    }</span>
+
+    @Override
+    public Set&lt;IntentId&gt; getMapping(IntentId intentId) {
+<span class="nc" id="L78">        Versioned&lt;Set&lt;IntentId&gt;&gt; result = intentMapping.get(intentId);</span>
+
+<span class="nc bnc" id="L80" title="All 2 branches missed.">        if (result != null) {</span>
+<span class="nc" id="L81">            return result.value();</span>
+        }
+
+<span class="nc" id="L84">        return null;</span>
+    }
+
+    @Override
+    public boolean allocateMapping(IntentId keyIntentId, IntentId valIntentId) {
+<span class="nc" id="L89">        Versioned&lt;Set&lt;IntentId&gt;&gt; versionedIntents = intentMapping.get(keyIntentId);</span>
+
+<span class="nc bnc" id="L91" title="All 2 branches missed.">        if (versionedIntents == null) {</span>
+<span class="nc" id="L92">            Set&lt;IntentId&gt; newSet = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L93">            newSet.add(valIntentId);</span>
+<span class="nc" id="L94">            intentMapping.put(keyIntentId, newSet);</span>
+<span class="nc" id="L95">        } else {</span>
+<span class="nc" id="L96">            versionedIntents.value().add(valIntentId);</span>
+        }
+
+<span class="nc" id="L99">        return true;</span>
+    }
+
+    @Override
+    public void releaseMapping(IntentId intentId) {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        for (IntentId intent : intentMapping.keySet()) {</span>
+            // TODO: optimize by checking for identical src &amp; dst
+<span class="nc" id="L106">            Set&lt;IntentId&gt; mapping = intentMapping.get(intent).value();</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            if (mapping.remove(intentId)) {</span>
+<span class="nc" id="L108">                return;</span>
+            }
+<span class="nc" id="L110">        }</span>
+<span class="nc" id="L111">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

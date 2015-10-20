@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DecodeCriterionCodecHelper.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">DecodeCriterionCodecHelper.java</span></div><h1>DecodeCriterionCodecHelper.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.onlab.packet.Ip6Address;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.MplsLabel;
+import org.onlab.packet.TpPort;
+import org.onlab.packet.VlanId;
+import org.onosproject.net.ChannelSpacing;
+import org.onosproject.net.GridType;
+import org.onosproject.net.Lambda;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.criteria.Criterion;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static org.onlab.util.Tools.nullIsIllegal;
+
+/**
+ * Decode portion of the criterion codec.
+ */
+public final class DecodeCriterionCodecHelper {
+
+    private final ObjectNode json;
+
+    protected static final String MISSING_MEMBER_MESSAGE =
+            &quot; member is required in Criterion&quot;;
+
+    private interface CriterionDecoder {
+        Criterion decodeCriterion(ObjectNode json);
+    }
+    private final Map&lt;String, CriterionDecoder&gt; decoderMap;
+
+    /**
+     * Creates a decode criterion codec object.
+     * Initializes the lookup map for criterion subclass decoders.
+     *
+     * @param json JSON object to decode
+     */
+<span class="fc" id="L60">    public DecodeCriterionCodecHelper(ObjectNode json) {</span>
+<span class="fc" id="L61">        this.json = json;</span>
+<span class="fc" id="L62">        decoderMap = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L64">        decoderMap.put(Criterion.Type.IN_PORT.name(), new InPortDecoder());</span>
+<span class="fc" id="L65">        decoderMap.put(Criterion.Type.IN_PHY_PORT.name(), new InPhyPortDecoder());</span>
+<span class="fc" id="L66">        decoderMap.put(Criterion.Type.METADATA.name(), new MetadataDecoder());</span>
+<span class="fc" id="L67">        decoderMap.put(Criterion.Type.ETH_DST.name(), new EthDstDecoder());</span>
+<span class="fc" id="L68">        decoderMap.put(Criterion.Type.ETH_SRC.name(), new EthSrcDecoder());</span>
+<span class="fc" id="L69">        decoderMap.put(Criterion.Type.ETH_TYPE.name(), new EthTypeDecoder());</span>
+<span class="fc" id="L70">        decoderMap.put(Criterion.Type.VLAN_VID.name(), new VlanVidDecoder());</span>
+<span class="fc" id="L71">        decoderMap.put(Criterion.Type.VLAN_PCP.name(), new VlanPcpDecoder());</span>
+<span class="fc" id="L72">        decoderMap.put(Criterion.Type.IP_DSCP.name(), new IpDscpDecoder());</span>
+<span class="fc" id="L73">        decoderMap.put(Criterion.Type.IP_ECN.name(), new IpEcnDecoder());</span>
+<span class="fc" id="L74">        decoderMap.put(Criterion.Type.IP_PROTO.name(), new IpProtoDecoder());</span>
+<span class="fc" id="L75">        decoderMap.put(Criterion.Type.IPV4_SRC.name(), new IpV4SrcDecoder());</span>
+<span class="fc" id="L76">        decoderMap.put(Criterion.Type.IPV4_DST.name(), new IpV4DstDecoder());</span>
+<span class="fc" id="L77">        decoderMap.put(Criterion.Type.TCP_SRC.name(), new TcpSrcDecoder());</span>
+<span class="fc" id="L78">        decoderMap.put(Criterion.Type.TCP_DST.name(), new TcpDstDecoder());</span>
+<span class="fc" id="L79">        decoderMap.put(Criterion.Type.UDP_SRC.name(), new UdpSrcDecoder());</span>
+<span class="fc" id="L80">        decoderMap.put(Criterion.Type.UDP_DST.name(), new UdpDstDecoder());</span>
+<span class="fc" id="L81">        decoderMap.put(Criterion.Type.SCTP_SRC.name(), new SctpSrcDecoder());</span>
+<span class="fc" id="L82">        decoderMap.put(Criterion.Type.SCTP_DST.name(), new SctpDstDecoder());</span>
+<span class="fc" id="L83">        decoderMap.put(Criterion.Type.ICMPV4_TYPE.name(), new IcmpV4TypeDecoder());</span>
+<span class="fc" id="L84">        decoderMap.put(Criterion.Type.ICMPV4_CODE.name(), new IcmpV4CodeDecoder());</span>
+<span class="fc" id="L85">        decoderMap.put(Criterion.Type.IPV6_SRC.name(), new IpV6SrcDecoder());</span>
+<span class="fc" id="L86">        decoderMap.put(Criterion.Type.IPV6_DST.name(), new IpV6DstDecoder());</span>
+<span class="fc" id="L87">        decoderMap.put(Criterion.Type.IPV6_FLABEL.name(), new IpV6FLabelDecoder());</span>
+<span class="fc" id="L88">        decoderMap.put(Criterion.Type.ICMPV6_TYPE.name(), new IcmpV6TypeDecoder());</span>
+<span class="fc" id="L89">        decoderMap.put(Criterion.Type.ICMPV6_CODE.name(), new IcmpV6CodeDecoder());</span>
+<span class="fc" id="L90">        decoderMap.put(Criterion.Type.IPV6_ND_TARGET.name(), new V6NDTargetDecoder());</span>
+<span class="fc" id="L91">        decoderMap.put(Criterion.Type.IPV6_ND_SLL.name(), new V6NDSllDecoder());</span>
+<span class="fc" id="L92">        decoderMap.put(Criterion.Type.IPV6_ND_TLL.name(), new V6NDTllDecoder());</span>
+<span class="fc" id="L93">        decoderMap.put(Criterion.Type.MPLS_LABEL.name(), new MplsLabelDecoder());</span>
+<span class="fc" id="L94">        decoderMap.put(Criterion.Type.IPV6_EXTHDR.name(), new IpV6ExthdrDecoder());</span>
+<span class="fc" id="L95">        decoderMap.put(Criterion.Type.OCH_SIGID.name(), new OchSigIdDecoder());</span>
+<span class="fc" id="L96">        decoderMap.put(Criterion.Type.OCH_SIGTYPE.name(), new OchSigTypeDecoder());</span>
+<span class="fc" id="L97">        decoderMap.put(Criterion.Type.TUNNEL_ID.name(), new TunnelIdDecoder());</span>
+<span class="fc" id="L98">    }</span>
+
+<span class="fc" id="L100">    private class EthTypeDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L103">            int ethType = nullIsIllegal(json.get(CriterionCodec.ETH_TYPE),</span>
+<span class="fc" id="L104">                    CriterionCodec.ETH_TYPE + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L105">            return Criteria.matchEthType(ethType);</span>
+        }
+    }
+
+<span class="fc" id="L109">    private class EthDstDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L112">            MacAddress mac = MacAddress.valueOf(nullIsIllegal(json.get(CriterionCodec.MAC),</span>
+<span class="fc" id="L113">                    CriterionCodec.MAC + MISSING_MEMBER_MESSAGE).asText());</span>
+
+<span class="fc" id="L115">            return Criteria.matchEthDst(mac);</span>
+        }
+    }
+
+<span class="fc" id="L119">    private class EthSrcDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L122">            MacAddress mac = MacAddress.valueOf(nullIsIllegal(json.get(CriterionCodec.MAC),</span>
+<span class="fc" id="L123">                    CriterionCodec.MAC + MISSING_MEMBER_MESSAGE).asText());</span>
+
+<span class="fc" id="L125">            return Criteria.matchEthSrc(mac);</span>
+        }
+    }
+
+<span class="fc" id="L129">    private class InPortDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L132">            PortNumber port = PortNumber.portNumber(nullIsIllegal(json.get(CriterionCodec.PORT),</span>
+<span class="fc" id="L133">                    CriterionCodec.PORT + MISSING_MEMBER_MESSAGE).asLong());</span>
+
+<span class="fc" id="L135">            return Criteria.matchInPort(port);</span>
+        }
+    }
+
+<span class="fc" id="L139">    private class InPhyPortDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L142">            PortNumber port = PortNumber.portNumber(nullIsIllegal(json.get(CriterionCodec.PORT),</span>
+<span class="fc" id="L143">                    CriterionCodec.PORT + MISSING_MEMBER_MESSAGE).asLong());</span>
+
+<span class="fc" id="L145">            return Criteria.matchInPhyPort(port);</span>
+        }
+    }
+
+<span class="fc" id="L149">    private class MetadataDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L152">            long metadata = nullIsIllegal(json.get(CriterionCodec.METADATA),</span>
+<span class="fc" id="L153">                    CriterionCodec.METADATA + MISSING_MEMBER_MESSAGE).asLong();</span>
+
+<span class="fc" id="L155">            return Criteria.matchMetadata(metadata);</span>
+        }
+    }
+
+<span class="fc" id="L159">    private class VlanVidDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L162">            short vlanId = (short) nullIsIllegal(json.get(CriterionCodec.VLAN_ID),</span>
+<span class="fc" id="L163">                    CriterionCodec.VLAN_ID + MISSING_MEMBER_MESSAGE).asInt();</span>
+
+<span class="fc" id="L165">            return Criteria.matchVlanId(VlanId.vlanId(vlanId));</span>
+        }
+    }
+
+<span class="fc" id="L169">    private class VlanPcpDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L172">            byte priority = (byte) nullIsIllegal(json.get(CriterionCodec.PRIORITY),</span>
+<span class="fc" id="L173">                    CriterionCodec.VLAN_ID + MISSING_MEMBER_MESSAGE).asInt();</span>
+
+<span class="fc" id="L175">            return Criteria.matchVlanPcp(priority);</span>
+        }
+    }
+
+<span class="fc" id="L179">    private class IpDscpDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L182">            byte ipDscp = (byte) nullIsIllegal(json.get(CriterionCodec.IP_DSCP),</span>
+<span class="fc" id="L183">                    CriterionCodec.IP_DSCP + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L184">            return Criteria.matchIPDscp(ipDscp);</span>
+        }
+    }
+
+<span class="fc" id="L188">    private class IpEcnDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L191">            byte ipEcn = (byte) nullIsIllegal(json.get(CriterionCodec.IP_ECN),</span>
+<span class="fc" id="L192">                    CriterionCodec.IP_ECN + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L193">            return Criteria.matchIPEcn(ipEcn);</span>
+        }
+    }
+
+<span class="fc" id="L197">    private class IpProtoDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L200">            short proto = (short) nullIsIllegal(json.get(CriterionCodec.PROTOCOL),</span>
+<span class="fc" id="L201">                    CriterionCodec.PROTOCOL + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L202">            return Criteria.matchIPProtocol(proto);</span>
+        }
+    }
+
+<span class="fc" id="L206">    private class IpV4SrcDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L209">            String ip = nullIsIllegal(json.get(CriterionCodec.IP),</span>
+<span class="fc" id="L210">                    CriterionCodec.IP + MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L211">            return Criteria.matchIPSrc(IpPrefix.valueOf(ip));</span>
+        }
+    }
+
+<span class="fc" id="L215">    private class IpV4DstDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L218">            String ip = nullIsIllegal(json.get(CriterionCodec.IP),</span>
+<span class="fc" id="L219">                    CriterionCodec.IP + MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L220">            return Criteria.matchIPDst(IpPrefix.valueOf(ip));</span>
+        }
+    }
+
+<span class="fc" id="L224">    private class IpV6SrcDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L227">            String ip = nullIsIllegal(json.get(CriterionCodec.IP),</span>
+<span class="fc" id="L228">                    CriterionCodec.IP + MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L229">            return Criteria.matchIPv6Src(IpPrefix.valueOf(ip));</span>
+        }
+    }
+
+<span class="fc" id="L233">    private class IpV6DstDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L236">            String ip = nullIsIllegal(json.get(CriterionCodec.IP),</span>
+<span class="fc" id="L237">                    CriterionCodec.IP + MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L238">            return Criteria.matchIPv6Dst(IpPrefix.valueOf(ip));</span>
+        }
+    }
+
+<span class="fc" id="L242">    private class TcpSrcDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L245">            TpPort tcpPort = TpPort.tpPort(nullIsIllegal(json.get(CriterionCodec.TCP_PORT),</span>
+<span class="fc" id="L246">                    CriterionCodec.TCP_PORT + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L247">            return Criteria.matchTcpSrc(tcpPort);</span>
+        }
+    }
+
+<span class="fc" id="L251">    private class TcpDstDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L254">            TpPort tcpPort = TpPort.tpPort(nullIsIllegal(json.get(CriterionCodec.TCP_PORT),</span>
+<span class="fc" id="L255">                    CriterionCodec.TCP_PORT + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L256">            return Criteria.matchTcpDst(tcpPort);</span>
+        }
+    }
+
+<span class="fc" id="L260">    private class UdpSrcDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L263">            TpPort udpPort = TpPort.tpPort(nullIsIllegal(json.get(CriterionCodec.UDP_PORT),</span>
+<span class="fc" id="L264">                    CriterionCodec.UDP_PORT + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L265">            return Criteria.matchUdpSrc(udpPort);</span>
+        }
+    }
+
+<span class="fc" id="L269">    private class UdpDstDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L272">            TpPort udpPort = TpPort.tpPort(nullIsIllegal(json.get(CriterionCodec.UDP_PORT),</span>
+<span class="fc" id="L273">                    CriterionCodec.UDP_PORT + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L274">            return Criteria.matchUdpDst(udpPort);</span>
+        }
+    }
+
+<span class="fc" id="L278">    private class SctpSrcDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L281">            TpPort sctpPort = TpPort.tpPort(nullIsIllegal(json.get(CriterionCodec.SCTP_PORT),</span>
+<span class="fc" id="L282">                    CriterionCodec.SCTP_PORT + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L283">            return Criteria.matchSctpSrc(sctpPort);</span>
+        }
+    }
+
+<span class="fc" id="L287">    private class SctpDstDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L290">            TpPort sctpPort = TpPort.tpPort(nullIsIllegal(json.get(CriterionCodec.SCTP_PORT),</span>
+<span class="fc" id="L291">                    CriterionCodec.SCTP_PORT + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L292">            return Criteria.matchSctpDst(sctpPort);</span>
+        }
+    }
+
+<span class="fc" id="L296">    private class IcmpV4TypeDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L299">            short type = (short) nullIsIllegal(json.get(CriterionCodec.ICMP_TYPE),</span>
+<span class="fc" id="L300">                    CriterionCodec.ICMP_TYPE + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L301">            return Criteria.matchIcmpType(type);</span>
+        }
+    }
+
+<span class="fc" id="L305">    private class IcmpV4CodeDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L308">            short code = (short) nullIsIllegal(json.get(CriterionCodec.ICMP_CODE),</span>
+<span class="fc" id="L309">                    CriterionCodec.ICMP_CODE + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L310">            return Criteria.matchIcmpCode(code);</span>
+        }
+    }
+
+<span class="fc" id="L314">    private class IpV6FLabelDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L317">            int flowLabel = nullIsIllegal(json.get(CriterionCodec.FLOW_LABEL),</span>
+<span class="fc" id="L318">                    CriterionCodec.FLOW_LABEL + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L319">            return Criteria.matchIPv6FlowLabel(flowLabel);</span>
+        }
+    }
+
+<span class="fc" id="L323">    private class IcmpV6TypeDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L326">            short type = (short) nullIsIllegal(json.get(CriterionCodec.ICMPV6_TYPE),</span>
+<span class="fc" id="L327">                    CriterionCodec.ICMPV6_TYPE + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L328">            return Criteria.matchIcmpv6Type(type);</span>
+        }
+    }
+
+<span class="fc" id="L332">    private class IcmpV6CodeDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L335">            short code = (short) nullIsIllegal(json.get(CriterionCodec.ICMPV6_CODE),</span>
+<span class="fc" id="L336">                    CriterionCodec.ICMPV6_CODE + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L337">            return Criteria.matchIcmpv6Code(code);</span>
+        }
+    }
+
+<span class="fc" id="L341">    private class V6NDTargetDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L344">            Ip6Address target = Ip6Address.valueOf(nullIsIllegal(json.get(CriterionCodec.TARGET_ADDRESS),</span>
+<span class="fc" id="L345">                    CriterionCodec.TARGET_ADDRESS + MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L346">            return Criteria.matchIPv6NDTargetAddress(target);</span>
+        }
+    }
+
+<span class="fc" id="L350">    private class V6NDSllDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L353">            MacAddress mac = MacAddress.valueOf(nullIsIllegal(json.get(CriterionCodec.MAC),</span>
+<span class="fc" id="L354">                    CriterionCodec.MAC + MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L355">            return Criteria.matchIPv6NDSourceLinkLayerAddress(mac);</span>
+        }
+    }
+
+<span class="fc" id="L359">    private class V6NDTllDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L362">            MacAddress mac = MacAddress.valueOf(nullIsIllegal(json.get(CriterionCodec.MAC),</span>
+<span class="fc" id="L363">                    CriterionCodec.MAC + MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L364">            return Criteria.matchIPv6NDTargetLinkLayerAddress(mac);</span>
+        }
+    }
+
+<span class="fc" id="L368">    private class MplsLabelDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L371">            int label = nullIsIllegal(json.get(CriterionCodec.LABEL),</span>
+<span class="fc" id="L372">                    CriterionCodec.LABEL + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L373">            return Criteria.matchMplsLabel(MplsLabel.mplsLabel(label));</span>
+        }
+    }
+
+<span class="fc" id="L377">    private class IpV6ExthdrDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L380">            int exthdrFlags = nullIsIllegal(json.get(CriterionCodec.EXT_HDR_FLAGS),</span>
+<span class="fc" id="L381">                    CriterionCodec.EXT_HDR_FLAGS + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L382">            return Criteria.matchIPv6ExthdrFlags(exthdrFlags);</span>
+        }
+    }
+
+<span class="fc" id="L386">    private class OchSigIdDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc bfc" id="L389" title="All 2 branches covered.">            if (json.get(CriterionCodec.LAMBDA) != null) {</span>
+<span class="fc" id="L390">                Lambda lambda = Lambda.indexedLambda(nullIsIllegal(json.get(CriterionCodec.LAMBDA),</span>
+<span class="fc" id="L391">                        CriterionCodec.LAMBDA + MISSING_MEMBER_MESSAGE).asInt());</span>
+<span class="fc" id="L392">                return Criteria.matchLambda(lambda);</span>
+            } else {
+<span class="fc" id="L394">                JsonNode ochSignalId = nullIsIllegal(json.get(CriterionCodec.OCH_SIGNAL_ID),</span>
+                        CriterionCodec.GRID_TYPE + MISSING_MEMBER_MESSAGE);
+<span class="fc" id="L396">                GridType gridType =</span>
+<span class="fc" id="L397">                        GridType.valueOf(</span>
+<span class="fc" id="L398">                                nullIsIllegal(ochSignalId.get(CriterionCodec.GRID_TYPE),</span>
+<span class="fc" id="L399">                                CriterionCodec.GRID_TYPE + MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L400">                ChannelSpacing channelSpacing =</span>
+<span class="fc" id="L401">                        ChannelSpacing.valueOf(</span>
+<span class="fc" id="L402">                                nullIsIllegal(ochSignalId.get(CriterionCodec.CHANNEL_SPACING),</span>
+<span class="fc" id="L403">                                CriterionCodec.CHANNEL_SPACING + MISSING_MEMBER_MESSAGE).asText());</span>
+<span class="fc" id="L404">                int spacingMultiplier = nullIsIllegal(ochSignalId.get(CriterionCodec.SPACING_MULIPLIER),</span>
+<span class="fc" id="L405">                        CriterionCodec.SPACING_MULIPLIER + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L406">                int slotGranularity = nullIsIllegal(ochSignalId.get(CriterionCodec.SLOT_GRANULARITY),</span>
+<span class="fc" id="L407">                        CriterionCodec.SLOT_GRANULARITY + MISSING_MEMBER_MESSAGE).asInt();</span>
+<span class="fc" id="L408">                return Criteria.matchLambda(</span>
+<span class="fc" id="L409">                        Lambda.ochSignal(gridType, channelSpacing,</span>
+                                spacingMultiplier, slotGranularity));
+            }
+        }
+    }
+
+<span class="fc" id="L415">    private class OchSigTypeDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="nc" id="L418">            return null;</span>
+        }
+    }
+
+<span class="fc" id="L422">    private class TunnelIdDecoder implements CriterionDecoder {</span>
+        @Override
+        public Criterion decodeCriterion(ObjectNode json) {
+<span class="fc" id="L425">            long tunnelId = nullIsIllegal(json.get(CriterionCodec.TUNNEL_ID),</span>
+<span class="fc" id="L426">                    CriterionCodec.TUNNEL_ID + MISSING_MEMBER_MESSAGE).asLong();</span>
+<span class="fc" id="L427">            return Criteria.matchTunnelId(tunnelId);</span>
+        }
+    }
+
+    /**
+     * Decodes the JSON into a criterion object.
+     *
+     * @return Criterion object
+     * @throws IllegalArgumentException if the JSON is invalid
+     */
+    public Criterion decode() {
+<span class="fc" id="L438">        String type = json.get(CriterionCodec.TYPE).asText();</span>
+
+<span class="fc" id="L440">        CriterionDecoder decoder = decoderMap.get(type);</span>
+<span class="pc bpc" id="L441" title="1 of 2 branches missed.">        if (decoder != null) {</span>
+<span class="fc" id="L442">            return decoder.decodeCriterion(json);</span>
+        }
+
+<span class="nc" id="L445">        throw new IllegalArgumentException(&quot;Type &quot; + type + &quot; is unknown&quot;);</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

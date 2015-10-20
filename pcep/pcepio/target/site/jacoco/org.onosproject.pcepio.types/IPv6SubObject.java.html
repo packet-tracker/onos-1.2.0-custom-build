@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IPv6SubObject.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.types</a> &gt; <span class="el_source">IPv6SubObject.java</span></div><h1>IPv6SubObject.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.types;
+
+import java.util.Objects;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
+
+/**
+ * Provides IPv6 Sub Object.
+ */
+public class IPv6SubObject implements PcepValueType {
+
+    /* reference :RFC 4874.
+    Subobject : IPv6 address
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |      Type     |     Length    | IPv6 address (16 bytes)       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | IPv6 address (continued)                                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | IPv6 address (continued)                                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | IPv6 address (continued)                                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | IPv6 address (continued)      | Prefix Length |      Flags    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+      Type
+
+         0x02  IPv6 address
+
+      Length
+
+         The Length contains the total length of the subobject in bytes,
+         including the Type and Length fields.  The Length is always 20.
+
+      IPv6 address
+
+         A 128-bit unicast host address.
+
+      Prefix length
+
+         128
+
+      Flags
+
+         0x01  Local protection available
+
+               Indicates that the link downstream of this node is
+               protected via a local repair mechanism.  This flag can
+               only be set if the Local protection flag was set in the
+               SESSION_ATTRIBUTE object of the corresponding Path
+               message.
+
+         0x02  Local protection in use
+
+               Indicates that a local repair mechanism is in use to
+               maintain this tunnel (usually in the face of an outage
+               of the link it was previously routed over).
+     */
+<span class="fc" id="L84">    protected static final Logger log = LoggerFactory.getLogger(IPv6SubObject.class);</span>
+
+    public static final short TYPE = 0x02;
+    public static final short LENGTH = 20;
+    public static final byte VALUE_LENGTH = 18;
+
+<span class="fc" id="L90">    private static final byte[] NONE_VAL = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };</span>
+<span class="fc" id="L91">    public static final IPv6SubObject NONE = new IPv6SubObject(NONE_VAL);</span>
+
+<span class="fc" id="L93">    private static final byte[] NO_MASK_VAL = {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,</span>
+        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
+        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF };
+<span class="fc" id="L96">    public static final IPv6SubObject NO_MASK = new IPv6SubObject(NO_MASK_VAL);</span>
+<span class="fc" id="L97">    public static final IPv6SubObject FULL_MASK = NONE;</span>
+
+    private final byte[] rawValue;
+
+    /**
+     * constructor to initialize rawValue with ipv6 address.
+     *
+     * @param rawValue ipv6 address
+     */
+<span class="fc" id="L106">    public IPv6SubObject(byte[] rawValue) {</span>
+<span class="fc" id="L107">        this.rawValue = rawValue;</span>
+<span class="fc" id="L108">    }</span>
+
+    /**
+     * To create instance of IPv6SubObject.
+     *
+     * @param raw byte array of ipv6 address
+     * @return object of IPv6SubObject
+     */
+    public static IPv6SubObject of(final byte[] raw) {
+        //check NONE_VAL
+<span class="fc" id="L118">        boolean bFoundNONE = true;</span>
+        //value starts from 3rd byte.
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        for (int i = 2; i &lt; 20; ++i) {</span>
+<span class="fc bfc" id="L121" title="All 2 branches covered.">            if (NONE_VAL[i] != raw[i]) {</span>
+<span class="fc" id="L122">                bFoundNONE = false;</span>
+            }
+        }
+
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">        if (bFoundNONE) {</span>
+<span class="nc" id="L127">            return NONE;</span>
+        }
+
+        //check NO_MASK_VAL
+<span class="fc" id="L131">        boolean bFoundNoMask = true;</span>
+        //value starts from 3rd byte.
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        for (int i = 2; i &lt; 20; ++i) {</span>
+<span class="pc bpc" id="L134" title="1 of 2 branches missed.">            if (0xFF != raw[i]) {</span>
+<span class="fc" id="L135">                bFoundNoMask = false;</span>
+            }
+        }
+<span class="pc bpc" id="L138" title="1 of 2 branches missed.">        if (bFoundNoMask) {</span>
+<span class="nc" id="L139">            return NO_MASK;</span>
+        }
+
+<span class="fc" id="L142">        return new IPv6SubObject(raw);</span>
+    }
+
+    /**
+     * Returns value of IPv6 Sub Object.
+     *
+     * @return byte array of ipv6 address
+     */
+    public byte[] getValue() {
+<span class="nc" id="L151">        return rawValue;</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L156">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public short getType() {
+<span class="nc" id="L161">        return TYPE;</span>
+    }
+
+    @Override
+    public short getLength() {
+<span class="nc" id="L166">        return LENGTH;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L171">        return Objects.hash(rawValue);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L176" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L177">            return true;</span>
+        }
+<span class="fc bfc" id="L179" title="All 2 branches covered.">        if (obj instanceof IPv6SubObject) {</span>
+<span class="fc" id="L180">            IPv6SubObject other = (IPv6SubObject) obj;</span>
+<span class="fc" id="L181">            return Objects.equals(rawValue, other.rawValue);</span>
+        }
+<span class="fc" id="L183">        return false;</span>
+    }
+
+    @Override
+    public int write(ChannelBuffer c) {
+<span class="nc" id="L188">        int iStartIndex = c.writerIndex();</span>
+<span class="nc" id="L189">        c.writeShort(TYPE);</span>
+<span class="nc" id="L190">        c.writeShort(LENGTH);</span>
+<span class="nc" id="L191">        c.writeBytes(rawValue);</span>
+<span class="nc" id="L192">        return c.writerIndex() - iStartIndex;</span>
+    }
+
+    /**
+     * Reads the channel buffer and returns object of IPv6SubObject.
+     *
+     * @param c type of channel buffer
+     * @return object of IPv6SubObject
+     */
+    public static IPv6SubObject read20Bytes(ChannelBuffer c) {
+<span class="nc" id="L202">        byte[] yTemp = new byte[20];</span>
+<span class="nc" id="L203">        c.readBytes(yTemp, 0, 20);</span>
+<span class="nc" id="L204">        return IPv6SubObject.of(yTemp);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L209">        ToStringHelper toStrHelper = MoreObjects.toStringHelper(getClass());</span>
+
+<span class="fc" id="L211">        toStrHelper.add(&quot;Type&quot;, TYPE);</span>
+<span class="fc" id="L212">        toStrHelper.add(&quot;Length&quot;, LENGTH);</span>
+
+<span class="fc" id="L214">        StringBuffer result = new StringBuffer();</span>
+<span class="fc bfc" id="L215" title="All 2 branches covered.">        for (byte b : rawValue) {</span>
+<span class="fc" id="L216">            result.append(String.format(&quot;%02X &quot;, b));</span>
+        }
+<span class="fc" id="L218">        toStrHelper.add(&quot;Value&quot;, result);</span>
+
+<span class="fc" id="L220">        return toStrHelper.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

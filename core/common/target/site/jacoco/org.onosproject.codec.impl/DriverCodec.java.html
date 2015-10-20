@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DriverCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">DriverCodec.java</span></div><h1>DriverCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.driver.Driver;
+
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * JSON codec for the Driver class.
+ */
+<span class="fc" id="L30">public final class DriverCodec extends JsonCodec&lt;Driver&gt; {</span>
+    private static final String PARENT = &quot;parent&quot;;
+    private static final String NAME = &quot;name&quot;;
+    private static final String MANUFACTURER = &quot;manufacturer&quot;;
+    private static final String HW_VERSION = &quot;hwVersion&quot;;
+    private static final String SW_VERSION = &quot;swVersion&quot;;
+    private static final String BEHAVIOURS = &quot;behaviours&quot;;
+    private static final String BEHAVIORS_NAME = &quot;name&quot;;
+    private static final String BEHAVIORS_IMPLEMENTATION_NAME = &quot;implementationName&quot;;
+    private static final String PROPERTIES = &quot;properties&quot;;
+
+    @Override
+    public ObjectNode encode(Driver driver, CodecContext context) {
+<span class="fc" id="L43">        checkNotNull(driver, &quot;Driver cannot be null&quot;);</span>
+
+<span class="fc" id="L45">        ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="fc" id="L46">                .put(NAME, driver.name())</span>
+<span class="fc" id="L47">                .put(MANUFACTURER, driver.manufacturer())</span>
+<span class="fc" id="L48">                .put(HW_VERSION, driver.hwVersion())</span>
+<span class="fc" id="L49">                .put(SW_VERSION, driver.swVersion());</span>
+
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (driver.parent() != null) {</span>
+<span class="fc" id="L52">            result.put(PARENT, driver.parent().name());</span>
+        }
+
+<span class="fc" id="L55">        ArrayNode behaviours = context.mapper().createArrayNode();</span>
+<span class="fc" id="L56">        driver.behaviours().forEach(behaviour -&gt; {</span>
+<span class="fc" id="L57">            ObjectNode entry = context.mapper().createObjectNode()</span>
+<span class="fc" id="L58">                    .put(BEHAVIORS_NAME, behaviour.getCanonicalName())</span>
+<span class="fc" id="L59">                    .put(BEHAVIORS_IMPLEMENTATION_NAME,</span>
+<span class="fc" id="L60">                            driver.implementation(behaviour).getCanonicalName());</span>
+
+<span class="fc" id="L62">            behaviours.add(entry);</span>
+<span class="fc" id="L63">        });</span>
+<span class="fc" id="L64">        result.set(BEHAVIOURS, behaviours);</span>
+
+<span class="fc" id="L66">        ArrayNode properties = context.mapper().createArrayNode();</span>
+<span class="fc" id="L67">        driver.properties().forEach((name, value) -&gt; {</span>
+<span class="fc" id="L68">            ObjectNode entry = context.mapper().createObjectNode()</span>
+<span class="fc" id="L69">                    .put(&quot;name&quot;, name)</span>
+<span class="fc" id="L70">                    .put(&quot;value&quot;, value);</span>
+
+<span class="fc" id="L72">            properties.add(entry);</span>
+<span class="fc" id="L73">        });</span>
+<span class="fc" id="L74">        result.set(PROPERTIES, properties);</span>
+
+<span class="fc" id="L76">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

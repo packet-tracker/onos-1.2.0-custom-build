@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>WallClockTimestamp.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.service</a> &gt; <span class="el_source">WallClockTimestamp.java</span></div><h1>WallClockTimestamp.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.service;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+import java.util.Objects;
+
+import org.onosproject.store.Timestamp;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ComparisonChain;
+
+/**
+ * A Timestamp that derives its value from the prevailing
+ * wallclock time on the controller where it is generated.
+ */
+public class WallClockTimestamp implements Timestamp {
+
+    private final long unixTimestamp;
+
+<span class="fc" id="L35">    public WallClockTimestamp() {</span>
+<span class="fc" id="L36">        unixTimestamp = System.currentTimeMillis();</span>
+<span class="fc" id="L37">    }</span>
+
+<span class="fc" id="L39">    public WallClockTimestamp(long timestamp) {</span>
+<span class="fc" id="L40">        unixTimestamp = timestamp;</span>
+<span class="fc" id="L41">    }</span>
+
+    @Override
+    public int compareTo(Timestamp o) {
+<span class="fc" id="L45">        checkArgument(o instanceof WallClockTimestamp,</span>
+                &quot;Must be WallClockTimestamp&quot;, o);
+<span class="fc" id="L47">        WallClockTimestamp that = (WallClockTimestamp) o;</span>
+
+<span class="fc" id="L49">        return ComparisonChain.start()</span>
+<span class="fc" id="L50">                .compare(this.unixTimestamp, that.unixTimestamp)</span>
+<span class="fc" id="L51">                .result();</span>
+    }
+    @Override
+    public int hashCode() {
+<span class="fc" id="L55">        return Objects.hash(unixTimestamp);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L61">            return true;</span>
+        }
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        if (!(obj instanceof WallClockTimestamp)) {</span>
+<span class="fc" id="L64">            return false;</span>
+        }
+<span class="fc" id="L66">        WallClockTimestamp that = (WallClockTimestamp) obj;</span>
+<span class="fc" id="L67">        return Objects.equals(this.unixTimestamp, that.unixTimestamp);</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L72">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="fc" id="L73">                    .add(&quot;unixTimestamp&quot;, unixTimestamp)</span>
+<span class="fc" id="L74">                    .toString();</span>
+    }
+
+    /**
+     * Returns the unixTimestamp.
+     *
+     * @return unix timestamp
+     */
+    public long unixTimestamp() {
+<span class="fc" id="L83">        return unixTimestamp;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DatabaseUpdate.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.service</a> &gt; <span class="el_source">DatabaseUpdate.java</span></div><h1>DatabaseUpdate.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.store.service;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Database update operation.
+ *
+ */
+<span class="fc" id="L29">public final class DatabaseUpdate {</span>
+
+    /**
+     * Type of database update operation.
+     */
+<span class="pc" id="L34">    public enum Type {</span>
+        /**
+         * Insert/Update entry without any checks.
+         */
+<span class="fc" id="L38">        PUT,</span>
+        /**
+         * Insert an entry iff there is no existing entry for that key.
+         */
+<span class="fc" id="L42">        PUT_IF_ABSENT,</span>
+
+        /**
+         * Update entry if the current version matches specified version.
+         */
+<span class="fc" id="L47">        PUT_IF_VERSION_MATCH,</span>
+
+        /**
+         * Update entry if the current value matches specified value.
+         */
+<span class="fc" id="L52">        PUT_IF_VALUE_MATCH,</span>
+
+        /**
+         * Remove entry without any checks.
+         */
+<span class="fc" id="L57">        REMOVE,</span>
+
+        /**
+         * Remove entry if the current version matches specified version.
+         */
+<span class="fc" id="L62">        REMOVE_IF_VERSION_MATCH,</span>
+
+        /**
+         * Remove entry if the current value matches specified value.
+         */
+<span class="fc" id="L67">        REMOVE_IF_VALUE_MATCH,</span>
+    }
+
+    private Type type;
+    private String mapName;
+    private String key;
+    private byte[] value;
+    private byte[] currentValue;
+<span class="fc" id="L75">    private long currentVersion = -1;</span>
+
+    /**
+     * Returns the type of update operation.
+     * @return type of update.
+     */
+    public Type type() {
+<span class="fc" id="L82">        return type;</span>
+    }
+
+    /**
+     * Returns the name of map being updated.
+     * @return map name.
+     */
+    public String mapName() {
+<span class="fc" id="L90">        return mapName;</span>
+    }
+
+    /**
+     * Returns the item key being updated.
+     * @return item key
+     */
+    public String key() {
+<span class="fc" id="L98">        return key;</span>
+    }
+
+    /**
+     * Returns the new value.
+     * @return item's target value.
+     */
+    public byte[] value() {
+<span class="fc" id="L106">        return value;</span>
+    }
+
+    /**
+     * Returns the expected current value in the database value for the key.
+     * @return current value in database.
+     */
+    public byte[] currentValue() {
+<span class="fc" id="L114">        return currentValue;</span>
+    }
+
+    /**
+     * Returns the expected current version in the database for the key.
+     * @return expected version.
+     */
+    public long currentVersion() {
+<span class="fc" id="L122">        return currentVersion;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L127">        return MoreObjects.toStringHelper(this)</span>
+<span class="fc" id="L128">            .add(&quot;type&quot;, type)</span>
+<span class="fc" id="L129">            .add(&quot;mapName&quot;, mapName)</span>
+<span class="fc" id="L130">            .add(&quot;key&quot;, key)</span>
+<span class="fc" id="L131">            .add(&quot;value&quot;, value)</span>
+<span class="fc" id="L132">            .add(&quot;currentValue&quot;, currentValue)</span>
+<span class="fc" id="L133">            .add(&quot;currentVersion&quot;, currentVersion)</span>
+<span class="fc" id="L134">            .toString();</span>
+    }
+
+    /**
+     * Creates a new builder instance.
+     *
+     * @return builder.
+     */
+    public static Builder newBuilder() {
+<span class="fc" id="L143">        return new Builder();</span>
+    }
+
+    /**
+     * DatabaseUpdate builder.
+     *
+     */
+<span class="fc" id="L150">    public static final class Builder {</span>
+
+<span class="fc" id="L152">        private DatabaseUpdate update = new DatabaseUpdate();</span>
+
+        public DatabaseUpdate build() {
+<span class="fc" id="L155">            validateInputs();</span>
+<span class="fc" id="L156">            return update;</span>
+        }
+
+        public Builder withType(Type type) {
+<span class="fc" id="L160">            update.type = checkNotNull(type, &quot;type cannot be null&quot;);</span>
+<span class="fc" id="L161">            return this;</span>
+        }
+
+        public Builder withMapName(String mapName) {
+<span class="fc" id="L165">            update.mapName = checkNotNull(mapName, &quot;mapName cannot be null&quot;);</span>
+<span class="fc" id="L166">            return this;</span>
+        }
+
+        public Builder withKey(String key) {
+<span class="fc" id="L170">            update.key = checkNotNull(key, &quot;key cannot be null&quot;);</span>
+<span class="fc" id="L171">            return this;</span>
+        }
+
+        public Builder withCurrentValue(byte[] value) {
+<span class="fc" id="L175">            update.currentValue = checkNotNull(value, &quot;currentValue cannot be null&quot;);</span>
+<span class="fc" id="L176">            return this;</span>
+        }
+
+        public Builder withValue(byte[] value) {
+<span class="fc" id="L180">            update.value = checkNotNull(value, &quot;value cannot be null&quot;);</span>
+<span class="fc" id="L181">            return this;</span>
+        }
+
+        public Builder withCurrentVersion(long version) {
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">            checkArgument(version &gt;= 0, &quot;version cannot be negative&quot;);</span>
+<span class="fc" id="L186">            update.currentVersion = version;</span>
+<span class="fc" id="L187">            return this;</span>
+        }
+
+        private void validateInputs() {
+<span class="fc" id="L191">            checkNotNull(update.type, &quot;type must be specified&quot;);</span>
+<span class="fc" id="L192">            checkNotNull(update.mapName, &quot;map name must be specified&quot;);</span>
+<span class="fc" id="L193">            checkNotNull(update.key, &quot;key must be specified&quot;);</span>
+<span class="pc bpc" id="L194" title="1 of 7 branches missed.">            switch (update.type) {</span>
+            case PUT:
+            case PUT_IF_ABSENT:
+<span class="fc" id="L197">                checkNotNull(update.value, &quot;value must be specified.&quot;);</span>
+<span class="fc" id="L198">                break;</span>
+            case PUT_IF_VERSION_MATCH:
+<span class="fc" id="L200">                checkNotNull(update.value, &quot;value must be specified.&quot;);</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">                checkState(update.currentVersion &gt;= 0, &quot;current version must be specified&quot;);</span>
+<span class="fc" id="L202">                break;</span>
+            case PUT_IF_VALUE_MATCH:
+<span class="fc" id="L204">                checkNotNull(update.value, &quot;value must be specified.&quot;);</span>
+<span class="fc" id="L205">                checkNotNull(update.currentValue, &quot;currentValue must be specified.&quot;);</span>
+<span class="fc" id="L206">                break;</span>
+            case REMOVE:
+<span class="fc" id="L208">                break;</span>
+            case REMOVE_IF_VERSION_MATCH:
+<span class="pc bpc" id="L210" title="1 of 2 branches missed.">                checkState(update.currentVersion &gt;= 0, &quot;current version must be specified&quot;);</span>
+<span class="fc" id="L211">                break;</span>
+            case REMOVE_IF_VALUE_MATCH:
+<span class="fc" id="L213">                checkNotNull(update.currentValue, &quot;currentValue must be specified.&quot;);</span>
+<span class="fc" id="L214">                break;</span>
+            default:
+<span class="nc" id="L216">                throw new IllegalStateException(&quot;Unknown operation type&quot;);</span>
+            }
+<span class="fc" id="L218">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DistributedClusterStore.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-dist</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.cluster.impl</a> &gt; <span class="el_source">DistributedClusterStore.java</span></div><h1>DistributedClusterStore.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.cluster.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.joda.time.DateTime;
+import org.onlab.packet.IpAddress;
+import org.onlab.util.KryoNamespace;
+import org.onosproject.cluster.ClusterDefinitionService;
+import org.onosproject.cluster.ClusterEvent;
+import org.onosproject.cluster.ClusterStore;
+import org.onosproject.cluster.ClusterStoreDelegate;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.ControllerNode.State;
+import org.onosproject.cluster.DefaultControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.store.AbstractStore;
+import org.onosproject.store.cluster.messaging.Endpoint;
+import org.onosproject.store.cluster.messaging.MessagingService;
+import org.onosproject.store.serializers.KryoNamespaces;
+import org.onosproject.store.serializers.KryoSerializer;
+import org.slf4j.Logger;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.slf4j.LoggerFactory.getLogger;
+
+@Component(immediate = true)
+@Service
+/**
+ * Distributed cluster nodes store that employs an accrual failure
+ * detector to identify cluster member up/down status.
+ */
+<span class="nc" id="L64">public class DistributedClusterStore</span>
+        extends AbstractStore&lt;ClusterEvent, ClusterStoreDelegate&gt;
+        implements ClusterStore {
+
+<span class="nc" id="L68">    private static final Logger log = getLogger(DistributedClusterStore.class);</span>
+
+    public static final String HEARTBEAT_MESSAGE = &quot;onos-cluster-heartbeat&quot;;
+
+    // TODO: make these configurable.
+    private static final int HEARTBEAT_INTERVAL_MS = 100;
+    private static final int PHI_FAILURE_THRESHOLD = 10;
+
+<span class="nc" id="L76">    private static final KryoSerializer SERIALIZER = new KryoSerializer() {</span>
+        @Override
+        protected void setupKryoPool() {
+<span class="nc" id="L79">            serializerPool = KryoNamespace.newBuilder()</span>
+<span class="nc" id="L80">                    .register(KryoNamespaces.API)</span>
+<span class="nc" id="L81">                    .register(HeartbeatMessage.class)</span>
+<span class="nc" id="L82">                    .build()</span>
+<span class="nc" id="L83">                    .populate(1);</span>
+<span class="nc" id="L84">        }</span>
+    };
+
+    private static final String INSTANCE_ID_NULL = &quot;Instance ID cannot be null&quot;;
+
+<span class="nc" id="L89">    private final Map&lt;NodeId, ControllerNode&gt; allNodes = Maps.newConcurrentMap();</span>
+<span class="nc" id="L90">    private final Map&lt;NodeId, State&gt; nodeStates = Maps.newConcurrentMap();</span>
+<span class="nc" id="L91">    private final Map&lt;NodeId, DateTime&gt; nodeStateLastUpdatedTimes = Maps.newConcurrentMap();</span>
+<span class="nc" id="L92">    private ScheduledExecutorService heartBeatSender = Executors.newSingleThreadScheduledExecutor(</span>
+<span class="nc" id="L93">            groupedThreads(&quot;onos/cluster/membership&quot;, &quot;heartbeat-sender&quot;));</span>
+<span class="nc" id="L94">    private ExecutorService heartBeatMessageHandler = Executors.newSingleThreadExecutor(</span>
+<span class="nc" id="L95">            groupedThreads(&quot;onos/cluster/membership&quot;, &quot;heartbeat-receiver&quot;));</span>
+
+    private PhiAccrualFailureDetector failureDetector;
+
+    private ControllerNode localNode;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ClusterDefinitionService clusterDefinitionService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected MessagingService messagingService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L109">        localNode = clusterDefinitionService.localNode();</span>
+
+<span class="nc" id="L111">        messagingService.registerHandler(HEARTBEAT_MESSAGE,</span>
+                                         new HeartbeatMessageHandler(), heartBeatMessageHandler);
+
+<span class="nc" id="L114">        failureDetector = new PhiAccrualFailureDetector();</span>
+
+<span class="nc" id="L116">        heartBeatSender.scheduleWithFixedDelay(this::heartbeat, 0,</span>
+                                               HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS);
+
+<span class="nc" id="L119">        addNode(localNode);</span>
+<span class="nc" id="L120">        updateState(localNode.id(), State.ACTIVE);</span>
+
+<span class="nc" id="L122">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L123">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L127">        messagingService.unregisterHandler(HEARTBEAT_MESSAGE);</span>
+<span class="nc" id="L128">        heartBeatSender.shutdownNow();</span>
+<span class="nc" id="L129">        heartBeatMessageHandler.shutdownNow();</span>
+
+<span class="nc" id="L131">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L132">    }</span>
+
+    @Override
+    public void setDelegate(ClusterStoreDelegate delegate) {
+<span class="nc" id="L136">        checkNotNull(delegate, &quot;Delegate cannot be null&quot;);</span>
+<span class="nc" id="L137">        this.delegate = delegate;</span>
+<span class="nc" id="L138">    }</span>
+
+    @Override
+    public void unsetDelegate(ClusterStoreDelegate delegate) {
+<span class="nc" id="L142">        this.delegate = null;</span>
+<span class="nc" id="L143">    }</span>
+
+    @Override
+    public boolean hasDelegate() {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        return this.delegate != null;</span>
+    }
+
+    @Override
+    public ControllerNode getLocalNode() {
+<span class="nc" id="L152">        return localNode;</span>
+    }
+
+    @Override
+    public Set&lt;ControllerNode&gt; getNodes() {
+<span class="nc" id="L157">        return ImmutableSet.copyOf(allNodes.values());</span>
+    }
+
+    @Override
+    public ControllerNode getNode(NodeId nodeId) {
+<span class="nc" id="L162">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L163">        return allNodes.get(nodeId);</span>
+    }
+
+    @Override
+    public State getState(NodeId nodeId) {
+<span class="nc" id="L168">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L169">        return nodeStates.get(nodeId);</span>
+    }
+
+    @Override
+    public ControllerNode addNode(NodeId nodeId, IpAddress ip, int tcpPort) {
+<span class="nc" id="L174">        ControllerNode node = new DefaultControllerNode(nodeId, ip, tcpPort);</span>
+<span class="nc" id="L175">        addNode(node);</span>
+<span class="nc" id="L176">        return node;</span>
+    }
+
+    @Override
+    public void removeNode(NodeId nodeId) {
+<span class="nc" id="L181">        checkNotNull(nodeId, INSTANCE_ID_NULL);</span>
+<span class="nc" id="L182">        ControllerNode node = allNodes.remove(nodeId);</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        if (node != null) {</span>
+<span class="nc" id="L184">            nodeStates.remove(nodeId);</span>
+<span class="nc" id="L185">            notifyDelegate(new ClusterEvent(ClusterEvent.Type.INSTANCE_REMOVED, node));</span>
+        }
+<span class="nc" id="L187">    }</span>
+
+    private void addNode(ControllerNode node) {
+<span class="nc" id="L190">        allNodes.put(node.id(), node);</span>
+<span class="nc" id="L191">        updateState(node.id(), State.INACTIVE);</span>
+<span class="nc" id="L192">        notifyDelegate(new ClusterEvent(ClusterEvent.Type.INSTANCE_ADDED, node));</span>
+<span class="nc" id="L193">    }</span>
+
+    private void updateState(NodeId nodeId, State newState) {
+<span class="nc" id="L196">        nodeStates.put(nodeId, newState);</span>
+<span class="nc" id="L197">        nodeStateLastUpdatedTimes.put(nodeId, DateTime.now());</span>
+<span class="nc" id="L198">    }</span>
+
+    private void heartbeat() {
+        try {
+<span class="nc" id="L202">            Set&lt;ControllerNode&gt; peers = allNodes.values()</span>
+<span class="nc" id="L203">                    .stream()</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">                    .filter(node -&gt; !(node.id().equals(localNode.id())))</span>
+<span class="nc" id="L205">                    .collect(Collectors.toSet());</span>
+<span class="nc" id="L206">            byte[] hbMessagePayload = SERIALIZER.encode(new HeartbeatMessage(localNode, peers));</span>
+<span class="nc" id="L207">            peers.forEach((node) -&gt; {</span>
+<span class="nc" id="L208">                heartbeatToPeer(hbMessagePayload, node);</span>
+<span class="nc" id="L209">                State currentState = nodeStates.get(node.id());</span>
+<span class="nc" id="L210">                double phi = failureDetector.phi(node.id());</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">                if (phi &gt;= PHI_FAILURE_THRESHOLD) {</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                    if (currentState == State.ACTIVE) {</span>
+<span class="nc" id="L213">                        updateState(node.id(), State.INACTIVE);</span>
+<span class="nc" id="L214">                        notifyStateChange(node.id(), State.ACTIVE, State.INACTIVE);</span>
+                    }
+                } else {
+<span class="nc bnc" id="L217" title="All 2 branches missed.">                    if (currentState == State.INACTIVE) {</span>
+<span class="nc" id="L218">                        updateState(node.id(), State.ACTIVE);</span>
+<span class="nc" id="L219">                        notifyStateChange(node.id(), State.INACTIVE, State.ACTIVE);</span>
+                    }
+                }
+<span class="nc" id="L222">            });</span>
+<span class="nc" id="L223">        } catch (Exception e) {</span>
+<span class="nc" id="L224">            log.debug(&quot;Failed to send heartbeat&quot;, e);</span>
+<span class="nc" id="L225">        }</span>
+<span class="nc" id="L226">    }</span>
+
+    private void notifyStateChange(NodeId nodeId, State oldState, State newState) {
+<span class="nc" id="L229">        ControllerNode node = allNodes.get(nodeId);</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (newState == State.ACTIVE) {</span>
+<span class="nc" id="L231">            notifyDelegate(new ClusterEvent(ClusterEvent.Type.INSTANCE_ACTIVATED, node));</span>
+        } else {
+<span class="nc" id="L233">            notifyDelegate(new ClusterEvent(ClusterEvent.Type.INSTANCE_DEACTIVATED, node));</span>
+        }
+<span class="nc" id="L235">    }</span>
+
+    private void heartbeatToPeer(byte[] messagePayload, ControllerNode peer) {
+<span class="nc" id="L238">        Endpoint remoteEp = new Endpoint(peer.ip(), peer.tcpPort());</span>
+<span class="nc" id="L239">        messagingService.sendAsync(remoteEp, HEARTBEAT_MESSAGE, messagePayload).whenComplete((result, error) -&gt; {</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">            if (error != null) {</span>
+<span class="nc" id="L241">                log.trace(&quot;Sending heartbeat to {} failed&quot;, remoteEp, error);</span>
+            }
+<span class="nc" id="L243">        });</span>
+<span class="nc" id="L244">    }</span>
+
+<span class="nc" id="L246">    private class HeartbeatMessageHandler implements Consumer&lt;byte[]&gt; {</span>
+        @Override
+        public void accept(byte[] message) {
+<span class="nc" id="L249">            HeartbeatMessage hb = SERIALIZER.decode(message);</span>
+<span class="nc" id="L250">            failureDetector.report(hb.source().id());</span>
+<span class="nc" id="L251">            hb.knownPeers().forEach(node -&gt; {</span>
+<span class="nc" id="L252">                allNodes.put(node.id(), node);</span>
+<span class="nc" id="L253">            });</span>
+<span class="nc" id="L254">        }</span>
+    }
+
+    private static class HeartbeatMessage {
+        private ControllerNode source;
+        private Set&lt;ControllerNode&gt; knownPeers;
+
+<span class="nc" id="L261">        public HeartbeatMessage(ControllerNode source, Set&lt;ControllerNode&gt; members) {</span>
+<span class="nc" id="L262">            this.source = source;</span>
+<span class="nc" id="L263">            this.knownPeers = ImmutableSet.copyOf(members);</span>
+<span class="nc" id="L264">        }</span>
+
+        public ControllerNode source() {
+<span class="nc" id="L267">            return source;</span>
+        }
+
+        public Set&lt;ControllerNode&gt; knownPeers() {
+<span class="nc" id="L271">            return knownPeers;</span>
+        }
+    }
+
+    @Override
+    public DateTime getLastUpdated(NodeId nodeId) {
+<span class="nc" id="L277">        return nodeStateLastUpdatedTimes.get(nodeId);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

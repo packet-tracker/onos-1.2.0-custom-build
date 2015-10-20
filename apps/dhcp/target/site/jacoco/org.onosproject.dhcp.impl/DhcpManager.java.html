@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DhcpManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-dhcp</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.dhcp.impl</a> &gt; <span class="el_source">DhcpManager.java</span></div><h1>DhcpManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.dhcp.impl;
+
+import com.google.common.collect.ImmutableSet;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.jboss.netty.util.Timeout;
+import org.jboss.netty.util.TimerTask;
+import org.onlab.packet.ARP;
+import org.onlab.packet.DHCP;
+import org.onlab.packet.DHCPOption;
+import org.onlab.packet.DHCPPacketType;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.IPv4;
+import org.onlab.packet.Ip4Address;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onlab.packet.TpPort;
+import org.onlab.packet.UDP;
+import org.onlab.packet.VlanId;
+import org.onlab.util.Timer;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
+import org.onosproject.dhcp.DhcpService;
+import org.onosproject.dhcp.DhcpStore;
+import org.onosproject.dhcp.IpAssignment;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
+import org.onosproject.net.config.ConfigFactory;
+import org.onosproject.net.config.NetworkConfigEvent;
+import org.onosproject.net.config.NetworkConfigListener;
+import org.onosproject.net.config.NetworkConfigRegistry;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.host.DefaultHostDescription;
+import org.onosproject.net.host.HostProvider;
+import org.onosproject.net.host.HostProviderRegistry;
+import org.onosproject.net.host.HostProviderService;
+import org.onosproject.net.packet.DefaultOutboundPacket;
+import org.onosproject.net.packet.PacketContext;
+import org.onosproject.net.packet.PacketPriority;
+import org.onosproject.net.packet.PacketProcessor;
+import org.onosproject.net.packet.PacketService;
+import org.onosproject.net.provider.AbstractProvider;
+import org.onosproject.net.provider.ProviderId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import static org.onlab.packet.MacAddress.valueOf;
+import static org.onosproject.net.config.basics.SubjectFactories.APP_SUBJECT_FACTORY;
+
+/**
+ * Skeletal ONOS DHCP Server application.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L89">public class DhcpManager implements DhcpService {</span>
+
+<span class="fc" id="L91">    private static final ProviderId PID = new ProviderId(&quot;of&quot;, &quot;org.onosproject.dhcp&quot;, true);</span>
+<span class="fc" id="L92">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+<span class="fc" id="L94">    private final InternalConfigListener cfgListener = new InternalConfigListener();</span>
+
+<span class="fc" id="L96">    private final Set&lt;ConfigFactory&gt; factories = ImmutableSet.of(</span>
+            new ConfigFactory&lt;ApplicationId, DhcpConfig&gt;(APP_SUBJECT_FACTORY,
+                    DhcpConfig.class,
+<span class="fc" id="L99">                    &quot;dhcp&quot;) {</span>
+                @Override
+                public DhcpConfig createConfig() {
+<span class="nc" id="L102">                    return new DhcpConfig();</span>
+                }
+            }
+    );
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected NetworkConfigRegistry cfgService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PacketService packetService;
+
+<span class="fc" id="L112">    private DHCPPacketProcessor processor = new DHCPPacketProcessor();</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DhcpStore dhcpStore;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostProviderRegistry hostProviderRegistry;
+
+    protected HostProviderService hostProviderService;
+
+<span class="fc" id="L125">    private final HostProvider hostProvider = new InternalHostProvider();</span>
+
+    private ApplicationId appId;
+
+    // Hardcoded values are default values.
+
+<span class="fc" id="L131">    private static Ip4Address myIP = Ip4Address.valueOf(&quot;10.0.0.2&quot;);</span>
+
+<span class="fc" id="L133">    private static MacAddress myMAC = valueOf(&quot;4f:4f:4f:4f:4f:4f&quot;);</span>
+
+    /**
+     * leaseTime - 10 mins or 600s.
+     * renewalTime - 5 mins or 300s.
+     * rebindingTime - 6 mins or 360s.
+     */
+
+<span class="fc" id="L141">    private static int leaseTime = 600;</span>
+
+<span class="fc" id="L143">    private static int renewalTime = 300;</span>
+
+<span class="fc" id="L145">    private static int rebindingTime = 360;</span>
+
+<span class="fc" id="L147">    private static byte packetTTL = (byte) 127;</span>
+
+<span class="fc" id="L149">    private static Ip4Address subnetMask = Ip4Address.valueOf(&quot;255.0.0.0&quot;);</span>
+
+<span class="fc" id="L151">    private static Ip4Address broadcastAddress = Ip4Address.valueOf(&quot;10.255.255.255&quot;);</span>
+
+<span class="fc" id="L153">    private static Ip4Address routerAddress = Ip4Address.valueOf(&quot;10.0.0.2&quot;);</span>
+
+<span class="fc" id="L155">    private static Ip4Address domainServer = Ip4Address.valueOf(&quot;10.0.0.2&quot;);</span>
+
+<span class="fc" id="L157">    private static final Ip4Address IP_BROADCAST = Ip4Address.valueOf(&quot;255.255.255.255&quot;);</span>
+
+    protected Timeout timeout;
+
+<span class="fc" id="L161">    protected static int timerDelay = 2;</span>
+
+    @Activate
+    protected void activate() {
+        // start the dhcp server
+<span class="fc" id="L166">        appId = coreService.registerApplication(&quot;org.onosproject.dhcp&quot;);</span>
+
+<span class="fc" id="L168">        cfgService.addListener(cfgListener);</span>
+<span class="fc" id="L169">        factories.forEach(cfgService::registerConfigFactory);</span>
+<span class="fc" id="L170">        cfgListener.reconfigureNetwork(cfgService.getConfig(appId, DhcpConfig.class));</span>
+
+<span class="fc" id="L172">        hostProviderService = hostProviderRegistry.register(hostProvider);</span>
+<span class="fc" id="L173">        packetService.addProcessor(processor, PacketProcessor.director(0));</span>
+<span class="fc" id="L174">        requestPackets();</span>
+<span class="fc" id="L175">        timeout = Timer.getTimer().newTimeout(new PurgeListTask(), timerDelay, TimeUnit.MINUTES);</span>
+<span class="fc" id="L176">        log.info(&quot;Started&quot;);</span>
+<span class="fc" id="L177">    }</span>
+
+    @Deactivate
+    protected void deactivate() {
+<span class="fc" id="L181">        cfgService.removeListener(cfgListener);</span>
+<span class="fc" id="L182">        factories.forEach(cfgService::unregisterConfigFactory);</span>
+<span class="fc" id="L183">        packetService.removeProcessor(processor);</span>
+<span class="fc" id="L184">        hostProviderRegistry.unregister(hostProvider);</span>
+<span class="fc" id="L185">        hostProviderService = null;</span>
+<span class="fc" id="L186">        cancelPackets();</span>
+<span class="fc" id="L187">        timeout.cancel();</span>
+<span class="fc" id="L188">        log.info(&quot;Stopped&quot;);</span>
+<span class="fc" id="L189">    }</span>
+
+    /**
+     * Request packet in via PacketService.
+     */
+    private void requestPackets() {
+
+<span class="fc" id="L196">        TrafficSelector.Builder selectorServer = DefaultTrafficSelector.builder()</span>
+<span class="fc" id="L197">                .matchEthType(Ethernet.TYPE_IPV4)</span>
+<span class="fc" id="L198">                .matchIPProtocol(IPv4.PROTOCOL_UDP)</span>
+<span class="fc" id="L199">                .matchUdpDst(TpPort.tpPort(UDP.DHCP_SERVER_PORT))</span>
+<span class="fc" id="L200">                .matchUdpSrc(TpPort.tpPort(UDP.DHCP_CLIENT_PORT));</span>
+<span class="fc" id="L201">        packetService.requestPackets(selectorServer.build(), PacketPriority.CONTROL, appId);</span>
+
+<span class="fc" id="L203">        selectorServer = DefaultTrafficSelector.builder()</span>
+<span class="fc" id="L204">                .matchEthType(Ethernet.TYPE_ARP);</span>
+<span class="fc" id="L205">        packetService.requestPackets(selectorServer.build(), PacketPriority.CONTROL, appId);</span>
+<span class="fc" id="L206">    }</span>
+
+    /**
+     * Cancel requested packets in via packet service.
+     */
+    private void cancelPackets() {
+<span class="fc" id="L212">        TrafficSelector.Builder selectorServer = DefaultTrafficSelector.builder()</span>
+<span class="fc" id="L213">                .matchEthType(Ethernet.TYPE_IPV4)</span>
+<span class="fc" id="L214">                .matchIPProtocol(IPv4.PROTOCOL_UDP)</span>
+<span class="fc" id="L215">                .matchUdpDst(TpPort.tpPort(UDP.DHCP_SERVER_PORT))</span>
+<span class="fc" id="L216">                .matchUdpSrc(TpPort.tpPort(UDP.DHCP_CLIENT_PORT));</span>
+<span class="fc" id="L217">        packetService.cancelPackets(selectorServer.build(), PacketPriority.CONTROL, appId);</span>
+
+<span class="fc" id="L219">        selectorServer = DefaultTrafficSelector.builder()</span>
+<span class="fc" id="L220">                .matchEthType(Ethernet.TYPE_ARP);</span>
+<span class="fc" id="L221">        packetService.cancelPackets(selectorServer.build(), PacketPriority.CONTROL, appId);</span>
+<span class="fc" id="L222">    }</span>
+
+    @Override
+    public Map&lt;HostId, IpAssignment&gt; listMapping() {
+<span class="nc" id="L226">        return dhcpStore.listAssignedMapping();</span>
+    }
+
+    @Override
+    public int getLeaseTime() {
+<span class="nc" id="L231">        return leaseTime;</span>
+    }
+
+    @Override
+    public int getRenewalTime() {
+<span class="nc" id="L236">        return renewalTime;</span>
+    }
+
+    @Override
+    public int getRebindingTime() {
+<span class="nc" id="L241">        return rebindingTime;</span>
+    }
+
+    @Override
+    public boolean setStaticMapping(MacAddress macID, Ip4Address ipAddress) {
+<span class="nc" id="L246">        return dhcpStore.assignStaticIP(macID, ipAddress);</span>
+    }
+
+    @Override
+    public boolean removeStaticMapping(MacAddress macID) {
+<span class="nc" id="L251">        return dhcpStore.removeStaticIP(macID);</span>
+    }
+
+    @Override
+    public Iterable&lt;Ip4Address&gt; getAvailableIPs() {
+<span class="nc" id="L256">        return dhcpStore.getAvailableIPs();</span>
+    }
+
+<span class="fc" id="L259">    private class DHCPPacketProcessor implements PacketProcessor {</span>
+
+        /**
+         * Builds the DHCP Reply packet.
+         *
+         * @param packet the incoming Ethernet frame
+         * @param ipOffered the IP offered by the DHCP Server
+         * @param outgoingMessageType the message type of the outgoing packet
+         * @return the Ethernet reply frame
+         */
+        private Ethernet buildReply(Ethernet packet, Ip4Address ipOffered, byte outgoingMessageType) {
+
+            // Ethernet Frame.
+<span class="fc" id="L272">            Ethernet ethReply = new Ethernet();</span>
+<span class="fc" id="L273">            ethReply.setSourceMACAddress(myMAC);</span>
+<span class="fc" id="L274">            ethReply.setDestinationMACAddress(packet.getSourceMAC());</span>
+<span class="fc" id="L275">            ethReply.setEtherType(Ethernet.TYPE_IPV4);</span>
+<span class="fc" id="L276">            ethReply.setVlanID(packet.getVlanID());</span>
+
+            // IP Packet
+<span class="fc" id="L279">            IPv4 ipv4Packet = (IPv4) packet.getPayload();</span>
+<span class="fc" id="L280">            IPv4 ipv4Reply = new IPv4();</span>
+<span class="fc" id="L281">            ipv4Reply.setSourceAddress(myIP.toInt());</span>
+<span class="fc" id="L282">            ipv4Reply.setDestinationAddress(ipOffered.toInt());</span>
+<span class="fc" id="L283">            ipv4Reply.setTtl(packetTTL);</span>
+
+            // UDP Datagram.
+<span class="fc" id="L286">            UDP udpPacket = (UDP) ipv4Packet.getPayload();</span>
+<span class="fc" id="L287">            UDP udpReply = new UDP();</span>
+<span class="fc" id="L288">            udpReply.setSourcePort((byte) UDP.DHCP_SERVER_PORT);</span>
+<span class="fc" id="L289">            udpReply.setDestinationPort((byte) UDP.DHCP_CLIENT_PORT);</span>
+
+            // DHCP Payload.
+<span class="fc" id="L292">            DHCP dhcpPacket = (DHCP) udpPacket.getPayload();</span>
+<span class="fc" id="L293">            DHCP dhcpReply = new DHCP();</span>
+<span class="fc" id="L294">            dhcpReply.setOpCode(DHCP.OPCODE_REPLY);</span>
+<span class="fc" id="L295">            dhcpReply.setFlags(dhcpPacket.getFlags());</span>
+<span class="fc" id="L296">            dhcpReply.setGatewayIPAddress(dhcpPacket.getGatewayIPAddress());</span>
+<span class="fc" id="L297">            dhcpReply.setClientHardwareAddress(dhcpPacket.getClientHardwareAddress());</span>
+<span class="fc" id="L298">            dhcpReply.setTransactionId(dhcpPacket.getTransactionId());</span>
+
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">            if (outgoingMessageType != DHCPPacketType.DHCPNAK.getValue()) {</span>
+<span class="fc" id="L301">                dhcpReply.setYourIPAddress(ipOffered.toInt());</span>
+<span class="fc" id="L302">                dhcpReply.setServerIPAddress(myIP.toInt());</span>
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">                if (dhcpPacket.getGatewayIPAddress() == 0) {</span>
+<span class="fc" id="L304">                    ipv4Reply.setDestinationAddress(IP_BROADCAST.toInt());</span>
+                }
+            }
+<span class="fc" id="L307">            dhcpReply.setHardwareType(DHCP.HWTYPE_ETHERNET);</span>
+<span class="fc" id="L308">            dhcpReply.setHardwareAddressLength((byte) 6);</span>
+
+            // DHCP Options.
+<span class="fc" id="L311">            DHCPOption option = new DHCPOption();</span>
+<span class="fc" id="L312">            List&lt;DHCPOption&gt; optionList = new ArrayList&lt;&gt;();</span>
+
+            // DHCP Message Type.
+<span class="fc" id="L315">            option.setCode(DHCP.DHCPOptionCode.OptionCode_MessageType.getValue());</span>
+<span class="fc" id="L316">            option.setLength((byte) 1);</span>
+<span class="fc" id="L317">            byte[] optionData = {outgoingMessageType};</span>
+<span class="fc" id="L318">            option.setData(optionData);</span>
+<span class="fc" id="L319">            optionList.add(option);</span>
+
+            // DHCP Server Identifier.
+<span class="fc" id="L322">            option = new DHCPOption();</span>
+<span class="fc" id="L323">            option.setCode(DHCP.DHCPOptionCode.OptionCode_DHCPServerIp.getValue());</span>
+<span class="fc" id="L324">            option.setLength((byte) 4);</span>
+<span class="fc" id="L325">            option.setData(myIP.toOctets());</span>
+<span class="fc" id="L326">            optionList.add(option);</span>
+
+<span class="pc bpc" id="L328" title="1 of 2 branches missed.">            if (outgoingMessageType != DHCPPacketType.DHCPNAK.getValue()) {</span>
+
+                // IP Address Lease Time.
+<span class="fc" id="L331">                option = new DHCPOption();</span>
+<span class="fc" id="L332">                option.setCode(DHCP.DHCPOptionCode.OptionCode_LeaseTime.getValue());</span>
+<span class="fc" id="L333">                option.setLength((byte) 4);</span>
+<span class="fc" id="L334">                option.setData(ByteBuffer.allocate(4).putInt(leaseTime).array());</span>
+<span class="fc" id="L335">                optionList.add(option);</span>
+
+                // IP Address Renewal Time.
+<span class="fc" id="L338">                option = new DHCPOption();</span>
+<span class="fc" id="L339">                option.setCode(DHCP.DHCPOptionCode.OptionCode_RenewalTime.getValue());</span>
+<span class="fc" id="L340">                option.setLength((byte) 4);</span>
+<span class="fc" id="L341">                option.setData(ByteBuffer.allocate(4).putInt(renewalTime).array());</span>
+<span class="fc" id="L342">                optionList.add(option);</span>
+
+                // IP Address Rebinding Time.
+<span class="fc" id="L345">                option = new DHCPOption();</span>
+<span class="fc" id="L346">                option.setCode(DHCP.DHCPOptionCode.OPtionCode_RebindingTime.getValue());</span>
+<span class="fc" id="L347">                option.setLength((byte) 4);</span>
+<span class="fc" id="L348">                option.setData(ByteBuffer.allocate(4).putInt(rebindingTime).array());</span>
+<span class="fc" id="L349">                optionList.add(option);</span>
+
+                // Subnet Mask.
+<span class="fc" id="L352">                option = new DHCPOption();</span>
+<span class="fc" id="L353">                option.setCode(DHCP.DHCPOptionCode.OptionCode_SubnetMask.getValue());</span>
+<span class="fc" id="L354">                option.setLength((byte) 4);</span>
+<span class="fc" id="L355">                option.setData(subnetMask.toOctets());</span>
+<span class="fc" id="L356">                optionList.add(option);</span>
+
+                // Broadcast Address.
+<span class="fc" id="L359">                option = new DHCPOption();</span>
+<span class="fc" id="L360">                option.setCode(DHCP.DHCPOptionCode.OptionCode_BroadcastAddress.getValue());</span>
+<span class="fc" id="L361">                option.setLength((byte) 4);</span>
+<span class="fc" id="L362">                option.setData(broadcastAddress.toOctets());</span>
+<span class="fc" id="L363">                optionList.add(option);</span>
+
+                // Router Address.
+<span class="fc" id="L366">                option = new DHCPOption();</span>
+<span class="fc" id="L367">                option.setCode(DHCP.DHCPOptionCode.OptionCode_RouterAddress.getValue());</span>
+<span class="fc" id="L368">                option.setLength((byte) 4);</span>
+<span class="fc" id="L369">                option.setData(routerAddress.toOctets());</span>
+<span class="fc" id="L370">                optionList.add(option);</span>
+
+                // DNS Server Address.
+<span class="fc" id="L373">                option = new DHCPOption();</span>
+<span class="fc" id="L374">                option.setCode(DHCP.DHCPOptionCode.OptionCode_DomainServer.getValue());</span>
+<span class="fc" id="L375">                option.setLength((byte) 4);</span>
+<span class="fc" id="L376">                option.setData(domainServer.toOctets());</span>
+<span class="fc" id="L377">                optionList.add(option);</span>
+            }
+
+            // End Option.
+<span class="fc" id="L381">            option = new DHCPOption();</span>
+<span class="fc" id="L382">            option.setCode(DHCP.DHCPOptionCode.OptionCode_END.getValue());</span>
+<span class="fc" id="L383">            option.setLength((byte) 1);</span>
+<span class="fc" id="L384">            optionList.add(option);</span>
+
+<span class="fc" id="L386">            dhcpReply.setOptions(optionList);</span>
+
+<span class="fc" id="L388">            udpReply.setPayload(dhcpReply);</span>
+<span class="fc" id="L389">            ipv4Reply.setPayload(udpReply);</span>
+<span class="fc" id="L390">            ethReply.setPayload(ipv4Reply);</span>
+
+<span class="fc" id="L392">            return ethReply;</span>
+        }
+
+        /**
+         * Sends the Ethernet reply frame via the Packet Service.
+         *
+         * @param context the context of the incoming frame
+         * @param reply the Ethernet reply frame
+         */
+        private void sendReply(PacketContext context, Ethernet reply) {
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">            if (reply != null) {</span>
+<span class="fc" id="L403">                TrafficTreatment.Builder builder = DefaultTrafficTreatment.builder();</span>
+<span class="fc" id="L404">                ConnectPoint sourcePoint = context.inPacket().receivedFrom();</span>
+<span class="fc" id="L405">                builder.setOutput(sourcePoint.port());</span>
+<span class="fc" id="L406">                context.block();</span>
+<span class="fc" id="L407">                packetService.emit(new DefaultOutboundPacket(sourcePoint.deviceId(),</span>
+<span class="fc" id="L408">                        builder.build(), ByteBuffer.wrap(reply.serialize())));</span>
+            }
+<span class="fc" id="L410">        }</span>
+
+        /**
+         * Processes the DHCP Payload and initiates a reply to the client.
+         *
+         * @param context context of the incoming message
+         * @param dhcpPayload the extracted DHCP payload
+         */
+        private void processDHCPPacket(PacketContext context, DHCP dhcpPayload) {
+<span class="fc" id="L419">            Ethernet packet = context.inPacket().parsed();</span>
+<span class="fc" id="L420">            boolean flagIfRequestedIP = false;</span>
+<span class="fc" id="L421">            boolean flagIfServerIP = false;</span>
+<span class="fc" id="L422">            Ip4Address requestedIP = Ip4Address.valueOf(&quot;0.0.0.0&quot;);</span>
+<span class="fc" id="L423">            Ip4Address serverIP = Ip4Address.valueOf(&quot;0.0.0.0&quot;);</span>
+
+<span class="pc bpc" id="L425" title="1 of 2 branches missed.">            if (dhcpPayload != null) {</span>
+
+<span class="fc" id="L427">                DHCPPacketType incomingPacketType = DHCPPacketType.getType(0);</span>
+<span class="fc bfc" id="L428" title="All 2 branches covered.">                for (DHCPOption option : dhcpPayload.getOptions()) {</span>
+<span class="fc bfc" id="L429" title="All 2 branches covered.">                    if (option.getCode() == DHCP.DHCPOptionCode.OptionCode_MessageType.getValue()) {</span>
+<span class="fc" id="L430">                        byte[] data = option.getData();</span>
+<span class="fc" id="L431">                        incomingPacketType = DHCPPacketType.getType(data[0]);</span>
+                    }
+<span class="fc bfc" id="L433" title="All 2 branches covered.">                    if (option.getCode() == DHCP.DHCPOptionCode.OptionCode_RequestedIP.getValue()) {</span>
+<span class="fc" id="L434">                        byte[] data = option.getData();</span>
+<span class="fc" id="L435">                        requestedIP = Ip4Address.valueOf(data);</span>
+<span class="fc" id="L436">                        flagIfRequestedIP = true;</span>
+                    }
+<span class="pc bpc" id="L438" title="1 of 2 branches missed.">                    if (option.getCode() == DHCP.DHCPOptionCode.OptionCode_DHCPServerIp.getValue()) {</span>
+<span class="nc" id="L439">                        byte[] data = option.getData();</span>
+<span class="nc" id="L440">                        serverIP = Ip4Address.valueOf(data);</span>
+<span class="nc" id="L441">                        flagIfServerIP = true;</span>
+                    }
+<span class="fc" id="L443">                }</span>
+                DHCPPacketType outgoingPacketType;
+<span class="fc" id="L445">                MacAddress clientMAC = new MacAddress(dhcpPayload.getClientHardwareAddress());</span>
+<span class="fc" id="L446">                VlanId vlanId = VlanId.vlanId(packet.getVlanID());</span>
+<span class="fc" id="L447">                HostId hostId = HostId.hostId(clientMAC, vlanId);</span>
+
+<span class="fc bfc" id="L449" title="All 2 branches covered.">                if (incomingPacketType.getValue() == DHCPPacketType.DHCPDISCOVER.getValue()) {</span>
+
+<span class="fc" id="L451">                    outgoingPacketType = DHCPPacketType.DHCPOFFER;</span>
+<span class="fc" id="L452">                    Ip4Address ipOffered = dhcpStore.suggestIP(hostId, requestedIP);</span>
+<span class="pc bpc" id="L453" title="1 of 2 branches missed.">                    if (ipOffered != null) {</span>
+<span class="fc" id="L454">                        Ethernet ethReply = buildReply(packet, ipOffered,</span>
+<span class="fc" id="L455">                                (byte) outgoingPacketType.getValue());</span>
+<span class="fc" id="L456">                        sendReply(context, ethReply);</span>
+                    }
+
+<span class="pc bpc" id="L459" title="1 of 2 branches missed.">                } else if (incomingPacketType.getValue() == DHCPPacketType.DHCPREQUEST.getValue()) {</span>
+
+<span class="pc bpc" id="L461" title="3 of 4 branches missed.">                    if (flagIfServerIP &amp;&amp; flagIfRequestedIP) {</span>
+                        // SELECTING state
+<span class="nc bnc" id="L463" title="All 2 branches missed.">                        if (myIP.equals(serverIP)) {</span>
+
+<span class="nc bnc" id="L465" title="All 2 branches missed.">                            if (dhcpStore.assignIP(hostId, requestedIP, leaseTime)) {</span>
+<span class="nc" id="L466">                                outgoingPacketType = DHCPPacketType.DHCPACK;</span>
+<span class="nc" id="L467">                                discoverHost(context, requestedIP);</span>
+                            } else {
+<span class="nc" id="L469">                                outgoingPacketType = DHCPPacketType.DHCPNAK;</span>
+                            }
+<span class="nc" id="L471">                            Ethernet ethReply = buildReply(packet, requestedIP, (byte) outgoingPacketType.getValue());</span>
+<span class="nc" id="L472">                            sendReply(context, ethReply);</span>
+<span class="nc" id="L473">                        }</span>
+<span class="pc bpc" id="L474" title="1 of 2 branches missed.">                    } else if (flagIfRequestedIP) {</span>
+                        // INIT-REBOOT state
+<span class="pc bpc" id="L476" title="1 of 2 branches missed.">                        if (dhcpStore.assignIP(hostId, requestedIP, leaseTime)) {</span>
+<span class="fc" id="L477">                            outgoingPacketType = DHCPPacketType.DHCPACK;</span>
+<span class="fc" id="L478">                            Ethernet ethReply = buildReply(packet, requestedIP, (byte) outgoingPacketType.getValue());</span>
+<span class="fc" id="L479">                            sendReply(context, ethReply);</span>
+<span class="fc" id="L480">                            discoverHost(context, requestedIP);</span>
+<span class="fc" id="L481">                        }</span>
+
+                    } else {
+                        // RENEWING and REBINDING state
+<span class="nc" id="L485">                        int ciaadr = dhcpPayload.getClientIPAddress();</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">                        if (ciaadr != 0) {</span>
+<span class="nc" id="L487">                            Ip4Address clientIaddr = Ip4Address.valueOf(ciaadr);</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">                            if (dhcpStore.assignIP(hostId, clientIaddr, leaseTime)) {</span>
+<span class="nc" id="L489">                                outgoingPacketType = DHCPPacketType.DHCPACK;</span>
+<span class="nc" id="L490">                                discoverHost(context, clientIaddr);</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">                            } else if (packet.getEtherType() == Ethernet.TYPE_IPV4 &amp;&amp;</span>
+<span class="nc bnc" id="L492" title="All 2 branches missed.">                                    ((IPv4) packet.getPayload()).getDestinationAddress() == myIP.toInt()) {</span>
+<span class="nc" id="L493">                                outgoingPacketType = DHCPPacketType.DHCPNAK;</span>
+                            } else {
+<span class="nc" id="L495">                                return;</span>
+                            }
+<span class="nc" id="L497">                            Ethernet ethReply = buildReply(packet, clientIaddr, (byte) outgoingPacketType.getValue());</span>
+<span class="nc" id="L498">                            sendReply(context, ethReply);</span>
+                        }
+<span class="nc" id="L500">                    }</span>
+<span class="nc bnc" id="L501" title="All 2 branches missed.">                } else if (incomingPacketType.getValue() == DHCPPacketType.DHCPRELEASE.getValue()) {</span>
+<span class="nc" id="L502">                    Ip4Address ip4Address = dhcpStore.releaseIP(hostId);</span>
+<span class="nc bnc" id="L503" title="All 2 branches missed.">                    if (ip4Address != null) {</span>
+<span class="nc" id="L504">                        hostProviderService.removeIpFromHost(hostId, ip4Address);</span>
+                    }
+                }
+            }
+<span class="fc" id="L508">        }</span>
+
+        /**
+         * Processes the ARP Payload and initiates a reply to the client.
+         *
+         * @param context context of the incoming message
+         * @param packet the ethernet payload
+         */
+        private void processARPPacket(PacketContext context, Ethernet packet) {
+
+<span class="nc" id="L518">            ARP arpPacket = (ARP) packet.getPayload();</span>
+
+<span class="nc" id="L520">            ARP arpReply = (ARP) arpPacket.clone();</span>
+<span class="nc" id="L521">            arpReply.setOpCode(ARP.OP_REPLY);</span>
+
+<span class="nc" id="L523">            arpReply.setTargetProtocolAddress(arpPacket.getSenderProtocolAddress());</span>
+<span class="nc" id="L524">            arpReply.setTargetHardwareAddress(arpPacket.getSenderHardwareAddress());</span>
+<span class="nc" id="L525">            arpReply.setSenderProtocolAddress(arpPacket.getTargetProtocolAddress());</span>
+<span class="nc" id="L526">            arpReply.setSenderHardwareAddress(myMAC.toBytes());</span>
+
+            // Ethernet Frame.
+<span class="nc" id="L529">            Ethernet ethReply = new Ethernet();</span>
+<span class="nc" id="L530">            ethReply.setSourceMACAddress(myMAC);</span>
+<span class="nc" id="L531">            ethReply.setDestinationMACAddress(packet.getSourceMAC());</span>
+<span class="nc" id="L532">            ethReply.setEtherType(Ethernet.TYPE_ARP);</span>
+<span class="nc" id="L533">            ethReply.setVlanID(packet.getVlanID());</span>
+
+<span class="nc" id="L535">            ethReply.setPayload(arpReply);</span>
+<span class="nc" id="L536">            sendReply(context, ethReply);</span>
+<span class="nc" id="L537">        }</span>
+
+        /**
+         * Integrates hosts learned through DHCP into topology.
+         * @param context context of the incoming message
+         * @param ipAssigned IP Address assigned to the host by DHCP Manager
+         */
+        private void discoverHost(PacketContext context, Ip4Address ipAssigned) {
+<span class="fc" id="L545">            Ethernet packet = context.inPacket().parsed();</span>
+<span class="fc" id="L546">            MacAddress mac = packet.getSourceMAC();</span>
+<span class="fc" id="L547">            VlanId vlanId = VlanId.vlanId(packet.getVlanID());</span>
+<span class="fc" id="L548">            HostLocation hostLocation = new HostLocation(context.inPacket().receivedFrom(), 0);</span>
+
+<span class="fc" id="L550">            Set&lt;IpAddress&gt; ips = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L551">            ips.add(ipAssigned);</span>
+
+<span class="fc" id="L553">            HostId hostId = HostId.hostId(mac, vlanId);</span>
+<span class="fc" id="L554">            DefaultHostDescription desc = new DefaultHostDescription(mac, vlanId, hostLocation, ips);</span>
+<span class="fc" id="L555">            hostProviderService.hostDetected(hostId, desc);</span>
+<span class="fc" id="L556">        }</span>
+
+
+        @Override
+        public void process(PacketContext context) {
+<span class="fc" id="L561">            Ethernet packet = context.inPacket().parsed();</span>
+<span class="pc bpc" id="L562" title="1 of 2 branches missed.">            if (packet == null) {</span>
+<span class="nc" id="L563">                return;</span>
+            }
+
+<span class="pc bpc" id="L566" title="1 of 2 branches missed.">            if (packet.getEtherType() == Ethernet.TYPE_IPV4) {</span>
+<span class="fc" id="L567">                IPv4 ipv4Packet = (IPv4) packet.getPayload();</span>
+
+<span class="pc bpc" id="L569" title="1 of 2 branches missed.">                if (ipv4Packet.getProtocol() == IPv4.PROTOCOL_UDP) {</span>
+<span class="fc" id="L570">                    UDP udpPacket = (UDP) ipv4Packet.getPayload();</span>
+
+<span class="pc bpc" id="L572" title="1 of 2 branches missed.">                    if (udpPacket.getDestinationPort() == UDP.DHCP_SERVER_PORT &amp;&amp;</span>
+<span class="pc bpc" id="L573" title="1 of 2 branches missed.">                            udpPacket.getSourcePort() == UDP.DHCP_CLIENT_PORT) {</span>
+                        // This is meant for the dhcp server so process the packet here.
+
+<span class="fc" id="L576">                        DHCP dhcpPayload = (DHCP) udpPacket.getPayload();</span>
+<span class="fc" id="L577">                        processDHCPPacket(context, dhcpPayload);</span>
+                    }
+                }
+<span class="pc bnc" id="L580" title="All 2 branches missed.">            } else if (packet.getEtherType() == Ethernet.TYPE_ARP) {</span>
+<span class="nc" id="L581">                ARP arpPacket = (ARP) packet.getPayload();</span>
+
+<span class="nc bnc" id="L583" title="All 2 branches missed.">                if ((arpPacket.getOpCode() == ARP.OP_REQUEST) &amp;&amp;</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">                        Objects.equals(myIP, Ip4Address.valueOf(arpPacket.getTargetProtocolAddress()))) {</span>
+
+<span class="nc" id="L586">                    processARPPacket(context, packet);</span>
+
+                }
+            }
+<span class="fc" id="L590">        }</span>
+    }
+
+<span class="fc" id="L593">    private class InternalConfigListener implements NetworkConfigListener {</span>
+
+        /**
+         * Reconfigures the DHCP Server according to the configuration parameters passed.
+         *
+         * @param cfg configuration object
+         */
+        private void reconfigureNetwork(DhcpConfig cfg) {
+<span class="pc bpc" id="L601" title="1 of 2 branches missed.">            if (cfg == null) {</span>
+<span class="fc" id="L602">                return;</span>
+            }
+<span class="nc bnc" id="L604" title="All 2 branches missed.">            if (cfg.ip() != null) {</span>
+<span class="nc" id="L605">                myIP = cfg.ip();</span>
+            }
+<span class="nc bnc" id="L607" title="All 2 branches missed.">            if (cfg.mac() != null) {</span>
+<span class="nc" id="L608">                myMAC = cfg.mac();</span>
+            }
+<span class="nc bnc" id="L610" title="All 2 branches missed.">            if (cfg.subnetMask() != null) {</span>
+<span class="nc" id="L611">                subnetMask = cfg.subnetMask();</span>
+            }
+<span class="nc bnc" id="L613" title="All 2 branches missed.">            if (cfg.broadcastAddress() != null) {</span>
+<span class="nc" id="L614">                broadcastAddress = cfg.broadcastAddress();</span>
+            }
+<span class="nc bnc" id="L616" title="All 2 branches missed.">            if (cfg.routerAddress() != null) {</span>
+<span class="nc" id="L617">                routerAddress = cfg.routerAddress();</span>
+            }
+<span class="nc bnc" id="L619" title="All 2 branches missed.">            if (cfg.domainServer() != null) {</span>
+<span class="nc" id="L620">                domainServer = cfg.domainServer();</span>
+            }
+<span class="nc bnc" id="L622" title="All 2 branches missed.">            if (cfg.ttl() != -1) {</span>
+<span class="nc" id="L623">                packetTTL = (byte) cfg.ttl();</span>
+            }
+<span class="nc bnc" id="L625" title="All 2 branches missed.">            if (cfg.leaseTime() != -1) {</span>
+<span class="nc" id="L626">                leaseTime = cfg.leaseTime();</span>
+            }
+<span class="nc bnc" id="L628" title="All 2 branches missed.">            if (cfg.renewTime() != -1) {</span>
+<span class="nc" id="L629">                renewalTime = cfg.renewTime();</span>
+            }
+<span class="nc bnc" id="L631" title="All 2 branches missed.">            if (cfg.rebindTime() != -1) {</span>
+<span class="nc" id="L632">                rebindingTime = cfg.rebindTime();</span>
+            }
+<span class="nc bnc" id="L634" title="All 2 branches missed.">            if (cfg.defaultTimeout() != -1) {</span>
+<span class="nc" id="L635">                dhcpStore.setDefaultTimeoutForPurge(cfg.defaultTimeout());</span>
+            }
+<span class="nc bnc" id="L637" title="All 2 branches missed.">            if (cfg.timerDelay() != -1) {</span>
+<span class="nc" id="L638">                timerDelay = cfg.timerDelay();</span>
+            }
+<span class="nc bnc" id="L640" title="All 4 branches missed.">            if ((cfg.startIp() != null) &amp;&amp; (cfg.endIp() != null)) {</span>
+<span class="nc" id="L641">                dhcpStore.populateIPPoolfromRange(cfg.startIp(), cfg.endIp());</span>
+            }
+<span class="nc" id="L643">        }</span>
+
+
+        @Override
+        public void event(NetworkConfigEvent event) {
+
+<span class="nc bnc" id="L649" title="All 2 branches missed.">            if ((event.type() == NetworkConfigEvent.Type.CONFIG_ADDED ||</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">                    event.type() == NetworkConfigEvent.Type.CONFIG_UPDATED) &amp;&amp;</span>
+<span class="nc bnc" id="L651" title="All 2 branches missed.">                    event.configClass().equals(DhcpConfig.class)) {</span>
+
+<span class="nc" id="L653">                DhcpConfig cfg = cfgService.getConfig(appId, DhcpConfig.class);</span>
+<span class="nc" id="L654">                reconfigureNetwork(cfg);</span>
+<span class="nc" id="L655">                log.info(&quot;Reconfigured&quot;);</span>
+            }
+<span class="nc" id="L657">        }</span>
+    }
+
+    private class InternalHostProvider extends AbstractProvider implements HostProvider {
+
+        /**
+         * Creates a provider with the supplier identifier.
+         */
+<span class="fc" id="L665">        protected InternalHostProvider() {</span>
+<span class="fc" id="L666">            super(PID);</span>
+<span class="fc" id="L667">        }</span>
+
+        @Override
+        public void triggerProbe(Host host) {
+            // nothing to do
+<span class="nc" id="L672">        }</span>
+    }
+
+<span class="fc" id="L675">    private class PurgeListTask implements TimerTask {</span>
+
+        @Override
+        public void run(Timeout to) {
+            IpAssignment ipAssignment;
+<span class="nc" id="L680">            Date dateNow = new Date();</span>
+
+<span class="nc" id="L682">            Map&lt;HostId, IpAssignment&gt; ipAssignmentMap = dhcpStore.listAllMapping();</span>
+<span class="nc bnc" id="L683" title="All 2 branches missed.">            for (Map.Entry&lt;HostId, IpAssignment&gt; entry: ipAssignmentMap.entrySet()) {</span>
+<span class="nc" id="L684">                ipAssignment = entry.getValue();</span>
+
+<span class="nc" id="L686">                long timeLapsed = dateNow.getTime() - ipAssignment.timestamp().getTime();</span>
+<span class="nc bnc" id="L687" title="All 2 branches missed.">                if ((ipAssignment.assignmentStatus() != IpAssignment.AssignmentStatus.Option_Expired) &amp;&amp;</span>
+<span class="nc bnc" id="L688" title="All 4 branches missed.">                        (ipAssignment.leasePeriod() &gt; 0) &amp;&amp; (timeLapsed &gt; (ipAssignment.leasePeriodMs()))) {</span>
+
+<span class="nc" id="L690">                    Ip4Address ip4Address = dhcpStore.releaseIP(entry.getKey());</span>
+<span class="nc bnc" id="L691" title="All 2 branches missed.">                    if (ip4Address != null) {</span>
+<span class="nc" id="L692">                        hostProviderService.removeIpFromHost(entry.getKey(), ipAssignment.ipAddress());</span>
+                    }
+                }
+<span class="nc" id="L695">            }</span>
+<span class="nc" id="L696">            timeout = Timer.getTimer().newTimeout(new PurgeListTask(), timerDelay, TimeUnit.MINUTES);</span>
+<span class="nc" id="L697">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

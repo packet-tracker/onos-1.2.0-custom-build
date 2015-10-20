@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>MacAddress.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">MacAddress.java</span></div><h1>MacAddress.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onlab.packet;
+
+import java.util.Arrays;
+
+/**
+ * The class representing MAC address.
+ */
+public class MacAddress {
+
+<span class="fc" id="L25">    public static final MacAddress ZERO = valueOf(&quot;00:00:00:00:00:00&quot;);</span>
+<span class="fc" id="L26">    public static final MacAddress BROADCAST = valueOf(&quot;ff:ff:ff:ff:ff:ff&quot;);</span>
+
+<span class="fc" id="L28">    private static final byte[] LL = new byte[]{</span>
+            0x01, (byte) 0x80, (byte) 0xc2, 0x00, 0x00,
+            0x00, 0x0e, 0x03
+    };
+
+    public static final int MAC_ADDRESS_LENGTH = 6;
+<span class="fc" id="L34">    private byte[] address = new byte[MacAddress.MAC_ADDRESS_LENGTH];</span>
+
+<span class="fc" id="L36">    public MacAddress(final byte[] address) {</span>
+<span class="fc" id="L37">        this.address = Arrays.copyOf(address, MacAddress.MAC_ADDRESS_LENGTH);</span>
+<span class="fc" id="L38">    }</span>
+
+    /**
+     * Returns a MAC address instance representing the value of the specified
+     * {@code String}.
+     *
+     * @param address the String representation of the MAC Address to be parsed.
+     * @return a MAC Address instance representing the value of the specified
+     * {@code String}.
+     * @throws IllegalArgumentException if the string cannot be parsed as a MAC address.
+     */
+    public static MacAddress valueOf(final String address) {
+<span class="fc" id="L50">        final String[] elements = address.split(&quot;:&quot;);</span>
+<span class="pc bpc" id="L51" title="1 of 2 branches missed.">        if (elements.length != MacAddress.MAC_ADDRESS_LENGTH) {</span>
+<span class="nc" id="L52">            throw new IllegalArgumentException(</span>
+                    &quot;Specified MAC Address must contain 12 hex digits&quot;
+                            + &quot; separated pairwise by :'s.&quot;);
+        }
+
+<span class="fc" id="L57">        final byte[] addressInBytes = new byte[MacAddress.MAC_ADDRESS_LENGTH];</span>
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        for (int i = 0; i &lt; MacAddress.MAC_ADDRESS_LENGTH; i++) {</span>
+<span class="fc" id="L59">            final String element = elements[i];</span>
+<span class="fc" id="L60">            addressInBytes[i] = (byte) Integer.parseInt(element, 16);</span>
+        }
+
+<span class="fc" id="L63">        return new MacAddress(addressInBytes);</span>
+    }
+
+    /**
+     * Returns a MAC address instance representing the specified {@code byte}
+     * array.
+     *
+     * @param address the byte array to be parsed.
+     * @return a MAC address instance representing the specified {@code byte}
+     * array.
+     * @throws IllegalArgumentException if the byte array cannot be parsed as a MAC address.
+     */
+    public static MacAddress valueOf(final byte[] address) {
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if (address.length != MacAddress.MAC_ADDRESS_LENGTH) {</span>
+<span class="nc" id="L77">            throw new IllegalArgumentException(&quot;the length is not &quot;</span>
+                                                       + MacAddress.MAC_ADDRESS_LENGTH);
+        }
+
+<span class="fc" id="L81">        return new MacAddress(address);</span>
+    }
+
+    /**
+     * Returns a MAC address instance representing the specified {@code long}
+     * value. The lower 48 bits of the long value are used to parse as a MAC
+     * address.
+     *
+     * @param address the long value to be parsed. The lower 48 bits are used for a
+     *                MAC address.
+     * @return a MAC address instance representing the specified {@code long}
+     * value.
+     * @throws IllegalArgumentException if the long value cannot be parsed as a MAC address.
+     */
+    public static MacAddress valueOf(final long address) {
+<span class="fc" id="L96">        final byte[] addressInBytes = new byte[]{</span>
+                (byte) (address &gt;&gt; 40 &amp; 0xff), (byte) (address &gt;&gt; 32 &amp; 0xff),
+                (byte) (address &gt;&gt; 24 &amp; 0xff), (byte) (address &gt;&gt; 16 &amp; 0xff),
+                (byte) (address &gt;&gt; 8 &amp; 0xff), (byte) (address &gt;&gt; 0 &amp; 0xff)};
+
+<span class="fc" id="L101">        return new MacAddress(addressInBytes);</span>
+    }
+
+    /**
+     * Returns the length of the {@code MACAddress}.
+     *
+     * @return the length of the {@code MACAddress}.
+     */
+    public int length() {
+<span class="nc" id="L110">        return this.address.length;</span>
+    }
+
+    /**
+     * Returns the value of the {@code MACAddress} as a {@code byte} array.
+     *
+     * @return the numeric value represented by this object after conversion to
+     * type {@code byte} array.
+     */
+    public byte[] toBytes() {
+<span class="fc" id="L120">        return Arrays.copyOf(this.address, this.address.length);</span>
+    }
+
+    /**
+     * Returns the value of the {@code MACAddress} as a {@code long}.
+     *
+     * @return the numeric value represented by this object after conversion to
+     * type {@code long}.
+     */
+    public long toLong() {
+<span class="nc" id="L130">        long mac = 0;</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        for (int i = 0; i &lt; 6; i++) {</span>
+<span class="nc" id="L132">            final long t = (this.address[i] &amp; 0xffL) &lt;&lt; (5 - i) * 8;</span>
+<span class="nc" id="L133">            mac |= t;</span>
+        }
+<span class="nc" id="L135">        return mac;</span>
+    }
+
+    /**
+     * Returns {@code true} if the MAC address is the broadcast address.
+     *
+     * @return {@code true} if the MAC address is the broadcast address.
+     */
+    public boolean isBroadcast() {
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        for (final byte b : this.address) {</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">            if (b != -1) {</span>
+<span class="nc" id="L146">                return false;</span>
+            }
+        }
+<span class="nc" id="L149">        return true;</span>
+    }
+
+    /**
+     * Returns {@code true} if the MAC address is the multicast address.
+     *
+     * @return {@code true} if the MAC address is the multicast address.
+     */
+    public boolean isMulticast() {
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        if (this.isBroadcast()) {</span>
+<span class="nc" id="L159">            return false;</span>
+        }
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        return (this.address[0] &amp; 0x01) != 0;</span>
+    }
+
+    /**
+     * Returns true if this MAC address is link local.
+     *
+     * @return true if link local
+     */
+    public boolean isLinkLocal() {
+<span class="nc bnc" id="L170" title="All 16 branches missed.">        return LL[0] == address[0] &amp;&amp; LL[1] == address[1] &amp;&amp; LL[2] == address[2] &amp;&amp;</span>
+                LL[3] == address[3] &amp;&amp; LL[4] == address[4] &amp;&amp;
+                (LL[5] == address[5] || LL[6] == address[5] || LL[7] == address[5]);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+<span class="pc bpc" id="L177" title="1 of 2 branches missed.">        if (o == this) {</span>
+<span class="nc" id="L178">            return true;</span>
+        }
+
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">        if (!(o instanceof MacAddress)) {</span>
+<span class="nc" id="L182">            return false;</span>
+        }
+
+<span class="fc" id="L185">        final MacAddress other = (MacAddress) o;</span>
+<span class="fc" id="L186">        return Arrays.equals(this.address, other.address);</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L191">        return Long.hashCode(toLong());</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="nc" id="L196">        final StringBuilder builder = new StringBuilder();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        for (final byte b : this.address) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            if (builder.length() &gt; 0) {</span>
+<span class="nc" id="L199">                builder.append(&quot;:&quot;);</span>
+            }
+<span class="nc" id="L201">            builder.append(String.format(&quot;%02X&quot;, b &amp; 0xFF));</span>
+        }
+<span class="nc" id="L203">        return builder.toString();</span>
+    }
+
+    /**
+     * @return MAC address in string representation without colons (useful for
+     * radix tree storage)
+     */
+    public String toStringNoColon() {
+<span class="nc" id="L211">        final StringBuilder builder = new StringBuilder();</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        for (final byte b : this.address) {</span>
+<span class="nc" id="L213">            builder.append(String.format(&quot;%02X&quot;, b &amp; 0xFF));</span>
+        }
+<span class="nc" id="L215">        return builder.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

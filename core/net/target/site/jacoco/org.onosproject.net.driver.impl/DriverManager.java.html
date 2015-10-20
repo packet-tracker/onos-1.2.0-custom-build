@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DriverManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.driver.impl</a> &gt; <span class="el_source">DriverManager.java</span></div><h1>DriverManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.driver.impl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.driver.Behaviour;
+import org.onosproject.net.driver.DefaultDriverData;
+import org.onosproject.net.driver.DefaultDriverHandler;
+import org.onosproject.net.driver.DefaultDriverProvider;
+import org.onosproject.net.driver.Driver;
+import org.onosproject.net.driver.DriverAdminService;
+import org.onosproject.net.driver.DriverHandler;
+import org.onosproject.net.driver.DriverProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.onlab.util.Tools.nullIsNotFound;
+import static org.onosproject.net.AnnotationKeys.DRIVER;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.onosproject.security.AppPermission.Type.*;
+
+
+
+/**
+ * Manages inventory of device drivers.
+ */
+@Component(immediate = true)
+@Service
+<span class="nc" id="L58">public class DriverManager extends DefaultDriverProvider implements DriverAdminService {</span>
+
+<span class="nc" id="L60">    private final Logger log = LoggerFactory.getLogger(getClass());</span>
+
+    private static final String NO_DRIVER = &quot;Driver not found&quot;;
+    private static final String NO_DEVICE = &quot;Device not found&quot;;
+    private static final String DEFAULT = &quot;default&quot;;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+<span class="nc" id="L69">    private Set&lt;DriverProvider&gt; providers = Sets.newConcurrentHashSet();</span>
+<span class="nc" id="L70">    private Map&lt;String, Driver&gt; driverByKey = Maps.newConcurrentMap();</span>
+
+    @Activate
+    protected void activate() {
+<span class="nc" id="L74">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L75">    }</span>
+
+    @Deactivate
+    protected void deactivate() {
+<span class="nc" id="L79">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L80">    }</span>
+
+
+    @Override
+    public Set&lt;DriverProvider&gt; getProviders() {
+<span class="nc" id="L85">        return ImmutableSet.copyOf(providers);</span>
+    }
+
+    @Override
+    public void registerProvider(DriverProvider provider) {
+<span class="nc" id="L90">        provider.getDrivers().forEach(driver -&gt; {</span>
+<span class="nc" id="L91">            addDrivers(provider.getDrivers());</span>
+<span class="nc" id="L92">            driverByKey.put(key(driver.manufacturer(),</span>
+<span class="nc" id="L93">                                driver.hwVersion(),</span>
+<span class="nc" id="L94">                                driver.swVersion()), driver);</span>
+<span class="nc" id="L95">        });</span>
+<span class="nc" id="L96">        providers.add(provider);</span>
+<span class="nc" id="L97">    }</span>
+
+    @Override
+    public void unregisterProvider(DriverProvider provider) {
+<span class="nc" id="L101">        provider.getDrivers().forEach(driver -&gt; {</span>
+<span class="nc" id="L102">            removeDrivers(provider.getDrivers());</span>
+<span class="nc" id="L103">            driverByKey.remove(key(driver.manufacturer(),</span>
+<span class="nc" id="L104">                                   driver.hwVersion(),</span>
+<span class="nc" id="L105">                                   driver.swVersion()));</span>
+<span class="nc" id="L106">        });</span>
+<span class="nc" id="L107">        providers.remove(provider);</span>
+<span class="nc" id="L108">    }</span>
+
+    @Override
+    public Set&lt;Driver&gt; getDrivers() {
+<span class="nc" id="L112">        checkPermission(DRIVER_READ);</span>
+
+<span class="nc" id="L114">        ImmutableSet.Builder&lt;Driver&gt; builder = ImmutableSet.builder();</span>
+<span class="nc" id="L115">        drivers.values().forEach(builder::add);</span>
+<span class="nc" id="L116">        return builder.build();</span>
+    }
+
+    @Override
+    public Set&lt;Driver&gt; getDrivers(Class&lt;? extends Behaviour&gt; withBehaviour) {
+<span class="nc" id="L121">        checkPermission(DRIVER_READ);</span>
+
+<span class="nc" id="L123">        return drivers.values().stream()</span>
+<span class="nc" id="L124">                .filter(d -&gt; d.hasBehaviour(withBehaviour))</span>
+<span class="nc" id="L125">                .collect(Collectors.toSet());</span>
+    }
+
+    @Override
+    public Driver getDriver(String driverName) {
+<span class="nc" id="L130">        checkPermission(DRIVER_READ);</span>
+
+<span class="nc" id="L132">        return nullIsNotFound(drivers.get(driverName), NO_DRIVER);</span>
+    }
+
+    @Override
+    public Driver getDriver(String mfr, String hw, String sw) {
+<span class="nc" id="L137">        checkPermission(DRIVER_READ);</span>
+
+        // First attempt a literal search.
+<span class="nc" id="L140">        Driver driver = driverByKey.get(key(mfr, hw, sw));</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        if (driver != null) {</span>
+<span class="nc" id="L142">            return driver;</span>
+        }
+
+        // Otherwise, sweep through the key space and attempt to match using
+        // regular expression matching.
+<span class="nc" id="L147">        Optional&lt;Driver&gt; optional = driverByKey.values().stream()</span>
+<span class="nc" id="L148">                .filter(d -&gt; matches(d, mfr, hw, sw)).findFirst();</span>
+
+        // If no matching driver is found, return default.
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        return optional.isPresent() ? optional.get() : drivers.get(DEFAULT);</span>
+    }
+
+    // Matches the given driver using ERE matching against the given criteria.
+    private boolean matches(Driver d, String mfr, String hw, String sw) {
+        // TODO: consider pre-compiling the expressions in the future
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        return mfr.matches(d.manufacturer()) &amp;&amp;</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">                hw.matches(d.hwVersion()) &amp;&amp;</span>
+<span class="nc bnc" id="L159" title="All 2 branches missed.">                sw.matches(d.swVersion());</span>
+    }
+
+    @Override
+    public Driver getDriver(DeviceId deviceId) {
+<span class="nc" id="L164">        checkPermission(DRIVER_READ);</span>
+
+<span class="nc" id="L166">        Device device = nullIsNotFound(deviceService.getDevice(deviceId), NO_DEVICE);</span>
+<span class="nc" id="L167">        String driverName = device.annotations().value(DRIVER);</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (driverName != null) {</span>
+<span class="nc" id="L169">            return getDriver(driverName);</span>
+        }
+<span class="nc" id="L171">        return nullIsNotFound(getDriver(device.manufacturer(),</span>
+<span class="nc" id="L172">                                        device.hwVersion(), device.swVersion()),</span>
+                              NO_DRIVER);
+    }
+
+    @Override
+    public DriverHandler createHandler(DeviceId deviceId, String... credentials) {
+<span class="nc" id="L178">        checkPermission(DRIVER_WRITE);</span>
+
+<span class="nc" id="L180">        Driver driver = getDriver(deviceId);</span>
+<span class="nc" id="L181">        return new DefaultDriverHandler(new DefaultDriverData(driver, deviceId));</span>
+    }
+
+    // Produces a composite driver key using the specified components.
+    private String key(String mfr, String hw, String sw) {
+<span class="nc" id="L186">        return String.format(&quot;%s-%s-%s&quot;, mfr, hw, sw);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

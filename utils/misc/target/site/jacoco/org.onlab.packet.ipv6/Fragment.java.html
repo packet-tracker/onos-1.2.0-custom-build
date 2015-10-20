@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Fragment.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet.ipv6</a> &gt; <span class="el_source">Fragment.java</span></div><h1>Fragment.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onlab.packet.ipv6;
+
+import org.onlab.packet.BasePacket;
+import org.onlab.packet.Data;
+import org.onlab.packet.DeserializationException;
+import org.onlab.packet.Deserializer;
+import org.onlab.packet.IPacket;
+import org.onlab.packet.IPv6;
+
+import java.nio.ByteBuffer;
+
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * Implements IPv6 fragment extension header format. (RFC 2460)
+ */
+<span class="fc" id="L33">public class Fragment extends BasePacket implements IExtensionHeader {</span>
+    public static final byte HEADER_LENGTH = 8; // bytes
+
+    protected byte nextHeader;
+    protected short fragmentOffset;
+    protected byte moreFragment;
+    protected int identification;
+
+    @Override
+    public byte getNextHeader() {
+<span class="fc" id="L43">        return this.nextHeader;</span>
+    }
+
+    @Override
+    public Fragment setNextHeader(final byte nextHeader) {
+<span class="fc" id="L48">        this.nextHeader = nextHeader;</span>
+<span class="fc" id="L49">        return this;</span>
+    }
+
+    /**
+     * Gets the fragment offset of this header.
+     *
+     * @return fragment offset
+     */
+    public short getFragmentOffset() {
+<span class="fc" id="L58">        return this.fragmentOffset;</span>
+    }
+
+    /**
+     * Sets the fragment offset of this header.
+     *
+     * @param fragmentOffset the fragment offset to set
+     * @return this
+     */
+    public Fragment setFragmentOffset(final short fragmentOffset) {
+<span class="fc" id="L68">        this.fragmentOffset = fragmentOffset;</span>
+<span class="fc" id="L69">        return this;</span>
+    }
+
+    /**
+     * Gets the more fragment flag of this header.
+     *
+     * @return more fragment flag
+     */
+    public byte getMoreFragment() {
+<span class="fc" id="L78">        return this.moreFragment;</span>
+    }
+
+    /**
+     * Sets the more fragment flag of this header.
+     *
+     * @param moreFragment the more fragment flag to set
+     * @return this
+     */
+    public Fragment setMoreFragment(final byte moreFragment) {
+<span class="fc" id="L88">        this.moreFragment = moreFragment;</span>
+<span class="fc" id="L89">        return this;</span>
+    }
+
+    /**
+     * Gets the identification of this header.
+     *
+     * @return identification
+     */
+    public int getIdentification() {
+<span class="fc" id="L98">        return this.identification;</span>
+    }
+
+    /**
+     * Sets the identification of this header.
+     *
+     * @param identification the identification to set
+     * @return this
+     */
+    public Fragment setIdentification(final int identification) {
+<span class="fc" id="L108">        this.identification = identification;</span>
+<span class="fc" id="L109">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="fc" id="L114">        byte[] payloadData = null;</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">        if (this.payload != null) {</span>
+<span class="fc" id="L116">            this.payload.setParent(this);</span>
+<span class="fc" id="L117">            payloadData = this.payload.serialize();</span>
+        }
+
+<span class="fc" id="L120">        int payloadLength = 0;</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L122">            payloadLength = payloadData.length;</span>
+        }
+
+<span class="fc" id="L125">        final byte[] data = new byte[HEADER_LENGTH + payloadLength];</span>
+<span class="fc" id="L126">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+
+<span class="fc" id="L128">        bb.put(this.nextHeader);</span>
+<span class="fc" id="L129">        bb.put((byte) 0);</span>
+<span class="fc" id="L130">        bb.putShort((short) (</span>
+                (this.fragmentOffset &amp; 0x1fff) &lt;&lt; 3 |
+                this.moreFragment &amp; 0x1
+        ));
+<span class="fc" id="L134">        bb.putInt(this.identification);</span>
+
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">        if (payloadData != null) {</span>
+<span class="fc" id="L137">            bb.put(payloadData);</span>
+        }
+
+<span class="pc bpc" id="L140" title="3 of 4 branches missed.">        if (this.parent != null &amp;&amp; this.parent instanceof IExtensionHeader) {</span>
+<span class="nc" id="L141">            ((IExtensionHeader) this.parent).setNextHeader(IPv6.PROTOCOL_FRAG);</span>
+        }
+<span class="fc" id="L143">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(byte[] data, int offset, int length) {
+<span class="nc" id="L148">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L149">        this.nextHeader = bb.get();</span>
+<span class="nc" id="L150">        bb.get();</span>
+<span class="nc" id="L151">        short sscratch = bb.getShort();</span>
+<span class="nc" id="L152">        this.fragmentOffset = (short) (sscratch &gt;&gt; 3 &amp; 0x1fff);</span>
+<span class="nc" id="L153">        this.moreFragment = (byte) (sscratch &amp; 0x1);</span>
+<span class="nc" id="L154">        this.identification = bb.getInt();</span>
+
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(this.nextHeader)) {</span>
+<span class="nc" id="L158">            deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(this.nextHeader);</span>
+        } else {
+<span class="nc" id="L160">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L163">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L164">                                                    bb.limit() - bb.position());</span>
+<span class="nc" id="L165">            this.payload.setParent(this);</span>
+<span class="nc" id="L166">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L167">            return this;</span>
+<span class="nc" id="L168">        }</span>
+
+<span class="nc" id="L170">        return this;</span>
+    }
+
+    /*
+    * (non-Javadoc)
+    *
+    * @see java.lang.Object#hashCode()
+    */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L180">        final int prime = 5807;</span>
+<span class="nc" id="L181">        int result = super.hashCode();</span>
+<span class="nc" id="L182">        result = prime * result + this.nextHeader;</span>
+<span class="nc" id="L183">        result = prime * result + this.fragmentOffset;</span>
+<span class="nc" id="L184">        result = prime * result + this.moreFragment;</span>
+<span class="nc" id="L185">        result = prime * result + this.identification;</span>
+<span class="nc" id="L186">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="fc bfc" id="L196" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L197">            return true;</span>
+        }
+<span class="pc bpc" id="L199" title="1 of 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L200">            return false;</span>
+        }
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">        if (!(obj instanceof Fragment)) {</span>
+<span class="nc" id="L203">            return false;</span>
+        }
+<span class="fc" id="L205">        final Fragment other = (Fragment) obj;</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        if (this.nextHeader != other.nextHeader) {</span>
+<span class="nc" id="L207">            return false;</span>
+        }
+<span class="pc bpc" id="L209" title="1 of 2 branches missed.">        if (this.fragmentOffset != other.fragmentOffset) {</span>
+<span class="nc" id="L210">            return false;</span>
+        }
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">        if (this.moreFragment != other.moreFragment) {</span>
+<span class="nc" id="L213">            return false;</span>
+        }
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        if (this.identification != other.identification) {</span>
+<span class="fc" id="L216">            return false;</span>
+        }
+<span class="nc" id="L218">        return true;</span>
+    }
+
+    /**
+     * Deserializer function for fragment headers.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;Fragment&gt; deserializer() {
+<span class="fc" id="L227">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L228">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="fc" id="L230">            Fragment fragment = new Fragment();</span>
+
+<span class="fc" id="L232">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L233">            fragment.nextHeader = bb.get();</span>
+<span class="fc" id="L234">            bb.get();</span>
+<span class="fc" id="L235">            short sscratch = bb.getShort();</span>
+<span class="fc" id="L236">            fragment.fragmentOffset = (short) (sscratch &gt;&gt; 3 &amp; 0x1fff);</span>
+<span class="fc" id="L237">            fragment.moreFragment = (byte) (sscratch &amp; 0x1);</span>
+<span class="fc" id="L238">            fragment.identification = bb.getInt();</span>
+
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">            if (IPv6.PROTOCOL_DESERIALIZER_MAP.containsKey(fragment.nextHeader)) {</span>
+<span class="fc" id="L242">                deserializer = IPv6.PROTOCOL_DESERIALIZER_MAP.get(fragment.nextHeader);</span>
+            } else {
+<span class="nc" id="L244">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L246">            fragment.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L247">                                               bb.limit() - bb.position());</span>
+<span class="fc" id="L248">            fragment.payload.setParent(fragment);</span>
+
+<span class="fc" id="L250">            return fragment;</span>
+        };
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

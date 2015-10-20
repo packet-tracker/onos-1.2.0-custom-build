@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentSynchronizer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-sdnip</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.sdnip</a> &gt; <span class="el_source">IntentSynchronizer.java</span></div><h1>IntentSynchronizer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.sdnip;
+
+import org.onosproject.core.ApplicationId;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.net.intent.IntentState;
+import org.onosproject.net.intent.Key;
+import org.onosproject.routing.IntentSynchronizationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static org.onlab.util.Tools.groupedThreads;
+
+/**
+ * Synchronizes intents between the in-memory intent store and the
+ * IntentService.
+ */
+public class IntentSynchronizer implements IntentSynchronizationService {
+
+<span class="fc" id="L43">    private static final Logger log =</span>
+<span class="fc" id="L44">        LoggerFactory.getLogger(IntentSynchronizer.class);</span>
+
+    private final ApplicationId appId;
+    private final IntentService intentService;
+
+    private final Map&lt;Key, Intent&gt; intents;
+
+    //
+    // State to deal with SDN-IP Leader election and pushing Intents
+    //
+    private final ExecutorService bgpIntentsSynchronizerExecutor;
+<span class="fc" id="L55">    private volatile boolean isElectedLeader = false;</span>
+<span class="fc" id="L56">    private volatile boolean isActivatedLeader = false;</span>
+
+    /**
+     * Class constructor.
+     *
+     * @param appId the Application ID
+     * @param intentService the intent service
+     */
+    IntentSynchronizer(ApplicationId appId, IntentService intentService) {
+<span class="nc" id="L65">        this(appId, intentService,</span>
+<span class="nc" id="L66">                newSingleThreadExecutor(groupedThreads(&quot;onos/sdnip&quot;, &quot;sync&quot;)));</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     * Class constructor.
+     *
+     * @param appId the Application ID
+     * @param intentService the intent service
+     * @param executorService executor service for synchronization thread
+     */
+    IntentSynchronizer(ApplicationId appId, IntentService intentService,
+<span class="fc" id="L77">                       ExecutorService executorService) {</span>
+<span class="fc" id="L78">        this.appId = appId;</span>
+<span class="fc" id="L79">        this.intentService = intentService;</span>
+
+<span class="fc" id="L81">        intents = new ConcurrentHashMap&lt;&gt;();</span>
+
+<span class="fc" id="L83">        bgpIntentsSynchronizerExecutor = executorService;</span>
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Starts the synchronizer.
+     */
+    public void start() {
+
+<span class="nc" id="L91">    }</span>
+
+    /**
+     * Stops the synchronizer.
+     */
+    public void stop() {
+<span class="nc" id="L97">        synchronized (this) {</span>
+            // Stop the thread(s)
+<span class="nc" id="L99">            bgpIntentsSynchronizerExecutor.shutdownNow();</span>
+
+            //
+            // Withdraw all SDN-IP intents
+            //
+<span class="nc bnc" id="L104" title="All 2 branches missed.">            if (!isElectedLeader) {</span>
+<span class="nc" id="L105">                return;         // Nothing to do: not the leader anymore</span>
+            }
+
+            //
+            // NOTE: We don't withdraw the intents during shutdown, because
+            // it creates flux in the data plane during switchover.
+            //
+
+            /*
+            //
+            // Build a batch operation to withdraw all intents from this
+            // application.
+            //
+            log.debug(&quot;SDN-IP Intent Synchronizer shutdown: &quot; +
+                      &quot;withdrawing all intents...&quot;);
+            IntentOperations.Builder builder = IntentOperations.builder(appId);
+            for (Intent intent : intentService.getIntents()) {
+                // Skip the intents from other applications
+                if (!intent.appId().equals(appId)) {
+                    continue;
+                }
+
+                // Skip the intents that are already withdrawn
+                IntentState intentState =
+                    intentService.getIntentState(intent.id());
+                if ((intentState == null) ||
+                    intentState.equals(IntentState.WITHDRAWING) ||
+                    intentState.equals(IntentState.WITHDRAWN)) {
+                    continue;
+                }
+
+                log.trace(&quot;SDN-IP Intent Synchronizer withdrawing intent: {}&quot;,
+                          intent);
+                builder.addWithdrawOperation(intent.id());
+            }
+            IntentOperations intentOperations = builder.build();
+            intentService.execute(intentOperations);
+            leaderChanged(false);
+
+            peerIntents.clear();
+            routeIntents.clear();
+            log.debug(&quot;SDN-IP Intent Synchronizer shutdown completed&quot;);
+            */
+<span class="nc" id="L148">        }</span>
+<span class="nc" id="L149">    }</span>
+
+    @Override
+    public void submit(Intent intent) {
+<span class="fc" id="L153">        synchronized (this) {</span>
+<span class="fc" id="L154">            intents.put(intent.key(), intent);</span>
+<span class="pc bpc" id="L155" title="1 of 4 branches missed.">            if (isElectedLeader &amp;&amp; isActivatedLeader) {</span>
+<span class="fc" id="L156">                log.trace(&quot;SDN-IP Submitting intent: {}&quot;, intent);</span>
+<span class="fc" id="L157">                intentService.submit(intent);</span>
+            }
+<span class="pc" id="L159">        }</span>
+<span class="fc" id="L160">    }</span>
+
+    @Override
+    public void withdraw(Intent intent) {
+<span class="fc" id="L164">        synchronized (this) {</span>
+<span class="fc" id="L165">            intents.remove(intent.key(), intent);</span>
+<span class="pc bpc" id="L166" title="1 of 4 branches missed.">            if (isElectedLeader &amp;&amp; isActivatedLeader) {</span>
+<span class="fc" id="L167">                log.trace(&quot;SDN-IP Withdrawing intent: {}&quot;, intent);</span>
+<span class="fc" id="L168">                intentService.withdraw(intent);</span>
+            }
+<span class="pc" id="L170">        }</span>
+<span class="fc" id="L171">    }</span>
+
+    /**
+     * Signals the synchronizer that the SDN-IP leadership has changed.
+     *
+     * @param isLeader true if this instance is now the leader, otherwise false
+     */
+    public void leaderChanged(boolean isLeader) {
+<span class="fc" id="L179">        log.debug(&quot;SDN-IP Leader changed: {}&quot;, isLeader);</span>
+
+<span class="fc bfc" id="L181" title="All 2 branches covered.">        if (!isLeader) {</span>
+<span class="fc" id="L182">            this.isElectedLeader = false;</span>
+<span class="fc" id="L183">            this.isActivatedLeader = false;</span>
+<span class="fc" id="L184">            return;                     // Nothing to do</span>
+        }
+<span class="fc" id="L186">        this.isActivatedLeader = false;</span>
+<span class="fc" id="L187">        this.isElectedLeader = true;</span>
+
+        // Run the synchronization method off-thread
+<span class="fc" id="L190">        bgpIntentsSynchronizerExecutor.execute(this::synchronizeIntents);</span>
+<span class="fc" id="L191">    }</span>
+
+    private void synchronizeIntents() {
+<span class="fc" id="L194">        Map&lt;Key, Intent&gt; serviceIntents = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L195">        intentService.getIntents().forEach(i -&gt; {</span>
+<span class="pc bpc" id="L196" title="1 of 2 branches missed.">            if (i.appId().equals(appId)) {</span>
+<span class="fc" id="L197">                serviceIntents.put(i.key(), i);</span>
+            }
+<span class="fc" id="L199">        });</span>
+
+<span class="fc" id="L201">        List&lt;Intent&gt; intentsToAdd = new LinkedList&lt;&gt;();</span>
+<span class="fc" id="L202">        List&lt;Intent&gt; intentsToRemove = new LinkedList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L204" title="All 2 branches covered.">        for (Intent localIntent : intents.values()) {</span>
+<span class="fc" id="L205">            Intent serviceIntent = serviceIntents.remove(localIntent.key());</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">            if (serviceIntent == null) {</span>
+<span class="fc" id="L207">                intentsToAdd.add(localIntent);</span>
+            } else {
+<span class="fc" id="L209">                IntentState state = intentService.getIntentState(serviceIntent.key());</span>
+<span class="pc bpc" id="L210" title="3 of 10 branches missed.">                if (!IntentUtils.equals(serviceIntent, localIntent) || state == null ||</span>
+                        state == IntentState.WITHDRAW_REQ ||
+                        state == IntentState.WITHDRAWING ||
+                        state == IntentState.WITHDRAWN) {
+<span class="fc" id="L214">                    intentsToAdd.add(localIntent);</span>
+                }
+            }
+<span class="fc" id="L217">        }</span>
+
+<span class="fc bfc" id="L219" title="All 2 branches covered.">        for (Intent serviceIntent : serviceIntents.values()) {</span>
+<span class="fc" id="L220">            IntentState state = intentService.getIntentState(serviceIntent.key());</span>
+<span class="pc bpc" id="L221" title="4 of 8 branches missed.">            if (state != null &amp;&amp; state != IntentState.WITHDRAW_REQ</span>
+                    &amp;&amp; state != IntentState.WITHDRAWING
+                    &amp;&amp; state != IntentState.WITHDRAWN) {
+<span class="fc" id="L224">                intentsToRemove.add(serviceIntent);</span>
+            }
+<span class="fc" id="L226">        }</span>
+
+<span class="fc" id="L228">        log.debug(&quot;SDN-IP Intent Synchronizer: submitting {}, withdrawing {}&quot;,</span>
+<span class="fc" id="L229">                intentsToAdd.size(), intentsToRemove.size());</span>
+
+        // Withdraw Intents
+<span class="fc bfc" id="L232" title="All 2 branches covered.">        for (Intent intent : intentsToRemove) {</span>
+<span class="fc" id="L233">            intentService.withdraw(intent);</span>
+<span class="fc" id="L234">            log.trace(&quot;SDN-IP Intent Synchronizer: withdrawing intent: {}&quot;,</span>
+                    intent);
+<span class="fc" id="L236">        }</span>
+<span class="pc bpc" id="L237" title="1 of 2 branches missed.">        if (!isElectedLeader) {</span>
+<span class="nc" id="L238">            log.debug(&quot;SDN-IP Intent Synchronizer: cannot withdraw intents: &quot; +</span>
+                    &quot;not elected leader anymore&quot;);
+<span class="nc" id="L240">            isActivatedLeader = false;</span>
+<span class="nc" id="L241">            return;</span>
+        }
+
+        // Add Intents
+<span class="fc bfc" id="L245" title="All 2 branches covered.">        for (Intent intent : intentsToAdd) {</span>
+<span class="fc" id="L246">            intentService.submit(intent);</span>
+<span class="fc" id="L247">            log.trace(&quot;SDN-IP Intent Synchronizer: submitting intent: {}&quot;,</span>
+                    intent);
+<span class="fc" id="L249">        }</span>
+<span class="pc bpc" id="L250" title="1 of 2 branches missed.">        if (!isElectedLeader) {</span>
+<span class="nc" id="L251">            log.debug(&quot;SDN-IP Intent Synchronizer: cannot submit intents: &quot; +</span>
+                    &quot;not elected leader anymore&quot;);
+<span class="nc" id="L253">            isActivatedLeader = false;</span>
+<span class="nc" id="L254">            return;</span>
+        }
+
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">        if (isElectedLeader) {</span>
+<span class="fc" id="L258">            isActivatedLeader = true;       // Allow push of Intents</span>
+        } else {
+<span class="nc" id="L260">            isActivatedLeader = false;</span>
+        }
+<span class="fc" id="L262">        log.debug(&quot;SDN-IP intent synchronization completed&quot;);</span>
+<span class="fc" id="L263">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

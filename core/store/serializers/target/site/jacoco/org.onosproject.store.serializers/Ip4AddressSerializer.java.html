@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Ip4AddressSerializer.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-serializers</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.store.serializers</a> &gt; <span class="el_source">Ip4AddressSerializer.java</span></div><h1>Ip4AddressSerializer.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.store.serializers;
+
+import org.onlab.packet.Ip4Address;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
+/**
+ * Kryo Serializer for {@link Ip4Address}.
+ */
+public class Ip4AddressSerializer extends Serializer&lt;Ip4Address&gt; {
+
+    /**
+     * Creates {@link Ip4Address} serializer instance.
+     */
+    public Ip4AddressSerializer() {
+        // non-null, immutable
+<span class="fc" id="L34">        super(false, true);</span>
+<span class="fc" id="L35">    }</span>
+
+    @Override
+    public void write(Kryo kryo, Output output, Ip4Address object) {
+<span class="fc" id="L39">        byte[] octs = object.toOctets();</span>
+        // It is always Ip4Address.BYTE_LENGTH
+<span class="fc" id="L41">        output.writeInt(octs.length);</span>
+<span class="fc" id="L42">        output.writeBytes(octs);</span>
+<span class="fc" id="L43">    }</span>
+
+    @Override
+    public Ip4Address read(Kryo kryo, Input input, Class&lt;Ip4Address&gt; type) {
+<span class="fc" id="L47">        final int octLen = input.readInt();</span>
+<span class="fc" id="L48">        byte[] octs = new byte[octLen];</span>
+<span class="fc" id="L49">        input.readBytes(octs);</span>
+<span class="fc" id="L50">        return Ip4Address.valueOf(octs);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

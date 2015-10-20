@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ClusterWebResource.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-rest</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.rest.resources</a> &gt; <span class="el_source">ClusterWebResource.java</span></div><h1>ClusterWebResource.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.rest.resources;
+
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.onosproject.cluster.ClusterAdminService;
+import org.onosproject.cluster.ClusterService;
+import org.onosproject.cluster.ControllerNode;
+import org.onosproject.cluster.NodeId;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.rest.AbstractWebResource;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.core.Response;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashSet;
+import java.util.List;
+
+import static org.onlab.util.Tools.nullIsNotFound;
+
+/**
+ * Manage cluster of ONOS instances.
+ */
+@Path(&quot;cluster&quot;)
+<span class="nc" id="L43">public class ClusterWebResource extends AbstractWebResource {</span>
+
+    public static final String NODE_NOT_FOUND = &quot;Node is not found&quot;;
+
+    /**
+     * Get all cluster nodes.
+     * Returns array of all cluster nodes.
+     *
+     * @return 200 OK
+     */
+    @GET
+    public Response getClusterNodes() {
+<span class="nc" id="L55">        Iterable&lt;ControllerNode&gt; nodes = get(ClusterService.class).getNodes();</span>
+<span class="nc" id="L56">        return ok(encodeArray(ControllerNode.class, &quot;nodes&quot;, nodes)).build();</span>
+    }
+
+    /**
+     * Get cluster node details.
+     * Returns details of the specified cluster node.
+     *
+     * @param id cluster node identifier
+     * @return 200 OK
+     */
+    @GET
+    @Path(&quot;{id}&quot;)
+    public Response getClusterNode(@PathParam(&quot;id&quot;) String id) {
+<span class="nc" id="L69">        ControllerNode node = nullIsNotFound(get(ClusterService.class).getNode(new NodeId(id)),</span>
+                                             NODE_NOT_FOUND);
+<span class="nc" id="L71">        return ok(codec(ControllerNode.class).encode(node, this)).build();</span>
+    }
+
+    /**
+     * Forms cluster of ONOS instances.
+     * Forms ONOS cluster using the uploaded JSON definition.
+     *
+     * @param config cluster definition
+     * @return 200 OK
+     * @throws IOException to signify bad request
+     */
+    @POST
+    @Path(&quot;configuration&quot;)
+    public Response formCluster(InputStream config) throws IOException {
+<span class="nc" id="L85">        JsonCodec&lt;ControllerNode&gt; codec = codec(ControllerNode.class);</span>
+<span class="nc" id="L86">        ObjectNode root = (ObjectNode) mapper().readTree(config);</span>
+<span class="nc" id="L87">        String ipPrefix = root.path(&quot;ipPrefix&quot;).asText();</span>
+
+<span class="nc" id="L89">        List&lt;ControllerNode&gt; nodes = codec.decode((ArrayNode) root.path(&quot;nodes&quot;), this);</span>
+<span class="nc" id="L90">        get(ClusterAdminService.class).formCluster(new HashSet&lt;&gt;(nodes), ipPrefix);</span>
+
+<span class="nc" id="L92">        return Response.ok().build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

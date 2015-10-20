@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>XmlDriverLoader.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.driver</a> &gt; <span class="el_source">XmlDriverLoader.java</span></div><h1>XmlDriverLoader.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.driver;
+
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.HierarchicalConfiguration;
+import org.apache.commons.configuration.XMLConfiguration;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+
+/**
+ * Utility capable of reading driver configuration XML resources and producing
+ * a device driver provider as a result.
+ * &lt;p&gt;
+ * The drivers stream structure is as follows:
+ * &lt;/p&gt;
+ * &lt;pre&gt;
+ *     &amp;lt;drivers&amp;gt;
+ *         &amp;lt;driver name=“...” [manufacturer=&quot;...&quot; hwVersion=&quot;...&quot; swVersion=&quot;...&quot;]&amp;gt;
+ *             &amp;lt;behaviour api=&quot;...&quot; impl=&quot;...&quot;/&amp;gt;
+ *             ...
+ *             [&amp;lt;property name=“key”&amp;gt;value&amp;lt;/key&amp;gt;]
+ *             ...
+ *         &amp;lt;/driver&amp;gt;
+ *         ...
+ *     &amp;lt;/drivers&amp;gt;
+ * &lt;/pre&gt;
+ */
+public class XmlDriverLoader {
+
+    private static final String DRIVERS = &quot;drivers&quot;;
+    private static final String DRIVER = &quot;driver&quot;;
+
+    private static final String BEHAVIOUR = &quot;behaviour&quot;;
+    private static final String PROPERTY = &quot;property&quot;;
+
+    private static final String NAME = &quot;[@name]&quot;;
+    private static final String EXTENDS = &quot;[@extends]&quot;;
+    private static final String MFG = &quot;[@manufacturer]&quot;;
+    private static final String HW = &quot;[@hwVersion]&quot;;
+    private static final String SW = &quot;[@swVersion]&quot;;
+    private static final String API = &quot;[@api]&quot;;
+    private static final String IMPL = &quot;[@impl]&quot;;
+
+    private final ClassLoader classLoader;
+
+<span class="fc" id="L64">    private Map&lt;String, Driver&gt; drivers = Maps.newHashMap();</span>
+
+    /**
+     * Creates a new driver loader capable of loading drivers from the supplied
+     * class loader.
+     *
+     * @param classLoader class loader to use
+     */
+<span class="fc" id="L72">    public XmlDriverLoader(ClassLoader classLoader) {</span>
+<span class="fc" id="L73">        this.classLoader = classLoader;</span>
+<span class="fc" id="L74">    }</span>
+
+    /**
+     * Loads the specified drivers resource as an XML stream and parses it to
+     * produce a ready-to-register driver provider.
+     *
+     * @param driversStream stream containing the drivers definitions
+     * @param resolver      driver resolver
+     * @return driver provider
+     * @throws java.io.IOException if issues are encountered reading the stream
+     *                             or parsing the driver definitions within
+     */
+    public DefaultDriverProvider loadDrivers(InputStream driversStream,
+                                             DriverResolver resolver) throws IOException {
+        try {
+<span class="fc" id="L89">            XMLConfiguration cfg = new XMLConfiguration();</span>
+<span class="fc" id="L90">            cfg.setRootElementName(DRIVERS);</span>
+<span class="fc" id="L91">            cfg.setAttributeSplittingDisabled(true);</span>
+
+<span class="fc" id="L93">            cfg.load(driversStream);</span>
+<span class="fc" id="L94">            return loadDrivers(cfg, resolver);</span>
+<span class="fc" id="L95">        } catch (ConfigurationException e) {</span>
+<span class="fc" id="L96">            throw new IOException(&quot;Unable to load drivers&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Loads a driver provider from the supplied hierarchical configuration.
+     *
+     * @param driversCfg hierarchical configuration containing the drivers definitions
+     * @param resolver   driver resolver
+     * @return driver provider
+     */
+    public DefaultDriverProvider loadDrivers(HierarchicalConfiguration driversCfg,
+                                             DriverResolver resolver) {
+<span class="fc" id="L109">        DefaultDriverProvider provider = new DefaultDriverProvider();</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        for (HierarchicalConfiguration cfg : driversCfg.configurationsAt(DRIVER)) {</span>
+<span class="fc" id="L111">            DefaultDriver driver = loadDriver(cfg, resolver);</span>
+<span class="fc" id="L112">            drivers.put(driver.name(), driver);</span>
+<span class="fc" id="L113">            provider.addDriver(driver);</span>
+<span class="fc" id="L114">        }</span>
+<span class="fc" id="L115">        drivers.clear();</span>
+<span class="fc" id="L116">        return provider;</span>
+    }
+
+    /**
+     * Loads a driver from the supplied hierarchical configuration.
+     *
+     * @param driverCfg hierarchical configuration containing the driver definition
+     * @param resolver  driver resolver
+     * @return driver
+     */
+    public DefaultDriver loadDriver(HierarchicalConfiguration driverCfg,
+                                    DriverResolver resolver) {
+<span class="fc" id="L128">        String name = driverCfg.getString(NAME);</span>
+<span class="fc" id="L129">        String parentName = driverCfg.getString(EXTENDS);</span>
+<span class="fc" id="L130">        String manufacturer = driverCfg.getString(MFG, &quot;&quot;);</span>
+<span class="fc" id="L131">        String hwVersion = driverCfg.getString(HW, &quot;&quot;);</span>
+<span class="fc" id="L132">        String swVersion = driverCfg.getString(SW, &quot;&quot;);</span>
+
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        Driver parent = parentName != null ? resolve(parentName, resolver) : null;</span>
+<span class="fc" id="L135">        return new DefaultDriver(name, parent, manufacturer, hwVersion, swVersion,</span>
+<span class="fc" id="L136">                                 parseBehaviours(driverCfg),</span>
+<span class="fc" id="L137">                                 parseProperties(driverCfg));</span>
+    }
+
+    // Resolves the driver by name locally at first and then using the specified resolver.
+    private Driver resolve(String parentName, DriverResolver resolver) {
+<span class="fc" id="L142">        Driver driver = drivers.get(parentName);</span>
+<span class="pc bpc" id="L143" title="3 of 4 branches missed.">        return driver != null ? driver :</span>
+<span class="pc" id="L144">                (resolver != null ? resolver.getDriver(parentName) : null);</span>
+    }
+
+    // Parses the behaviours section.
+    private Map&lt;Class&lt;? extends Behaviour&gt;, Class&lt;? extends Behaviour&gt;&gt;
+    parseBehaviours(HierarchicalConfiguration driverCfg) {
+        ImmutableMap.Builder&lt;Class&lt;? extends Behaviour&gt;,
+<span class="fc" id="L151">                Class&lt;? extends Behaviour&gt;&gt; behaviours = ImmutableMap.builder();</span>
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        for (HierarchicalConfiguration b : driverCfg.configurationsAt(BEHAVIOUR)) {</span>
+<span class="fc" id="L153">            behaviours.put(getClass(b.getString(API)), getClass(b.getString(IMPL)));</span>
+<span class="fc" id="L154">        }</span>
+<span class="fc" id="L155">        return behaviours.build();</span>
+    }
+
+    // Parses the properties section.
+    private Map&lt;String, String&gt; parseProperties(HierarchicalConfiguration driverCfg) {
+<span class="fc" id="L160">        ImmutableMap.Builder&lt;String, String&gt; properties = ImmutableMap.builder();</span>
+<span class="fc bfc" id="L161" title="All 2 branches covered.">        for (HierarchicalConfiguration b : driverCfg.configurationsAt(PROPERTY)) {</span>
+<span class="fc" id="L162">            properties.put(b.getString(NAME), (String) b.getRootNode().getValue());</span>
+<span class="fc" id="L163">        }</span>
+<span class="fc" id="L164">        return properties.build();</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private Class&lt;? extends Behaviour&gt; getClass(String className) {
+        try {
+<span class="fc" id="L170">            return (Class&lt;? extends Behaviour&gt;) classLoader.loadClass(className);</span>
+<span class="fc" id="L171">        } catch (ClassNotFoundException e) {</span>
+<span class="fc" id="L172">            throw new IllegalArgumentException(&quot;Unable to load class &quot; + className, e);</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

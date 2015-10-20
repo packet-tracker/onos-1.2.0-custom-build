@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ResourceManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.newresource.impl</a> &gt; <span class="el_source">ResourceManager.java</span></div><h1>ResourceManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.newresource.impl;
+
+import com.google.common.annotations.Beta;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.net.newresource.ResourceAdminService;
+import org.onosproject.net.newresource.ResourceAllocation;
+import org.onosproject.net.newresource.ResourceConsumer;
+import org.onosproject.net.newresource.ResourceService;
+import org.onosproject.net.newresource.ResourcePath;
+import org.onosproject.net.newresource.ResourceStore;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * An implementation of ResourceService.
+ */
+@Component(immediate = true, enabled = false)
+@Service
+@Beta
+<span class="nc" id="L47">public final class ResourceManager implements ResourceService, ResourceAdminService {</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ResourceStore store;
+
+    @Override
+    public List&lt;ResourceAllocation&gt; allocate(ResourceConsumer consumer,
+                                             List&lt;ResourcePath&gt; resources) {
+<span class="nc" id="L55">        checkNotNull(consumer);</span>
+<span class="nc" id="L56">        checkNotNull(resources);</span>
+
+        // TODO: implement support of resource hierarchy
+        // allocation for a particular resource implies allocations for all of the sub-resources need to be done
+
+<span class="nc" id="L61">        boolean success = store.allocate(resources, consumer);</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        if (!success) {</span>
+<span class="nc" id="L63">            return ImmutableList.of();</span>
+        }
+
+<span class="nc" id="L66">        return resources.stream()</span>
+<span class="nc" id="L67">                .map(x -&gt; new ResourceAllocation(x, consumer))</span>
+<span class="nc" id="L68">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public boolean release(List&lt;ResourceAllocation&gt; allocations) {
+<span class="nc" id="L73">        checkNotNull(allocations);</span>
+
+<span class="nc" id="L75">        List&lt;ResourcePath&gt; resources = allocations.stream()</span>
+<span class="nc" id="L76">                .map(ResourceAllocation::resource)</span>
+<span class="nc" id="L77">                .collect(Collectors.toList());</span>
+<span class="nc" id="L78">        List&lt;ResourceConsumer&gt; consumers = allocations.stream()</span>
+<span class="nc" id="L79">                .map(ResourceAllocation::consumer)</span>
+<span class="nc" id="L80">                .collect(Collectors.toList());</span>
+
+<span class="nc" id="L82">        return store.release(resources, consumers);</span>
+    }
+
+    @Override
+    public boolean release(ResourceConsumer consumer) {
+<span class="nc" id="L87">        checkNotNull(consumer);</span>
+
+<span class="nc" id="L89">        Collection&lt;ResourceAllocation&gt; allocations = getResourceAllocations(consumer);</span>
+<span class="nc" id="L90">        return release(ImmutableList.copyOf(allocations));</span>
+    }
+
+    @Override
+    public Optional&lt;ResourceAllocation&gt; getResourceAllocation(ResourcePath resource) {
+<span class="nc" id="L95">        checkNotNull(resource);</span>
+
+<span class="nc" id="L97">        Optional&lt;ResourceConsumer&gt; consumer = store.getConsumer(resource);</span>
+<span class="nc" id="L98">        return consumer.map(x -&gt; new ResourceAllocation(resource, x));</span>
+    }
+
+    @Override
+    public &lt;T&gt; Collection&lt;ResourceAllocation&gt; getResourceAllocations(ResourcePath parent, Class&lt;T&gt; cls) {
+<span class="nc" id="L103">        checkNotNull(parent);</span>
+<span class="nc" id="L104">        checkNotNull(cls);</span>
+
+<span class="nc" id="L106">        Collection&lt;ResourcePath&gt; resources = store.getAllocatedResources(parent, cls);</span>
+<span class="nc" id="L107">        List&lt;ResourceAllocation&gt; allocations = new ArrayList&lt;&gt;(resources.size());</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        for (ResourcePath resource: resources) {</span>
+            // We access store twice in this method, then the store may be updated by others
+<span class="nc" id="L110">            Optional&lt;ResourceConsumer&gt; consumer = store.getConsumer(resource);</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            if (consumer.isPresent()) {</span>
+<span class="nc" id="L112">                allocations.add(new ResourceAllocation(resource, consumer.get()));</span>
+            }
+<span class="nc" id="L114">        }</span>
+
+<span class="nc" id="L116">        return allocations;</span>
+    }
+
+    @Override
+    public Collection&lt;ResourceAllocation&gt; getResourceAllocations(ResourceConsumer consumer) {
+<span class="nc" id="L121">        checkNotNull(consumer);</span>
+
+<span class="nc" id="L123">        Collection&lt;ResourcePath&gt; resources = store.getResources(consumer);</span>
+<span class="nc" id="L124">        return resources.stream()</span>
+<span class="nc" id="L125">                .map(x -&gt; new ResourceAllocation(x, consumer))</span>
+<span class="nc" id="L126">                .collect(Collectors.toList());</span>
+    }
+
+    @Override
+    public boolean isAvailable(ResourcePath resource) {
+<span class="nc" id="L131">        checkNotNull(resource);</span>
+
+<span class="nc" id="L133">        Optional&lt;ResourceConsumer&gt; consumer = store.getConsumer(resource);</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        return !consumer.isPresent();</span>
+    }
+
+    @Override
+    public &lt;T&gt; boolean registerResources(ResourcePath parent, List&lt;T&gt; children) {
+<span class="nc" id="L139">        checkNotNull(parent);</span>
+<span class="nc" id="L140">        checkNotNull(children);</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        checkArgument(!children.isEmpty());</span>
+
+<span class="nc" id="L143">        List&lt;ResourcePath&gt; resources = Lists.transform(children, x -&gt; ResourcePath.child(parent, x));</span>
+<span class="nc" id="L144">        return store.register(resources);</span>
+    }
+
+    @Override
+    public &lt;T&gt; boolean unregisterResources(ResourcePath parent, List&lt;T&gt; children) {
+<span class="nc" id="L149">        checkNotNull(parent);</span>
+<span class="nc" id="L150">        checkNotNull(children);</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        checkArgument(!children.isEmpty());</span>
+
+<span class="nc" id="L153">        List&lt;ResourcePath&gt; resources = Lists.transform(children, x -&gt; ResourcePath.child(parent, x));</span>
+<span class="nc" id="L154">        return store.unregister(resources);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

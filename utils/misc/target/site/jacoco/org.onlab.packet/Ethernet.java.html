@@ -1,0 +1,626 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Ethernet.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">Ethernet.java</span></div><h1>Ethernet.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.packet.PacketUtils.checkHeaderLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ *
+ */
+<span class="pc bpc" id="L33" title="1 of 2 branches missed.">public class Ethernet extends BasePacket {</span>
+    private static final String HEXES = &quot;0123456789ABCDEF&quot;;
+
+<span class="fc" id="L36">    public static final short TYPE_ARP = EthType.EtherType.ARP.ethType().toShort();</span>
+<span class="fc" id="L37">    public static final short TYPE_RARP = EthType.EtherType.RARP.ethType().toShort();</span>
+<span class="fc" id="L38">    public static final short TYPE_IPV4 = EthType.EtherType.IPV4.ethType().toShort();</span>
+<span class="fc" id="L39">    public static final short TYPE_IPV6 = EthType.EtherType.IPV6.ethType().toShort();</span>
+<span class="fc" id="L40">    public static final short TYPE_LLDP = EthType.EtherType.LLDP.ethType().toShort();</span>
+<span class="fc" id="L41">    public static final short TYPE_VLAN = EthType.EtherType.VLAN.ethType().toShort();</span>
+<span class="fc" id="L42">    public static final short TYPE_BSN = EthType.EtherType.BDDP.ethType().toShort();</span>
+
+<span class="fc" id="L44">    public static final short MPLS_UNICAST = EthType.EtherType.MPLS_UNICAST.ethType().toShort();;</span>
+<span class="fc" id="L45">    public static final short MPLS_MULTICAST = EthType.EtherType.MPLS_MULTICAST.ethType().toShort();</span>
+
+
+    public static final short VLAN_UNTAGGED = (short) 0xffff;
+
+    public static final short ETHERNET_HEADER_LENGTH = 14; // bytes
+    public static final short VLAN_HEADER_LENGTH = 4; // bytes
+
+    public static final short DATALAYER_ADDRESS_LENGTH = 6; // bytes
+
+<span class="fc" id="L55">    private static final Map&lt;Short, Deserializer&lt;? extends IPacket&gt;&gt; ETHERTYPE_DESERIALIZER_MAP =</span>
+            new HashMap&lt;&gt;();
+
+    static {
+<span class="fc bfc" id="L59" title="All 2 branches covered.">       for (EthType.EtherType ethType : EthType.EtherType.values()) {</span>
+<span class="fc bfc" id="L60" title="All 2 branches covered.">           if (ethType.deserializer() != null) {</span>
+<span class="fc" id="L61">               ETHERTYPE_DESERIALIZER_MAP.put(ethType.ethType().toShort(), ethType.deserializer());</span>
+           }
+       }
+<span class="fc" id="L64">    }</span>
+
+    protected MacAddress destinationMACAddress;
+    protected MacAddress sourceMACAddress;
+    protected byte priorityCode;
+    protected short vlanID;
+    protected short etherType;
+<span class="fc" id="L71">    protected boolean pad = false;</span>
+
+    /**
+     * By default, set Ethernet to untagged.
+     */
+    public Ethernet() {
+<span class="fc" id="L77">        super();</span>
+<span class="fc" id="L78">        this.vlanID = Ethernet.VLAN_UNTAGGED;</span>
+<span class="fc" id="L79">    }</span>
+
+    /**
+     * Gets the destination MAC address.
+     *
+     * @return the destination MAC as a byte array
+     */
+    public byte[] getDestinationMACAddress() {
+<span class="nc" id="L87">        return this.destinationMACAddress.toBytes();</span>
+    }
+
+    /**
+     * Gets the destination MAC address.
+     *
+     * @return the destination MAC
+     */
+    public MacAddress getDestinationMAC() {
+<span class="fc" id="L96">        return this.destinationMACAddress;</span>
+    }
+
+    /**
+     * Sets the destination MAC address.
+     *
+     * @param destMac the destination MAC to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setDestinationMACAddress(final MacAddress destMac) {
+<span class="nc" id="L106">        this.destinationMACAddress = checkNotNull(destMac);</span>
+<span class="nc" id="L107">        return this;</span>
+    }
+
+    /**
+     * Sets the destination MAC address.
+     *
+     * @param destMac the destination MAC to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setDestinationMACAddress(final byte[] destMac) {
+<span class="fc" id="L117">        this.destinationMACAddress = MacAddress.valueOf(destMac);</span>
+<span class="fc" id="L118">        return this;</span>
+    }
+
+    /**
+     * Sets the destination MAC address.
+     *
+     * @param destMac the destination MAC to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setDestinationMACAddress(final String destMac) {
+<span class="nc" id="L128">        this.destinationMACAddress = MacAddress.valueOf(destMac);</span>
+<span class="nc" id="L129">        return this;</span>
+    }
+
+    /**
+     * Gets the source MAC address.
+     *
+     * @return the source MACAddress as a byte array
+     */
+    public byte[] getSourceMACAddress() {
+<span class="nc" id="L138">        return this.sourceMACAddress.toBytes();</span>
+    }
+
+    /**
+     * Gets the source MAC address.
+     *
+     * @return the source MACAddress
+     */
+    public MacAddress getSourceMAC() {
+<span class="fc" id="L147">        return this.sourceMACAddress;</span>
+    }
+
+    /**
+     * Sets the source MAC address.
+     *
+     * @param sourceMac the source MAC to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setSourceMACAddress(final MacAddress sourceMac) {
+<span class="nc" id="L157">        this.sourceMACAddress = checkNotNull(sourceMac);</span>
+<span class="nc" id="L158">        return this;</span>
+    }
+
+    /**
+     * Sets the source MAC address.
+     *
+     * @param sourceMac the source MAC to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setSourceMACAddress(final byte[] sourceMac) {
+<span class="fc" id="L168">        this.sourceMACAddress = MacAddress.valueOf(sourceMac);</span>
+<span class="fc" id="L169">        return this;</span>
+    }
+
+    /**
+     * Sets the source MAC address.
+     *
+     * @param sourceMac the source MAC to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setSourceMACAddress(final String sourceMac) {
+<span class="nc" id="L179">        this.sourceMACAddress = MacAddress.valueOf(sourceMac);</span>
+<span class="nc" id="L180">        return this;</span>
+    }
+
+    /**
+     * Gets the priority code.
+     *
+     * @return the priorityCode
+     */
+    public byte getPriorityCode() {
+<span class="nc" id="L189">        return this.priorityCode;</span>
+    }
+
+    /**
+     * Sets the priority code.
+     *
+     * @param priority the priorityCode to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setPriorityCode(final byte priority) {
+<span class="fc" id="L199">        this.priorityCode = priority;</span>
+<span class="fc" id="L200">        return this;</span>
+    }
+
+    /**
+     * Gets the VLAN ID.
+     *
+     * @return the vlanID
+     */
+    public short getVlanID() {
+<span class="fc" id="L209">        return this.vlanID;</span>
+    }
+
+    /**
+     * Sets the VLAN ID.
+     *
+     * @param vlan the vlanID to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setVlanID(final short vlan) {
+<span class="fc" id="L219">        this.vlanID = vlan;</span>
+<span class="fc" id="L220">        return this;</span>
+    }
+
+    /**
+     * Gets the Ethernet type.
+     *
+     * @return the etherType
+     */
+    public short getEtherType() {
+<span class="fc" id="L229">        return this.etherType;</span>
+    }
+
+    /**
+     * Sets the Ethernet type.
+     *
+     * @param ethType the etherType to set
+     * @return the Ethernet frame
+     */
+    public Ethernet setEtherType(final short ethType) {
+<span class="fc" id="L239">        this.etherType = ethType;</span>
+<span class="fc" id="L240">        return this;</span>
+    }
+
+    /**
+     * @return True if the Ethernet frame is broadcast, false otherwise
+     */
+    public boolean isBroadcast() {
+<span class="nc bnc" id="L247" title="All 4 branches missed.">        assert this.destinationMACAddress.length() == 6;</span>
+<span class="nc" id="L248">        return this.destinationMACAddress.isBroadcast();</span>
+    }
+
+    /**
+     * @return True is the Ethernet frame is multicast, False otherwise
+     */
+    public boolean isMulticast() {
+<span class="nc" id="L255">        return this.destinationMACAddress.isMulticast();</span>
+    }
+
+    /**
+     * Pad this packet to 60 bytes minimum, filling with zeros?
+     *
+     * @return the pad
+     */
+    public boolean isPad() {
+<span class="nc" id="L264">        return this.pad;</span>
+    }
+
+    /**
+     * Pad this packet to 60 bytes minimum, filling with zeros?
+     *
+     * @param pd
+     *            the pad to set
+     * @return this
+     */
+    public Ethernet setPad(final boolean pd) {
+<span class="nc" id="L275">        this.pad = pd;</span>
+<span class="nc" id="L276">        return this;</span>
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L281">        byte[] payloadData = null;</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        if (this.payload != null) {</span>
+<span class="nc" id="L283">            this.payload.setParent(this);</span>
+<span class="nc" id="L284">            payloadData = this.payload.serialize();</span>
+        }
+<span class="nc bnc" id="L286" title="All 4 branches missed.">        int length = 14 + (this.vlanID == Ethernet.VLAN_UNTAGGED ? 0 : 4)</span>
+                + (payloadData == null ? 0 : payloadData.length);
+<span class="nc bnc" id="L288" title="All 4 branches missed.">        if (this.pad &amp;&amp; length &lt; 60) {</span>
+<span class="nc" id="L289">            length = 60;</span>
+        }
+<span class="nc" id="L291">        final byte[] data = new byte[length];</span>
+<span class="nc" id="L292">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="nc" id="L293">        bb.put(this.destinationMACAddress.toBytes());</span>
+<span class="nc" id="L294">        bb.put(this.sourceMACAddress.toBytes());</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (this.vlanID != Ethernet.VLAN_UNTAGGED) {</span>
+<span class="nc" id="L296">            bb.putShort(TYPE_VLAN);</span>
+<span class="nc" id="L297">            bb.putShort((short) (this.priorityCode &lt;&lt; 13 | this.vlanID &amp; 0x0fff));</span>
+        }
+<span class="nc" id="L299">        bb.putShort(this.etherType);</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">        if (payloadData != null) {</span>
+<span class="nc" id="L301">            bb.put(payloadData);</span>
+        }
+<span class="nc bnc" id="L303" title="All 2 branches missed.">        if (this.pad) {</span>
+<span class="nc" id="L304">            Arrays.fill(data, bb.position(), data.length, (byte) 0x0);</span>
+        }
+<span class="nc" id="L306">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc bnc" id="L312" title="All 2 branches missed.">        if (length &lt;= 0) {</span>
+<span class="nc" id="L313">            return null;</span>
+        }
+<span class="nc" id="L315">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc bnc" id="L316" title="All 2 branches missed.">        if (this.destinationMACAddress == null) {</span>
+<span class="nc" id="L317">            this.destinationMACAddress = MacAddress.valueOf(new byte[6]);</span>
+        }
+<span class="nc" id="L319">        final byte[] dstAddr = new byte[MacAddress.MAC_ADDRESS_LENGTH];</span>
+<span class="nc" id="L320">        bb.get(dstAddr);</span>
+<span class="nc" id="L321">        this.destinationMACAddress = MacAddress.valueOf(dstAddr);</span>
+
+<span class="nc bnc" id="L323" title="All 2 branches missed.">        if (this.sourceMACAddress == null) {</span>
+<span class="nc" id="L324">            this.sourceMACAddress = MacAddress.valueOf(new byte[6]);</span>
+        }
+<span class="nc" id="L326">        final byte[] srcAddr = new byte[MacAddress.MAC_ADDRESS_LENGTH];</span>
+<span class="nc" id="L327">        bb.get(srcAddr);</span>
+<span class="nc" id="L328">        this.sourceMACAddress = MacAddress.valueOf(srcAddr);</span>
+
+<span class="nc" id="L330">        short ethType = bb.getShort();</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if (ethType == TYPE_VLAN) {</span>
+<span class="nc" id="L332">            final short tci = bb.getShort();</span>
+<span class="nc" id="L333">            this.priorityCode = (byte) (tci &gt;&gt; 13 &amp; 0x07);</span>
+<span class="nc" id="L334">            this.vlanID = (short) (tci &amp; 0x0fff);</span>
+<span class="nc" id="L335">            ethType = bb.getShort();</span>
+<span class="nc" id="L336">        } else {</span>
+<span class="nc" id="L337">            this.vlanID = Ethernet.VLAN_UNTAGGED;</span>
+        }
+<span class="nc" id="L339">        this.etherType = ethType;</span>
+
+        IPacket payload;
+        Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        if (Ethernet.ETHERTYPE_DESERIALIZER_MAP.containsKey(ethType)) {</span>
+<span class="nc" id="L344">            deserializer = Ethernet.ETHERTYPE_DESERIALIZER_MAP.get(ethType);</span>
+        } else {
+<span class="nc" id="L346">            deserializer = Data.deserializer();</span>
+        }
+        try {
+<span class="nc" id="L349">            this.payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="nc" id="L350">                                                    bb.limit() - bb.position());</span>
+<span class="nc" id="L351">            this.payload.setParent(this);</span>
+<span class="nc" id="L352">        } catch (DeserializationException e) {</span>
+<span class="nc" id="L353">            return this;</span>
+<span class="nc" id="L354">        }</span>
+<span class="nc" id="L355">        return this;</span>
+    }
+
+    /**
+     * Checks to see if a string is a valid MAC address.
+     *
+     * @param macAddress string to test if it is a valid MAC
+     * @return True if macAddress is a valid MAC, False otherwise
+     */
+    public static boolean isMACAddress(final String macAddress) {
+<span class="nc" id="L365">        final String[] macBytes = macAddress.split(&quot;:&quot;);</span>
+<span class="nc bnc" id="L366" title="All 2 branches missed.">        if (macBytes.length != 6) {</span>
+<span class="nc" id="L367">            return false;</span>
+        }
+<span class="nc bnc" id="L369" title="All 2 branches missed.">        for (int i = 0; i &lt; 6; ++i) {</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (Ethernet.HEXES.indexOf(macBytes[i].toUpperCase().charAt(0)) == -1</span>
+<span class="nc bnc" id="L371" title="All 2 branches missed.">                    || Ethernet.HEXES.indexOf(macBytes[i].toUpperCase().charAt(</span>
+                            1)) == -1) {
+<span class="nc" id="L373">                return false;</span>
+            }
+        }
+<span class="nc" id="L376">        return true;</span>
+    }
+
+    /**
+     * Accepts a MAC address of the form 00:aa:11:bb:22:cc, case does not
+     * matter, and returns a corresponding byte[].
+     *
+     * @param macAddress
+     *            The MAC address to convert into a byte array
+     * @return The macAddress as a byte array
+     */
+    public static byte[] toMACAddress(final String macAddress) {
+<span class="nc" id="L388">        return MacAddress.valueOf(macAddress).toBytes();</span>
+    }
+
+    /**
+     * Accepts a MAC address and returns the corresponding long, where the MAC
+     * bytes are set on the lower order bytes of the long.
+     *
+     * @param macAddress MAC address as a byte array
+     * @return a long containing the mac address bytes
+     */
+    public static long toLong(final byte[] macAddress) {
+<span class="nc" id="L399">        return MacAddress.valueOf(macAddress).toLong();</span>
+    }
+
+    /**
+     * Converts a long MAC address to a byte array.
+     *
+     * @param macAddress MAC address set on the lower order bytes of the long
+     * @return the bytes of the mac address
+     */
+    public static byte[] toByteArray(final long macAddress) {
+<span class="nc" id="L409">        return MacAddress.valueOf(macAddress).toBytes();</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+<span class="nc" id="L419">        final int prime = 7867;</span>
+<span class="nc" id="L420">        int result = super.hashCode();</span>
+<span class="nc" id="L421">        result = prime * result + this.destinationMACAddress.hashCode();</span>
+<span class="nc" id="L422">        result = prime * result + this.etherType;</span>
+<span class="nc" id="L423">        result = prime * result + this.vlanID;</span>
+<span class="nc" id="L424">        result = prime * result + this.priorityCode;</span>
+<span class="nc bnc" id="L425" title="All 2 branches missed.">        result = prime * result + (this.pad ? 1231 : 1237);</span>
+<span class="nc" id="L426">        result = prime * result + this.sourceMACAddress.hashCode();</span>
+<span class="nc" id="L427">        return result;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(final Object obj) {
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (this == obj) {</span>
+<span class="nc" id="L438">            return true;</span>
+        }
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        if (!super.equals(obj)) {</span>
+<span class="nc" id="L441">            return false;</span>
+        }
+<span class="nc bnc" id="L443" title="All 2 branches missed.">        if (!(obj instanceof Ethernet)) {</span>
+<span class="nc" id="L444">            return false;</span>
+        }
+<span class="nc" id="L446">        final Ethernet other = (Ethernet) obj;</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">        if (!this.destinationMACAddress.equals(other.destinationMACAddress)) {</span>
+<span class="nc" id="L448">            return false;</span>
+        }
+<span class="nc bnc" id="L450" title="All 2 branches missed.">        if (this.priorityCode != other.priorityCode) {</span>
+<span class="nc" id="L451">            return false;</span>
+        }
+<span class="nc bnc" id="L453" title="All 2 branches missed.">        if (this.vlanID != other.vlanID) {</span>
+<span class="nc" id="L454">            return false;</span>
+        }
+<span class="nc bnc" id="L456" title="All 2 branches missed.">        if (this.etherType != other.etherType) {</span>
+<span class="nc" id="L457">            return false;</span>
+        }
+<span class="nc bnc" id="L459" title="All 2 branches missed.">        if (this.pad != other.pad) {</span>
+<span class="nc" id="L460">            return false;</span>
+        }
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        if (!this.sourceMACAddress.equals(other.sourceMACAddress)) {</span>
+<span class="nc" id="L463">            return false;</span>
+        }
+<span class="nc" id="L465">        return true;</span>
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see java.lang.Object#toString(java.lang.Object)
+     */
+    @Override
+    public String toString() {
+
+<span class="nc" id="L476">        final StringBuffer sb = new StringBuffer(&quot;\n&quot;);</span>
+
+<span class="nc" id="L478">        final IPacket pkt = this.getPayload();</span>
+
+<span class="nc bnc" id="L480" title="All 2 branches missed.">        if (pkt instanceof ARP) {</span>
+<span class="nc" id="L481">            sb.append(&quot;arp&quot;);</span>
+<span class="nc bnc" id="L482" title="All 2 branches missed.">        } else if (pkt instanceof LLDP) {</span>
+<span class="nc" id="L483">            sb.append(&quot;lldp&quot;);</span>
+<span class="nc bnc" id="L484" title="All 2 branches missed.">        } else if (pkt instanceof ICMP) {</span>
+<span class="nc" id="L485">            sb.append(&quot;icmp&quot;);</span>
+<span class="nc bnc" id="L486" title="All 2 branches missed.">        } else if (pkt instanceof IPv4) {</span>
+<span class="nc" id="L487">            sb.append(&quot;ip&quot;);</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">        } else if (pkt instanceof DHCP) {</span>
+<span class="nc" id="L489">            sb.append(&quot;dhcp&quot;);</span>
+        } else {
+<span class="nc" id="L491">            sb.append(this.getEtherType());</span>
+        }
+
+<span class="nc" id="L494">        sb.append(&quot;\ndl_vlan: &quot;);</span>
+<span class="nc bnc" id="L495" title="All 2 branches missed.">        if (this.getVlanID() == Ethernet.VLAN_UNTAGGED) {</span>
+<span class="nc" id="L496">            sb.append(&quot;untagged&quot;);</span>
+        } else {
+<span class="nc" id="L498">            sb.append(this.getVlanID());</span>
+        }
+<span class="nc" id="L500">        sb.append(&quot;\ndl_vlan_pcp: &quot;);</span>
+<span class="nc" id="L501">        sb.append(this.getPriorityCode());</span>
+<span class="nc" id="L502">        sb.append(&quot;\ndl_src: &quot;);</span>
+<span class="nc" id="L503">        sb.append(bytesToHex(this.getSourceMACAddress()));</span>
+<span class="nc" id="L504">        sb.append(&quot;\ndl_dst: &quot;);</span>
+<span class="nc" id="L505">        sb.append(bytesToHex(this.getDestinationMACAddress()));</span>
+
+<span class="nc bnc" id="L507" title="All 2 branches missed.">        if (pkt instanceof ARP) {</span>
+<span class="nc" id="L508">            final ARP p = (ARP) pkt;</span>
+<span class="nc" id="L509">            sb.append(&quot;\nnw_src: &quot;);</span>
+<span class="nc" id="L510">            sb.append(IPv4.fromIPv4Address(IPv4.toIPv4Address(p</span>
+<span class="nc" id="L511">                    .getSenderProtocolAddress())));</span>
+<span class="nc" id="L512">            sb.append(&quot;\nnw_dst: &quot;);</span>
+<span class="nc" id="L513">            sb.append(IPv4.fromIPv4Address(IPv4.toIPv4Address(p</span>
+<span class="nc" id="L514">                    .getTargetProtocolAddress())));</span>
+<span class="nc bnc" id="L515" title="All 2 branches missed.">        } else if (pkt instanceof LLDP) {</span>
+<span class="nc" id="L516">            sb.append(&quot;lldp packet&quot;);</span>
+<span class="nc bnc" id="L517" title="All 2 branches missed.">        } else if (pkt instanceof ICMP) {</span>
+<span class="nc" id="L518">            final ICMP icmp = (ICMP) pkt;</span>
+<span class="nc" id="L519">            sb.append(&quot;\nicmp_type: &quot;);</span>
+<span class="nc" id="L520">            sb.append(icmp.getIcmpType());</span>
+<span class="nc" id="L521">            sb.append(&quot;\nicmp_code: &quot;);</span>
+<span class="nc" id="L522">            sb.append(icmp.getIcmpCode());</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">        } else if (pkt instanceof IPv4) {</span>
+<span class="nc" id="L524">            final IPv4 p = (IPv4) pkt;</span>
+<span class="nc" id="L525">            sb.append(&quot;\nnw_src: &quot;);</span>
+<span class="nc" id="L526">            sb.append(IPv4.fromIPv4Address(p.getSourceAddress()));</span>
+<span class="nc" id="L527">            sb.append(&quot;\nnw_dst: &quot;);</span>
+<span class="nc" id="L528">            sb.append(IPv4.fromIPv4Address(p.getDestinationAddress()));</span>
+<span class="nc" id="L529">            sb.append(&quot;\nnw_tos: &quot;);</span>
+<span class="nc" id="L530">            sb.append(p.getDiffServ());</span>
+<span class="nc" id="L531">            sb.append(&quot;\nnw_proto: &quot;);</span>
+<span class="nc" id="L532">            sb.append(p.getProtocol());</span>
+
+<span class="nc bnc" id="L534" title="All 2 branches missed.">            if (pkt instanceof TCP) {</span>
+<span class="nc" id="L535">                sb.append(&quot;\ntp_src: &quot;);</span>
+<span class="nc" id="L536">                sb.append(((TCP) pkt).getSourcePort());</span>
+<span class="nc" id="L537">                sb.append(&quot;\ntp_dst: &quot;);</span>
+<span class="nc" id="L538">                sb.append(((TCP) pkt).getDestinationPort());</span>
+
+<span class="nc bnc" id="L540" title="All 2 branches missed.">            } else if (pkt instanceof UDP) {</span>
+<span class="nc" id="L541">                sb.append(&quot;\ntp_src: &quot;);</span>
+<span class="nc" id="L542">                sb.append(((UDP) pkt).getSourcePort());</span>
+<span class="nc" id="L543">                sb.append(&quot;\ntp_dst: &quot;);</span>
+<span class="nc" id="L544">                sb.append(((UDP) pkt).getDestinationPort());</span>
+            }
+
+<span class="nc bnc" id="L547" title="All 2 branches missed.">            if (pkt instanceof ICMP) {</span>
+<span class="nc" id="L548">                final ICMP icmp = (ICMP) pkt;</span>
+<span class="nc" id="L549">                sb.append(&quot;\nicmp_type: &quot;);</span>
+<span class="nc" id="L550">                sb.append(icmp.getIcmpType());</span>
+<span class="nc" id="L551">                sb.append(&quot;\nicmp_code: &quot;);</span>
+<span class="nc" id="L552">                sb.append(icmp.getIcmpCode());</span>
+            }
+
+<span class="nc bnc" id="L555" title="All 2 branches missed.">        } else if (pkt instanceof DHCP) {</span>
+<span class="nc" id="L556">            sb.append(&quot;\ndhcp packet&quot;);</span>
+<span class="nc bnc" id="L557" title="All 2 branches missed.">        } else if (pkt instanceof Data) {</span>
+<span class="nc" id="L558">            sb.append(&quot;\ndata packet&quot;);</span>
+<span class="nc bnc" id="L559" title="All 2 branches missed.">        } else if (pkt instanceof LLC) {</span>
+<span class="nc" id="L560">            sb.append(&quot;\nllc packet&quot;);</span>
+        } else {
+<span class="nc" id="L562">            sb.append(&quot;\nunknown packet&quot;);</span>
+        }
+
+<span class="nc" id="L565">        return sb.toString();</span>
+    }
+
+    public static String bytesToHex(byte[] in) {
+<span class="nc" id="L569">        final StringBuilder builder = new StringBuilder();</span>
+<span class="nc bnc" id="L570" title="All 2 branches missed.">        for (byte b : in) {</span>
+<span class="nc" id="L571">            builder.append(String.format(&quot;%02x&quot;, b));</span>
+        }
+<span class="nc" id="L573">        return builder.toString();</span>
+    }
+
+    /**
+     * Deserializer function for Ethernet packets.
+     *
+     * @return deserializer function
+     */
+    public static Deserializer&lt;Ethernet&gt; deserializer() {
+<span class="fc" id="L582">        return (data, offset, length) -&gt; {</span>
+<span class="fc" id="L583">            checkInput(data, offset, length, ETHERNET_HEADER_LENGTH);</span>
+
+<span class="fc" id="L585">            byte[] addressBuffer = new byte[DATALAYER_ADDRESS_LENGTH];</span>
+
+<span class="fc" id="L587">            ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="fc" id="L588">            Ethernet eth = new Ethernet();</span>
+            // Read destination MAC address into buffer
+<span class="fc" id="L590">            bb.get(addressBuffer);</span>
+<span class="fc" id="L591">            eth.setDestinationMACAddress(addressBuffer);</span>
+
+            // Read source MAC address into buffer
+<span class="fc" id="L594">            bb.get(addressBuffer);</span>
+<span class="fc" id="L595">            eth.setSourceMACAddress(addressBuffer);</span>
+
+<span class="fc" id="L597">            short ethType = bb.getShort();</span>
+<span class="fc bfc" id="L598" title="All 2 branches covered.">            if (ethType == TYPE_VLAN) {</span>
+<span class="fc" id="L599">                checkHeaderLength(length, ETHERNET_HEADER_LENGTH + VLAN_HEADER_LENGTH);</span>
+<span class="fc" id="L600">                final short tci = bb.getShort();</span>
+<span class="fc" id="L601">                eth.setPriorityCode((byte) (tci &gt;&gt; 13 &amp; 0x07));</span>
+<span class="fc" id="L602">                eth.setVlanID((short) (tci &amp; 0x0fff));</span>
+<span class="fc" id="L603">                ethType = bb.getShort();</span>
+<span class="fc" id="L604">            } else {</span>
+<span class="fc" id="L605">                eth.setVlanID(Ethernet.VLAN_UNTAGGED);</span>
+            }
+<span class="fc" id="L607">            eth.setEtherType(ethType);</span>
+
+            IPacket payload;
+            Deserializer&lt;? extends IPacket&gt; deserializer;
+<span class="pc bpc" id="L611" title="1 of 2 branches missed.">            if (Ethernet.ETHERTYPE_DESERIALIZER_MAP.containsKey(ethType)) {</span>
+<span class="nc" id="L612">                deserializer = Ethernet.ETHERTYPE_DESERIALIZER_MAP.get(ethType);</span>
+            } else {
+<span class="fc" id="L614">                deserializer = Data.deserializer();</span>
+            }
+<span class="fc" id="L616">            payload = deserializer.deserialize(data, bb.position(),</span>
+<span class="fc" id="L617">                                               bb.limit() - bb.position());</span>
+<span class="fc" id="L618">            payload.setParent(eth);</span>
+<span class="fc" id="L619">            eth.setPayload(payload);</span>
+
+<span class="fc" id="L621">            return eth;</span>
+        };
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

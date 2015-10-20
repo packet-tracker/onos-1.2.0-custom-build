@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultLink.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">DefaultLink.java</span></div><h1>DefaultLink.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import org.onosproject.net.provider.ProviderId;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+import static org.onosproject.net.Link.State.ACTIVE;
+
+/**
+ * Default infrastructure link model implementation.
+ */
+public class DefaultLink extends AbstractModel implements Link {
+
+    private final ConnectPoint src;
+    private final ConnectPoint dst;
+    private final Type type;
+    private final State state;
+    private final boolean isDurable;
+
+    /**
+     * Creates an active infrastructure link using the supplied information.
+     *
+     * @param providerId  provider identity
+     * @param src         link source
+     * @param dst         link destination
+     * @param type        link type
+     * @param annotations optional key/value annotations
+     */
+    public DefaultLink(ProviderId providerId, ConnectPoint src, ConnectPoint dst,
+                       Type type, Annotations... annotations) {
+<span class="fc" id="L47">        this(providerId, src, dst, type, ACTIVE, false, annotations);</span>
+<span class="fc" id="L48">    }</span>
+
+    /**
+     * Creates an infrastructure link using the supplied information.
+     * Links marked as durable will remain in the inventory when a vanish
+     * message is received and instead will be marked as inactive.
+     *
+     * @param providerId  provider identity
+     * @param src         link source
+     * @param dst         link destination
+     * @param type        link type
+     * @param state       link state
+     * @param isDurable   indicates if the link is to be considered durable
+     * @param annotations optional key/value annotations
+     */
+    public DefaultLink(ProviderId providerId, ConnectPoint src, ConnectPoint dst,
+                       Type type, State state,
+                       boolean isDurable, Annotations... annotations) {
+<span class="fc" id="L66">        super(providerId, annotations);</span>
+<span class="fc" id="L67">        this.src = src;</span>
+<span class="fc" id="L68">        this.dst = dst;</span>
+<span class="fc" id="L69">        this.type = type;</span>
+<span class="fc" id="L70">        this.state = state;</span>
+<span class="fc" id="L71">        this.isDurable = isDurable;</span>
+<span class="fc" id="L72">    }</span>
+
+    @Override
+    public ConnectPoint src() {
+<span class="fc" id="L76">        return src;</span>
+    }
+
+    @Override
+    public ConnectPoint dst() {
+<span class="fc" id="L81">        return dst;</span>
+    }
+
+    @Override
+    public Type type() {
+<span class="fc" id="L86">        return type;</span>
+    }
+
+    @Override
+    public State state() {
+<span class="fc" id="L91">        return state;</span>
+    }
+
+    @Override
+    public boolean isDurable() {
+<span class="fc" id="L96">        return isDurable;</span>
+    }
+
+    // Note: Durability &amp; state are purposefully omitted form equality &amp; hashCode.
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L103">        return Objects.hash(src, dst, type);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L109">            return true;</span>
+        }
+<span class="fc bfc" id="L111" title="All 2 branches covered.">        if (obj instanceof DefaultLink) {</span>
+<span class="fc" id="L112">            final DefaultLink other = (DefaultLink) obj;</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">            return Objects.equals(this.src, other.src) &amp;&amp;</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">                    Objects.equals(this.dst, other.dst) &amp;&amp;</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">                    Objects.equals(this.type, other.type);</span>
+        }
+<span class="fc" id="L117">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L122">        return toStringHelper(this)</span>
+<span class="fc" id="L123">                .add(&quot;src&quot;, src)</span>
+<span class="fc" id="L124">                .add(&quot;dst&quot;, dst)</span>
+<span class="fc" id="L125">                .add(&quot;type&quot;, type)</span>
+<span class="fc" id="L126">                .add(&quot;state&quot;, state)</span>
+<span class="fc" id="L127">                .add(&quot;durable&quot;, isDurable)</span>
+<span class="fc" id="L128">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

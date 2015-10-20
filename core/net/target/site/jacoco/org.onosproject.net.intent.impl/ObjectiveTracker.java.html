@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ObjectiveTracker.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl</a> &gt; <span class="el_source">ObjectiveTracker.java</span></div><h1>ObjectiveTracker.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.SetMultimap;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.ReferencePolicy;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.event.Event;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.ElementId;
+import org.onosproject.net.HostId;
+import org.onosproject.net.Link;
+import org.onosproject.net.LinkKey;
+import org.onosproject.net.NetworkResource;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.host.HostEvent;
+import org.onosproject.net.host.HostListener;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentData;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.net.intent.Key;
+import org.onosproject.net.intent.PartitionEvent;
+import org.onosproject.net.intent.PartitionEventListener;
+import org.onosproject.net.intent.PartitionService;
+import org.onosproject.net.link.LinkEvent;
+import org.onosproject.net.resource.link.LinkResourceEvent;
+import org.onosproject.net.resource.link.LinkResourceListener;
+import org.onosproject.net.resource.link.LinkResourceService;
+import org.onosproject.net.topology.TopologyEvent;
+import org.onosproject.net.topology.TopologyListener;
+import org.onosproject.net.topology.TopologyService;
+import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Multimaps.synchronizedSetMultimap;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static org.onlab.util.Tools.groupedThreads;
+import static org.onlab.util.Tools.isNullOrEmpty;
+import static org.onosproject.net.LinkKey.linkKey;
+import static org.onosproject.net.intent.IntentState.INSTALLED;
+import static org.onosproject.net.intent.IntentState.INSTALLING;
+import static org.onosproject.net.link.LinkEvent.Type.LINK_REMOVED;
+import static org.onosproject.net.link.LinkEvent.Type.LINK_UPDATED;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * Entity responsible for tracking installed flows and for monitoring topology
+ * events to determine what flows are affected by topology changes.
+ */
+@Component(immediate = true)
+@Service
+<span class="fc" id="L89">public class ObjectiveTracker implements ObjectiveTrackerService {</span>
+
+<span class="fc" id="L91">    private final Logger log = getLogger(getClass());</span>
+
+<span class="fc" id="L93">    private final SetMultimap&lt;LinkKey, Key&gt; intentsByLink =</span>
+            //TODO this could be slow as a point of synchronization
+<span class="fc" id="L95">            synchronizedSetMultimap(HashMultimap.&lt;LinkKey, Key&gt;create());</span>
+
+<span class="fc" id="L97">    private final SetMultimap&lt;ElementId, Key&gt; intentsByDevice =</span>
+<span class="fc" id="L98">            synchronizedSetMultimap(HashMultimap.&lt;ElementId, Key&gt;create());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyService topologyService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkResourceService resourceManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL_UNARY,
+               policy = ReferencePolicy.DYNAMIC)
+    protected IntentService intentService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected PartitionService partitionService;
+
+<span class="fc" id="L119">    private ExecutorService executorService =</span>
+<span class="fc" id="L120">            newSingleThreadExecutor(groupedThreads(&quot;onos/intent&quot;, &quot;objectivetracker&quot;));</span>
+<span class="fc" id="L121">    private ScheduledExecutorService executor = Executors</span>
+<span class="fc" id="L122">            .newScheduledThreadPool(1);</span>
+
+<span class="fc" id="L124">    private TopologyListener listener = new InternalTopologyListener();</span>
+<span class="fc" id="L125">    private LinkResourceListener linkResourceListener =</span>
+            new InternalLinkResourceListener();
+<span class="fc" id="L127">    private DeviceListener deviceListener = new InternalDeviceListener();</span>
+<span class="fc" id="L128">    private HostListener hostListener = new InternalHostListener();</span>
+<span class="fc" id="L129">    private PartitionEventListener partitionListener = new InternalPartitionListener();</span>
+    private TopologyChangeDelegate delegate;
+
+<span class="fc" id="L132">    protected final AtomicBoolean updateScheduled = new AtomicBoolean(false);</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L136">        topologyService.addListener(listener);</span>
+<span class="nc" id="L137">        resourceManager.addListener(linkResourceListener);</span>
+<span class="nc" id="L138">        deviceService.addListener(deviceListener);</span>
+<span class="nc" id="L139">        hostService.addListener(hostListener);</span>
+<span class="nc" id="L140">        partitionService.addListener(partitionListener);</span>
+<span class="nc" id="L141">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L142">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L146">        topologyService.removeListener(listener);</span>
+<span class="nc" id="L147">        resourceManager.removeListener(linkResourceListener);</span>
+<span class="nc" id="L148">        deviceService.removeListener(deviceListener);</span>
+<span class="nc" id="L149">        hostService.removeListener(hostListener);</span>
+<span class="nc" id="L150">        partitionService.removeListener(partitionListener);</span>
+<span class="nc" id="L151">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L152">    }</span>
+
+    protected void bindIntentService(IntentService service) {
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if (intentService == null) {</span>
+<span class="nc" id="L156">            intentService = service;</span>
+        }
+<span class="nc" id="L158">     }</span>
+
+    protected void unbindIntentService(IntentService service) {
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (intentService == service) {</span>
+<span class="nc" id="L162">            intentService = null;</span>
+        }
+<span class="nc" id="L164">    }</span>
+
+    @Override
+    public void setDelegate(TopologyChangeDelegate delegate) {
+<span class="fc" id="L168">        checkNotNull(delegate, &quot;Delegate cannot be null&quot;);</span>
+<span class="pc bpc" id="L169" title="3 of 4 branches missed.">        checkArgument(this.delegate == null || this.delegate == delegate,</span>
+                      &quot;Another delegate already set&quot;);
+<span class="fc" id="L171">        this.delegate = delegate;</span>
+<span class="fc" id="L172">    }</span>
+
+    @Override
+    public void unsetDelegate(TopologyChangeDelegate delegate) {
+<span class="pc bpc" id="L176" title="1 of 2 branches missed.">        checkArgument(this.delegate == delegate, &quot;Not the current delegate&quot;);</span>
+<span class="fc" id="L177">        this.delegate = null;</span>
+<span class="fc" id="L178">    }</span>
+
+    @Override
+    public void addTrackedResources(Key intentKey,
+                                    Collection&lt;NetworkResource&gt; resources) {
+<span class="fc bfc" id="L183" title="All 2 branches covered.">        for (NetworkResource resource : resources) {</span>
+<span class="fc bfc" id="L184" title="All 2 branches covered.">            if (resource instanceof Link) {</span>
+<span class="fc" id="L185">                intentsByLink.put(linkKey((Link) resource), intentKey);</span>
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">            } else if (resource instanceof ElementId) {</span>
+<span class="fc" id="L187">                intentsByDevice.put((ElementId) resource, intentKey);</span>
+            }
+<span class="fc" id="L189">        }</span>
+<span class="fc" id="L190">    }</span>
+
+    @Override
+    public void removeTrackedResources(Key intentKey,
+                                       Collection&lt;NetworkResource&gt; resources) {
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        for (NetworkResource resource : resources) {</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">            if (resource instanceof Link) {</span>
+<span class="nc" id="L197">                intentsByLink.remove(linkKey((Link) resource), intentKey);</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            } else if (resource instanceof ElementId) {</span>
+<span class="nc" id="L199">                intentsByDevice.remove(resource, intentKey);</span>
+            }
+<span class="nc" id="L201">        }</span>
+<span class="nc" id="L202">    }</span>
+
+    @Override
+    public void trackIntent(IntentData intentData) {
+
+        //NOTE: This will be called for intents that are being added to the store
+        //      locally (i.e. every intent update)
+
+<span class="nc" id="L210">        Key key = intentData.key();</span>
+<span class="nc" id="L211">        Intent intent = intentData.intent();</span>
+<span class="nc" id="L212">        boolean isLocal = intentService.isLocal(key);</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        boolean isInstalled = intentData.state() == INSTALLING ||</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">                              intentData.state() == INSTALLED;</span>
+<span class="nc" id="L215">        List&lt;Intent&gt; installables = intentData.installables();</span>
+
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (log.isTraceEnabled()) {</span>
+<span class="nc" id="L218">            log.trace(&quot;intent {}, old: {}, new: {}, installableCount: {}, resourceCount: {}&quot;,</span>
+                      key,
+<span class="nc bnc" id="L220" title="All 4 branches missed.">                      intentsByDevice.values().contains(key),</span>
+<span class="nc" id="L221">                      isLocal &amp;&amp; isInstalled,</span>
+<span class="nc" id="L222">                      installables.size(),</span>
+<span class="nc" id="L223">                      intent.resources().size() +</span>
+<span class="nc" id="L224">                          installables.stream()</span>
+<span class="nc" id="L225">                              .mapToLong(i -&gt; i.resources().size()).sum());</span>
+        }
+
+<span class="nc bnc" id="L228" title="All 4 branches missed.">        if (isNullOrEmpty(installables) &amp;&amp; intentData.state() == INSTALLED) {</span>
+<span class="nc" id="L229">            log.warn(&quot;Intent {} is INSTALLED with no installables&quot;, key);</span>
+        }
+
+        // FIXME Intents will be added 3 times (once directly using addTracked,
+        //       then when installing and when installed)
+<span class="nc bnc" id="L234" title="All 4 branches missed.">        if (isLocal &amp;&amp; isInstalled) {</span>
+<span class="nc" id="L235">            addTrackedResources(key, intent.resources());</span>
+<span class="nc bnc" id="L236" title="All 2 branches missed.">            for (Intent installable : installables) {</span>
+<span class="nc" id="L237">                addTrackedResources(key, installable.resources());</span>
+<span class="nc" id="L238">            }</span>
+            // FIXME check all resources against current topo service(s); recompile if necessary
+        } else {
+<span class="nc" id="L241">            removeTrackedResources(key, intent.resources());</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">            for (Intent installable : installables) {</span>
+<span class="nc" id="L243">                removeTrackedResources(key, installable.resources());</span>
+<span class="nc" id="L244">            }</span>
+        }
+<span class="nc" id="L246">    }</span>
+
+    // Internal re-actor to topology change events.
+<span class="fc" id="L249">    private class InternalTopologyListener implements TopologyListener {</span>
+        @Override
+        public void event(TopologyEvent event) {
+<span class="fc" id="L252">            executorService.execute(new TopologyChangeHandler(event));</span>
+<span class="fc" id="L253">        }</span>
+    }
+
+    // Re-dispatcher of topology change events.
+    private class TopologyChangeHandler implements Runnable {
+
+        private final TopologyEvent event;
+
+<span class="fc" id="L261">        TopologyChangeHandler(TopologyEvent event) {</span>
+<span class="fc" id="L262">            this.event = event;</span>
+<span class="fc" id="L263">        }</span>
+
+        @Override
+        public void run() {
+            // If there is no delegate, why bother? Just bail.
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">            if (delegate == null) {</span>
+<span class="nc" id="L269">                return;</span>
+            }
+
+<span class="pc bpc" id="L272" title="1 of 4 branches missed.">            if (event.reasons() == null || event.reasons().isEmpty()) {</span>
+<span class="fc" id="L273">                delegate.triggerCompile(Collections.emptySet(), true);</span>
+
+            } else {
+<span class="fc" id="L276">                Set&lt;Key&gt; intentsToRecompile = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L277">                boolean dontRecompileAllFailedIntents = true;</span>
+
+                // Scan through the list of reasons and keep accruing all
+                // intents that need to be recompiled.
+<span class="fc bfc" id="L281" title="All 2 branches covered.">                for (Event reason : event.reasons()) {</span>
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">                    if (reason instanceof LinkEvent) {</span>
+<span class="fc" id="L283">                        LinkEvent linkEvent = (LinkEvent) reason;</span>
+<span class="fc" id="L284">                        final LinkKey linkKey = linkKey(linkEvent.subject());</span>
+<span class="fc" id="L285">                        synchronized (intentsByLink) {</span>
+<span class="fc" id="L286">                            Set&lt;Key&gt; intentKeys = intentsByLink.get(linkKey);</span>
+<span class="fc" id="L287">                            log.debug(&quot;recompile triggered by LinkEvent {} ({}) for {}&quot;,</span>
+<span class="fc" id="L288">                                    linkKey, linkEvent.type(), intentKeys);</span>
+<span class="fc" id="L289">                            intentsToRecompile.addAll(intentKeys);</span>
+<span class="pc" id="L290">                        }</span>
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">                        dontRecompileAllFailedIntents = dontRecompileAllFailedIntents &amp;&amp;</span>
+<span class="fc bfc" id="L292" title="All 2 branches covered.">                                (linkEvent.type() == LINK_REMOVED ||</span>
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">                                (linkEvent.type() == LINK_UPDATED &amp;&amp;</span>
+<span class="pc bnc" id="L294" title="All 2 branches missed.">                                linkEvent.subject().isDurable()));</span>
+                    }
+<span class="fc" id="L296">                }</span>
+<span class="fc bfc" id="L297" title="All 2 branches covered.">                delegate.triggerCompile(intentsToRecompile, !dontRecompileAllFailedIntents);</span>
+            }
+<span class="fc" id="L299">        }</span>
+    }
+
+    /**
+     * Internal re-actor to resource available events.
+     */
+<span class="fc" id="L305">    private class InternalLinkResourceListener implements LinkResourceListener {</span>
+        @Override
+        public void event(LinkResourceEvent event) {
+<span class="fc" id="L308">            executorService.execute(new ResourceAvailableHandler(event));</span>
+<span class="fc" id="L309">        }</span>
+    }
+
+    /*
+     * Re-dispatcher of resource available events.
+     */
+    private class ResourceAvailableHandler implements Runnable {
+
+        private final LinkResourceEvent event;
+
+<span class="fc" id="L319">        ResourceAvailableHandler(LinkResourceEvent event) {</span>
+<span class="fc" id="L320">            this.event = event;</span>
+<span class="fc" id="L321">        }</span>
+
+        @Override
+        public void run() {
+            // If there is no delegate, why bother? Just bail.
+<span class="pc bpc" id="L326" title="1 of 2 branches missed.">            if (delegate == null) {</span>
+<span class="nc" id="L327">                return;</span>
+            }
+
+<span class="fc" id="L330">            delegate.triggerCompile(Collections.emptySet(), true);</span>
+<span class="fc" id="L331">        }</span>
+    }
+
+    //TODO consider adding flow rule event tracking
+
+    private void updateTrackedResources(ApplicationId appId, boolean track) {
+<span class="nc bnc" id="L337" title="All 2 branches missed.">        if (intentService == null) {</span>
+<span class="nc" id="L338">            log.warn(&quot;Intent service is not bound yet&quot;);</span>
+<span class="nc" id="L339">            return;</span>
+        }
+<span class="nc" id="L341">        intentService.getIntents().forEach(intent -&gt; {</span>
+<span class="nc bnc" id="L342" title="All 2 branches missed.">            if (intent.appId().equals(appId)) {</span>
+<span class="nc" id="L343">                Key key = intent.key();</span>
+<span class="nc" id="L344">                Collection&lt;NetworkResource&gt; resources = Lists.newArrayList();</span>
+<span class="nc" id="L345">                intentService.getInstallableIntents(key).stream()</span>
+<span class="nc" id="L346">                        .map(installable -&gt; installable.resources())</span>
+<span class="nc" id="L347">                        .forEach(resources::addAll);</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">                if (track) {</span>
+<span class="nc" id="L349">                    addTrackedResources(key, resources);</span>
+                } else {
+<span class="nc" id="L351">                    removeTrackedResources(key, resources);</span>
+                }
+            }
+<span class="nc" id="L354">        });</span>
+<span class="nc" id="L355">    }</span>
+
+    /*
+     * Re-dispatcher of device and host events.
+     */
+    private class DeviceAvailabilityHandler implements Runnable {
+
+        private final ElementId id;
+        private final boolean available;
+
+<span class="fc" id="L365">        DeviceAvailabilityHandler(ElementId id, boolean available) {</span>
+<span class="fc" id="L366">            this.id = checkNotNull(id);</span>
+<span class="fc" id="L367">            this.available = available;</span>
+<span class="fc" id="L368">        }</span>
+
+        @Override
+        public void run() {
+            // If there is no delegate, why bother? Just bail.
+<span class="pc bpc" id="L373" title="1 of 2 branches missed.">            if (delegate == null) {</span>
+<span class="nc" id="L374">                return;</span>
+            }
+
+            // TODO should we recompile on available==true?
+
+            final ImmutableSet&lt;Key&gt; snapshot;
+<span class="fc" id="L380">            synchronized (intentsByDevice) {</span>
+<span class="fc" id="L381">                snapshot = ImmutableSet.copyOf(intentsByDevice.get(id));</span>
+<span class="pc" id="L382">            }</span>
+<span class="fc" id="L383">            delegate.triggerCompile(snapshot, available);</span>
+<span class="fc" id="L384">        }</span>
+    }
+
+
+<span class="fc" id="L388">    private class InternalDeviceListener implements DeviceListener {</span>
+        @Override
+        public void event(DeviceEvent event) {
+<span class="fc" id="L391">            DeviceEvent.Type type = event.type();</span>
+<span class="pc bpc" id="L392" title="1 of 2 branches missed.">            switch (type) {</span>
+            case DEVICE_ADDED:
+            case DEVICE_AVAILABILITY_CHANGED:
+            case DEVICE_REMOVED:
+            case DEVICE_SUSPENDED:
+            case DEVICE_UPDATED:
+<span class="fc" id="L398">                DeviceId id = event.subject().id();</span>
+                // TODO we need to check whether AVAILABILITY_CHANGED means up or down
+<span class="pc bpc" id="L400" title="2 of 6 branches missed.">                boolean available = (type == DeviceEvent.Type.DEVICE_AVAILABILITY_CHANGED ||</span>
+                        type == DeviceEvent.Type.DEVICE_ADDED ||
+                        type == DeviceEvent.Type.DEVICE_UPDATED);
+<span class="fc" id="L403">                executorService.execute(new DeviceAvailabilityHandler(id, available));</span>
+<span class="fc" id="L404">                break;</span>
+            case PORT_ADDED:
+            case PORT_REMOVED:
+            case PORT_UPDATED:
+            case PORT_STATS_UPDATED:
+            default:
+                // Don't handle port events for now
+                break;
+            }
+<span class="fc" id="L413">        }</span>
+    }
+
+<span class="fc" id="L416">    private class InternalHostListener implements HostListener {</span>
+        @Override
+        public void event(HostEvent event) {
+<span class="nc" id="L419">            HostId id = event.subject().id();</span>
+<span class="pc bnc" id="L420" title="All 2 branches missed.">            switch (event.type()) {</span>
+                case HOST_ADDED:
+                case HOST_MOVED:
+                case HOST_REMOVED:
+<span class="nc" id="L424">                    executorService.execute(new DeviceAvailabilityHandler(id, false));</span>
+<span class="nc" id="L425">                    break;</span>
+                case HOST_UPDATED:
+                default:
+                    // DO NOTHING
+                    break;
+            }
+<span class="nc" id="L431">        }</span>
+    }
+
+    protected void doIntentUpdate() {
+<span class="nc" id="L435">        updateScheduled.set(false);</span>
+<span class="nc bnc" id="L436" title="All 2 branches missed.">        if (intentService == null) {</span>
+<span class="nc" id="L437">            log.warn(&quot;Intent service is not bound yet&quot;);</span>
+<span class="nc" id="L438">            return;</span>
+        }
+        try {
+            //FIXME very inefficient
+<span class="nc bnc" id="L442" title="All 2 branches missed.">            for (IntentData intentData : intentService.getIntentData()) {</span>
+                try {
+<span class="nc" id="L444">                    trackIntent(intentData);</span>
+<span class="nc" id="L445">                } catch (NullPointerException npe) {</span>
+<span class="nc" id="L446">                    log.warn(&quot;intent error {}&quot;, intentData.key(), npe);</span>
+<span class="nc" id="L447">                }</span>
+<span class="nc" id="L448">            }</span>
+<span class="nc" id="L449">        } catch (Exception e) {</span>
+<span class="nc" id="L450">            log.warn(&quot;Exception caught during update task&quot;, e);</span>
+<span class="nc" id="L451">        }</span>
+<span class="nc" id="L452">    }</span>
+
+    private void scheduleIntentUpdate(int afterDelaySec) {
+<span class="nc bnc" id="L455" title="All 2 branches missed.">        if (updateScheduled.compareAndSet(false, true)) {</span>
+<span class="nc" id="L456">            executor.schedule(this::doIntentUpdate, afterDelaySec, TimeUnit.SECONDS);</span>
+        }
+<span class="nc" id="L458">    }</span>
+
+<span class="fc" id="L460">    private final class InternalPartitionListener implements PartitionEventListener {</span>
+        @Override
+        public void event(PartitionEvent event) {
+<span class="nc" id="L463">            log.debug(&quot;got message {}&quot;, event.subject());</span>
+<span class="nc" id="L464">            scheduleIntentUpdate(1);</span>
+<span class="nc" id="L465">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

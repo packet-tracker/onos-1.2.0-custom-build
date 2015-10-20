@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>ConfigPropertyDefinitions.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.cfg.impl</a> &gt; <span class="el_source">ConfigPropertyDefinitions.java</span></div><h1>ConfigPropertyDefinitions.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.cfg.impl;
+
+import com.google.common.collect.ImmutableSet;
+import org.onosproject.cfg.ConfigProperty;
+import org.onosproject.cfg.ConfigProperty.Type;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.util.Set;
+
+import static org.onosproject.cfg.ConfigProperty.defineProperty;
+
+/**
+ * Utility for writing and reading configuration property definition file.
+ */
+public final class ConfigPropertyDefinitions {
+
+    private static final String FMT = &quot;%s|%s|%s|%s\n&quot;;
+    private static final String SEP = &quot;\\|&quot;;
+    private static final String COMMENT = &quot;#&quot;;
+
+<span class="nc" id="L42">    private ConfigPropertyDefinitions() {</span>
+<span class="nc" id="L43">    }</span>
+
+    /**
+     * Writes the specified set of property definitions into the given output
+     * stream.
+     *
+     * @param stream output stream
+     * @param props  properties whose definitions are to be written
+     * @throws java.io.IOException if unable to write the stream
+     */
+    public static void write(OutputStream stream, Set&lt;ConfigProperty&gt; props) throws IOException {
+<span class="pc" id="L54">        try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(stream))) {</span>
+<span class="fc" id="L55">            props.forEach(p -&gt; pw.format(FMT, p.name(), p.type(), p.description(), p.defaultValue()));</span>
+<span class="pc bpc" id="L56" title="6 of 8 branches missed.">        }</span>
+<span class="fc" id="L57">    }</span>
+
+    /**
+     * Reads the specified input stream and creates from its contents a
+     * set of property definitions.
+     *
+     * @param stream input stream
+     * @return properties whose definitions are contained in the stream
+     * @throws java.io.IOException if unable to read the stream
+     */
+    public static Set&lt;ConfigProperty&gt; read(InputStream stream) throws IOException {
+<span class="fc" id="L68">        ImmutableSet.Builder&lt;ConfigProperty&gt; builder = ImmutableSet.builder();</span>
+<span class="pc" id="L69">        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream))) {</span>
+            String line;
+<span class="fc bfc" id="L71" title="All 2 branches covered.">            while ((line = br.readLine()) != null) {</span>
+<span class="pc bpc" id="L72" title="2 of 4 branches missed.">                if (!line.isEmpty() &amp;&amp; !line.startsWith(COMMENT)) {</span>
+<span class="fc" id="L73">                    String[] f = line.split(SEP, 4);</span>
+<span class="fc" id="L74">                    builder.add(defineProperty(f[0], Type.valueOf(f[1]), f[2], f[3]));</span>
+<span class="fc" id="L75">                }</span>
+            }
+<span class="pc bpc" id="L77" title="6 of 8 branches missed.">        }</span>
+<span class="fc" id="L78">        return builder.build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

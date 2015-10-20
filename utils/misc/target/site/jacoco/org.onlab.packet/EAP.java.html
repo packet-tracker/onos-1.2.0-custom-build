@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>EAP.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onlab-misc</a> &gt; <a href="index.source.html" class="el_package">org.onlab.packet</a> &gt; <span class="el_source">EAP.java</span></div><h1>EAP.java</h1><pre class="source lang-java linenums">/*
+ *
+ *  * Copyright 2015 AT&amp;T Foundry
+ *  *
+ *  * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ *  * you may not use this file except in compliance with the License.
+ *  * You may obtain a copy of the License at
+ *  *
+ *  *     http://www.apache.org/licenses/LICENSE-2.0
+ *  *
+ *  * Unless required by applicable law or agreed to in writing, software
+ *  * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  * See the License for the specific language governing permissions and
+ *  * limitations under the License.
+ *
+ */
+
+package org.onlab.packet;
+
+import java.nio.ByteBuffer;
+
+import static org.onlab.packet.PacketUtils.checkHeaderLength;
+import static org.onlab.packet.PacketUtils.checkInput;
+
+/**
+ * EAP (Extensible Authentication Protocol) packet.
+ */
+public class EAP extends BasePacket {
+    private static final int HEADER_LENGTH = 4;
+
+    public static final short MIN_LEN = 0x4;
+    public static final short EAP_HDR_LEN_REQ_RESP = 5;
+    public static final short EAP_HDR_LEN_SUC_FAIL = 4;
+
+    // EAP Code
+    public static final byte REQUEST  = 0x1;
+    public static final byte RESPONSE = 0x2;
+    public static final byte SUCCESS  = 0x3;
+    public static final byte FAILURE  = 0x4;
+
+    // EAP Attribute Type
+    public static final byte ATTR_IDENTITY = 0x1;
+    public static final byte ATTR_NOTIFICATION = 0x2;
+    public static final byte ATTR_NAK = 0x3;
+    public static final byte ATTR_MD5 = 0x4;
+    public static final byte ATTR_OTP = 0x5;
+    public static final byte ATTR_GTC = 0x6;
+    public static final byte ATTR_TLS = 0xd;
+
+    protected byte code;
+    protected byte identifier;
+    protected short length;
+    protected byte type;
+    protected byte[] data;
+
+
+    /**
+     * Gets the EAP code.
+     *
+     * @return EAP code
+     */
+    public byte getCode() {
+<span class="nc" id="L64">        return this.code;</span>
+    }
+
+
+    /**
+     * Sets the EAP code.
+     *
+     * @param code EAP code
+     * @return this
+     */
+    public EAP setCode(final byte code) {
+<span class="nc" id="L75">        this.code = code;</span>
+<span class="nc" id="L76">        return this;</span>
+    }
+
+    /**
+     * Gets the EAP identifier.
+     *
+     * @return EAP identifier
+     */
+    public byte getIdentifier() {
+<span class="nc" id="L85">        return this.identifier;</span>
+    }
+
+    /**
+     * Sets the EAP identifier.
+     *
+     * @param identifier EAP identifier
+     * @return this
+     */
+    public EAP setIdentifier(final byte identifier) {
+<span class="nc" id="L95">        this.identifier = identifier;</span>
+<span class="nc" id="L96">        return this;</span>
+    }
+
+    /**
+     * Gets the get packet length.
+     *
+     * @return packet length
+     */
+    public short getLength() {
+<span class="nc" id="L105">        return this.length;</span>
+    }
+
+    /**
+     * Sets the packet length.
+     *
+     * @param length packet length
+     * @return this
+     */
+    public EAP setLength(final short length) {
+<span class="nc" id="L115">        this.length = length;</span>
+<span class="nc" id="L116">        return this;</span>
+    }
+
+    /**
+     * Gets the data type.
+     *
+     * @return data type
+     */
+    public byte getDataType() {
+<span class="nc" id="L125">        return this.type;</span>
+    }
+
+    /**
+     * Sets the data type.
+     *
+     * @param type data type
+     * @return this
+     */
+    public EAP setDataType(final byte type) {
+<span class="nc" id="L135">        this.type = type;</span>
+<span class="nc" id="L136">        return this;</span>
+    }
+
+    /**
+     * Gets the EAP data.
+     *
+     * @return EAP data
+     */
+    public byte[] getData() {
+<span class="nc" id="L145">        return this.data;</span>
+    }
+
+    /**
+     * Sets the EAP data.
+     *
+     * @param data EAP data to be set
+     * @return this
+     */
+    public EAP setData(final byte[] data) {
+<span class="nc" id="L155">        this.data = data;</span>
+<span class="nc" id="L156">        return this;</span>
+    }
+
+    /**
+     * Default EAP constructor that sets the EAP code to 0.
+     */
+<span class="nc" id="L162">    public EAP() {</span>
+<span class="nc" id="L163">        this.code = 0;</span>
+<span class="nc" id="L164">    }</span>
+
+    /**
+     * EAP constructor that initially sets all fields.
+     *
+     * @param code EAP code
+     * @param identifier EAP identifier
+     * @param type packet type
+     * @param data EAP data
+     */
+<span class="nc" id="L174">    public EAP(byte code, byte identifier, byte type, byte[] data) {</span>
+<span class="nc" id="L175">        this.code = code;</span>
+<span class="nc" id="L176">        this.identifier = identifier;</span>
+<span class="nc bnc" id="L177" title="All 4 branches missed.">        if (this.code == REQUEST || this.code == RESPONSE) {</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            this.length = (short) (5 + (data == null ? 0 : data.length));</span>
+<span class="nc" id="L179">            this.type = type;</span>
+        } else {
+<span class="nc bnc" id="L181" title="All 2 branches missed.">            this.length = (short) (4 + (data == null ? 0 : data.length));</span>
+        }
+<span class="nc" id="L183">        this.data = data;</span>
+<span class="nc" id="L184">    }</span>
+
+    /**
+     * Deserializer for EAP packets.
+     *
+     * @return deserializer
+     */
+    public static Deserializer&lt;EAP&gt; deserializer() {
+<span class="nc" id="L192">        return (data, offset, length) -&gt; {</span>
+<span class="nc" id="L193">            checkInput(data, offset, length, HEADER_LENGTH);</span>
+
+<span class="nc" id="L195">            EAP eap = new EAP();</span>
+<span class="nc" id="L196">            final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L197">            eap.code = bb.get();</span>
+<span class="nc" id="L198">            eap.identifier = bb.get();</span>
+<span class="nc" id="L199">            eap.length = bb.getShort();</span>
+
+<span class="nc" id="L201">            checkHeaderLength(length, eap.length);</span>
+
+            int dataLength;
+<span class="nc bnc" id="L204" title="All 4 branches missed.">            if (eap.code == REQUEST || eap.code == RESPONSE) {</span>
+<span class="nc" id="L205">                eap.type = bb.get();</span>
+<span class="nc" id="L206">                dataLength = eap.length - 5;</span>
+            } else {
+<span class="nc" id="L208">                dataLength = eap.length - 4;</span>
+            }
+
+<span class="nc" id="L211">            eap.data = new byte[dataLength];</span>
+<span class="nc" id="L212">            bb.get(eap.data);</span>
+<span class="nc" id="L213">            return eap;</span>
+        };
+    }
+
+    @Override
+    public byte[] serialize() {
+<span class="nc" id="L219">        final byte[] data = new byte[this.length];</span>
+
+<span class="nc" id="L221">        final ByteBuffer bb = ByteBuffer.wrap(data);</span>
+<span class="nc" id="L222">        bb.put(this.code);</span>
+<span class="nc" id="L223">        bb.put(this.identifier);</span>
+<span class="nc" id="L224">        bb.putShort(this.length);</span>
+<span class="nc bnc" id="L225" title="All 4 branches missed.">        if (this.code == REQUEST || this.code == RESPONSE) {</span>
+<span class="nc" id="L226">            bb.put(this.type);</span>
+        }
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (this.data != null) {</span>
+<span class="nc" id="L229">            bb.put(this.data);</span>
+        }
+<span class="nc" id="L231">        return data;</span>
+    }
+
+    @Override
+    public IPacket deserialize(final byte[] data, final int offset,
+                               final int length) {
+<span class="nc" id="L237">        final ByteBuffer bb = ByteBuffer.wrap(data, offset, length);</span>
+<span class="nc" id="L238">        this.code = bb.get();</span>
+<span class="nc" id="L239">        this.identifier = bb.get();</span>
+<span class="nc" id="L240">        this.length = bb.getShort();</span>
+
+        int dataLength;
+<span class="nc bnc" id="L243" title="All 4 branches missed.">        if (this.code == REQUEST || this.code == RESPONSE) {</span>
+<span class="nc" id="L244">            this.type = bb.get();</span>
+<span class="nc" id="L245">            dataLength = this.length - 5;</span>
+        } else {
+<span class="nc" id="L247">            dataLength = this.length - 4;</span>
+        }
+<span class="nc" id="L249">        this.data = new byte[dataLength];</span>
+<span class="nc" id="L250">        bb.get(this.data);</span>
+<span class="nc" id="L251">        return this;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="nc" id="L256">        final int prime = 3889;</span>
+<span class="nc" id="L257">        int result = super.hashCode();</span>
+<span class="nc" id="L258">        result = prime * result + this.code;</span>
+<span class="nc" id="L259">        result = prime * result + this.identifier;</span>
+<span class="nc" id="L260">        result = prime * result + this.length;</span>
+<span class="nc" id="L261">        result = prime * result + this.type;</span>
+<span class="nc" id="L262">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

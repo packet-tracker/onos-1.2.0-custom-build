@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PointToPointIntentCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">PointToPointIntentCodec.java</span></div><h1>PointToPointIntentCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.intent.ConnectivityIntent;
+import org.onosproject.net.intent.PointToPointIntent;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.util.Tools.nullIsIllegal;
+
+/**
+ * Point to point intent codec.
+ */
+<span class="fc" id="L32">public final class PointToPointIntentCodec extends JsonCodec&lt;PointToPointIntent&gt; {</span>
+
+    private static final String INGRESS_POINT = &quot;ingressPoint&quot;;
+    private static final String EGRESS_POINT = &quot;egressPoint&quot;;
+
+    @Override
+    public ObjectNode encode(PointToPointIntent intent, CodecContext context) {
+<span class="fc" id="L39">        checkNotNull(intent, &quot;Point to point intent cannot be null&quot;);</span>
+
+<span class="fc" id="L41">        final JsonCodec&lt;ConnectivityIntent&gt; connectivityIntentCodec =</span>
+<span class="fc" id="L42">                context.codec(ConnectivityIntent.class);</span>
+<span class="fc" id="L43">        final ObjectNode result = connectivityIntentCodec.encode(intent, context);</span>
+
+<span class="fc" id="L45">        final JsonCodec&lt;ConnectPoint&gt; connectPointCodec =</span>
+<span class="fc" id="L46">                context.codec(ConnectPoint.class);</span>
+<span class="fc" id="L47">        final ObjectNode ingress =</span>
+<span class="fc" id="L48">                connectPointCodec.encode(intent.ingressPoint(), context);</span>
+<span class="fc" id="L49">        final ObjectNode egress =</span>
+<span class="fc" id="L50">                connectPointCodec.encode(intent.egressPoint(), context);</span>
+
+<span class="fc" id="L52">        result.set(INGRESS_POINT, ingress);</span>
+<span class="fc" id="L53">        result.set(EGRESS_POINT, egress);</span>
+
+<span class="fc" id="L55">        return result;</span>
+    }
+
+
+    @Override
+    public PointToPointIntent decode(ObjectNode json, CodecContext context) {
+<span class="fc" id="L61">        PointToPointIntent.Builder builder = PointToPointIntent.builder();</span>
+
+<span class="fc" id="L63">        IntentCodec.intentAttributes(json, context, builder);</span>
+<span class="fc" id="L64">        ConnectivityIntentCodec.intentAttributes(json, context, builder);</span>
+
+<span class="fc" id="L66">        ObjectNode ingressJson = nullIsIllegal(get(json, INGRESS_POINT),</span>
+                INGRESS_POINT + IntentCodec.MISSING_MEMBER_MESSAGE);
+<span class="fc" id="L68">        ConnectPoint ingress = context.codec(ConnectPoint.class)</span>
+<span class="fc" id="L69">                .decode(ingressJson, context);</span>
+<span class="fc" id="L70">        builder.ingressPoint(ingress);</span>
+
+<span class="fc" id="L72">        ObjectNode egressJson = nullIsIllegal(get(json, EGRESS_POINT),</span>
+                EGRESS_POINT + IntentCodec.MISSING_MEMBER_MESSAGE);
+<span class="fc" id="L74">        ConnectPoint egress = context.codec(ConnectPoint.class)</span>
+<span class="fc" id="L75">                .decode(egressJson, context);</span>
+<span class="fc" id="L76">        builder.egressPoint(egress);</span>
+
+<span class="fc" id="L78">        return builder.build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

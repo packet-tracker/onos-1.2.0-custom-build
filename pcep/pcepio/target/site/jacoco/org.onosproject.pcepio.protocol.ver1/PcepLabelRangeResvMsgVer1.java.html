@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PcepLabelRangeResvMsgVer1.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-pcepio</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.pcepio.protocol.ver1</a> &gt; <span class="el_source">PcepLabelRangeResvMsgVer1.java</span></div><h1>PcepLabelRangeResvMsgVer1.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.pcepio.protocol.ver1;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.onosproject.pcepio.exceptions.PcepParseException;
+import org.onosproject.pcepio.protocol.PcepLabelRange;
+import org.onosproject.pcepio.protocol.PcepLabelRangeResvMsg;
+import org.onosproject.pcepio.protocol.PcepMessageReader;
+import org.onosproject.pcepio.protocol.PcepMessageWriter;
+import org.onosproject.pcepio.protocol.PcepType;
+import org.onosproject.pcepio.protocol.PcepVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.MoreObjects;
+
+/**
+ * Provides PCEP label range reserve message.
+ */
+class PcepLabelRangeResvMsgVer1 implements PcepLabelRangeResvMsg {
+
+    // Pcep version: 1
+
+    /*
+       The format of a PCLRResv message is as follows:
+
+               PCLRResv Message&gt;::= &lt;Common Header&gt;
+                                    &lt;label-range&gt;
+          Where:
+
+               &lt;label-range&gt; ::= &lt;SRP&gt;
+                                 &lt;labelrange-list&gt;
+
+          Where
+               &lt;labelrange-list&gt;::=&lt;LABEL-RANGE&gt;[&lt;labelrange-list&gt;]
+     */
+<span class="nc" id="L52">    protected static final Logger log = LoggerFactory.getLogger(PcepLabelRangeResvMsgVer1.class);</span>
+
+    public static final byte PACKET_VERSION = 1;
+    // LabelRangeResvMsgMinLength = COMMON-HEADER(4)+SrpObjMinLentgh(12)+LABEL-RANGE-MIN-LENGTH(12)
+    public static final int PACKET_MINIMUM_LENGTH = 28;
+<span class="nc" id="L57">    public static final PcepType MSG_TYPE = PcepType.LABEL_RANGE_RESERV;</span>
+    //&lt;label-range&gt;
+    PcepLabelRange labelRange;
+
+<span class="nc" id="L61">    public static final PcepLabelRangeResvMsgVer1.Reader READER = new Reader();</span>
+
+    /**
+     * Reader reads LabelRangeResv Message from the channel.
+     */
+<span class="nc" id="L66">    static class Reader implements PcepMessageReader&lt;PcepLabelRangeResvMsg&gt; {</span>
+
+        @Override
+        public PcepLabelRangeResvMsg readFrom(ChannelBuffer cb) throws PcepParseException {
+
+<span class="nc bnc" id="L71" title="All 2 branches missed.">            if (cb.readableBytes() &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L72">                throw new PcepParseException(&quot;Channel buffer has less readable bytes than Packet minimum length.&quot;);</span>
+            }
+            // fixed value property version == 1
+<span class="nc" id="L75">            byte version = cb.readByte();</span>
+<span class="nc" id="L76">            version = (byte) (version &gt;&gt; PcepMessageVer1.SHIFT_FLAG);</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">            if (version != PACKET_VERSION) {</span>
+<span class="nc" id="L78">                throw new PcepParseException(&quot;Wrong version. Expected=PcepVersion.PCEP_1(1), got=&quot; + version);</span>
+            }
+            // fixed value property type == 15
+<span class="nc" id="L81">            byte type = cb.readByte();</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            if (type != MSG_TYPE.getType()) {</span>
+<span class="nc" id="L83">                throw new PcepParseException(&quot;Wrong type. Expected=PcepType.LABEL_RANGE_RESERV(15), got=&quot; + type);</span>
+            }
+<span class="nc" id="L85">            short length = cb.readShort();</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            if (length &lt; PACKET_MINIMUM_LENGTH) {</span>
+<span class="nc" id="L87">                throw new PcepParseException(&quot;Wrong length.Expected to be &gt;= &quot; + PACKET_MINIMUM_LENGTH + &quot;, is: &quot;</span>
+                        + length);
+            }
+            // parse &lt;label-range&gt;
+<span class="nc" id="L91">            PcepLabelRange labelRange = PcepLabelRangeVer1.read(cb);</span>
+<span class="nc" id="L92">            return new PcepLabelRangeResvMsgVer1(labelRange);</span>
+        }
+    }
+
+    /**
+     * Constructor to initialize PCEP label range.
+     *
+     * @param labelRange PCEP label range
+     */
+<span class="nc" id="L101">    PcepLabelRangeResvMsgVer1(PcepLabelRange labelRange) {</span>
+<span class="nc" id="L102">        this.labelRange = labelRange;</span>
+<span class="nc" id="L103">    }</span>
+
+    /**
+     * Builder class for PCEP label range reserve message.
+     */
+<span class="nc" id="L108">    static class Builder implements PcepLabelRangeResvMsg.Builder {</span>
+
+<span class="nc" id="L110">        PcepLabelRange labelRange = new PcepLabelRangeVer1();</span>
+
+        @Override
+        public PcepVersion getVersion() {
+<span class="nc" id="L114">            return PcepVersion.PCEP_1;</span>
+        }
+
+        @Override
+        public PcepType getType() {
+<span class="nc" id="L119">            return PcepType.LABEL_RANGE_RESERV;</span>
+        }
+
+        @Override
+        public PcepLabelRangeResvMsg build() {
+<span class="nc" id="L124">            return new PcepLabelRangeResvMsgVer1(this.labelRange);</span>
+        }
+
+        @Override
+        public PcepLabelRange getLabelRange() {
+<span class="nc" id="L129">            return this.labelRange;</span>
+        }
+
+        @Override
+        public Builder setLabelRange(PcepLabelRange labelRange) {
+<span class="nc" id="L134">            this.labelRange = labelRange;</span>
+<span class="nc" id="L135">            return this;</span>
+        }
+    }
+
+    @Override
+    public void writeTo(ChannelBuffer cb) throws PcepParseException {
+<span class="nc" id="L141">        WRITER.write(cb, this);</span>
+<span class="nc" id="L142">    }</span>
+
+<span class="nc" id="L144">    static final Writer WRITER = new Writer();</span>
+
+    /**
+     * Writer writes LabelRangeResv Message to the channel.
+     */
+<span class="nc" id="L149">    static class Writer implements PcepMessageWriter&lt;PcepLabelRangeResvMsgVer1&gt; {</span>
+
+        @Override
+        public void write(ChannelBuffer cb, PcepLabelRangeResvMsgVer1 message) throws PcepParseException {
+
+<span class="nc" id="L154">            int startIndex = cb.writerIndex();</span>
+            // first 3 bits set to version
+<span class="nc" id="L156">            cb.writeByte((byte) (PACKET_VERSION &lt;&lt; PcepMessageVer1.SHIFT_FLAG));</span>
+            // message type
+<span class="nc" id="L158">            cb.writeByte(MSG_TYPE.getType());</span>
+            // Length will be set after calculating length, but currently set it as 0.
+<span class="nc" id="L160">            int msgLenIndex = cb.writerIndex();</span>
+
+<span class="nc" id="L162">            cb.writeShort((short) 0);</span>
+            //write Label Range
+<span class="nc" id="L164">            message.labelRange.write(cb);</span>
+
+            // update message length field
+<span class="nc" id="L167">            int length = cb.writerIndex() - startIndex;</span>
+<span class="nc" id="L168">            cb.setShort(msgLenIndex, (short) length);</span>
+<span class="nc" id="L169">        }</span>
+    }
+
+    @Override
+    public PcepVersion getVersion() {
+<span class="nc" id="L174">        return PcepVersion.PCEP_1;</span>
+    }
+
+    @Override
+    public PcepType getType() {
+<span class="nc" id="L179">        return MSG_TYPE;</span>
+    }
+
+    @Override
+    public PcepLabelRange getLabelRange() {
+<span class="nc" id="L184">        return this.labelRange;</span>
+    }
+
+    @Override
+    public void setLabelRange(PcepLabelRange lr) {
+<span class="nc" id="L189">        this.labelRange = lr;</span>
+<span class="nc" id="L190">    }</span>
+
+    @Override
+    public String toString() {
+<span class="nc" id="L194">        return MoreObjects.toStringHelper(getClass())</span>
+<span class="nc" id="L195">                .add(&quot;labelRange&quot;, labelRange)</span>
+<span class="nc" id="L196">                .toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

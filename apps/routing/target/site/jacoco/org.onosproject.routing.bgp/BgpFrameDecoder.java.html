@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>BgpFrameDecoder.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-app-routing</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.routing.bgp</a> &gt; <span class="el_source">BgpFrameDecoder.java</span></div><h1>BgpFrameDecoder.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.routing.bgp;
+
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.jboss.netty.handler.codec.frame.FrameDecoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Class for handling the decoding of the BGP messages.
+ */
+class BgpFrameDecoder extends FrameDecoder {
+<span class="fc" id="L30">    private static final Logger log =</span>
+<span class="fc" id="L31">        LoggerFactory.getLogger(BgpFrameDecoder.class);</span>
+
+    private final BgpSession bgpSession;
+
+    /**
+     * Constructor for a given BGP Session.
+     *
+     * @param bgpSession the BGP session state to use.
+     */
+<span class="fc" id="L40">    BgpFrameDecoder(BgpSession bgpSession) {</span>
+<span class="fc" id="L41">        this.bgpSession = bgpSession;</span>
+<span class="fc" id="L42">    }</span>
+
+    @Override
+    protected Object decode(ChannelHandlerContext ctx,
+                            Channel channel,
+                            ChannelBuffer buf) throws Exception {
+        //
+        // NOTE: If we close the channel during the decoding, we might still
+        // see some incoming messages while the channel closing is completed.
+        //
+<span class="pc bpc" id="L52" title="1 of 2 branches missed.">        if (bgpSession.isClosed()) {</span>
+<span class="nc" id="L53">            return null;</span>
+        }
+
+<span class="fc" id="L56">        log.trace(&quot;BGP Peer: decode(): remoteAddr = {} localAddr = {} &quot; +</span>
+                  &quot;messageSize = {}&quot;,
+<span class="fc" id="L58">                  ctx.getChannel().getRemoteAddress(),</span>
+<span class="fc" id="L59">                  ctx.getChannel().getLocalAddress(),</span>
+<span class="fc" id="L60">                  buf.readableBytes());</span>
+
+        // Test for minimum length of the BGP message
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        if (buf.readableBytes() &lt; BgpConstants.BGP_HEADER_LENGTH) {</span>
+            // No enough data received
+<span class="nc" id="L65">            return null;</span>
+        }
+
+        //
+        // Mark the current buffer position in case we haven't received
+        // the whole message.
+        //
+<span class="fc" id="L72">        buf.markReaderIndex();</span>
+
+        //
+        // Read and check the BGP message Marker field: it must be all ones
+        // (See RFC 4271, Section 4.1)
+        //
+<span class="fc" id="L78">        byte[] marker = new byte[BgpConstants.BGP_HEADER_MARKER_LENGTH];</span>
+<span class="fc" id="L79">        buf.readBytes(marker);</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        for (int i = 0; i &lt; marker.length; i++) {</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">            if (marker[i] != (byte) 0xff) {</span>
+<span class="nc" id="L82">                log.debug(&quot;BGP RX Error: invalid marker {} at position {}&quot;,</span>
+<span class="nc" id="L83">                          marker[i], i);</span>
+                //
+                // ERROR: Connection Not Synchronized
+                //
+                // Send NOTIFICATION and close the connection
+<span class="nc" id="L88">                int errorCode = BgpConstants.Notifications.MessageHeaderError.ERROR_CODE;</span>
+<span class="nc" id="L89">                int errorSubcode =</span>
+                    BgpConstants.Notifications.MessageHeaderError.CONNECTION_NOT_SYNCHRONIZED;
+<span class="nc" id="L91">                ChannelBuffer txMessage =</span>
+<span class="nc" id="L92">                    BgpNotification.prepareBgpNotification(errorCode,</span>
+                                                           errorSubcode,
+                                                           null);
+<span class="nc" id="L95">                ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L96">                bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L97">                return null;</span>
+            }
+        }
+
+        //
+        // Read and check the BGP message Length field
+        //
+<span class="fc" id="L104">        int length = buf.readUnsignedShort();</span>
+<span class="pc bpc" id="L105" title="2 of 4 branches missed.">        if ((length &lt; BgpConstants.BGP_HEADER_LENGTH) ||</span>
+            (length &gt; BgpConstants.BGP_MESSAGE_MAX_LENGTH)) {
+<span class="nc" id="L107">            log.debug(&quot;BGP RX Error: invalid Length field {}. &quot; +</span>
+                      &quot;Must be between {} and {}&quot;,
+<span class="nc" id="L109">                      length,</span>
+<span class="nc" id="L110">                      BgpConstants.BGP_HEADER_LENGTH,</span>
+<span class="nc" id="L111">                      BgpConstants.BGP_MESSAGE_MAX_LENGTH);</span>
+            //
+            // ERROR: Bad Message Length
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L116">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L117">                BgpNotification.prepareBgpNotificationBadMessageLength(length);</span>
+<span class="nc" id="L118">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L119">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L120">            return null;</span>
+        }
+
+        //
+        // Test whether the rest of the message is received:
+        // So far we have read the Marker (16 octets) and the
+        // Length (2 octets) fields.
+        //
+<span class="fc" id="L128">        int remainingMessageLen =</span>
+            length - BgpConstants.BGP_HEADER_MARKER_LENGTH - 2;
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">        if (buf.readableBytes() &lt; remainingMessageLen) {</span>
+            // No enough data received
+<span class="nc" id="L132">            buf.resetReaderIndex();</span>
+<span class="nc" id="L133">            return null;</span>
+        }
+
+        //
+        // Read the BGP message Type field, and process based on that type
+        //
+<span class="fc" id="L139">        int type = buf.readUnsignedByte();</span>
+<span class="fc" id="L140">        remainingMessageLen--;      // Adjust after reading the type</span>
+<span class="fc" id="L141">        ChannelBuffer message = buf.readBytes(remainingMessageLen);</span>
+
+        //
+        // Process the remaining of the message based on the message type
+        //
+<span class="pc bpc" id="L146" title="2 of 5 branches missed.">        switch (type) {</span>
+        case BgpConstants.BGP_TYPE_OPEN:
+<span class="fc" id="L148">            BgpOpen.processBgpOpen(bgpSession, ctx, message);</span>
+<span class="fc" id="L149">            break;</span>
+        case BgpConstants.BGP_TYPE_UPDATE:
+<span class="fc" id="L151">            BgpUpdate.processBgpUpdate(bgpSession, ctx, message);</span>
+<span class="fc" id="L152">            break;</span>
+        case BgpConstants.BGP_TYPE_NOTIFICATION:
+<span class="nc" id="L154">            BgpNotification.processBgpNotification(bgpSession, ctx, message);</span>
+<span class="nc" id="L155">            break;</span>
+        case BgpConstants.BGP_TYPE_KEEPALIVE:
+<span class="fc" id="L157">            BgpKeepalive.processBgpKeepalive(bgpSession, ctx, message);</span>
+<span class="fc" id="L158">            break;</span>
+        default:
+            //
+            // ERROR: Bad Message Type
+            //
+            // Send NOTIFICATION and close the connection
+<span class="nc" id="L164">            int errorCode = BgpConstants.Notifications.MessageHeaderError.ERROR_CODE;</span>
+<span class="nc" id="L165">            int errorSubcode = BgpConstants.Notifications.MessageHeaderError.BAD_MESSAGE_TYPE;</span>
+<span class="nc" id="L166">            ChannelBuffer data = ChannelBuffers.buffer(1);</span>
+<span class="nc" id="L167">            data.writeByte(type);</span>
+<span class="nc" id="L168">            ChannelBuffer txMessage =</span>
+<span class="nc" id="L169">                BgpNotification.prepareBgpNotification(errorCode, errorSubcode,</span>
+                                                       data);
+<span class="nc" id="L171">            ctx.getChannel().write(txMessage);</span>
+<span class="nc" id="L172">            bgpSession.closeSession(ctx);</span>
+<span class="nc" id="L173">            return null;</span>
+        }
+<span class="fc" id="L175">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

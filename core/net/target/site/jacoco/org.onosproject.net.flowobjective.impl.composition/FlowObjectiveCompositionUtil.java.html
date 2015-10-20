@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowObjectiveCompositionUtil.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.flowobjective.impl.composition</a> &gt; <span class="el_source">FlowObjectiveCompositionUtil.java</span></div><h1>FlowObjectiveCompositionUtil.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.flowobjective.impl.composition;
+
+import org.onlab.packet.IpPrefix;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.LambdaCriterion;
+import org.onosproject.net.flow.criteria.OchSignalCriterion;
+import org.onosproject.net.flow.criteria.EthCriterion;
+import org.onosproject.net.flow.criteria.VlanIdCriterion;
+import org.onosproject.net.flow.criteria.VlanPcpCriterion;
+import org.onosproject.net.flow.criteria.MplsCriterion;
+import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onosproject.net.flow.criteria.IPv6FlowLabelCriterion;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.L0ModificationInstruction;
+import org.onosproject.net.flow.instructions.L2ModificationInstruction;
+import org.onosproject.net.flow.instructions.L3ModificationInstruction;
+import org.onosproject.net.flowobjective.DefaultForwardingObjective;
+import org.onosproject.net.flowobjective.ForwardingObjective;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
+
+/**
+ * Provide util functions for FlowObjectiveComposition.
+ */
+public final class FlowObjectiveCompositionUtil {
+
+<span class="nc" id="L54">    private FlowObjectiveCompositionUtil() {}</span>
+
+    // only work with VERSATILE
+    public static ForwardingObjective composeParallel(ForwardingObjective fo1, ForwardingObjective fo2) {
+
+<span class="nc" id="L59">        TrafficSelector trafficSelector = intersectTrafficSelector(fo1.selector(), fo2.selector());</span>
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        if (trafficSelector == null) {</span>
+<span class="nc" id="L61">            return null;</span>
+        }
+
+<span class="nc" id="L64">        TrafficTreatment trafficTreatment = unionTrafficTreatment(fo1.treatment(), fo2.treatment());</span>
+
+<span class="nc" id="L66">        return DefaultForwardingObjective.builder()</span>
+<span class="nc" id="L67">                .fromApp(fo1.appId())</span>
+<span class="nc" id="L68">                .makePermanent()</span>
+<span class="nc" id="L69">                .withFlag(ForwardingObjective.Flag.VERSATILE)</span>
+<span class="nc" id="L70">                .withPriority(fo1.priority() + fo2.priority())</span>
+<span class="nc" id="L71">                .withSelector(trafficSelector)</span>
+<span class="nc" id="L72">                .withTreatment(trafficTreatment)</span>
+<span class="nc" id="L73">                .add();</span>
+    }
+
+    public static ForwardingObjective composeSequential(ForwardingObjective fo1,
+                                                        ForwardingObjective fo2,
+                                                        int priorityMultiplier) {
+
+<span class="nc" id="L80">        TrafficSelector revertTrafficSelector = revertTreatmentSelector(fo1.treatment(), fo2.selector());</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (revertTrafficSelector == null) {</span>
+<span class="nc" id="L82">            return null;</span>
+        }
+
+<span class="nc" id="L85">        TrafficSelector trafficSelector = intersectTrafficSelector(fo1.selector(), revertTrafficSelector);</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (trafficSelector == null) {</span>
+<span class="nc" id="L87">            return null;</span>
+        }
+
+<span class="nc" id="L90">        TrafficTreatment trafficTreatment = unionTrafficTreatment(fo1.treatment(), fo2.treatment());</span>
+
+<span class="nc" id="L92">        return DefaultForwardingObjective.builder()</span>
+<span class="nc" id="L93">                .fromApp(fo1.appId())</span>
+<span class="nc" id="L94">                .makePermanent()</span>
+<span class="nc" id="L95">                .withFlag(ForwardingObjective.Flag.VERSATILE)</span>
+<span class="nc" id="L96">                .withPriority(fo1.priority() * priorityMultiplier + fo2.priority())</span>
+<span class="nc" id="L97">                .withSelector(trafficSelector)</span>
+<span class="nc" id="L98">                .withTreatment(trafficTreatment)</span>
+<span class="nc" id="L99">                .add();</span>
+    }
+
+    public static ForwardingObjective composeOverride(ForwardingObjective fo, int priorityAddend) {
+<span class="nc" id="L103">        return DefaultForwardingObjective.builder()</span>
+<span class="nc" id="L104">                .fromApp(fo.appId())</span>
+<span class="nc" id="L105">                .makePermanent()</span>
+<span class="nc" id="L106">                .withFlag(fo.flag())</span>
+<span class="nc" id="L107">                .withPriority(fo.priority() + priorityAddend)</span>
+<span class="nc" id="L108">                .withSelector(fo.selector())</span>
+<span class="nc" id="L109">                .withTreatment(fo.treatment())</span>
+<span class="nc" id="L110">                .add();</span>
+    }
+
+    public static TrafficSelector intersectTrafficSelector(TrafficSelector ts1, TrafficSelector ts2) {
+
+<span class="nc" id="L115">        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();</span>
+
+<span class="nc" id="L117">        Set&lt;Criterion.Type&gt; ts1IntersectTs2 = getTypeSet(ts1);</span>
+<span class="nc" id="L118">        ts1IntersectTs2.retainAll(getTypeSet(ts2));</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        for (Criterion.Type type : ts1IntersectTs2) {</span>
+<span class="nc" id="L120">            Criterion criterion = intersectCriterion(ts1.getCriterion(type), ts2.getCriterion(type));</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">            if (criterion == null) {</span>
+<span class="nc" id="L122">                return null;</span>
+            } else {
+<span class="nc" id="L124">                selectorBuilder.add(criterion);</span>
+            }
+<span class="nc" id="L126">        }</span>
+
+<span class="nc" id="L128">        Set&lt;Criterion.Type&gt; ts1MinusTs2 = getTypeSet(ts1);</span>
+<span class="nc" id="L129">        ts1MinusTs2.removeAll(getTypeSet(ts2));</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        for (Criterion.Type type : ts1MinusTs2) {</span>
+<span class="nc" id="L131">            selectorBuilder.add(ts1.getCriterion(type));</span>
+<span class="nc" id="L132">        }</span>
+
+<span class="nc" id="L134">        Set&lt;Criterion.Type&gt; ts2MinusTs1 = getTypeSet(ts2);</span>
+<span class="nc" id="L135">        ts2MinusTs1.removeAll(getTypeSet(ts1));</span>
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        for (Criterion.Type type : ts2MinusTs1) {</span>
+<span class="nc" id="L137">            selectorBuilder.add(ts2.getCriterion(type));</span>
+<span class="nc" id="L138">        }</span>
+
+<span class="nc" id="L140">        return selectorBuilder.build();</span>
+    }
+
+    public static TrafficTreatment unionTrafficTreatment(TrafficTreatment tt1, TrafficTreatment tt2) {
+
+<span class="nc" id="L145">        TrafficTreatment.Builder treatmentBuilder = DefaultTrafficTreatment.builder();</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        for (Instruction instruction : tt1.allInstructions()) {</span>
+<span class="nc" id="L148">            treatmentBuilder.add(instruction);</span>
+<span class="nc" id="L149">        }</span>
+
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        for (Instruction instruction : tt2.allInstructions()) {</span>
+<span class="nc" id="L152">            treatmentBuilder.add(instruction);</span>
+<span class="nc" id="L153">        }</span>
+
+<span class="nc" id="L155">        return treatmentBuilder.build();</span>
+    }
+
+    public static TrafficSelector revertTreatmentSelector(TrafficTreatment trafficTreatment,
+                                                          TrafficSelector trafficSelector) {
+
+<span class="nc" id="L161">        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();</span>
+
+<span class="nc" id="L163">        Map&lt;Criterion.Type, Criterion&gt; criterionMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        for (Criterion criterion : trafficSelector.criteria()) {</span>
+<span class="nc" id="L165">            criterionMap.put(criterion.type(), criterion);</span>
+<span class="nc" id="L166">        }</span>
+
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        for (Instruction instruction : trafficTreatment.allInstructions()) {</span>
+<span class="nc bnc" id="L169" title="All 9 branches missed.">            switch (instruction.type()) {</span>
+                case DROP:
+<span class="nc" id="L171">                    return null;</span>
+                case OUTPUT:
+<span class="nc" id="L173">                    break;</span>
+                case GROUP:
+<span class="nc" id="L175">                    break;</span>
+                case L0MODIFICATION: {
+<span class="nc" id="L177">                    L0ModificationInstruction l0 = (L0ModificationInstruction) instruction;</span>
+<span class="nc bnc" id="L178" title="All 3 branches missed.">                    switch (l0.subtype()) {</span>
+                        case LAMBDA:
+<span class="nc bnc" id="L180" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.OCH_SIGID)) {</span>
+<span class="nc" id="L181">                                if (((LambdaCriterion) criterionMap.get((Criterion.Type.OCH_SIGID))).lambda()</span>
+<span class="nc bnc" id="L182" title="All 2 branches missed.">                                        == ((L0ModificationInstruction.ModLambdaInstruction) l0).lambda()) {</span>
+<span class="nc" id="L183">                                    criterionMap.remove(Criterion.Type.OCH_SIGID);</span>
+                                } else {
+<span class="nc" id="L185">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case OCH:
+<span class="nc bnc" id="L191" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.OCH_SIGID)) {</span>
+<span class="nc" id="L192">                                if (((OchSignalCriterion) criterionMap.get((Criterion.Type.OCH_SIGID))).lambda()</span>
+<span class="nc bnc" id="L193" title="All 2 branches missed.">                                        .equals(((L0ModificationInstruction.ModOchSignalInstruction) l0).lambda())) {</span>
+<span class="nc" id="L194">                                    criterionMap.remove(Criterion.Type.OCH_SIGID);</span>
+                                } else {
+<span class="nc" id="L196">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        default:
+<span class="nc" id="L202">                            break;</span>
+                    }
+                    break;
+                }
+                case L2MODIFICATION: {
+<span class="nc" id="L207">                    L2ModificationInstruction l2 = (L2ModificationInstruction) instruction;</span>
+<span class="nc bnc" id="L208" title="All 6 branches missed.">                    switch (l2.subtype()) {</span>
+                        case ETH_SRC:
+<span class="nc bnc" id="L210" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.ETH_SRC)) {</span>
+<span class="nc" id="L211">                                if (((EthCriterion) criterionMap.get((Criterion.Type.ETH_SRC))).mac()</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                                        .equals(((L2ModificationInstruction.ModEtherInstruction) l2).mac())) {</span>
+<span class="nc" id="L213">                                    criterionMap.remove(Criterion.Type.ETH_SRC);</span>
+                                } else {
+<span class="nc" id="L215">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case ETH_DST:
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.ETH_DST)) {</span>
+<span class="nc" id="L222">                                if (((EthCriterion) criterionMap.get((Criterion.Type.ETH_DST))).mac()</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">                                        .equals(((L2ModificationInstruction.ModEtherInstruction) l2).mac())) {</span>
+<span class="nc" id="L224">                                    criterionMap.remove(Criterion.Type.ETH_DST);</span>
+                                } else {
+<span class="nc" id="L226">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case VLAN_ID:
+<span class="nc bnc" id="L232" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.VLAN_VID)) {</span>
+<span class="nc" id="L233">                                if (((VlanIdCriterion) criterionMap.get((Criterion.Type.VLAN_VID))).vlanId()</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">                                        .equals(((L2ModificationInstruction.ModVlanIdInstruction) l2).vlanId())) {</span>
+<span class="nc" id="L235">                                    criterionMap.remove(Criterion.Type.VLAN_VID);</span>
+                                } else {
+<span class="nc" id="L237">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case VLAN_PCP:
+<span class="nc bnc" id="L243" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.VLAN_PCP)) {</span>
+<span class="nc" id="L244">                                if (((VlanPcpCriterion) criterionMap.get((Criterion.Type.VLAN_PCP))).priority()</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">                                        == ((L2ModificationInstruction.ModVlanPcpInstruction) l2).vlanPcp()) {</span>
+<span class="nc" id="L246">                                    criterionMap.remove(Criterion.Type.VLAN_PCP);</span>
+                                } else {
+<span class="nc" id="L248">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case MPLS_LABEL:
+<span class="nc bnc" id="L254" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.MPLS_LABEL)) {</span>
+<span class="nc" id="L255">                                if (((MplsCriterion) criterionMap.get((Criterion.Type.MPLS_LABEL))).label()</span>
+<span class="nc bnc" id="L256" title="All 2 branches missed.">                                        .equals(((L2ModificationInstruction.ModMplsLabelInstruction) l2).mplsLabel())) {</span>
+<span class="nc" id="L257">                                    criterionMap.remove(Criterion.Type.ETH_DST);</span>
+                                } else {
+<span class="nc" id="L259">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        default:
+<span class="nc" id="L265">                            break;</span>
+                    }
+                    break;
+                }
+                case TABLE:
+<span class="nc" id="L270">                    break;</span>
+                case L3MODIFICATION: {
+<span class="nc" id="L272">                    L3ModificationInstruction l3 = (L3ModificationInstruction) instruction;</span>
+<span class="nc bnc" id="L273" title="All 6 branches missed.">                    switch (l3.subtype()) {</span>
+                        case IPV4_SRC:
+<span class="nc bnc" id="L275" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.IPV4_SRC)) {</span>
+<span class="nc" id="L276">                                if (((IPCriterion) criterionMap.get(Criterion.Type.IPV4_SRC)).ip()</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">                                        .contains(((L3ModificationInstruction.ModIPInstruction) l3).ip())) {</span>
+<span class="nc" id="L278">                                    criterionMap.remove(Criterion.Type.IPV4_SRC);</span>
+                                } else {
+<span class="nc" id="L280">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case IPV4_DST:
+<span class="nc bnc" id="L286" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.IPV4_DST)) {</span>
+<span class="nc" id="L287">                                if (((IPCriterion) criterionMap.get(Criterion.Type.IPV4_DST)).ip()</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">                                        .contains(((L3ModificationInstruction.ModIPInstruction) l3).ip())) {</span>
+<span class="nc" id="L289">                                    criterionMap.remove(Criterion.Type.IPV4_DST);</span>
+                                } else {
+<span class="nc" id="L291">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case IPV6_SRC:
+<span class="nc bnc" id="L297" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.IPV6_SRC)) {</span>
+<span class="nc" id="L298">                                if (((IPCriterion) criterionMap.get(Criterion.Type.IPV6_SRC)).ip()</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">                                        .contains(((L3ModificationInstruction.ModIPInstruction) l3).ip())) {</span>
+<span class="nc" id="L300">                                    criterionMap.remove(Criterion.Type.IPV6_SRC);</span>
+                                } else {
+<span class="nc" id="L302">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case IPV6_DST:
+<span class="nc bnc" id="L308" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.IPV6_DST)) {</span>
+<span class="nc" id="L309">                                if (((IPCriterion) criterionMap.get(Criterion.Type.IPV6_DST)).ip()</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">                                        .contains(((L3ModificationInstruction.ModIPInstruction) l3).ip())) {</span>
+<span class="nc" id="L311">                                    criterionMap.remove(Criterion.Type.IPV6_DST);</span>
+                                } else {
+<span class="nc" id="L313">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        case IPV6_FLABEL:
+<span class="nc bnc" id="L319" title="All 2 branches missed.">                            if (criterionMap.containsKey(Criterion.Type.IPV6_FLABEL)) {</span>
+<span class="nc" id="L320">                                if (((IPv6FlowLabelCriterion) criterionMap.get(Criterion.Type.IPV6_FLABEL)).flowLabel()</span>
+<span class="nc bnc" id="L321" title="All 2 branches missed.">                                        == (((L3ModificationInstruction.ModIPv6FlowLabelInstruction) l3).flowLabel())) {</span>
+<span class="nc" id="L322">                                    criterionMap.remove(Criterion.Type.IPV4_SRC);</span>
+                                } else {
+<span class="nc" id="L324">                                    return null;</span>
+                                }
+                            } else {
+                                break;
+                            }
+                        default:
+<span class="nc" id="L330">                            break;</span>
+                    }
+                    break;
+                }
+                case METADATA:
+<span class="nc" id="L335">                    break;</span>
+                default:
+                    break;
+            }
+<span class="nc" id="L339">        }</span>
+
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        for (Criterion criterion : criterionMap.values()) {</span>
+<span class="nc" id="L342">            selectorBuilder.add(criterion);</span>
+<span class="nc" id="L343">        }</span>
+
+<span class="nc" id="L345">        return selectorBuilder.build();</span>
+    }
+
+    public static Set&lt;Criterion.Type&gt; getTypeSet(TrafficSelector trafficSelector) {
+<span class="nc" id="L349">        Set&lt;Criterion.Type&gt; typeSet = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        for (Criterion criterion : trafficSelector.criteria()) {</span>
+<span class="nc" id="L351">            typeSet.add(criterion.type());</span>
+<span class="nc" id="L352">        }</span>
+<span class="nc" id="L353">        return typeSet;</span>
+    }
+
+    public static Criterion intersectCriterion(Criterion c1, Criterion c2) {
+<span class="nc bnc" id="L357" title="All 5 branches missed.">        switch (c1.type()) {</span>
+            case IPV4_SRC: {
+<span class="nc" id="L359">                IpPrefix ipPrefix = intersectIpPrefix(((IPCriterion) c1).ip(), ((IPCriterion) c2).ip());</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">                if (ipPrefix == null) {</span>
+<span class="nc" id="L361">                    return null;</span>
+                } else {
+<span class="nc" id="L363">                    return Criteria.matchIPSrc(ipPrefix);</span>
+                }
+            }
+            case IPV4_DST: {
+<span class="nc" id="L367">                IpPrefix ipPrefix = intersectIpPrefix(((IPCriterion) c1).ip(), ((IPCriterion) c2).ip());</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">                if (ipPrefix == null) {</span>
+<span class="nc" id="L369">                    return null;</span>
+                } else {
+<span class="nc" id="L371">                    return Criteria.matchIPDst(ipPrefix);</span>
+                }
+            }
+            case IPV6_SRC: {
+<span class="nc" id="L375">                IpPrefix ipPrefix = intersectIpPrefix(((IPCriterion) c1).ip(), ((IPCriterion) c2).ip());</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">                if (ipPrefix == null) {</span>
+<span class="nc" id="L377">                    return null;</span>
+                } else {
+<span class="nc" id="L379">                    return Criteria.matchIPv6Src(ipPrefix);</span>
+                }
+            }
+            case IPV6_DST: {
+<span class="nc" id="L383">                IpPrefix ipPrefix = intersectIpPrefix(((IPCriterion) c1).ip(), ((IPCriterion) c2).ip());</span>
+<span class="nc bnc" id="L384" title="All 2 branches missed.">                if (ipPrefix == null) {</span>
+<span class="nc" id="L385">                    return null;</span>
+                } else {
+<span class="nc" id="L387">                    return Criteria.matchIPv6Dst(ipPrefix);</span>
+                }
+            }
+            default:
+<span class="nc bnc" id="L391" title="All 2 branches missed.">                if (!c1.equals(c2)) {</span>
+<span class="nc" id="L392">                    return null;</span>
+                } else {
+<span class="nc" id="L394">                    return c1;</span>
+                }
+        }
+    }
+
+    public static IpPrefix intersectIpPrefix(IpPrefix ip1, IpPrefix ip2) {
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        if (ip1.contains(ip2)) {</span>
+<span class="nc" id="L401">            return ip1;</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        } else if (ip2.contains(ip1)) {</span>
+<span class="nc" id="L403">            return ip2;</span>
+        } else {
+<span class="nc" id="L405">            return null;</span>
+        }
+    }
+
+    public static FlowObjectiveCompositionTree parsePolicyString(String policy) {
+<span class="nc" id="L410">        List&lt;FlowObjectiveCompositionTree&gt; postfix = transformToPostfixForm(policy);</span>
+<span class="nc" id="L411">        return buildPolicyTree(postfix);</span>
+    }
+
+    private static List&lt;FlowObjectiveCompositionTree&gt; transformToPostfixForm(String policy) {
+<span class="nc" id="L415">        Stack&lt;Character&gt; stack = new Stack&lt;&gt;();</span>
+<span class="nc" id="L416">        List&lt;FlowObjectiveCompositionTree&gt; postfix = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L418" title="All 2 branches missed.">        for (int i = 0; i &lt; policy.length(); i++) {</span>
+<span class="nc" id="L419">            Character ch = policy.charAt(i);</span>
+<span class="nc bnc" id="L420" title="All 2 branches missed.">            if (Character.isDigit(ch)) {</span>
+
+<span class="nc" id="L422">                int applicationId = ch - '0';</span>
+<span class="nc bnc" id="L423" title="All 4 branches missed.">                while (i + 1 &lt; policy.length() &amp;&amp; Character.isDigit(policy.charAt(i + 1))) {</span>
+<span class="nc" id="L424">                    i++;</span>
+<span class="nc" id="L425">                    applicationId = applicationId * 10 + policy.charAt(i) - '0';</span>
+                }
+
+<span class="nc" id="L428">                postfix.add(new FlowObjectiveCompositionTree((short) applicationId));</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">            } else if (ch == '(') {</span>
+<span class="nc" id="L430">                stack.push(ch);</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">            } else if (ch == ')') {</span>
+<span class="nc bnc" id="L432" title="All 2 branches missed.">                while (stack.peek() != '(') {</span>
+<span class="nc" id="L433">                    postfix.add(new FlowObjectiveCompositionTree(stack.pop()));</span>
+                }
+<span class="nc" id="L435">                stack.pop();</span>
+            } else {
+<span class="nc bnc" id="L437" title="All 4 branches missed.">                while (!stack.isEmpty() &amp;&amp; compareOperatorPriority(stack.peek(), ch)) {</span>
+<span class="nc" id="L438">                    postfix.add(new FlowObjectiveCompositionTree(stack.pop()));</span>
+                }
+<span class="nc" id="L440">                stack.push(ch);</span>
+            }
+        }
+<span class="nc bnc" id="L443" title="All 2 branches missed.">        while (!stack.isEmpty()) {</span>
+<span class="nc" id="L444">            postfix.add(new FlowObjectiveCompositionTree(stack.pop()));</span>
+        }
+
+<span class="nc" id="L447">        return postfix;</span>
+    }
+
+    private static boolean compareOperatorPriority(char peek, char cur) {
+<span class="nc bnc" id="L451" title="All 8 branches missed.">        if (peek == '/' &amp;&amp; (cur == '+' || cur == '&gt;' || cur == '/')) {</span>
+<span class="nc" id="L452">            return true;</span>
+<span class="nc bnc" id="L453" title="All 6 branches missed.">        } else if (peek == '&gt;' &amp;&amp; (cur == '+' || cur == '&gt;')) {</span>
+<span class="nc" id="L454">            return true;</span>
+<span class="nc bnc" id="L455" title="All 4 branches missed.">        } else if (peek == '+' &amp;&amp; cur == '+') {</span>
+<span class="nc" id="L456">            return true;</span>
+        }
+<span class="nc" id="L458">        return false;</span>
+    }
+
+    private static FlowObjectiveCompositionTree buildPolicyTree(List&lt;FlowObjectiveCompositionTree&gt; postfix) {
+<span class="nc" id="L462">        Stack&lt;FlowObjectiveCompositionTree&gt; stack = new Stack&lt;&gt;();</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">        for (FlowObjectiveCompositionTree node : postfix) {</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">            if (node.operator == FlowObjectiveCompositionManager.PolicyOperator.Application) {</span>
+<span class="nc" id="L465">                stack.push(node);</span>
+            } else {
+<span class="nc" id="L467">                node.rightChild = stack.pop();</span>
+<span class="nc" id="L468">                node.leftChild = stack.pop();</span>
+<span class="nc" id="L469">                stack.push(node);</span>
+            }
+<span class="nc" id="L471">        }</span>
+<span class="nc" id="L472">        return stack.pop();</span>
+    }
+
+    public static Collection&lt;ForwardingObjective&gt; minusForwardingObjectives(Collection&lt;ForwardingObjective&gt; fo1,
+                                                                            Collection&lt;ForwardingObjective&gt; fo2) {
+<span class="nc" id="L477">        Map&lt;Integer, ForwardingObjective&gt; map = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L478" title="All 2 branches missed.">        for (ForwardingObjective fo : fo1) {</span>
+<span class="nc" id="L479">            map.put(fo.id(), fo);</span>
+<span class="nc" id="L480">        }</span>
+<span class="nc bnc" id="L481" title="All 2 branches missed.">        for (ForwardingObjective fo : fo2) {</span>
+<span class="nc" id="L482">            map.remove(fo.id());</span>
+<span class="nc" id="L483">        }</span>
+<span class="nc" id="L484">        return map.values();</span>
+    }
+
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>DefaultDevice.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-api</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net</a> &gt; <span class="el_source">DefaultDevice.java</span></div><h1>DefaultDevice.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net;
+
+import org.onosproject.net.provider.ProviderId;
+import org.onlab.packet.ChassisId;
+
+import java.util.Objects;
+
+import static com.google.common.base.MoreObjects.toStringHelper;
+
+/**
+ * Default infrastructure device model implementation.
+ */
+public class DefaultDevice extends AbstractElement implements Device {
+
+    private final Type type;
+    private final String manufacturer;
+    private final String serialNumber;
+    private final String hwVersion;
+    private final String swVersion;
+    private final ChassisId chassisId;
+
+    // For serialization
+<span class="nc" id="L38">    private DefaultDevice() {</span>
+<span class="nc" id="L39">        this.type = null;</span>
+<span class="nc" id="L40">        this.manufacturer = null;</span>
+<span class="nc" id="L41">        this.hwVersion = null;</span>
+<span class="nc" id="L42">        this.swVersion = null;</span>
+<span class="nc" id="L43">        this.serialNumber = null;</span>
+<span class="nc" id="L44">        this.chassisId = null;</span>
+<span class="nc" id="L45">    }</span>
+
+    /**
+     * Creates a network element attributed to the specified provider.
+     *
+     * @param providerId   identity of the provider
+     * @param id           device identifier
+     * @param type         device type
+     * @param manufacturer device manufacturer
+     * @param hwVersion    device HW version
+     * @param swVersion    device SW version
+     * @param serialNumber device serial number
+     * @param chassisId    chassis id
+     * @param annotations  optional key/value annotations
+     */
+    public DefaultDevice(ProviderId providerId, DeviceId id, Type type,
+                         String manufacturer, String hwVersion, String swVersion,
+                         String serialNumber, ChassisId chassisId,
+                         Annotations... annotations) {
+<span class="fc" id="L64">        super(providerId, id, annotations);</span>
+<span class="fc" id="L65">        this.type = type;</span>
+<span class="fc" id="L66">        this.manufacturer = manufacturer;</span>
+<span class="fc" id="L67">        this.hwVersion = hwVersion;</span>
+<span class="fc" id="L68">        this.swVersion = swVersion;</span>
+<span class="fc" id="L69">        this.serialNumber = serialNumber;</span>
+<span class="fc" id="L70">        this.chassisId = chassisId;</span>
+<span class="fc" id="L71">    }</span>
+
+    @Override
+    public DeviceId id() {
+<span class="fc" id="L75">        return (DeviceId) id;</span>
+    }
+
+    @Override
+    public Type type() {
+<span class="fc" id="L80">        return type;</span>
+    }
+
+    @Override
+    public String manufacturer() {
+<span class="fc" id="L85">        return manufacturer;</span>
+    }
+
+    @Override
+    public String hwVersion() {
+<span class="fc" id="L90">        return hwVersion;</span>
+    }
+
+    @Override
+    public String swVersion() {
+<span class="fc" id="L95">        return swVersion;</span>
+    }
+
+    @Override
+    public String serialNumber() {
+<span class="fc" id="L100">        return serialNumber;</span>
+    }
+
+    @Override
+    public ChassisId chassisId() {
+<span class="nc" id="L105">        return chassisId;</span>
+    }
+
+    @Override
+    public int hashCode() {
+<span class="fc" id="L110">        return Objects.hash(id, type, manufacturer, hwVersion, swVersion, serialNumber);</span>
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        if (this == obj) {</span>
+<span class="fc" id="L116">            return true;</span>
+        }
+<span class="fc bfc" id="L118" title="All 2 branches covered.">        if (obj instanceof DefaultDevice) {</span>
+<span class="fc" id="L119">            final DefaultDevice other = (DefaultDevice) obj;</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">            return Objects.equals(this.id, other.id) &amp;&amp;</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">                    Objects.equals(this.type, other.type) &amp;&amp;</span>
+<span class="pc bpc" id="L122" title="1 of 2 branches missed.">                    Objects.equals(this.manufacturer, other.manufacturer) &amp;&amp;</span>
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">                    Objects.equals(this.hwVersion, other.hwVersion) &amp;&amp;</span>
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">                    Objects.equals(this.swVersion, other.swVersion) &amp;&amp;</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">                    Objects.equals(this.serialNumber, other.serialNumber);</span>
+        }
+<span class="fc" id="L127">        return false;</span>
+    }
+
+    @Override
+    public String toString() {
+<span class="fc" id="L132">        return toStringHelper(this)</span>
+<span class="fc" id="L133">                .add(&quot;id&quot;, id)</span>
+<span class="fc" id="L134">                .add(&quot;type&quot;, type)</span>
+<span class="fc" id="L135">                .add(&quot;manufacturer&quot;, manufacturer)</span>
+<span class="fc" id="L136">                .add(&quot;hwVersion&quot;, hwVersion)</span>
+<span class="fc" id="L137">                .add(&quot;swVersion&quot;, swVersion)</span>
+<span class="fc" id="L138">                .add(&quot;serialNumber&quot;, serialNumber)</span>
+<span class="fc" id="L139">                .toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

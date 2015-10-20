@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>IntentCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">IntentCodec.java</span></div><h1>IntentCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.core.CoreService;
+import org.onosproject.net.NetworkResource;
+import org.onosproject.net.intent.HostToHostIntent;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentService;
+import org.onosproject.net.intent.IntentState;
+import org.onosproject.net.intent.PointToPointIntent;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.net.UrlEscapers;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onlab.util.Tools.nullIsIllegal;
+
+/**
+ * Intent JSON codec.
+ */
+<span class="fc" id="L39">public final class IntentCodec extends JsonCodec&lt;Intent&gt; {</span>
+
+    protected static final String TYPE = &quot;type&quot;;
+    protected static final String ID = &quot;id&quot;;
+    protected static final String APP_ID = &quot;appId&quot;;
+    protected static final String STATE = &quot;state&quot;;
+    protected static final String PRIORITY = &quot;priority&quot;;
+    protected static final String RESOURCES = &quot;resources&quot;;
+    protected static final String MISSING_MEMBER_MESSAGE =
+            &quot; member is required in Intent&quot;;
+
+    @Override
+    public ObjectNode encode(Intent intent, CodecContext context) {
+<span class="fc" id="L52">        checkNotNull(intent, &quot;Intent cannot be null&quot;);</span>
+
+<span class="fc" id="L54">        final ObjectNode result = context.mapper().createObjectNode()</span>
+<span class="fc" id="L55">                .put(TYPE, intent.getClass().getSimpleName())</span>
+<span class="fc" id="L56">                .put(ID, intent.id().toString())</span>
+<span class="fc" id="L57">                .put(APP_ID, UrlEscapers.urlPathSegmentEscaper()</span>
+<span class="fc" id="L58">                        .escape(intent.appId().name()));</span>
+
+<span class="fc" id="L60">        final ArrayNode jsonResources = result.putArray(RESOURCES);</span>
+
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        for (final NetworkResource resource : intent.resources()) {</span>
+<span class="fc" id="L63">            jsonResources.add(resource.toString());</span>
+<span class="fc" id="L64">        }</span>
+
+<span class="fc" id="L66">        IntentService service = context.getService(IntentService.class);</span>
+<span class="fc" id="L67">        IntentState state = service.getIntentState(intent.key());</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">        if (state != null) {</span>
+<span class="fc" id="L69">            result.put(STATE, state.toString());</span>
+        }
+
+<span class="fc" id="L72">        return result;</span>
+    }
+
+    @Override
+    public Intent decode(ObjectNode json, CodecContext context) {
+<span class="fc" id="L77">        checkNotNull(json, &quot;JSON cannot be null&quot;);</span>
+
+<span class="fc" id="L79">        String type = nullIsIllegal(json.get(TYPE),</span>
+<span class="fc" id="L80">                TYPE + MISSING_MEMBER_MESSAGE).asText();</span>
+
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        if (type.equals(PointToPointIntent.class.getSimpleName())) {</span>
+<span class="fc" id="L83">            return context.codec(PointToPointIntent.class).decode(json, context);</span>
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">        } else if (type.equals(HostToHostIntent.class.getSimpleName())) {</span>
+<span class="fc" id="L85">            return context.codec(HostToHostIntent.class).decode(json, context);</span>
+        }
+
+<span class="nc" id="L88">        throw new IllegalArgumentException(&quot;Intent type &quot;</span>
+                + type + &quot; is not supported&quot;);
+    }
+
+    /**
+     * Extracts base intent specific attributes from a JSON object
+     * and adds them to a builder.
+     *
+     * @param json root JSON object
+     * @param context code context
+     * @param builder builder to use for storing the attributes
+     */
+    public static void intentAttributes(ObjectNode json, CodecContext context,
+                                    Intent.Builder builder) {
+<span class="fc" id="L102">        String appId = nullIsIllegal(json.get(IntentCodec.APP_ID),</span>
+<span class="fc" id="L103">                IntentCodec.APP_ID + IntentCodec.MISSING_MEMBER_MESSAGE).asText();</span>
+<span class="fc" id="L104">        CoreService service = context.getService(CoreService.class);</span>
+<span class="fc" id="L105">        builder.appId(service.getAppId(appId));</span>
+
+<span class="fc" id="L107">        JsonNode priorityJson = json.get(IntentCodec.PRIORITY);</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        if (priorityJson != null) {</span>
+<span class="fc" id="L109">            builder.priority(priorityJson.asInt());</span>
+        }
+<span class="fc" id="L111">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

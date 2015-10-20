@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>InstructionCodec.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-common</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.codec.impl</a> &gt; <span class="el_source">InstructionCodec.java</span></div><h1>InstructionCodec.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.codec.impl;
+
+import org.onosproject.codec.CodecContext;
+import org.onosproject.codec.JsonCodec;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
+/**
+ * Instruction codec.
+ */
+<span class="fc" id="L31">public final class InstructionCodec extends JsonCodec&lt;Instruction&gt; {</span>
+
+<span class="fc" id="L33">    protected static final Logger log = LoggerFactory.getLogger(InstructionCodec.class);</span>
+
+    protected static final String TYPE = &quot;type&quot;;
+    protected static final String SUBTYPE = &quot;subtype&quot;;
+    protected static final String PORT = &quot;port&quot;;
+    protected static final String MAC = &quot;mac&quot;;
+    protected static final String VLAN_ID = &quot;vlanId&quot;;
+    protected static final String VLAN_PCP = &quot;vlanPcp&quot;;
+    protected static final String MPLS_LABEL = &quot;label&quot;;
+    protected static final String IP = &quot;ip&quot;;
+    protected static final String FLOW_LABEL = &quot;flowLabel&quot;;
+    protected static final String LAMBDA = &quot;lambda&quot;;
+    protected static final String GRID_TYPE = &quot;gridType&quot;;
+    protected static final String CHANNEL_SPACING = &quot;channelSpacing&quot;;
+    protected static final String SPACING_MULTIPLIER = &quot;spacingMultiplier&quot;;
+    protected static final String SLOT_GRANULARITY = &quot;slotGranularity&quot;;
+    protected static final String ETHERNET_TYPE = &quot;ethernetType&quot;;
+    protected static final String TUNNEL_ID = &quot;tunnelId&quot;;
+    protected static final String TCP_PORT = &quot;tcpPort&quot;;
+    protected static final String UDP_PORT = &quot;udpPort&quot;;
+
+    protected static final String MISSING_MEMBER_MESSAGE =
+            &quot; member is required in Instruction&quot;;
+
+
+    @Override
+    public ObjectNode encode(Instruction instruction, CodecContext context) {
+<span class="fc" id="L60">        checkNotNull(instruction, &quot;Instruction cannot be null&quot;);</span>
+
+<span class="fc" id="L62">        return new EncodeInstructionCodecHelper(instruction, context).encode();</span>
+    }
+
+    @Override
+    public Instruction decode(ObjectNode json, CodecContext context) {
+<span class="pc bpc" id="L67" title="2 of 4 branches missed.">        if (json == null || !json.isObject()) {</span>
+<span class="nc" id="L68">            return null;</span>
+        }
+
+<span class="fc" id="L71">        return new DecodeInstructionCodecHelper(json).decode();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

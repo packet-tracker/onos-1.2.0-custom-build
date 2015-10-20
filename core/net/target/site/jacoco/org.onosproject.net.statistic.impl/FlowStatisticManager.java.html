@@ -1,0 +1,635 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>FlowStatisticManager.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.statistic.impl</a> &gt; <span class="el_source">FlowStatisticManager.java</span></div><h1>FlowStatisticManager.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.onosproject.net.statistic.impl;
+
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableSet;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.Service;
+import org.onosproject.cli.Comparators;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.Device;
+import org.onosproject.net.Port;
+import org.onosproject.net.PortNumber;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.DefaultTypedFlowEntry;
+import org.onosproject.net.flow.FlowEntry;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleEvent;
+import org.onosproject.net.flow.FlowRuleListener;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TypedStoredFlowEntry;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.statistic.DefaultLoad;
+import org.onosproject.net.statistic.FlowStatisticService;
+import org.onosproject.net.statistic.Load;
+import org.onosproject.net.statistic.FlowStatisticStore;
+import org.onosproject.net.statistic.SummaryFlowEntryWithLoad;
+import org.onosproject.net.statistic.TypedFlowEntryWithLoad;
+
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.onosproject.security.AppGuard.checkPermission;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.onosproject.security.AppPermission.Type.*;
+
+/**
+ * Provides an implementation of the Flow Statistic Service.
+ */
+@Component(immediate = true, enabled = true)
+@Service
+<span class="nc" id="L70">public class FlowStatisticManager implements FlowStatisticService {</span>
+<span class="nc" id="L71">    private final Logger log = getLogger(getClass());</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowRuleService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowStatisticStore flowStatisticStore;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+<span class="nc" id="L82">    private final InternalFlowRuleStatsListener frListener = new InternalFlowRuleStatsListener();</span>
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L86">        flowRuleService.addListener(frListener);</span>
+<span class="nc" id="L87">        log.info(&quot;Started&quot;);</span>
+<span class="nc" id="L88">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L92">        flowRuleService.removeListener(frListener);</span>
+<span class="nc" id="L93">        log.info(&quot;Stopped&quot;);</span>
+<span class="nc" id="L94">    }</span>
+
+    @Override
+    public Map&lt;ConnectPoint, SummaryFlowEntryWithLoad&gt; loadSummary(Device device) {
+<span class="nc" id="L98">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L100">        Map&lt;ConnectPoint, SummaryFlowEntryWithLoad&gt; summaryLoad = new TreeMap&lt;&gt;(Comparators.CONNECT_POINT_COMPARATOR);</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if (device == null) {</span>
+<span class="nc" id="L103">            return summaryLoad;</span>
+        }
+
+<span class="nc" id="L106">        List&lt;Port&gt; ports = new ArrayList&lt;&gt;(deviceService.getPorts(device.id()));</span>
+
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        for (Port port : ports) {</span>
+<span class="nc" id="L109">            ConnectPoint cp = new ConnectPoint(device.id(), port.number());</span>
+<span class="nc" id="L110">            SummaryFlowEntryWithLoad sfe = loadSummaryPortInternal(cp);</span>
+<span class="nc" id="L111">            summaryLoad.put(cp, sfe);</span>
+<span class="nc" id="L112">        }</span>
+
+<span class="nc" id="L114">        return summaryLoad;</span>
+    }
+
+    @Override
+    public SummaryFlowEntryWithLoad loadSummary(Device device, PortNumber pNumber) {
+<span class="nc" id="L119">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L121">        ConnectPoint cp = new ConnectPoint(device.id(), pNumber);</span>
+<span class="nc" id="L122">        return loadSummaryPortInternal(cp);</span>
+    }
+
+    @Override
+    public Map&lt;ConnectPoint, List&lt;TypedFlowEntryWithLoad&gt;&gt; loadAllByType(Device device,
+                                                                  TypedStoredFlowEntry.FlowLiveType liveType,
+                                                                  Instruction.Type instType) {
+<span class="nc" id="L129">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L131">        Map&lt;ConnectPoint, List&lt;TypedFlowEntryWithLoad&gt;&gt; allLoad = new TreeMap&lt;&gt;(Comparators.CONNECT_POINT_COMPARATOR);</span>
+
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (device == null) {</span>
+<span class="nc" id="L134">            return allLoad;</span>
+        }
+
+<span class="nc" id="L137">        List&lt;Port&gt; ports = new ArrayList&lt;&gt;(deviceService.getPorts(device.id()));</span>
+
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        for (Port port : ports) {</span>
+<span class="nc" id="L140">            ConnectPoint cp = new ConnectPoint(device.id(), port.number());</span>
+<span class="nc" id="L141">            List&lt;TypedFlowEntryWithLoad&gt; tfel = loadAllPortInternal(cp, liveType, instType);</span>
+<span class="nc" id="L142">            allLoad.put(cp, tfel);</span>
+<span class="nc" id="L143">        }</span>
+
+<span class="nc" id="L145">        return allLoad;</span>
+    }
+
+    @Override
+    public List&lt;TypedFlowEntryWithLoad&gt; loadAllByType(Device device, PortNumber pNumber,
+                                               TypedStoredFlowEntry.FlowLiveType liveType,
+                                               Instruction.Type instType) {
+<span class="nc" id="L152">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L154">        ConnectPoint cp = new ConnectPoint(device.id(), pNumber);</span>
+<span class="nc" id="L155">        return loadAllPortInternal(cp, liveType, instType);</span>
+    }
+
+    @Override
+    public Map&lt;ConnectPoint, List&lt;TypedFlowEntryWithLoad&gt;&gt; loadTopnByType(Device device,
+                                                                   TypedStoredFlowEntry.FlowLiveType liveType,
+                                                                   Instruction.Type instType,
+                                                                   int topn) {
+<span class="nc" id="L163">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L165">        Map&lt;ConnectPoint, List&lt;TypedFlowEntryWithLoad&gt;&gt; allLoad = new TreeMap&lt;&gt;(Comparators.CONNECT_POINT_COMPARATOR);</span>
+
+<span class="nc bnc" id="L167" title="All 2 branches missed.">        if (device == null) {</span>
+<span class="nc" id="L168">            return allLoad;</span>
+        }
+
+<span class="nc" id="L171">        List&lt;Port&gt; ports = new ArrayList&lt;&gt;(deviceService.getPorts(device.id()));</span>
+
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        for (Port port : ports) {</span>
+<span class="nc" id="L174">            ConnectPoint cp = new ConnectPoint(device.id(), port.number());</span>
+<span class="nc" id="L175">            List&lt;TypedFlowEntryWithLoad&gt; tfel = loadTopnPortInternal(cp, liveType, instType, topn);</span>
+<span class="nc" id="L176">            allLoad.put(cp, tfel);</span>
+<span class="nc" id="L177">        }</span>
+
+<span class="nc" id="L179">        return allLoad;</span>
+    }
+
+    @Override
+    public List&lt;TypedFlowEntryWithLoad&gt; loadTopnByType(Device device, PortNumber pNumber,
+                                                TypedStoredFlowEntry.FlowLiveType liveType,
+                                                Instruction.Type instType,
+                                                int topn) {
+<span class="nc" id="L187">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L189">        ConnectPoint cp = new ConnectPoint(device.id(), pNumber);</span>
+<span class="nc" id="L190">        return loadTopnPortInternal(cp, liveType, instType, topn);</span>
+    }
+
+    private SummaryFlowEntryWithLoad loadSummaryPortInternal(ConnectPoint cp) {
+<span class="nc" id="L194">        checkPermission(STATISTIC_READ);</span>
+
+        Set&lt;FlowEntry&gt; currentStats;
+        Set&lt;FlowEntry&gt; previousStats;
+
+        TypedStatistics typedStatistics;
+<span class="nc" id="L200">        synchronized (flowStatisticStore) {</span>
+<span class="nc" id="L201">             currentStats = flowStatisticStore.getCurrentFlowStatistic(cp);</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (currentStats == null) {</span>
+<span class="nc" id="L203">                return new SummaryFlowEntryWithLoad(cp, new DefaultLoad());</span>
+            }
+<span class="nc" id="L205">            previousStats = flowStatisticStore.getPreviousFlowStatistic(cp);</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">            if (previousStats == null) {</span>
+<span class="nc" id="L207">                return new SummaryFlowEntryWithLoad(cp, new DefaultLoad());</span>
+            }
+            // copy to local flow entry
+<span class="nc" id="L210">            typedStatistics = new TypedStatistics(currentStats, previousStats);</span>
+
+            // Check for validity of this stats data
+<span class="nc" id="L213">            checkLoadValidity(currentStats, previousStats);</span>
+<span class="nc" id="L214">        }</span>
+
+        // current and previous set is not empty!
+<span class="nc" id="L217">        Set&lt;FlowEntry&gt; currentSet = typedStatistics.current();</span>
+<span class="nc" id="L218">        Set&lt;FlowEntry&gt; previousSet = typedStatistics.previous();</span>
+<span class="nc" id="L219">        Load totalLoad = new DefaultLoad(aggregateBytesSet(currentSet), aggregateBytesSet(previousSet),</span>
+<span class="nc" id="L220">                TypedFlowEntryWithLoad.avgPollInterval());</span>
+
+        Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentMap;
+        Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousMap;
+
+<span class="nc" id="L225">        currentMap = typedStatistics.currentImmediate();</span>
+<span class="nc" id="L226">        previousMap = typedStatistics.previousImmediate();</span>
+<span class="nc" id="L227">        Load immediateLoad = new DefaultLoad(aggregateBytesMap(currentMap), aggregateBytesMap(previousMap),</span>
+<span class="nc" id="L228">                TypedFlowEntryWithLoad.shortPollInterval());</span>
+
+<span class="nc" id="L230">        currentMap = typedStatistics.currentShort();</span>
+<span class="nc" id="L231">        previousMap = typedStatistics.previousShort();</span>
+<span class="nc" id="L232">        Load shortLoad = new DefaultLoad(aggregateBytesMap(currentMap), aggregateBytesMap(previousMap),</span>
+<span class="nc" id="L233">                TypedFlowEntryWithLoad.shortPollInterval());</span>
+
+<span class="nc" id="L235">        currentMap = typedStatistics.currentMid();</span>
+<span class="nc" id="L236">        previousMap = typedStatistics.previousMid();</span>
+<span class="nc" id="L237">        Load midLoad = new DefaultLoad(aggregateBytesMap(currentMap), aggregateBytesMap(previousMap),</span>
+<span class="nc" id="L238">                TypedFlowEntryWithLoad.midPollInterval());</span>
+
+<span class="nc" id="L240">        currentMap = typedStatistics.currentLong();</span>
+<span class="nc" id="L241">        previousMap = typedStatistics.previousLong();</span>
+<span class="nc" id="L242">        Load longLoad = new DefaultLoad(aggregateBytesMap(currentMap), aggregateBytesMap(previousMap),</span>
+<span class="nc" id="L243">                TypedFlowEntryWithLoad.longPollInterval());</span>
+
+<span class="nc" id="L245">        currentMap = typedStatistics.currentUnknown();</span>
+<span class="nc" id="L246">        previousMap = typedStatistics.previousUnknown();</span>
+<span class="nc" id="L247">        Load unknownLoad = new DefaultLoad(aggregateBytesMap(currentMap), aggregateBytesMap(previousMap),</span>
+<span class="nc" id="L248">                TypedFlowEntryWithLoad.avgPollInterval());</span>
+
+<span class="nc" id="L250">        return new SummaryFlowEntryWithLoad(cp, totalLoad, immediateLoad, shortLoad, midLoad, longLoad, unknownLoad);</span>
+    }
+
+    private List&lt;TypedFlowEntryWithLoad&gt; loadAllPortInternal(ConnectPoint cp,
+                                                             TypedStoredFlowEntry.FlowLiveType liveType,
+                                                             Instruction.Type instType) {
+<span class="nc" id="L256">        checkPermission(STATISTIC_READ);</span>
+
+<span class="nc" id="L258">        List&lt;TypedFlowEntryWithLoad&gt; retTFEL = new ArrayList&lt;&gt;();</span>
+
+        Set&lt;FlowEntry&gt; currentStats;
+        Set&lt;FlowEntry&gt; previousStats;
+
+        TypedStatistics typedStatistics;
+<span class="nc" id="L264">        synchronized (flowStatisticStore) {</span>
+<span class="nc" id="L265">            currentStats = flowStatisticStore.getCurrentFlowStatistic(cp);</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">            if (currentStats == null) {</span>
+<span class="nc" id="L267">                return retTFEL;</span>
+            }
+<span class="nc" id="L269">            previousStats = flowStatisticStore.getPreviousFlowStatistic(cp);</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">            if (previousStats == null) {</span>
+<span class="nc" id="L271">                return retTFEL;</span>
+            }
+            // copy to local flow entry set
+<span class="nc" id="L274">            typedStatistics = new TypedStatistics(currentStats, previousStats);</span>
+
+            // Check for validity of this stats data
+<span class="nc" id="L277">            checkLoadValidity(currentStats, previousStats);</span>
+<span class="nc" id="L278">        }</span>
+
+        // current and previous set is not empty!
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        boolean isAllLiveType = (liveType == null ? true : false); // null is all live type</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        boolean isAllInstType = (instType == null ? true : false); // null is all inst type</span>
+
+        Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentMap;
+        Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousMap;
+
+<span class="nc bnc" id="L287" title="All 4 branches missed.">        if (isAllLiveType || liveType == TypedStoredFlowEntry.FlowLiveType.IMMEDIATE_FLOW) {</span>
+<span class="nc" id="L288">            currentMap = typedStatistics.currentImmediate();</span>
+<span class="nc" id="L289">            previousMap = typedStatistics.previousImmediate();</span>
+
+<span class="nc" id="L291">            List&lt;TypedFlowEntryWithLoad&gt; fel = typedFlowEntryLoadByInstInternal(cp, currentMap, previousMap,</span>
+<span class="nc" id="L292">                    isAllInstType, instType, TypedFlowEntryWithLoad.shortPollInterval());</span>
+<span class="nc bnc" id="L293" title="All 2 branches missed.">            if (fel.size() &gt; 0) {</span>
+<span class="nc" id="L294">                retTFEL.addAll(fel);</span>
+            }
+        }
+
+<span class="nc bnc" id="L298" title="All 4 branches missed.">        if (isAllLiveType || liveType == TypedStoredFlowEntry.FlowLiveType.SHORT_FLOW) {</span>
+<span class="nc" id="L299">            currentMap = typedStatistics.currentShort();</span>
+<span class="nc" id="L300">            previousMap = typedStatistics.previousShort();</span>
+
+<span class="nc" id="L302">            List&lt;TypedFlowEntryWithLoad&gt; fel = typedFlowEntryLoadByInstInternal(cp, currentMap, previousMap,</span>
+<span class="nc" id="L303">                    isAllInstType, instType, TypedFlowEntryWithLoad.shortPollInterval());</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">            if (fel.size() &gt; 0) {</span>
+<span class="nc" id="L305">                retTFEL.addAll(fel);</span>
+            }
+        }
+
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        if (isAllLiveType || liveType == TypedStoredFlowEntry.FlowLiveType.MID_FLOW) {</span>
+<span class="nc" id="L310">            currentMap = typedStatistics.currentMid();</span>
+<span class="nc" id="L311">            previousMap = typedStatistics.previousMid();</span>
+
+<span class="nc" id="L313">            List&lt;TypedFlowEntryWithLoad&gt; fel = typedFlowEntryLoadByInstInternal(cp, currentMap, previousMap,</span>
+<span class="nc" id="L314">                    isAllInstType, instType, TypedFlowEntryWithLoad.midPollInterval());</span>
+<span class="nc bnc" id="L315" title="All 2 branches missed.">            if (fel.size() &gt; 0) {</span>
+<span class="nc" id="L316">                retTFEL.addAll(fel);</span>
+            }
+        }
+
+<span class="nc bnc" id="L320" title="All 4 branches missed.">        if (isAllLiveType || liveType == TypedStoredFlowEntry.FlowLiveType.LONG_FLOW) {</span>
+<span class="nc" id="L321">            currentMap = typedStatistics.currentLong();</span>
+<span class="nc" id="L322">            previousMap = typedStatistics.previousLong();</span>
+
+<span class="nc" id="L324">            List&lt;TypedFlowEntryWithLoad&gt; fel = typedFlowEntryLoadByInstInternal(cp, currentMap, previousMap,</span>
+<span class="nc" id="L325">                    isAllInstType, instType, TypedFlowEntryWithLoad.longPollInterval());</span>
+<span class="nc bnc" id="L326" title="All 2 branches missed.">            if (fel.size() &gt; 0) {</span>
+<span class="nc" id="L327">                retTFEL.addAll(fel);</span>
+            }
+        }
+
+<span class="nc bnc" id="L331" title="All 4 branches missed.">        if (isAllLiveType || liveType == TypedStoredFlowEntry.FlowLiveType.UNKNOWN_FLOW) {</span>
+<span class="nc" id="L332">            currentMap = typedStatistics.currentUnknown();</span>
+<span class="nc" id="L333">            previousMap = typedStatistics.previousUnknown();</span>
+
+<span class="nc" id="L335">            List&lt;TypedFlowEntryWithLoad&gt; fel = typedFlowEntryLoadByInstInternal(cp, currentMap, previousMap,</span>
+<span class="nc" id="L336">                    isAllInstType, instType, TypedFlowEntryWithLoad.avgPollInterval());</span>
+<span class="nc bnc" id="L337" title="All 2 branches missed.">            if (fel.size() &gt; 0) {</span>
+<span class="nc" id="L338">                retTFEL.addAll(fel);</span>
+            }
+        }
+
+<span class="nc" id="L342">        return retTFEL;</span>
+    }
+
+    private List&lt;TypedFlowEntryWithLoad&gt; typedFlowEntryLoadByInstInternal(ConnectPoint cp,
+                                                                      Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentMap,
+                                                                      Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousMap,
+                                                                      boolean isAllInstType,
+                                                                      Instruction.Type instType,
+                                                                      int liveTypePollInterval) {
+<span class="nc" id="L351">        List&lt;TypedFlowEntryWithLoad&gt; fel = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        for (TypedStoredFlowEntry tfe : currentMap.values()) {</span>
+<span class="nc bnc" id="L354" title="All 2 branches missed.">            if (isAllInstType ||</span>
+<span class="nc" id="L355">                    tfe.treatment().allInstructions().stream().</span>
+<span class="nc bnc" id="L356" title="All 2 branches missed.">                            filter(i -&gt; i.type() == instType).</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">                            findAny().isPresent()) {</span>
+<span class="nc" id="L358">                long currentBytes = tfe.bytes();</span>
+<span class="nc" id="L359">                long previousBytes = previousMap.getOrDefault(tfe, new DefaultTypedFlowEntry((FlowRule) tfe)).bytes();</span>
+<span class="nc" id="L360">                Load fLoad = new DefaultLoad(currentBytes, previousBytes, liveTypePollInterval);</span>
+<span class="nc" id="L361">                fel.add(new TypedFlowEntryWithLoad(cp, tfe, fLoad));</span>
+            }
+<span class="nc" id="L363">        }</span>
+
+<span class="nc" id="L365">        return fel;</span>
+    }
+
+    private List&lt;TypedFlowEntryWithLoad&gt; loadTopnPortInternal(ConnectPoint cp,
+                                                             TypedStoredFlowEntry.FlowLiveType liveType,
+                                                             Instruction.Type instType,
+                                                             int topn) {
+<span class="nc" id="L372">        List&lt;TypedFlowEntryWithLoad&gt; fel = loadAllPortInternal(cp, liveType, instType);</span>
+
+        // Sort with descending order of load
+<span class="nc" id="L375">        List&lt;TypedFlowEntryWithLoad&gt; tfel =</span>
+<span class="nc" id="L376">                fel.stream().sorted(Comparators.TYPEFLOWENTRY_WITHLOAD_COMPARATOR).</span>
+<span class="nc" id="L377">                        limit(topn).collect(Collectors.toList());</span>
+
+<span class="nc" id="L379">        return tfel;</span>
+    }
+
+    private long aggregateBytesSet(Set&lt;FlowEntry&gt; setFE) {
+<span class="nc" id="L383">        return setFE.stream().mapToLong(FlowEntry::bytes).sum();</span>
+    }
+
+    private long aggregateBytesMap(Map&lt;FlowRule, TypedStoredFlowEntry&gt; mapFE) {
+<span class="nc" id="L387">        return mapFE.values().stream().mapToLong(FlowEntry::bytes).sum();</span>
+    }
+
+    /**
+     * Internal data class holding two set of typed flow entries.
+     */
+    private static class TypedStatistics {
+        private final ImmutableSet&lt;FlowEntry&gt; currentAll;
+        private final ImmutableSet&lt;FlowEntry&gt; previousAll;
+
+<span class="nc" id="L397">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentImmediate = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L398">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousImmediate = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L400">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentShort = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L401">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousShort = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L403">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentMid = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L404">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousMid = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L406">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentLong = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L407">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousLong = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L409">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentUnknown = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L410">        private final Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousUnknown = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L412">        public TypedStatistics(Set&lt;FlowEntry&gt; current, Set&lt;FlowEntry&gt; previous) {</span>
+<span class="nc" id="L413">            this.currentAll = ImmutableSet.copyOf(checkNotNull(current));</span>
+<span class="nc" id="L414">            this.previousAll = ImmutableSet.copyOf(checkNotNull(previous));</span>
+
+<span class="nc" id="L416">            currentAll.forEach(fe -&gt; {</span>
+<span class="nc" id="L417">                TypedStoredFlowEntry tfe = TypedFlowEntryWithLoad.newTypedStoredFlowEntry(fe);</span>
+
+<span class="nc bnc" id="L419" title="All 5 branches missed.">                switch (tfe.flowLiveType()) {</span>
+                    case IMMEDIATE_FLOW:
+<span class="nc" id="L421">                        currentImmediate.put(fe, tfe);</span>
+<span class="nc" id="L422">                        break;</span>
+                    case SHORT_FLOW:
+<span class="nc" id="L424">                        currentShort.put(fe, tfe);</span>
+<span class="nc" id="L425">                        break;</span>
+                    case MID_FLOW:
+<span class="nc" id="L427">                        currentMid.put(fe, tfe);</span>
+<span class="nc" id="L428">                        break;</span>
+                    case LONG_FLOW:
+<span class="nc" id="L430">                        currentLong.put(fe, tfe);</span>
+<span class="nc" id="L431">                        break;</span>
+                    default:
+<span class="nc" id="L433">                        currentUnknown.put(fe, tfe);</span>
+                        break;
+                }
+<span class="nc" id="L436">            });</span>
+
+<span class="nc" id="L438">            previousAll.forEach(fe -&gt; {</span>
+<span class="nc" id="L439">                TypedStoredFlowEntry tfe = TypedFlowEntryWithLoad.newTypedStoredFlowEntry(fe);</span>
+
+<span class="nc bnc" id="L441" title="All 5 branches missed.">                switch (tfe.flowLiveType()) {</span>
+                    case IMMEDIATE_FLOW:
+<span class="nc bnc" id="L443" title="All 2 branches missed.">                        if (currentImmediate.containsKey(fe)) {</span>
+<span class="nc" id="L444">                            previousImmediate.put(fe, tfe);</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">                        } else if (currentShort.containsKey(fe)) {</span>
+<span class="nc" id="L446">                            previousShort.put(fe, tfe);</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">                        } else if (currentMid.containsKey(fe)) {</span>
+<span class="nc" id="L448">                            previousMid.put(fe, tfe);</span>
+<span class="nc bnc" id="L449" title="All 2 branches missed.">                        } else if (currentLong.containsKey(fe)) {</span>
+<span class="nc" id="L450">                            previousLong.put(fe, tfe);</span>
+                        } else {
+<span class="nc" id="L452">                            previousUnknown.put(fe, tfe);</span>
+                        }
+<span class="nc" id="L454">                        break;</span>
+                    case SHORT_FLOW:
+<span class="nc bnc" id="L456" title="All 2 branches missed.">                        if (currentShort.containsKey(fe)) {</span>
+<span class="nc" id="L457">                            previousShort.put(fe, tfe);</span>
+<span class="nc bnc" id="L458" title="All 2 branches missed.">                        } else if (currentMid.containsKey(fe)) {</span>
+<span class="nc" id="L459">                            previousMid.put(fe, tfe);</span>
+<span class="nc bnc" id="L460" title="All 2 branches missed.">                        } else if (currentLong.containsKey(fe)) {</span>
+<span class="nc" id="L461">                            previousLong.put(fe, tfe);</span>
+                        } else {
+<span class="nc" id="L463">                            previousUnknown.put(fe, tfe);</span>
+                        }
+<span class="nc" id="L465">                        break;</span>
+                    case MID_FLOW:
+<span class="nc bnc" id="L467" title="All 2 branches missed.">                        if (currentMid.containsKey(fe)) {</span>
+<span class="nc" id="L468">                            previousMid.put(fe, tfe);</span>
+<span class="nc bnc" id="L469" title="All 2 branches missed.">                        } else if (currentLong.containsKey(fe)) {</span>
+<span class="nc" id="L470">                            previousLong.put(fe, tfe);</span>
+                        } else {
+<span class="nc" id="L472">                            previousUnknown.put(fe, tfe);</span>
+                        }
+<span class="nc" id="L474">                        break;</span>
+                    case LONG_FLOW:
+<span class="nc bnc" id="L476" title="All 2 branches missed.">                        if (currentLong.containsKey(fe)) {</span>
+<span class="nc" id="L477">                            previousLong.put(fe, tfe);</span>
+                        } else {
+<span class="nc" id="L479">                            previousUnknown.put(fe, tfe);</span>
+                        }
+<span class="nc" id="L481">                        break;</span>
+                    default:
+<span class="nc" id="L483">                        previousUnknown.put(fe, tfe);</span>
+                        break;
+                }
+<span class="nc" id="L486">            });</span>
+<span class="nc" id="L487">        }</span>
+
+        /**
+         * Returns flow entries as the current value.
+         *
+         * @return flow entries as the current value
+         */
+        public ImmutableSet&lt;FlowEntry&gt; current() {
+<span class="nc" id="L495">            return currentAll;</span>
+        }
+
+        /**
+         * Returns flow entries as the previous value.
+         *
+         * @return flow entries as the previous value
+         */
+        public ImmutableSet&lt;FlowEntry&gt; previous() {
+<span class="nc" id="L504">            return previousAll;</span>
+        }
+
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentImmediate() {
+<span class="nc" id="L508">            return currentImmediate;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousImmediate() {
+<span class="nc" id="L511">            return previousImmediate;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentShort() {
+<span class="nc" id="L514">            return currentShort;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousShort() {
+<span class="nc" id="L517">            return previousShort;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentMid() {
+<span class="nc" id="L520">            return currentMid;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousMid() {
+<span class="nc" id="L523">            return previousMid;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentLong() {
+<span class="nc" id="L526">            return currentLong;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousLong() {
+<span class="nc" id="L529">            return previousLong;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; currentUnknown() {
+<span class="nc" id="L532">            return currentUnknown;</span>
+        }
+        public Map&lt;FlowRule, TypedStoredFlowEntry&gt; previousUnknown() {
+<span class="nc" id="L535">            return previousUnknown;</span>
+        }
+
+        /**
+         * Validates values are not empty.
+         *
+         * @return false if either of the sets is empty. Otherwise, true.
+         */
+        public boolean isValid() {
+<span class="nc bnc" id="L544" title="All 4 branches missed.">            return !(currentAll.isEmpty() || previousAll.isEmpty());</span>
+        }
+
+        @Override
+        public int hashCode() {
+<span class="nc" id="L549">            return Objects.hash(currentAll, previousAll);</span>
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+<span class="nc bnc" id="L554" title="All 2 branches missed.">            if (this == obj) {</span>
+<span class="nc" id="L555">                return true;</span>
+            }
+<span class="nc bnc" id="L557" title="All 2 branches missed.">            if (!(obj instanceof TypedStatistics)) {</span>
+<span class="nc" id="L558">                return false;</span>
+            }
+<span class="nc" id="L560">            final TypedStatistics other = (TypedStatistics) obj;</span>
+<span class="nc bnc" id="L561" title="All 2 branches missed.">            return Objects.equals(this.currentAll, other.currentAll) &amp;&amp;</span>
+<span class="nc bnc" id="L562" title="All 2 branches missed.">                    Objects.equals(this.previousAll, other.previousAll);</span>
+        }
+
+        @Override
+        public String toString() {
+<span class="nc" id="L567">            return MoreObjects.toStringHelper(this)</span>
+<span class="nc" id="L568">                    .add(&quot;current&quot;, currentAll)</span>
+<span class="nc" id="L569">                    .add(&quot;previous&quot;, previousAll)</span>
+<span class="nc" id="L570">                    .toString();</span>
+        }
+    }
+
+    private void checkLoadValidity(Set&lt;FlowEntry&gt; current, Set&lt;FlowEntry&gt; previous) {
+<span class="nc" id="L575">        current.stream().forEach(c -&gt; {</span>
+<span class="nc" id="L576">            FlowEntry f = previous.stream().filter(p -&gt; c.equals(p)).</span>
+<span class="nc" id="L577">                    findAny().orElse(null);</span>
+<span class="nc bnc" id="L578" title="All 4 branches missed.">            if (f != null &amp;&amp; c.bytes() &lt; f.bytes()) {</span>
+<span class="nc" id="L579">                log.debug(&quot;FlowStatisticManager:checkLoadValidity():&quot; +</span>
+<span class="nc" id="L580">                        &quot;Error: &quot; + c + &quot; :Previous bytes=&quot; + f.bytes() +</span>
+<span class="nc" id="L581">                        &quot; is larger than current bytes=&quot; + c.bytes() + &quot; !!!&quot;);</span>
+            }
+<span class="nc" id="L583">        });</span>
+
+<span class="nc" id="L585">    }</span>
+
+    /**
+     * Creates a predicate that checks the instruction type of a flow entry is the same as
+     * the specified instruction type.
+     *
+     * @param instType instruction type to be checked
+     * @return predicate
+     */
+    private static Predicate&lt;FlowEntry&gt; hasInstructionType(Instruction.Type instType) {
+<span class="nc" id="L595">        return new Predicate&lt;FlowEntry&gt;() {</span>
+            @Override
+            public boolean apply(FlowEntry flowEntry) {
+<span class="nc" id="L598">                List&lt;Instruction&gt; allInstructions = flowEntry.treatment().allInstructions();</span>
+
+<span class="nc bnc" id="L600" title="All 2 branches missed.">                return allInstructions.stream().filter(i -&gt; i.type() == instType).findAny().isPresent();</span>
+            }
+        };
+    }
+
+    /**
+     * Internal flow rule event listener for FlowStatisticManager.
+     */
+<span class="nc" id="L608">    private class InternalFlowRuleStatsListener implements FlowRuleListener {</span>
+
+        @Override
+        public void event(FlowRuleEvent event) {
+<span class="nc" id="L612">            FlowRule rule = event.subject();</span>
+<span class="nc bnc" id="L613" title="All 6 branches missed.">            switch (event.type()) {</span>
+                case RULE_ADDED:
+<span class="nc bnc" id="L615" title="All 2 branches missed.">                    if (rule instanceof FlowEntry) {</span>
+<span class="nc" id="L616">                        flowStatisticStore.addFlowStatistic((FlowEntry) rule);</span>
+                    }
+                    break;
+                case RULE_UPDATED:
+<span class="nc" id="L620">                    flowStatisticStore.updateFlowStatistic((FlowEntry) rule);</span>
+<span class="nc" id="L621">                    break;</span>
+                case RULE_ADD_REQUESTED:
+<span class="nc" id="L623">                    break;</span>
+                case RULE_REMOVE_REQUESTED:
+<span class="nc" id="L625">                    break;</span>
+                case RULE_REMOVED:
+<span class="nc" id="L627">                    flowStatisticStore.removeFlowStatistic(rule);</span>
+<span class="nc" id="L628">                    break;</span>
+                default:
+<span class="nc" id="L630">                    log.warn(&quot;Unknown flow rule event {}&quot;, event);</span>
+            }
+<span class="nc" id="L632">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>OpticalConnectivityIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">OpticalConnectivityIntentCompiler.java</span></div><h1>OpticalConnectivityIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import com.google.common.collect.ImmutableList;
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.util.Frequency;
+import org.onosproject.net.AnnotationKeys;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DeviceId;
+import org.onosproject.net.Link;
+import org.onosproject.net.OchPort;
+import org.onosproject.net.OchSignal;
+import org.onosproject.net.OchSignalType;
+import org.onosproject.net.OmsPort;
+import org.onosproject.net.Path;
+import org.onosproject.net.Port;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.IntentCompiler;
+import org.onosproject.net.intent.IntentExtensionService;
+import org.onosproject.net.intent.OpticalConnectivityIntent;
+import org.onosproject.net.intent.OpticalPathIntent;
+import org.onosproject.net.intent.impl.IntentCompilationException;
+import org.onosproject.net.newresource.ResourcePath;
+import org.onosproject.net.newresource.ResourceService;
+import org.onosproject.net.resource.ResourceType;
+import org.onosproject.net.resource.link.DefaultLinkResourceRequest;
+import org.onosproject.net.resource.link.LambdaResource;
+import org.onosproject.net.resource.link.LambdaResourceAllocation;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+import org.onosproject.net.resource.link.LinkResourceRequest;
+import org.onosproject.net.resource.link.LinkResourceService;
+import org.onosproject.net.topology.LinkWeight;
+import org.onosproject.net.topology.Topology;
+import org.onosproject.net.topology.TopologyService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
+
+/**
+ * An intent compiler for {@link org.onosproject.net.intent.OpticalConnectivityIntent}.
+ */
+// For now, remove component designation until dependency on the new resource manager is available.
+// @Component(immediate = true)
+<span class="nc" id="L67">public class OpticalConnectivityIntentCompiler implements IntentCompiler&lt;OpticalConnectivityIntent&gt; {</span>
+
+<span class="nc" id="L69">    protected static final Logger log = LoggerFactory.getLogger(OpticalConnectivityIntentCompiler.class);</span>
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected IntentExtensionService intentManager;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyService topologyService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected DeviceService deviceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected ResourceService resourceService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkResourceService linkResourceService;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L88">        intentManager.registerCompiler(OpticalConnectivityIntent.class, this);</span>
+<span class="nc" id="L89">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L93">        intentManager.unregisterCompiler(OpticalConnectivityIntent.class);</span>
+<span class="nc" id="L94">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(OpticalConnectivityIntent intent,
+                                List&lt;Intent&gt; installable,
+                                Set&lt;LinkResourceAllocations&gt; resources) {
+        // Check if source and destination are optical OCh ports
+<span class="nc" id="L101">        ConnectPoint src = intent.getSrc();</span>
+<span class="nc" id="L102">        ConnectPoint dst = intent.getDst();</span>
+<span class="nc" id="L103">        Port srcPort = deviceService.getPort(src.deviceId(), src.port());</span>
+<span class="nc" id="L104">        Port dstPort = deviceService.getPort(dst.deviceId(), dst.port());</span>
+<span class="nc" id="L105">        checkArgument(srcPort instanceof OchPort);</span>
+<span class="nc" id="L106">        checkArgument(dstPort instanceof OchPort);</span>
+
+<span class="nc" id="L108">        log.debug(&quot;Compiling optical connectivity intent between {} and {}&quot;, src, dst);</span>
+
+        // Reserve OCh ports
+<span class="nc" id="L111">        ResourcePath srcPortPath = new ResourcePath(src.deviceId(), src.port());</span>
+<span class="nc" id="L112">        ResourcePath dstPortPath = new ResourcePath(dst.deviceId(), dst.port());</span>
+<span class="nc" id="L113">        List&lt;org.onosproject.net.newresource.ResourceAllocation&gt; allocation =</span>
+<span class="nc" id="L114">                resourceService.allocate(intent.id(), srcPortPath, dstPortPath);</span>
+<span class="nc bnc" id="L115" title="All 2 branches missed.">        if (allocation.isEmpty()) {</span>
+<span class="nc" id="L116">            throw new IntentCompilationException(&quot;Unable to reserve ports for intent &quot; + intent);</span>
+        }
+
+        // Calculate available light paths
+<span class="nc" id="L120">        Set&lt;Path&gt; paths = getOpticalPaths(intent);</span>
+
+        // Use first path that can be successfully reserved
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        for (Path path : paths) {</span>
+
+            // Static or dynamic lambda allocation
+<span class="nc" id="L126">            String staticLambda = srcPort.annotations().value(AnnotationKeys.STATIC_LAMBDA);</span>
+<span class="nc" id="L127">            OchPort srcOchPort = (OchPort) srcPort;</span>
+<span class="nc" id="L128">            OchPort dstOchPort = (OchPort) dstPort;</span>
+            OchSignal ochSignal;
+
+            // FIXME: need to actually reserve the lambda for static lambda's
+<span class="nc bnc" id="L132" title="All 2 branches missed.">            if (staticLambda != null) {</span>
+<span class="nc" id="L133">                ochSignal = new OchSignal(Frequency.ofHz(Long.parseLong(staticLambda)),</span>
+<span class="nc" id="L134">                        srcOchPort.lambda().channelSpacing(),</span>
+<span class="nc" id="L135">                        srcOchPort.lambda().slotGranularity());</span>
+<span class="nc bnc" id="L136" title="All 4 branches missed.">            } else if (!srcOchPort.isTunable() || !dstOchPort.isTunable()) {</span>
+                // FIXME: also check OCh port
+<span class="nc" id="L138">                ochSignal = srcOchPort.lambda();</span>
+            } else {
+                // Request and reserve lambda on path
+<span class="nc" id="L141">                LinkResourceAllocations linkAllocs = assignWavelength(intent, path);</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                if (linkAllocs == null) {</span>
+<span class="nc" id="L143">                    continue;</span>
+                }
+<span class="nc" id="L145">                LambdaResourceAllocation lambdaAlloc = getWavelength(path, linkAllocs);</span>
+<span class="nc" id="L146">                OmsPort omsPort = (OmsPort) deviceService.getPort(path.src().deviceId(), path.src().port());</span>
+<span class="nc" id="L147">                ochSignal = new OchSignal(lambdaAlloc.lambda().toInt(), omsPort.maxFrequency(), omsPort.grid());</span>
+            }
+
+            // Create installable optical path intent
+            // Only support fixed grid for now
+<span class="nc" id="L152">            OchSignalType signalType = OchSignalType.FIXED_GRID;</span>
+
+<span class="nc" id="L154">            Intent newIntent = OpticalPathIntent.builder()</span>
+<span class="nc" id="L155">                    .appId(intent.appId())</span>
+<span class="nc" id="L156">                    .src(intent.getSrc())</span>
+<span class="nc" id="L157">                    .dst(intent.getDst())</span>
+<span class="nc" id="L158">                    .path(path)</span>
+<span class="nc" id="L159">                    .lambda(ochSignal)</span>
+<span class="nc" id="L160">                    .signalType(signalType)</span>
+<span class="nc" id="L161">                    .bidirectional(intent.isBidirectional())</span>
+<span class="nc" id="L162">                    .build();</span>
+
+<span class="nc" id="L164">            return ImmutableList.of(newIntent);</span>
+        }
+
+        // Release port allocations if unsuccessful
+<span class="nc" id="L168">        resourceService.release(intent.id());</span>
+
+<span class="nc" id="L170">        throw new IntentCompilationException(&quot;Unable to find suitable lightpath for intent &quot; + intent);</span>
+    }
+
+    /**
+     * Find the lambda allocated to the path.
+     *
+     * @param path the path
+     * @param linkAllocs the link allocations
+     * @return lambda allocated to the given path
+     */
+    private LambdaResourceAllocation getWavelength(Path path, LinkResourceAllocations linkAllocs) {
+<span class="nc" id="L181">        return path.links().stream()</span>
+<span class="nc" id="L182">                .flatMap(x -&gt; linkAllocs.getResourceAllocation(x).stream())</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                .filter(x -&gt; x.type() == ResourceType.LAMBDA)</span>
+<span class="nc" id="L184">                .findFirst()</span>
+<span class="nc" id="L185">                .map(x -&gt; (LambdaResourceAllocation) x)</span>
+<span class="nc" id="L186">                .orElse(null);</span>
+    }
+
+    /**
+     * Request and reserve first available wavelength across path.
+     *
+     * @param path path in WDM topology
+     * @return first available lambda resource allocation
+     */
+    private LinkResourceAllocations assignWavelength(Intent intent, Path path) {
+<span class="nc" id="L196">        LinkResourceRequest.Builder request =</span>
+<span class="nc" id="L197">                DefaultLinkResourceRequest.builder(intent.id(), path.links())</span>
+<span class="nc" id="L198">                .addLambdaRequest();</span>
+
+<span class="nc" id="L200">        LinkResourceAllocations allocations = linkResourceService.requestResources(request.build());</span>
+
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if (!checkWavelengthContinuity(allocations, path)) {</span>
+<span class="nc" id="L203">            linkResourceService.releaseResources(allocations);</span>
+<span class="nc" id="L204">            return null;</span>
+        }
+
+<span class="nc" id="L207">        return allocations;</span>
+    }
+
+    /**
+     * Checks wavelength continuity constraint across path, i.e., an identical lambda is used on all links.
+     * @return true if wavelength continuity is met, false otherwise
+     */
+    private boolean checkWavelengthContinuity(LinkResourceAllocations allocations, Path path) {
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if (allocations == null) {</span>
+<span class="nc" id="L216">            return false;</span>
+        }
+
+<span class="nc" id="L219">        List&lt;LambdaResource&gt; lambdas = path.links().stream()</span>
+<span class="nc" id="L220">                .flatMap(x -&gt; allocations.getResourceAllocation(x).stream())</span>
+<span class="nc bnc" id="L221" title="All 2 branches missed.">                .filter(x -&gt; x.type() == ResourceType.LAMBDA)</span>
+<span class="nc" id="L222">                .map(x -&gt; ((LambdaResourceAllocation) x).lambda())</span>
+<span class="nc" id="L223">                .collect(Collectors.toList());</span>
+
+<span class="nc" id="L225">        LambdaResource lambda = null;</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">        for (LambdaResource nextLambda: lambdas) {</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if (nextLambda == null) {</span>
+<span class="nc" id="L228">                return false;</span>
+            }
+<span class="nc bnc" id="L230" title="All 2 branches missed.">            if (lambda == null) {</span>
+<span class="nc" id="L231">                lambda = nextLambda;</span>
+<span class="nc" id="L232">                continue;</span>
+            }
+<span class="nc bnc" id="L234" title="All 2 branches missed.">            if (!lambda.equals(nextLambda)) {</span>
+<span class="nc" id="L235">                return false;</span>
+            }
+<span class="nc" id="L237">        }</span>
+
+<span class="nc" id="L239">        return true;</span>
+    }
+
+    private ConnectPoint staticPort(ConnectPoint connectPoint) {
+<span class="nc" id="L243">        Port port = deviceService.getPort(connectPoint.deviceId(), connectPoint.port());</span>
+
+<span class="nc" id="L245">        String staticPort = port.annotations().value(AnnotationKeys.STATIC_PORT);</span>
+
+        // FIXME: need a better way to match the port
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (staticPort != null) {</span>
+<span class="nc bnc" id="L249" title="All 2 branches missed.">            for (Port p : deviceService.getPorts(connectPoint.deviceId())) {</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">                if (staticPort.equals(p.number().name())) {</span>
+<span class="nc" id="L251">                    return new ConnectPoint(p.element().id(), p.number());</span>
+                }
+<span class="nc" id="L253">            }</span>
+        }
+
+<span class="nc" id="L256">        return null;</span>
+    }
+
+    /**
+     * Calculates optical paths in WDM topology.
+     *
+     * @param intent optical connectivity intent
+     * @return set of paths in WDM topology
+     */
+    private Set&lt;Path&gt; getOpticalPaths(OpticalConnectivityIntent intent) {
+        // Route in WDM topology
+<span class="nc" id="L267">        Topology topology = topologyService.currentTopology();</span>
+<span class="nc" id="L268">        LinkWeight weight = edge -&gt; {</span>
+            // Disregard inactive or non-optical links
+<span class="nc bnc" id="L270" title="All 2 branches missed.">            if (edge.link().state() == Link.State.INACTIVE) {</span>
+<span class="nc" id="L271">                return -1;</span>
+            }
+<span class="nc bnc" id="L273" title="All 2 branches missed.">            if (edge.link().type() != Link.Type.OPTICAL) {</span>
+<span class="nc" id="L274">                return -1;</span>
+            }
+            // Adhere to static port mappings
+<span class="nc" id="L277">            DeviceId srcDeviceId = edge.link().src().deviceId();</span>
+<span class="nc bnc" id="L278" title="All 2 branches missed.">            if (srcDeviceId.equals(intent.getSrc().deviceId())) {</span>
+<span class="nc" id="L279">                ConnectPoint srcStaticPort = staticPort(intent.getSrc());</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">                if (srcStaticPort != null) {</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">                    return srcStaticPort.equals(edge.link().src()) ? 1 : -1;</span>
+                }
+            }
+<span class="nc" id="L284">            DeviceId dstDeviceId = edge.link().dst().deviceId();</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">            if (dstDeviceId.equals(intent.getDst().deviceId())) {</span>
+<span class="nc" id="L286">                ConnectPoint dstStaticPort = staticPort(intent.getDst());</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">                if (dstStaticPort != null) {</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">                    return dstStaticPort.equals(edge.link().dst()) ? 1 : -1;</span>
+                }
+            }
+
+<span class="nc" id="L292">            return 1;</span>
+        };
+
+<span class="nc" id="L295">        ConnectPoint start = intent.getSrc();</span>
+<span class="nc" id="L296">        ConnectPoint end = intent.getDst();</span>
+<span class="nc" id="L297">        Set&lt;Path&gt; paths = topologyService.getPaths(topology, start.deviceId(),</span>
+<span class="nc" id="L298">                end.deviceId(), weight);</span>
+
+<span class="nc" id="L300">        return paths;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>

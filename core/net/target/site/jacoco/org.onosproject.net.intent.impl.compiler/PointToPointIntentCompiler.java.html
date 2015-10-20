@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>PointToPointIntentCompiler.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">onos-core-net</a> &gt; <a href="index.source.html" class="el_package">org.onosproject.net.intent.impl.compiler</a> &gt; <span class="el_source">PointToPointIntentCompiler.java</span></div><h1>PointToPointIntentCompiler.java</h1><pre class="source lang-java linenums">/*
+ * Copyright 2014-2015 Open Networking Laboratory
+ *
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.onosproject.net.intent.impl.compiler;
+
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.onosproject.net.ConnectPoint;
+import org.onosproject.net.DefaultPath;
+import org.onosproject.net.Link;
+import org.onosproject.net.Path;
+import org.onosproject.net.intent.Intent;
+import org.onosproject.net.intent.PathIntent;
+import org.onosproject.net.intent.PointToPointIntent;
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.resource.link.LinkResourceAllocations;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import static java.util.Arrays.asList;
+import static org.onosproject.net.DefaultEdgeLink.createEdgeLink;
+
+/**
+ * An intent compiler for {@link org.onosproject.net.intent.PointToPointIntent}.
+ */
+@Component(immediate = true)
+<span class="fc" id="L42">public class PointToPointIntentCompiler</span>
+        extends ConnectivityIntentCompiler&lt;PointToPointIntent&gt; {
+
+    // TODO: use off-the-shell core provider ID
+<span class="fc" id="L46">    private static final ProviderId PID =</span>
+            new ProviderId(&quot;core&quot;, &quot;org.onosproject.core&quot;, true);
+    // TODO: consider whether the default cost is appropriate or not
+    public static final int DEFAULT_COST = 1;
+
+    @Activate
+    public void activate() {
+<span class="nc" id="L53">        intentManager.registerCompiler(PointToPointIntent.class, this);</span>
+<span class="nc" id="L54">    }</span>
+
+    @Deactivate
+    public void deactivate() {
+<span class="nc" id="L58">        intentManager.unregisterCompiler(PointToPointIntent.class);</span>
+<span class="nc" id="L59">    }</span>
+
+    @Override
+    public List&lt;Intent&gt; compile(PointToPointIntent intent, List&lt;Intent&gt; installable,
+                Set&lt;LinkResourceAllocations&gt; resources) {
+
+<span class="fc" id="L65">        ConnectPoint ingressPoint = intent.ingressPoint();</span>
+<span class="fc" id="L66">        ConnectPoint egressPoint = intent.egressPoint();</span>
+
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        if (ingressPoint.deviceId().equals(egressPoint.deviceId())) {</span>
+<span class="fc" id="L69">            List&lt;Link&gt; links = asList(createEdgeLink(ingressPoint, true), createEdgeLink(egressPoint, false));</span>
+<span class="fc" id="L70">            return asList(createPathIntent(new DefaultPath(PID, links, DEFAULT_COST), intent));</span>
+        }
+
+<span class="fc" id="L73">        List&lt;Link&gt; links = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L74">        Path path = getPath(intent, ingressPoint.deviceId(),</span>
+<span class="fc" id="L75">                egressPoint.deviceId());</span>
+
+<span class="fc" id="L77">        links.add(createEdgeLink(ingressPoint, true));</span>
+<span class="fc" id="L78">        links.addAll(path.links());</span>
+<span class="fc" id="L79">        links.add(createEdgeLink(egressPoint, false));</span>
+
+<span class="fc" id="L81">        return asList(createPathIntent(new DefaultPath(PID, links, path.cost(),</span>
+<span class="fc" id="L82">                                                       path.annotations()), intent));</span>
+    }
+
+    /**
+     * Creates a path intent from the specified path and original
+     * connectivity intent.
+     *
+     * @param path   path to create an intent for
+     * @param intent original intent
+     */
+    private Intent createPathIntent(Path path,
+                                    PointToPointIntent intent) {
+<span class="fc" id="L94">        return PathIntent.builder()</span>
+<span class="fc" id="L95">                .appId(intent.appId())</span>
+<span class="fc" id="L96">                .selector(intent.selector())</span>
+<span class="fc" id="L97">                .treatment(intent.treatment())</span>
+<span class="fc" id="L98">                .path(path)</span>
+<span class="fc" id="L99">                .constraints(intent.constraints())</span>
+<span class="fc" id="L100">                .priority(intent.priority())</span>
+<span class="fc" id="L101">                .build();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.2.201409121644</span></div></body></html>
