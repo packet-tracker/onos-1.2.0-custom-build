@@ -4,6 +4,7 @@
     <facet type="Osmorc" name="OSGi">
       <configuration manifestGenerationMode="OsmorcControlled" manifestLocation="" jarfileLocation="onos-app-mfwd-1.4.0-SNAPSHOT.jar" outputPathType="CompilerOutputPath" bndFileLocation="" bundlorFileLocation="" bundleActivator="" bundleSymbolicName="org.onosproject.onos-app-mfwd" bundleVersion="1.4.0.SNAPSHOT" ignoreFilePattern="" useProjectDefaultManifestFileLocation="true" alwaysRebuildBundleJAR="false" doNotSynchronizeWithMaven="false">
         <additionalProperties>
+          <property key="Bundle-Description" value="Multicast forwarding application" />
           <property key="-wab" value="src/main/webapp/" />
           <property key="Import-Package" value="org.slf4j,org.osgi.framework,javax.ws.rs,javax.ws.rs.core,com.sun.jersey.api.core,com.sun.jersey.spi.container.servlet,com.sun.jersey.server.impl.container.servlet,com.fasterxml.jackson.databind,com.fasterxml.jackson.databind.node,org.apache.commons.lang.math.*,org.apache.karaf.shell.commands,org.apache.karaf.shell.console,com.google.common.*,org.onlab.packet.*,org.onlab.rest.*,org.onosproject.*,org.onlab.util.*,org.jboss.netty.util.*" />
           <property key="Web-ContextPath" value="default" />

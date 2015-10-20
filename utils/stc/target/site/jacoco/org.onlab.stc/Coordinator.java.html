@@ -256,7 +256,7 @@ public class Coordinator {
 
 <span class="fc bfc" id="L257" title="All 2 branches covered.">        for (Dependency dependency : processFlow.getEdgesFrom(step)) {</span>
 <span class="fc" id="L258">            Status depStatus = store.getStatus(dependency.dst());</span>
-<span class="pc bpc" id="L259" title="1 of 4 branches missed.">            if (depStatus == WAITING || depStatus == IN_PROGRESS) {</span>
+<span class="fc bfc" id="L259" title="All 4 branches covered.">            if (depStatus == WAITING || depStatus == IN_PROGRESS) {</span>
 <span class="fc" id="L260">                return NOOP;</span>
 <span class="pc bpc" id="L261" title="2 of 4 branches missed.">            } else if ((depStatus == FAILED || depStatus == SKIPPED) &amp;&amp;</span>
 <span class="nc bnc" id="L262" title="All 2 branches missed.">                    !dependency.isSoft()) {</span>

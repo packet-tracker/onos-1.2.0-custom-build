@@ -4,6 +4,7 @@
     <facet type="Osmorc" name="OSGi">
       <configuration manifestGenerationMode="OsmorcControlled" manifestLocation="" jarfileLocation="onos-app-cordfabric-1.4.0-SNAPSHOT.jar" outputPathType="CompilerOutputPath" bndFileLocation="" bundlorFileLocation="" bundleActivator="" bundleSymbolicName="org.onosproject.onos-app-cordfabric" bundleVersion="1.4.0.SNAPSHOT" ignoreFilePattern="" useProjectDefaultManifestFileLocation="true" alwaysRebuildBundleJAR="false" doNotSynchronizeWithMaven="false">
         <additionalProperties>
+          <property key="Bundle-Description" value="Simple fabric application for CORD" />
           <property key="-wab" value="src/main/webapp/" />
           <property key="Include-Resource" value="WEB-INF/classes/apidoc/swagger.json=$MODULE_DIR$/target/swagger.json,OSGI-INF/blueprint/shell-config.xml=$MODULE_DIR$/src/main/resources/OSGI-INF/blueprint/shell-config.xml" />
           <property key="Import-Package" value="org.slf4j,org.osgi.framework,javax.ws.rs,javax.ws.rs.core,com.sun.jersey.api.core,com.sun.jersey.spi.container.servlet,com.sun.jersey.server.impl.container.servlet,com.fasterxml.jackson.databind,com.fasterxml.jackson.databind.node,org.apache.karaf.shell.commands,org.apache.commons.lang.math.*,com.google.common.*,org.onlab.packet.*,org.onlab.rest.*,org.onosproject.*,org.onlab.util.*,org.jboss.netty.util.*" />

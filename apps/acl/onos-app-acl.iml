@@ -4,6 +4,7 @@
     <facet type="Osmorc" name="OSGi">
       <configuration manifestGenerationMode="OsmorcControlled" manifestLocation="" jarfileLocation="onos-app-acl-1.4.0-SNAPSHOT.jar" outputPathType="CompilerOutputPath" bndFileLocation="" bundlorFileLocation="" bundleActivator="" bundleSymbolicName="org.onosproject.onos-app-acl" bundleVersion="1.4.0.SNAPSHOT" ignoreFilePattern="" useProjectDefaultManifestFileLocation="true" alwaysRebuildBundleJAR="false" doNotSynchronizeWithMaven="false">
         <additionalProperties>
+          <property key="Bundle-Description" value="ONOS ACL application" />
           <property key="-wab" value="src/main/webapp/" />
           <property key="Include-Resource" value="WEB-INF/classes/apidoc/swagger.json=$MODULE_DIR$/target/swagger.json" />
           <property key="Import-Package" value="org.slf4j,org.osgi.framework,javax.ws.rs,javax.ws.rs.core,com.fasterxml.jackson*,com.sun.jersey.api.core,com.sun.jersey.spi.container.servlet,com.sun.jersey.server.impl.container.servlet,org.onlab.packet.*,org.onlab.rest.*,org.onosproject.*,org.onlab.util.*,com.google.common.*;" />
