@@ -140,7 +140,7 @@ public abstract class AbstractAccumulator&lt;T&gt; implements Accumulator&lt;T&g
 <span class="fc" id="L140">            synchronized (AbstractAccumulator.this) {</span>
 <span class="fc" id="L141">                idleTask = cancelIfActive(idleTask);</span>
 <span class="pc" id="L142">            }</span>
-<span class="pc bpc" id="L143" title="1 of 2 branches missed.">            if (isReady()) {</span>
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            if (isReady()) {</span>
                 try {
 <span class="fc" id="L145">                    synchronized (AbstractAccumulator.this) {</span>
 <span class="fc" id="L146">                        maxTask = cancelIfActive(maxTask);</span>
@@ -153,9 +153,9 @@ public abstract class AbstractAccumulator&lt;T&gt; implements Accumulator&lt;T&g
 <span class="nc" id="L153">                    log.warn(&quot;Unable to process batch due to&quot;, e);</span>
 <span class="pc" id="L154">                }</span>
             } else {
-<span class="nc" id="L156">                synchronized (AbstractAccumulator.this) {</span>
-<span class="nc" id="L157">                    idleTask = schedule(maxIdleMillis);</span>
-<span class="nc" id="L158">                }</span>
+<span class="fc" id="L156">                synchronized (AbstractAccumulator.this) {</span>
+<span class="fc" id="L157">                    idleTask = schedule(maxIdleMillis);</span>
+<span class="pc" id="L158">                }</span>
             }
 <span class="fc" id="L160">        }</span>
     }

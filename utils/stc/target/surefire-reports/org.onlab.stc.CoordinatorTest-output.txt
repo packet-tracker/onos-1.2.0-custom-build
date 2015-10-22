@@ -1,7 +1,7 @@
 > alpha: started; null
 > one: started; asdads
-< one: completed
 > two: started; asdads
+< one: completed
 < two: completed
 > three: started; null
 > three.a: started; asdads
@@ -13,46 +13,46 @@
 < three: completed
 < alpha: completed
 > hi: started; some-command Barfoo or /home/parallels other args
+< hi: completed
 > ping-1: started; asdads 1.2.3.1
 > ping-3: started; asdads 1.2.3.3
-< hi: completed
-> ping-2: started; asdads 1.2.3.2
 > waz: started; some-command other args
+> ping-2: started; asdads 1.2.3.2
 < ping-1: completed
-< ping-2: completed
 > pong-2: started; asdads
+< ping-3: completed
+> pong-3: started; asdads
 < waz: completed
 > pong-1: started; asdads
-> pong-3: started; asdads
-< pong-2: completed
-< ping-3: completed
+< ping-2: completed
 > yo: started; some-command /home/parallels and Foobar args
-> ding-2: started; asdads
-< pong-1: completed
-> foo.yolo: started; some-command args
+< pong-2: completed
 < pong-3: completed
+< pong-1: completed
 < yo: completed
-< ding-2: completed
+> foo.yolo: started; some-command args
 > dude: started; some-command args
-< foo.yolo: completed
-> ding-3: started; asdads
 > alpha: started; null
-> foo.hello: started; some-command other args
-> one: started; asdads
-< dude: completed
 > ding-1: started; asdads
+> one: started; asdads
 > two: started; asdads
-> up: started; another-command
-< ding-3: completed
+< foo.yolo: completed
 > there: started; another-command
-< there: completed
-< one: completed
+< dude: completed
 < ding-1: completed
-< foo.hello: completed
 < two: completed
+> ding-3: started; asdads
+< one: completed
+> ding-2: started; asdads
+< there: completed
+> up: started; another-command
 > three: started; null
 > three.a: started; asdads
+> foo.hello: started; some-command other args
+< ding-3: completed
+< ding-2: completed
 < up: completed
+< foo.hello: completed
 < three.a: completed
 > three.b: started; asdads
 < three.b: completed
