@@ -465,8 +465,8 @@ public class ReactiveForwarding {
             }
 
 
-            if (pkt.receivedFrom().ipElementId().ipAddress().equals("")) {
-            }
+            //if (pkt.receivedFrom().ipElementId().ipAddress().equals("")) {
+            //}
             // Otherwise, get a set of paths that lead from here to the
             // destination edge switch.
             paths = topologyService.getPaths(topologyService.currentTopology(),
