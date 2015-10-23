@@ -218,7 +218,6 @@ public class ReactiveForwarding {
 
     /**
      * Request packet in via packet service.
-     * Packaet Service를 통하여 Packet을 요청함.
      */
     private void requestIntercepts() {
         TrafficSelector.Builder selector = DefaultTrafficSelector.builder();
@@ -237,7 +236,6 @@ public class ReactiveForwarding {
 
     /**
      * Cancel request for packet in via packet service.
-     * Packet 요청을 취소함.
      */
     private void withdrawIntercepts() {
         TrafficSelector.Builder selector = DefaultTrafficSelector.builder();
@@ -400,7 +398,7 @@ public class ReactiveForwarding {
             }
         } catch (ClassCastException e) {
             // No propertyName defined.
-            enabled = false;
+            enabled = false;fl
         }
         return enabled;
     }
@@ -476,7 +474,7 @@ public class ReactiveForwarding {
                                              dst.location().deviceId());
 
             log.info("{ devicdeId of recevied from packet : " + pkt.receivedFrom().deviceId().toString() + " }, "
-                    + "{ deviceId of deistination location : " + dst.location().deviceId().toString() + " }");
+                   + "{ deviceId of deistination location : " + dst.location().deviceId().toString() + " }");
 
 
             if (paths.isEmpty()) {
@@ -529,6 +527,7 @@ public class ReactiveForwarding {
     private void flood(PacketContext context) {
         if (topologyService.isBroadcastPoint(topologyService.currentTopology(),
                                              context.inPacket().receivedFrom())) {
+
             packetOut(context, PortNumber.FLOOD);
         } else {
             context.block();
