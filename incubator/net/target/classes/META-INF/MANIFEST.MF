@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501108529
+Bnd-LastModified: 1445513384202
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS incubating network control core subsystems
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -38,9 +38,9 @@ Provide-Capability: osgi.service;effective:=active;objectClass:List<Stri
  ent.ListenerService,org.onosproject.incubator.net.tunnel.TunnelAdminSer
  vice,org.onosproject.incubator.net.tunnel.TunnelProviderRegistry,org.on
  osproject.net.provider.ProviderRegistry",osgi.service;effective:=active
- ;objectClass:List<String>="org.onosproject.net.mcast.MulticastRouteServ
- ice,org.onosproject.event.ListenerService",osgi.service;effective:=acti
- ve;objectClass="org.onosproject.incubator.net.PortStatisticsService",os
+ ;objectClass="org.onosproject.incubator.net.PortStatisticsService",osgi
+ .service;effective:=active;objectClass:List<String>="org.onosproject.ne
+ t.mcast.MulticastRouteService,org.onosproject.event.ListenerService",os
  gi.service;effective:=active;objectClass:List<String>="org.onosproject.
  incubator.net.intf.InterfaceService,org.onosproject.incubator.net.intf.
  InterfaceAdminService",osgi.service;effective:=active;objectClass:List<
@@ -60,9 +60,9 @@ Require-Capability: osgi.service;effective:=active;filter:="(objectClass
  .service;effective:=active;filter:="(objectClass=org.onosproject.incuba
  tor.net.tunnel.TunnelStore)",osgi.service;effective:=active;filter:="(o
  bjectClass=org.onosproject.net.config.NetworkConfigRegistry)",osgi.serv
- ice;effective:=active;filter:="(objectClass=org.onosproject.core.CoreSe
- rvice)",osgi.service;effective:=active;filter:="(objectClass=org.onospr
- oject.net.device.DeviceService)",osgi.service;effective:=active;filter:
+ ice;effective:=active;filter:="(objectClass=org.onosproject.net.device.
+ DeviceService)",osgi.service;effective:=active;filter:="(objectClass=or
+ g.onosproject.core.CoreService)",osgi.service;effective:=active;filter:
  ="(objectClass=org.onosproject.net.config.NetworkConfigService)",osgi.s
  ervice;effective:=active;filter:="(objectClass=org.onosproject.incubato
  r.net.resource.label.LabelResourceStore)",osgi.ee;filter:="(&(osgi.ee=J
@@ -71,9 +71,9 @@ Service-Component: OSGI-INF/org.onosproject.incubator.net.virtual.impl.V
  irtualNetworkManager.xml,OSGI-INF/org.onosproject.incubator.net.meter.i
  mpl.MeterManager.xml,OSGI-INF/org.onosproject.incubator.net.tunnel.impl
  .TunnelManager.xml,OSGI-INF/org.onosproject.incubator.net.config.impl.E
- xtraNetworkConfigs.xml,OSGI-INF/org.onosproject.incubator.net.mcast.imp
- l.MulticastRouteManager.xml,OSGI-INF/org.onosproject.incubator.net.impl
- .PortStatisticsManager.xml,OSGI-INF/org.onosproject.incubator.net.intf.
+ xtraNetworkConfigs.xml,OSGI-INF/org.onosproject.incubator.net.impl.Port
+ StatisticsManager.xml,OSGI-INF/org.onosproject.incubator.net.mcast.impl
+ .MulticastRouteManager.xml,OSGI-INF/org.onosproject.incubator.net.intf.
  impl.InterfaceManager.xml,OSGI-INF/org.onosproject.incubator.net.domain
  .impl.IntentDomainManager.xml,OSGI-INF/org.onosproject.incubator.net.re
  source.label.impl.LabelResourceManager.xml

@@ -18,7 +18,7 @@
     <!-- TODO: parametrize this via recipes -->
     <group name="P2P-Intent-Connectivity">
         <step name="P2P-Intent.Uninstall-Reactive-Forwarding"
-              exec="onos ${OC1} app deactivate org.onosproject.fwd org.onosproject.ifwd"/>
+              exec="onos ${OC1} app deactivate org.onosproject.somafwd org.onosproject.ifwd"/>
         <step name="P2P-Intent.Check-Apps" requires="^"
               exec="onos-check-apps ${OC1} fwd,ifwd excludes"/>
 

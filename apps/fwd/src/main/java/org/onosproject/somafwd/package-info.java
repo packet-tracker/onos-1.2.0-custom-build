@@ -17,4 +17,4 @@
 /**
  * Sample application that provides simple form of reactive forwarding.
  */
-package org.onosproject.fwd;
+package org.onosproject.somafwd;

@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501198642
+Bnd-LastModified: 1445513445946
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-Description: ONOS framework applications
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
@@ -11,18 +11,18 @@ Bundle-SymbolicName: org.onosproject.onos-app-vtn-rsc
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
 Export-Package: org.onosproject.vtnrsc;uses:="org.onlab.packet,org.onosp
- roject.net";version="1.4.0",org.onosproject.vtnrsc.web;uses:="com.faste
- rxml.jackson.databind.node,org.onosproject.codec,org.onosproject.vtnrsc
- ";version="1.4.0",org.onosproject.vtnrsc.virtualport;uses:="org.onospro
- ject.net,org.onosproject.vtnrsc";version="1.4.0",org.onosproject.vtnrsc
- .subnet;uses:="org.onosproject.vtnrsc";version="1.4.0",org.onosproject.
- vtnrsc.tunnel;uses:="org.onosproject.vtnrsc";version="1.4.0",org.onospr
- oject.vtnrsc.tenantnetwork;uses:="org.onosproject.vtnrsc";version="1.4.
- 0",org.onosproject.vtnrsc.cli.virtualport;uses:="org.apache.karaf.shell
- .commands,org.onosproject.cli";version="1.4.0",org.onosproject.vtnrsc.c
- li.subnet;uses:="org.apache.karaf.shell.commands,org.onosproject.cli";v
- ersion="1.4.0",org.onosproject.vtnrsc.cli.network;uses:="org.apache.kar
- af.shell.commands,org.onosproject.cli";version="1.4.0"
+ roject.net";version="1.4.0",org.onosproject.vtnrsc.cli.network;uses:="o
+ rg.apache.karaf.shell.commands,org.onosproject.cli";version="1.4.0",org
+ .onosproject.vtnrsc.cli.subnet;uses:="org.apache.karaf.shell.commands,o
+ rg.onosproject.cli";version="1.4.0",org.onosproject.vtnrsc.cli.virtualp
+ ort;uses:="org.apache.karaf.shell.commands,org.onosproject.cli";version
+ ="1.4.0",org.onosproject.vtnrsc.subnet;uses:="org.onosproject.vtnrsc";v
+ ersion="1.4.0",org.onosproject.vtnrsc.tenantnetwork;uses:="org.onosproj
+ ect.vtnrsc";version="1.4.0",org.onosproject.vtnrsc.tunnel;uses:="org.on
+ osproject.vtnrsc";version="1.4.0",org.onosproject.vtnrsc.virtualport;us
+ es:="org.onosproject.net,org.onosproject.vtnrsc";version="1.4.0",org.on
+ osproject.vtnrsc.web;uses:="com.fasterxml.jackson.databind.node,org.ono
+ sproject.codec,org.onosproject.vtnrsc";version="1.4.0"
 Import-Package: com.fasterxml.jackson.databind;version="[2.4,3)",com.fas
  terxml.jackson.databind.node;version="[2.4,3)",com.google.common.base;v
  ersion="[18.0,19)",com.google.common.collect;version="[18.0,19)",org.ap

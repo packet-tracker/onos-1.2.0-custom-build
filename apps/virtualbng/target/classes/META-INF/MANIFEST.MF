@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501175386
+Bnd-LastModified: 1445513428532
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-ClassPath: WEB-INF/classes
 Bundle-Description: A virtual Broadband Network Gateway(BNG) application
@@ -39,13 +39,13 @@ Require-Capability: osgi.service;effective:=active;filter:="(objectClass
  ive;filter:="(objectClass=org.onosproject.virtualbng.VbngConfigurationS
  ervice)",osgi.service;effective:=active;filter:="(objectClass=org.onosp
  roject.core.CoreService)",osgi.service;effective:=active;filter:="(obje
- ctClass=org.onosproject.net.host.HostService)",osgi.service;effective:=
- active;filter:="(objectClass=org.onosproject.net.intent.IntentService)"
- ,osgi.service;effective:=active;filter:="(objectClass=org.onosproject.r
- est.ApiDocService)",osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
+ ctClass=org.onosproject.rest.ApiDocService)",osgi.service;effective:=ac
+ tive;filter:="(objectClass=org.onosproject.net.host.HostService)",osgi.
+ service;effective:=active;filter:="(objectClass=org.onosproject.net.int
+ ent.IntentService)",osgi.ee;filter:="(&(osgi.ee=JavaSE)(version=1.8))"
 Service-Component: OSGI-INF/org.onosproject.virtualbng.VbngConfiguration
  Manager.xml,OSGI-INF/org.onosproject.virtualbng.VirtualPublicHosts.xml,
- OSGI-INF/org.onosproject.virtualbng.VbngManager.xml,OSGI-INF/org.onospr
- oject.virtualbng.ApiDocRegistrator.xml
+ OSGI-INF/org.onosproject.virtualbng.ApiDocRegistrator.xml,OSGI-INF/org.
+ onosproject.virtualbng.VbngManager.xml
 Tool: Bnd-2.4.0.201411031534
 Web-ContextPath: /onos/virtualbng

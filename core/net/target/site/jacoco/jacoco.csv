@@ -38,8 +38,8 @@ onos-core-net,org.onosproject.net.intent.impl,IntentManager.Direction,9,29,0,0,0
 onos-core-net,org.onosproject.net.intent.impl,IntentCleanup,210,258,29,19,34,62,27,16,7,10
 onos-core-net,org.onosproject.net.intent.impl,ObjectiveTracker.InternalDeviceListener,0,46,3,5,0,8,3,3,0,2
 onos-core-net,org.onosproject.net.intent.impl,IntentManager.InternalTopoChangeDelegate,6,6,0,0,2,1,1,1,1,1
-onos-core-net,org.onosproject.net.intent.impl,IntentManager,218,361,28,10,37,85,31,23,16,19
 onos-core-net,org.onosproject.net.intent.impl,CompilerRegistry,0,125,1,13,0,29,1,13,0,7
+onos-core-net,org.onosproject.net.intent.impl,IntentManager,218,361,28,10,37,85,31,23,16,19
 onos-core-net,org.onosproject.net.intent.impl,ObjectiveTracker.InternalLinkResourceListener,0,17,0,0,0,3,0,2,0,2
 onos-core-net,org.onosproject.net.intent.impl,IntentManager.InternalStoreDelegate,6,17,0,0,2,5,1,3,1,3
 onos-core-net,org.onosproject.net.intent.impl,ObjectiveTracker.ResourceAvailableHandler,1,20,1,1,1,6,1,2,0,2
@@ -62,12 +62,14 @@ onos-core-net,org.onosproject.cluster.impl,MastershipManager.new Object() {...},
 onos-core-net,org.onosproject.cluster.impl,MastershipManager,299,188,31,3,54,45,26,16,10,14
 onos-core-net,org.onosproject.event.impl,CoreEventDispatcher.Watchdog,71,6,4,0,11,1,3,1,1,1
 onos-core-net,org.onosproject.event.impl,CoreEventDispatcher,28,86,3,1,6,21,4,5,2,5
-onos-core-net,org.onosproject.event.impl,CoreEventDispatcher.DispatchLoop,7,85,0,6,2,24,0,7,0,4
+onos-core-net,org.onosproject.event.impl,CoreEventDispatcher.DispatchLoop,7,85,1,5,2,24,1,6,0,4
 onos-core-net,org.onosproject.event.impl,CoreEventDispatcher.new AbstractEvent() {...},0,5,0,0,0,1,0,1,0,1
 onos-core-net,org.onosproject.core.impl,CoreManager,250,0,26,0,54,0,33,0,20,0
 onos-core-net,org.onosproject.core.impl,MetricsManagerComponent,9,0,0,0,5,0,3,0,3,0
 onos-core-net,org.onosproject.core.impl,StoreBasedIdBlockAllocator,20,0,0,0,6,0,3,0,3,0
 onos-core-net,org.onosproject.core.impl,BlockAllocatorBasedIdGenerator,10,62,1,3,0,16,1,3,0,2
+onos-core-net,org.onosproject.app.impl,ApplicationManager.InternalStoreDelegate,42,66,6,12,5,15,6,5,0,2
+onos-core-net,org.onosproject.app.impl,ApplicationManager,103,222,18,14,20,59,21,16,7,14
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager.PolicyOperator,58,0,0,0,5,0,4,0,4,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,ForwardTable.new Object() {...},19,0,0,0,1,0,1,0,1,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager.ObjectiveInstaller,110,0,8,0,23,0,8,0,4,0
@@ -76,8 +78,8 @@ onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCo
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionUtil,951,0,163,0,228,0,106,0,15,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager.InnerDeviceListener,55,0,10,0,14,0,10,0,2,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FilterTable.new Object() {...},19,0,0,0,1,0,1,0,1,0
-onos-core-net,org.onosproject.net.flowobjective.impl.composition,ForwardTable,219,0,11,0,44,0,15,0,9,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionTree.new Object() {...},33,0,0,0,1,0,1,0,1,0
+onos-core-net,org.onosproject.net.flowobjective.impl.composition,ForwardTable,219,0,11,0,44,0,15,0,9,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager.InnerMastershipListener,37,0,5,0,7,0,5,0,2,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager.InnerPipelineContext,14,0,0,0,3,0,3,0,3,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,NextTable,68,0,5,0,17,0,6,0,3,0
@@ -86,10 +88,8 @@ onos-core-net,org.onosproject.net.flowobjective.impl.composition,FilterTable,68,
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionTree,628,0,53,0,136,0,43,0,12,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,NextTable.new Object() {...},19,0,0,0,1,0,1,0,1,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager.InternalStoreDelegate,50,0,2,0,10,0,4,0,3,0
-onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionUtil.new Object() {...},189,0,0,0,5,0,1,0,1,0
 onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionManager,570,0,40,0,97,0,50,0,30,0
-onos-core-net,org.onosproject.app.impl,ApplicationManager.InternalStoreDelegate,42,66,6,12,5,15,6,5,0,2
-onos-core-net,org.onosproject.app.impl,ApplicationManager,103,222,18,14,20,59,21,16,7,14
+onos-core-net,org.onosproject.net.flowobjective.impl.composition,FlowObjectiveCompositionUtil.new Object() {...},189,0,0,0,5,0,1,0,1,0
 onos-core-net,org.onosproject.net.host.impl,HostManager,130,161,20,0,19,39,27,12,17,12
 onos-core-net,org.onosproject.net.host.impl,HostManager.InternalNetworkConfigListener,27,6,6,0,6,1,4,1,1,1
 onos-core-net,org.onosproject.net.host.impl,HostMonitor,31,361,5,19,6,98,6,18,1,11

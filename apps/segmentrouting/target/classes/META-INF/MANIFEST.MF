@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501188452
+Bnd-LastModified: 1445513437144
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-ClassPath: WEB-INF/classes
 Bundle-Description: Segment routing application
@@ -18,16 +18,16 @@ Export-Package: org.onosproject.segmentrouting;uses:="org.onlab.packet,o
  sproject.net.intent,org.onosproject.net.link,org.onosproject.net.packet
  ,org.onosproject.net.topology,org.onosproject.segmentrouting.grouphandl
  er,org.onosproject.store.service,org.slf4j";version="1.4.0",org.onospro
- ject.segmentrouting.config;uses:="org.onlab.packet,org.onosproject.net,
- org.onosproject.net.config,org.onosproject.net.config.basics";version="
- 1.4.0",org.onosproject.segmentrouting.web;uses:="com.fasterxml.jackson.
- databind.node,javax.ws.rs,javax.ws.rs.core,org.onosproject.codec,org.on
- osproject.rest,org.onosproject.segmentrouting";version="1.4.0",org.onos
- project.segmentrouting.grouphandler;uses:="org.onlab.packet,org.onlab.u
- til,org.onosproject.core,org.onosproject.net,org.onosproject.net.flowob
- jective,org.onosproject.net.group,org.onosproject.net.link,org.onosproj
- ect.store.service,org.slf4j";version="1.4.0",org.onosproject.segmentrou
- ting.cli;uses:="org.apache.karaf.shell.commands,org.onosproject.cli";ve
+ ject.segmentrouting.cli;uses:="org.apache.karaf.shell.commands,org.onos
+ project.cli";version="1.4.0",org.onosproject.segmentrouting.config;uses
+ :="org.onlab.packet,org.onosproject.net,org.onosproject.net.config,org.
+ onosproject.net.config.basics";version="1.4.0",org.onosproject.segmentr
+ outing.grouphandler;uses:="org.onlab.packet,org.onlab.util,org.onosproj
+ ect.core,org.onosproject.net,org.onosproject.net.flowobjective,org.onos
+ project.net.group,org.onosproject.net.link,org.onosproject.store.servic
+ e,org.slf4j";version="1.4.0",org.onosproject.segmentrouting.web;uses:="
+ com.fasterxml.jackson.databind.node,javax.ws.rs,javax.ws.rs.core,org.on
+ osproject.codec,org.onosproject.rest,org.onosproject.segmentrouting";ve
  rsion="1.4.0"
 Import-Package: org.slf4j;version="[1.7,2)",javax.ws.rs;version="[1.1,2)
  ",javax.ws.rs.core;version="[1.1,2)",com.fasterxml.jackson.databind;ver

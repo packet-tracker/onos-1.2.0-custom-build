@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501101974
+Bnd-LastModified: 1445513378265
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS incubating distributed store subsystems
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -27,9 +27,9 @@ Provide-Capability: osgi.service;effective:=active;objectClass:List<Stri
  osgi.service;effective:=active;objectClass:List<String>="org.onosprojec
  t.incubator.net.tunnel.TunnelStore,org.onosproject.store.Store",osgi.se
  rvice;effective:=active;objectClass:List<String>="org.onosproject.incub
- ator.net.virtual.VirtualNetworkStore,org.onosproject.store.Store",osgi.
- service;effective:=active;objectClass:List<String>="org.onosproject.inc
- ubator.net.resource.label.LabelResourceStore,org.onosproject.store.Stor
+ ator.net.resource.label.LabelResourceStore,org.onosproject.store.Store"
+ ,osgi.service;effective:=active;objectClass:List<String>="org.onosproje
+ ct.incubator.net.virtual.VirtualNetworkStore,org.onosproject.store.Stor
  e"
 Require-Capability: osgi.service;effective:=active;filter:="(objectClass
  =org.onosproject.cluster.ClusterService)",osgi.service;effective:=activ
@@ -44,6 +44,6 @@ Require-Capability: osgi.service;effective:=active;filter:="(objectClass
 Service-Component: OSGI-INF/org.onosproject.incubator.store.meter.impl.D
  istributedMeterStore.xml,OSGI-INF/org.onosproject.incubator.store.tunne
  l.impl.DistributedTunnelStore.xml,OSGI-INF/org.onosproject.incubator.st
- ore.virtual.impl.DistributedVirtualNetworkStore.xml,OSGI-INF/org.onospr
- oject.incubator.store.resource.impl.DistributedLabelResourceStore.xml
+ ore.resource.impl.DistributedLabelResourceStore.xml,OSGI-INF/org.onospr
+ oject.incubator.store.virtual.impl.DistributedVirtualNetworkStore.xml
 Tool: Bnd-2.4.0.201411031534

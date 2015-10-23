@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501208284
+Bnd-LastModified: 1445513454347
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-Description: Virtual tenant network service for CORD
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
@@ -10,12 +10,12 @@ Bundle-Name: onos-app-cordvtn
 Bundle-SymbolicName: org.onosproject.onos-app-cordvtn
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.cordvtn;uses:="org.onlab.packet,org.onos
- project.cluster,org.onosproject.core,org.onosproject.mastership,org.ono
- sproject.net,org.onosproject.net.config,org.onosproject.net.device,org.
- onosproject.net.host,org.onosproject.ovsdb.controller,org.onosproject.s
- tore.service,org.slf4j";version="1.4.0",org.onosproject.cordvtn.cli;use
- s:="org.apache.karaf.shell.commands,org.onosproject.cli";version="1.4.0
+Export-Package: org.onosproject.cordvtn.cli;uses:="org.apache.karaf.shel
+ l.commands,org.onosproject.cli";version="1.4.0",org.onosproject.cordvtn
+ ;uses:="org.onlab.packet,org.onosproject.cluster,org.onosproject.core,o
+ rg.onosproject.mastership,org.onosproject.net,org.onosproject.net.confi
+ g,org.onosproject.net.device,org.onosproject.net.host,org.onosproject.o
+ vsdb.controller,org.onosproject.store.service,org.slf4j";version="1.4.0
  "
 Import-Package: com.fasterxml.jackson.databind;version="[2.4,3)",com.fas
  terxml.jackson.databind.node;version="[2.4,3)",com.google.common.base;v

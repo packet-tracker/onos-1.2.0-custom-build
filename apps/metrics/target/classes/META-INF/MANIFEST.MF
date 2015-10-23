@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501171855
+Bnd-LastModified: 1445513426279
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-Description: Performance metrics collection
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
@@ -10,15 +10,15 @@ Bundle-Name: onos-app-metrics
 Bundle-SymbolicName: org.onosproject.onos-app-metrics
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.metrics.intent;uses:="org.onlab.metrics,
- org.onosproject.core,org.onosproject.event,org.onosproject.net.intent";
- version="1.4.0",org.onosproject.metrics.intent.cli;uses:="org.apache.ka
- raf.shell.commands,org.onosproject.cli";version="1.4.0",org.onosproject
- .metrics.topology;uses:="org.onlab.metrics,org.onosproject.core,org.ono
- sproject.event,org.onosproject.net.device,org.onosproject.net.host,org.
- onosproject.net.link,org.onosproject.net.topology";version="1.4.0",org.
- onosproject.metrics.topology.cli;uses:="org.apache.karaf.shell.commands
- ,org.onosproject.cli";version="1.4.0"
+Export-Package: org.onosproject.metrics.intent.cli;uses:="org.apache.kar
+ af.shell.commands,org.onosproject.cli";version="1.4.0",org.onosproject.
+ metrics.intent;uses:="org.onlab.metrics,org.onosproject.core,org.onospr
+ oject.event,org.onosproject.net.intent";version="1.4.0",org.onosproject
+ .metrics.topology.cli;uses:="org.apache.karaf.shell.commands,org.onospr
+ oject.cli";version="1.4.0",org.onosproject.metrics.topology;uses:="org.
+ onlab.metrics,org.onosproject.core,org.onosproject.event,org.onosprojec
+ t.net.device,org.onosproject.net.host,org.onosproject.net.link,org.onos
+ project.net.topology";version="1.4.0"
 Import-Package: com.codahale.metrics;version="[3.1,4)",com.codahale.metr
  ics.json;version="[3.1,4)",com.fasterxml.jackson.core;version="[2.4,3)"
  ,com.fasterxml.jackson.databind;version="[2.4,3)",com.fasterxml.jackson

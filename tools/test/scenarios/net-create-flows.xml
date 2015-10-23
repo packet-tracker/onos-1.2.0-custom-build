@@ -20,7 +20,7 @@
 
         <!-- Make sure that reactive forwarding is off -->
         <step name="Net-Create-Flows.Uninstall-Reactive-Forwarding"
-              exec="onos ${OC1} app deactivate org.onosproject.fwd org.onosproject.ifwd"/>
+              exec="onos ${OC1} app deactivate org.onosproject.somafwd org.onosproject.ifwd"/>
         <step name="Net-Create-Flows.Check-Apps" requires="^"
               exec="onos-check-apps ${OC1} fwd,ifwd excludes"/>
 

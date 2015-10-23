@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501222330
+Bnd-LastModified: 1445513471233
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS BGPio Protocol subsystem
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -9,22 +9,22 @@ Bundle-Name: onos-bgpio
 Bundle-SymbolicName: org.onosproject.onos-bgpio
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.bgpio.types;uses:="org.jboss.netty.buffe
- r,org.onlab.packet,org.onosproject.bgpio.exceptions,org.onosproject.bgp
- io.protocol,org.slf4j";version="1.4.0",org.onosproject.bgpio.types.attr
- ;uses:="org.jboss.netty.buffer,org.onosproject.bgpio.exceptions,org.ono
- sproject.bgpio.types,org.slf4j";version="1.4.0",org.onosproject.bgpio.u
- til;uses:="org.jboss.netty.buffer,org.onlab.packet,org.onosproject.bgpi
- o.exceptions,org.slf4j";version="1.4.0",org.onosproject.bgpio.exception
- s;uses:="org.jboss.netty.buffer";version="1.4.0",org.onosproject.bgpio.
- protocol;uses:="org.jboss.netty.buffer,org.onosproject.bgpio.exceptions
- ,org.onosproject.bgpio.protocol.link_state,org.onosproject.bgpio.types"
- ;version="1.4.0",org.onosproject.bgpio.protocol.link_state;uses:="org.j
- boss.netty.buffer,org.onosproject.bgpio.exceptions,org.onosproject.bgpi
- o.protocol,org.onosproject.bgpio.types,org.slf4j";version="1.4.0",org.o
- nosproject.bgpio.protocol.ver4;uses:="org.jboss.netty.buffer,org.onospr
- oject.bgpio.exceptions,org.onosproject.bgpio.protocol,org.onosproject.b
- gpio.types,org.slf4j";version="1.4.0"
+Export-Package: org.onosproject.bgpio.exceptions;uses:="org.jboss.netty.
+ buffer";version="1.4.0",org.onosproject.bgpio.protocol;uses:="org.jboss
+ .netty.buffer,org.onosproject.bgpio.exceptions,org.onosproject.bgpio.pr
+ otocol.link_state,org.onosproject.bgpio.types";version="1.4.0",org.onos
+ project.bgpio.protocol.link_state;uses:="org.jboss.netty.buffer,org.ono
+ sproject.bgpio.exceptions,org.onosproject.bgpio.protocol,org.onosprojec
+ t.bgpio.types,org.slf4j";version="1.4.0",org.onosproject.bgpio.protocol
+ .ver4;uses:="org.jboss.netty.buffer,org.onosproject.bgpio.exceptions,or
+ g.onosproject.bgpio.protocol,org.onosproject.bgpio.types,org.slf4j";ver
+ sion="1.4.0",org.onosproject.bgpio.types;uses:="org.jboss.netty.buffer,
+ org.onlab.packet,org.onosproject.bgpio.exceptions,org.onosproject.bgpio
+ .protocol,org.slf4j";version="1.4.0",org.onosproject.bgpio.types.attr;u
+ ses:="org.jboss.netty.buffer,org.onosproject.bgpio.exceptions,org.onosp
+ roject.bgpio.types,org.slf4j";version="1.4.0",org.onosproject.bgpio.uti
+ l;uses:="org.jboss.netty.buffer,org.onlab.packet,org.onosproject.bgpio.
+ exceptions,org.slf4j";version="1.4.0"
 Import-Package: com.google.common.base;version="[18.0,19)",com.google.co
  mmon.primitives;version="[18.0,19)",org.jboss.netty.buffer;version="[3.
  9,4)",org.onlab.packet;version="[1.4,2)",org.slf4j;version="[1.7,2)"

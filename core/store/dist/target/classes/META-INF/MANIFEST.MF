@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445500931820
+Bnd-LastModified: 1445513183655
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS Gossip based distributed store subsystems
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -9,16 +9,16 @@ Bundle-Name: onos-core-dist
 Bundle-SymbolicName: org.onosproject.onos-core-dist
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.store.ecmap;uses:="org.onlab.util,org.on
- osproject.cluster,org.onosproject.store,org.onosproject.store.cluster.m
- essaging,org.onosproject.store.service";version="1.4.0",org.onosproject
- .store.app;uses:="org.onosproject.app,org.onosproject.cluster,org.onosp
- roject.common.app,org.onosproject.core,org.onosproject.security,org.ono
- sproject.store,org.onosproject.store.cluster.messaging,org.onosproject.
- store.service";version="1.4.0",org.onosproject.store.flow;uses:="com.go
- ogle.common.base,org.onosproject.cluster,org.onosproject.event,org.onos
- project.net";version="1.4.0",org.onosproject.store.cfg;uses:="org.onosp
- roject.cfg,org.onosproject.store,org.onosproject.store.service";version
+Export-Package: org.onosproject.store.app;uses:="org.onosproject.app,org
+ .onosproject.cluster,org.onosproject.common.app,org.onosproject.core,or
+ g.onosproject.security,org.onosproject.store,org.onosproject.store.clus
+ ter.messaging,org.onosproject.store.service";version="1.4.0",org.onospr
+ oject.store.cfg;uses:="org.onosproject.cfg,org.onosproject.store,org.on
+ osproject.store.service";version="1.4.0",org.onosproject.store.ecmap;us
+ es:="org.onlab.util,org.onosproject.cluster,org.onosproject.store,org.o
+ nosproject.store.cluster.messaging,org.onosproject.store.service";versi
+ on="1.4.0",org.onosproject.store.flow;uses:="com.google.common.base,org
+ .onosproject.cluster,org.onosproject.event,org.onosproject.net";version
  ="1.4.0",org.onosproject.store.serializers.custom;uses:="com.esotericso
  ftware.kryo,com.esotericsoftware.kryo.io,org.onlab.util,org.onosproject
  .store.cluster.messaging";version="1.4.0"
@@ -78,8 +78,8 @@ Provide-Capability: osgi.service;effective:=active;objectClass:List<Stri
  .service.StorageService,org.onosproject.store.service.StorageAdminServi
  ce",osgi.service;effective:=active;objectClass="org.onosproject.net.sta
  tistic.FlowStatisticStore",osgi.service;effective:=active;objectClass="
- org.onosproject.store.flow.ReplicaInfoService",osgi.service;effective:=
- active;objectClass="org.onosproject.store.service.LogicalClockService",
+ org.onosproject.store.service.LogicalClockService",osgi.service;effecti
+ ve:=active;objectClass="org.onosproject.store.flow.ReplicaInfoService",
  osgi.service;effective:=active;objectClass="org.onosproject.core.Applic
  ationIdStore",osgi.service;effective:=active;objectClass:List<String>="
  org.onosproject.net.link.LinkStore,org.onosproject.store.Store",osgi.se
@@ -102,13 +102,13 @@ Provide-Capability: osgi.service;effective:=active;objectClass:List<Stri
  rg.onosproject.cluster.LeadershipService,org.onosproject.event.Listener
  Service",osgi.service;effective:=active;objectClass="org.onosproject.ne
  t.newresource.ResourceStore",osgi.service;effective:=active;objectClass
- :List<String>="org.onosproject.net.device.DeviceStore,org.onosproject.s
- tore.Store",osgi.service;effective:=active;objectClass:List<String>="or
- g.onosproject.net.config.NetworkConfigStore,org.onosproject.store.Store
- ",osgi.service;effective:=active;objectClass:List<String>="org.onosproj
- ect.net.resource.link.LinkResourceStore,org.onosproject.store.Store",os
- gi.service;effective:=active;objectClass="org.onosproject.store.cluster
- .messaging.ClusterCommunicationService",osgi.service;effective:=active;
+ :List<String>="org.onosproject.net.config.NetworkConfigStore,org.onospr
+ oject.store.Store",osgi.service;effective:=active;objectClass:List<Stri
+ ng>="org.onosproject.net.device.DeviceStore,org.onosproject.store.Store
+ ",osgi.service;effective:=active;objectClass="org.onosproject.store.clu
+ ster.messaging.ClusterCommunicationService",osgi.service;effective:=act
+ ive;objectClass:List<String>="org.onosproject.net.resource.link.LinkRes
+ ourceStore,org.onosproject.store.Store",osgi.service;effective:=active;
  objectClass="org.onosproject.net.device.DeviceClockService",osgi.servic
  e;effective:=active;objectClass:List<String>="org.onosproject.cluster.C
  lusterStore,org.onosproject.store.Store",osgi.service;effective:=active
@@ -156,9 +156,9 @@ Service-Component: OSGI-INF/org.onosproject.store.topology.impl.Distribu
  tedTopologyStore.xml,OSGI-INF/org.onosproject.store.mastership.impl.Con
  sistentDeviceMastershipStore.xml,OSGI-INF/org.onosproject.store.consist
  ent.impl.DatabaseManager.xml,OSGI-INF/org.onosproject.store.statistic.i
- mpl.DistributedFlowStatisticStore.xml,OSGI-INF/org.onosproject.store.fl
- ow.impl.ReplicaInfoManager.xml,OSGI-INF/org.onosproject.store.core.impl
- .LogicalClockManager.xml,OSGI-INF/org.onosproject.store.core.impl.Consi
+ mpl.DistributedFlowStatisticStore.xml,OSGI-INF/org.onosproject.store.co
+ re.impl.LogicalClockManager.xml,OSGI-INF/org.onosproject.store.flow.imp
+ l.ReplicaInfoManager.xml,OSGI-INF/org.onosproject.store.core.impl.Consi
  stentApplicationIdStore.xml,OSGI-INF/org.onosproject.store.link.impl.Go
  ssipLinkStore.xml,OSGI-INF/org.onosproject.store.resource.impl.Consiste
  ntIntentSetMultimap.xml,OSGI-INF/org.onosproject.store.group.impl.Distr
@@ -173,11 +173,11 @@ Service-Component: OSGI-INF/org.onosproject.store.topology.impl.Distribu
  ect.store.intent.impl.GossipIntentStore.xml,OSGI-INF/org.onosproject.st
  ore.consistent.impl.DistributedLeadershipManager.xml,OSGI-INF/org.onosp
  roject.store.newresource.impl.ConsistentResourceStore.xml,OSGI-INF/org.
- onosproject.store.device.impl.GossipDeviceStore.xml,OSGI-INF/org.onospr
- oject.store.config.impl.DistributedNetworkConfigStore.xml,OSGI-INF/org.
+ onosproject.store.config.impl.DistributedNetworkConfigStore.xml,OSGI-IN
+ F/org.onosproject.store.device.impl.GossipDeviceStore.xml,OSGI-INF/org.
  onosproject.store.device.impl.ECDeviceStore.xml,OSGI-INF/org.onosprojec
- t.store.resource.impl.ConsistentLinkResourceStore.xml,OSGI-INF/org.onos
- project.store.cluster.messaging.impl.ClusterCommunicationManager.xml,OS
+ t.store.cluster.messaging.impl.ClusterCommunicationManager.xml,OSGI-INF
+ /org.onosproject.store.resource.impl.ConsistentLinkResourceStore.xml,OS
  GI-INF/org.onosproject.store.device.impl.DeviceClockManager.xml,OSGI-IN
  F/org.onosproject.store.link.impl.ECLinkStore.xml,OSGI-INF/org.onosproj
  ect.store.cluster.impl.DistributedClusterStore.xml,OSGI-INF/org.onospro

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.onosproject.fwd;
+package org.onosproject.somafwd;
 
 import com.google.common.collect.ImmutableSet;
 import org.apache.felix.scr.annotations.Activate;
@@ -93,6 +93,9 @@ public class ReactiveForwarding {
     private static final int DEFAULT_PRIORITY = 10;
 
     private final Logger log = getLogger(getClass());
+
+    private static final String HONEYPOT_ADRESS = "";
+    public static Set<Path> paths;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected TopologyService topologyService;
@@ -186,7 +189,7 @@ public class ReactiveForwarding {
     @Activate
     public void activate(ComponentContext context) {
         cfgService.registerProperties(getClass());
-        appId = coreService.registerApplication("org.onosproject.fwd");
+        appId = coreService.registerApplication("org.onosproject.somafwd");
 
         packetService.addProcessor(processor, PacketProcessor.director(2));
         topologyService.addListener(topologyListener);
@@ -215,6 +218,7 @@ public class ReactiveForwarding {
 
     /**
      * Request packet in via packet service.
+     * Packaet Service를 통하여 Packet을 요청함.
      */
     private void requestIntercepts() {
         TrafficSelector.Builder selector = DefaultTrafficSelector.builder();
@@ -233,6 +237,7 @@ public class ReactiveForwarding {
 
     /**
      * Cancel request for packet in via packet service.
+     * Packet 요청을 취소함.
      */
     private void withdrawIntercepts() {
         TrafficSelector.Builder selector = DefaultTrafficSelector.builder();
@@ -461,12 +466,19 @@ public class ReactiveForwarding {
                 return;
             }
 
+
+            if (pkt.receivedFrom().ipElementId().ipAddress().equals("")) {
+            }
             // Otherwise, get a set of paths that lead from here to the
             // destination edge switch.
-            Set<Path> paths =
-                    topologyService.getPaths(topologyService.currentTopology(),
+            paths = topologyService.getPaths(topologyService.currentTopology(),
                                              pkt.receivedFrom().deviceId(),
                                              dst.location().deviceId());
+
+            log.info("{ devicdeId of recevied from packet : " + pkt.receivedFrom().deviceId().toString() + " }, "
+                    + "{ deviceId of deistination location : " + dst.location().deviceId().toString() + " }");
+
+
             if (paths.isEmpty()) {
                 // If there are no paths, flood and bail.
                 flood(context);

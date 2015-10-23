@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501019358
+Bnd-LastModified: 1445513297424
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS OVSDB plugin API
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -9,15 +9,15 @@ Bundle-Name: onos-ovsdb-api
 Bundle-SymbolicName: org.onosproject.onos-ovsdb-api
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.ovsdb.controller.driver;uses:="com.faste
- rxml.jackson.databind,com.google.common.util.concurrent,io.netty.channe
- l,org.onlab.packet,org.onosproject.net,org.onosproject.net.behaviour,or
- g.onosproject.ovsdb.controller,org.onosproject.ovsdb.rfc.jsonrpc,org.on
- osproject.ovsdb.rfc.message,org.onosproject.ovsdb.rfc.notation,org.onos
- project.ovsdb.rfc.operations,org.onosproject.ovsdb.rfc.schema";version=
- "1.4.0",org.onosproject.ovsdb.controller;uses:="com.google.common.util.
- concurrent,org.onlab.packet,org.onosproject.net,org.onosproject.net.beh
- aviour,org.onosproject.ovsdb.rfc.jsonrpc,org.onosproject.ovsdb.rfc.mess
+Export-Package: org.onosproject.ovsdb.controller;uses:="com.google.commo
+ n.util.concurrent,org.onlab.packet,org.onosproject.net,org.onosproject.
+ net.behaviour,org.onosproject.ovsdb.rfc.jsonrpc,org.onosproject.ovsdb.r
+ fc.message,org.onosproject.ovsdb.rfc.notation,org.onosproject.ovsdb.rfc
+ .operations,org.onosproject.ovsdb.rfc.schema";version="1.4.0",org.onosp
+ roject.ovsdb.controller.driver;uses:="com.fasterxml.jackson.databind,co
+ m.google.common.util.concurrent,io.netty.channel,org.onlab.packet,org.o
+ nosproject.net,org.onosproject.net.behaviour,org.onosproject.ovsdb.cont
+ roller,org.onosproject.ovsdb.rfc.jsonrpc,org.onosproject.ovsdb.rfc.mess
  age,org.onosproject.ovsdb.rfc.notation,org.onosproject.ovsdb.rfc.operat
  ions,org.onosproject.ovsdb.rfc.schema";version="1.4.0"
 Import-Package: com.fasterxml.jackson.databind;version="[2.4,3)",com.goo

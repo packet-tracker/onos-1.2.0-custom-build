@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445500911500
+Bnd-LastModified: 1445513142192
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS incubating core API
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -9,24 +9,24 @@ Bundle-Name: onos-incubator-api
 Bundle-SymbolicName: org.onosproject.onos-incubator-api
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.incubator.net.resource.label;uses:="com.
- google.common.collect,org.onosproject.event,org.onosproject.net,org.ono
- sproject.net.provider,org.onosproject.net.resource,org.onosproject.stor
- e";version="1.4.0",org.onosproject.incubator.net.config.basics;uses:="o
- rg.onosproject.incubator.net.domain,org.onosproject.incubator.net.intf,
- org.onosproject.net,org.onosproject.net.config";version="1.4.0",org.ono
- sproject.incubator.net.virtual;uses:="org.onosproject.event,org.onospro
- ject.incubator.net.tunnel,org.onosproject.net,org.onosproject.net.provi
- der,org.onosproject.store";version="1.4.0",org.onosproject.incubator.ne
- t.domain;uses:="org.onlab.graph,org.onosproject.core,org.onosproject.in
- cubator.net.tunnel,org.onosproject.net,org.onosproject.net.config";vers
- ion="1.4.0",org.onosproject.incubator.net.tunnel;uses:="org.onlab.packe
- t,org.onosproject.core,org.onosproject.event,org.onosproject.net,org.on
- osproject.net.provider,org.onosproject.store,org.onosproject.ui.table,o
- rg.onosproject.ui.table.cell";version="1.4.0",org.onosproject.incubator
- .net.intf;uses:="org.onlab.packet,org.onosproject.net,org.onosproject.n
- et.host";version="1.4.0",org.onosproject.incubator.net;uses:="org.onosp
- roject.net,org.onosproject.net.statistic";version="1.4.0"
+Export-Package: org.onosproject.incubator.net.config.basics;uses:="org.o
+ nosproject.incubator.net.domain,org.onosproject.incubator.net.intf,org.
+ onosproject.net,org.onosproject.net.config";version="1.4.0",org.onospro
+ ject.incubator.net.domain;uses:="org.onlab.graph,org.onosproject.core,o
+ rg.onosproject.incubator.net.tunnel,org.onosproject.net,org.onosproject
+ .net.config";version="1.4.0",org.onosproject.incubator.net.intf;uses:="
+ org.onlab.packet,org.onosproject.net,org.onosproject.net.host";version=
+ "1.4.0",org.onosproject.incubator.net;uses:="org.onosproject.net,org.on
+ osproject.net.statistic";version="1.4.0",org.onosproject.incubator.net.
+ resource.label;uses:="com.google.common.collect,org.onosproject.event,o
+ rg.onosproject.net,org.onosproject.net.provider,org.onosproject.net.res
+ ource,org.onosproject.store";version="1.4.0",org.onosproject.incubator.
+ net.tunnel;uses:="org.onlab.packet,org.onosproject.core,org.onosproject
+ .event,org.onosproject.net,org.onosproject.net.provider,org.onosproject
+ .store,org.onosproject.ui.table,org.onosproject.ui.table.cell";version=
+ "1.4.0",org.onosproject.incubator.net.virtual;uses:="org.onosproject.ev
+ ent,org.onosproject.incubator.net.tunnel,org.onosproject.net,org.onospr
+ oject.net.provider,org.onosproject.store";version="1.4.0"
 Import-Package: com.fasterxml.jackson.databind;version="[2.4,3)",com.fas
  terxml.jackson.databind.node;version="[2.4,3)",com.google.common.base;v
  ersion="[18.0,19)",com.google.common.collect;version="[18.0,19)",com.go

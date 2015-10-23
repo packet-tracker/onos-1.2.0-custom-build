@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501206483
+Bnd-LastModified: 1445513452985
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-ClassPath: WEB-INF/classes
 Bundle-Description: DHCP Server application
@@ -11,9 +11,9 @@ Bundle-Name: onos-app-dhcp
 Bundle-SymbolicName: org.onosproject.onos-app-dhcp
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.dhcp;uses:="org.onlab.packet,org.onospro
- ject.net";version="1.4.0",org.onosproject.dhcp.cli;uses:="org.apache.ka
- raf.shell.commands,org.apache.karaf.shell.console,org.onosproject.cli";
+Export-Package: org.onosproject.dhcp.cli;uses:="org.apache.karaf.shell.c
+ ommands,org.apache.karaf.shell.console,org.onosproject.cli";version="1.
+ 4.0",org.onosproject.dhcp;uses:="org.onlab.packet,org.onosproject.net";
  version="1.4.0",org.onosproject.dhcp.rest;uses:="javax.ws.rs,javax.ws.r
  s.core,org.onosproject.rest";version="1.4.0"
 Import-Package: org.slf4j;version="[1.7,2)",javax.ws.rs;version="[1.1,2)

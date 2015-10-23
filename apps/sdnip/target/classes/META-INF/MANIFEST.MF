@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501167401
+Bnd-LastModified: 1445513423794
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-Description: SDN-IP peering application
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
@@ -10,12 +10,12 @@ Bundle-Name: onos-app-sdnip
 Bundle-SymbolicName: org.onosproject.onos-app-sdnip
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.sdnip;uses:="com.google.common.collect,o
- rg.onosproject.cluster,org.onosproject.core,org.onosproject.incubator.n
- et.intf,org.onosproject.net.config,org.onosproject.net.host,org.onospro
- ject.net.intent,org.onosproject.routing,org.onosproject.routing.config"
- ;version="1.4.0",org.onosproject.sdnip.cli;uses:="org.apache.karaf.shel
- l.commands,org.onosproject.cli";version="1.4.0"
+Export-Package: org.onosproject.sdnip.cli;uses:="org.apache.karaf.shell.
+ commands,org.onosproject.cli";version="1.4.0",org.onosproject.sdnip;use
+ s:="com.google.common.collect,org.onosproject.cluster,org.onosproject.c
+ ore,org.onosproject.incubator.net.intf,org.onosproject.net.config,org.o
+ nosproject.net.host,org.onosproject.net.intent,org.onosproject.routing,
+ org.onosproject.routing.config";version="1.4.0"
 Import-Package: com.google.common.base;version="[18.0,19)",com.google.co
  mmon.collect;version="[18.0,19)",org.apache.karaf.shell.commands;versio
  n="[3.0,4)",org.onlab.packet;version="[1.4,2)",org.onlab.util;version="

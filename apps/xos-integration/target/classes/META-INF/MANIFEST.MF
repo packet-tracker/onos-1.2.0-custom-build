@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501131956
+Bnd-LastModified: 1445513400357
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Blueprint: OSGI-INF/blueprint/shell-config.xml
 Bundle-Description: ONOS XOS integration application
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
@@ -10,11 +10,11 @@ Bundle-Name: onos-app-xos-integration
 Bundle-SymbolicName: org.onosproject.onos-app-xos-integration
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.xosintegration;uses:="org.onosproject.cf
- g,org.onosproject.core,org.onosproject.net,org.onosproject.net.flowobje
- ctive,org.osgi.service.component";version="1.4.0",org.onosproject.xosin
- tegration.cli;uses:="org.apache.karaf.shell.commands,org.onosproject.cl
- i";version="1.4.0"
+Export-Package: org.onosproject.xosintegration.cli;uses:="org.apache.kar
+ af.shell.commands,org.onosproject.cli";version="1.4.0",org.onosproject.
+ xosintegration;uses:="org.onosproject.cfg,org.onosproject.core,org.onos
+ project.net,org.onosproject.net.flowobjective,org.osgi.service.componen
+ t";version="1.4.0"
 Import-Package: com.eclipsesource.json;version="[0.9,1)",com.google.comm
  on.base;version="[18.0,19)",com.google.common.collect;version="[18.0,19
  )",com.google.common.net;version="[18.0,19)",com.sun.jersey.api.client;

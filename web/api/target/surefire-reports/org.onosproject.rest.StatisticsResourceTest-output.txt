@@ -1,114 +1,114 @@
-Oct 22, 2015 1:02:58 AM com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer start
-INFO: Starting the Grizzly2 Web Container...
-Oct 22, 2015 1:02:58 AM org.onosproject.codec.impl.CodecManager activate
-INFO: Started
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.servlet.ServletHandler loadServlet
-INFO: Loading Servlet: com.sun.jersey.spi.container.servlet.ServletContainer
-Oct 22, 2015 1:02:58 AM com.sun.jersey.api.core.PackagesResourceConfig init
-INFO: Scanning for root resource and provider classes in the packages:
+10월 22, 2015 8:27:35 오후 com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer start
+정보: Starting the Grizzly2 Web Container...
+10월 22, 2015 8:27:35 오후 org.onosproject.codec.impl.CodecManager activate
+정보: Started
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.servlet.ServletHandler loadServlet
+정보: Loading Servlet: com.sun.jersey.spi.container.servlet.ServletContainer
+10월 22, 2015 8:27:35 오후 com.sun.jersey.api.core.PackagesResourceConfig init
+정보: Scanning for root resource and provider classes in the packages:
   org.onosproject.rest
-Oct 22, 2015 1:02:58 AM com.sun.jersey.api.core.ScanningResourceConfig logClasses
-INFO: Root resource classes found:
-  class org.onosproject.rest.resources.FlowsWebResource
-  class org.onosproject.rest.resources.ClusterWebResource
-  class org.onosproject.rest.resources.IntentsWebResource
-  class org.onosproject.rest.resources.LinksWebResource
-  class org.onosproject.rest.resources.ApiDocResource
-  class org.onosproject.rest.resources.StatisticsWebResource
-  class org.onosproject.rest.resources.ComponentConfigWebResource
-  class org.onosproject.rest.resources.DevicesWebResource
+10월 22, 2015 8:27:35 오후 com.sun.jersey.api.core.ScanningResourceConfig logClasses
+정보: Root resource classes found:
   class org.onosproject.rest.resources.HostsWebResource
-  class org.onosproject.rest.resources.PathsWebResource
-  class org.onosproject.rest.resources.ApplicationsWebResource
-  class org.onosproject.rest.resources.ConfigWebResource
+  class org.onosproject.rest.resources.LinksWebResource
+  class org.onosproject.rest.resources.DevicesWebResource
   class org.onosproject.rest.resources.TopologyWebResource
+  class org.onosproject.rest.resources.ComponentConfigWebResource
+  class org.onosproject.rest.resources.PathsWebResource
+  class org.onosproject.rest.resources.StatisticsWebResource
+  class org.onosproject.rest.resources.ClusterWebResource
+  class org.onosproject.rest.resources.ApplicationsWebResource
+  class org.onosproject.rest.resources.FlowsWebResource
+  class org.onosproject.rest.resources.ApiDocResource
+  class org.onosproject.rest.resources.ConfigWebResource
+  class org.onosproject.rest.resources.IntentsWebResource
   class org.onosproject.rest.resources.NetworkConfigWebResource
-Oct 22, 2015 1:02:58 AM com.sun.jersey.api.core.ScanningResourceConfig logClasses
-INFO: Provider classes found:
-  class org.onosproject.rest.exceptions.ServerErrorMapper
-  class org.onosproject.rest.exceptions.BadRequestMapper
+10월 22, 2015 8:27:35 오후 com.sun.jersey.api.core.ScanningResourceConfig logClasses
+정보: Provider classes found:
   class org.onosproject.rest.exceptions.ServiceNotFoundMapper
-  class org.onosproject.rest.exceptions.IllegalStateExceptionMapper
-  class org.onosproject.rest.exceptions.IllegalArgumentExceptionMapper
-  class org.onosproject.rest.exceptions.NotFoundMapper
-  class org.onosproject.rest.resources.JsonBodyWriter
-  class org.onosproject.rest.exceptions.WebApplicationExceptionMapper
   class org.onosproject.rest.exceptions.EntityNotFoundMapper
-Oct 22, 2015 1:02:58 AM com.sun.jersey.server.impl.application.WebApplicationImpl _initiate
-INFO: Initiating Jersey application, version 'Jersey: 1.19 02/11/2015 03:25 AM'
-Oct 22, 2015 1:02:58 AM com.sun.jersey.spi.inject.Errors processErrorMessages
-WARNING: The following warnings have been detected with resource and/or provider classes:
+  class org.onosproject.rest.exceptions.IllegalArgumentExceptionMapper
+  class org.onosproject.rest.exceptions.WebApplicationExceptionMapper
+  class org.onosproject.rest.exceptions.ServerErrorMapper
+  class org.onosproject.rest.exceptions.IllegalStateExceptionMapper
+  class org.onosproject.rest.exceptions.BadRequestMapper
+  class org.onosproject.rest.resources.JsonBodyWriter
+  class org.onosproject.rest.exceptions.NotFoundMapper
+10월 22, 2015 8:27:35 오후 com.sun.jersey.server.impl.application.WebApplicationImpl _initiate
+정보: Initiating Jersey application, version 'Jersey: 1.19 02/11/2015 03:25 AM'
+10월 22, 2015 8:27:35 오후 com.sun.jersey.spi.inject.Errors processErrorMessages
+경고: The following warnings have been detected with resource and/or provider classes:
   WARNING: A sub-resource method, public javax.ws.rs.core.Response org.onosproject.rest.resources.ApiDocResource.getDefault() throws java.io.IOException,java.net.URISyntaxException, with URI template, "/", is treated as a resource method
-Oct 22, 2015 1:02:58 AM com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer stop
-INFO: Stopping the Grizzly2 Web Container...
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.http.server.NetworkListener stop
-INFO: Stopped listener bound to [localhost:38819]
-Oct 22, 2015 1:02:58 AM com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer <init>
-INFO: Creating Grizzly2 Web Container configured at the base URI http://localhost:54858/
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.http.server.NetworkListener start
-INFO: Started listener bound to [localhost:54858]
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.http.server.HttpServer start
-INFO: [HttpServer-47] Started.
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.servlet.WebappContext deploy
-INFO: Starting application [TestContext] ...
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.servlet.WebappContext initServlets
-INFO: [TestContext] Servlet [com.sun.jersey.spi.container.servlet.ServletContainer] registered for url pattern(s) [[/*]].
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.servlet.WebappContext deploy
-INFO: Application [TestContext] is ready to service requests.  Root: [].
-Oct 22, 2015 1:02:58 AM com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer start
-INFO: Starting the Grizzly2 Web Container...
-Oct 22, 2015 1:02:58 AM org.onosproject.codec.impl.CodecManager activate
-INFO: Started
-Oct 22, 2015 1:02:58 AM org.glassfish.grizzly.servlet.ServletHandler loadServlet
-INFO: Loading Servlet: com.sun.jersey.spi.container.servlet.ServletContainer
-Oct 22, 2015 1:02:58 AM com.sun.jersey.api.core.PackagesResourceConfig init
-INFO: Scanning for root resource and provider classes in the packages:
+10월 22, 2015 8:27:35 오후 com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer stop
+정보: Stopping the Grizzly2 Web Container...
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.http.server.NetworkListener stop
+정보: Stopped listener bound to [localhost:52105]
+10월 22, 2015 8:27:35 오후 com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer <init>
+정보: Creating Grizzly2 Web Container configured at the base URI http://localhost:52109/
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.http.server.NetworkListener start
+정보: Started listener bound to [localhost:52109]
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.http.server.HttpServer start
+정보: [HttpServer-50] Started.
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.servlet.WebappContext deploy
+정보: Starting application [TestContext] ...
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.servlet.WebappContext initServlets
+정보: [TestContext] Servlet [com.sun.jersey.spi.container.servlet.ServletContainer] registered for url pattern(s) [[/*]].
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.servlet.WebappContext deploy
+정보: Application [TestContext] is ready to service requests.  Root: [].
+10월 22, 2015 8:27:35 오후 com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer start
+정보: Starting the Grizzly2 Web Container...
+10월 22, 2015 8:27:35 오후 org.onosproject.codec.impl.CodecManager activate
+정보: Started
+10월 22, 2015 8:27:35 오후 org.glassfish.grizzly.servlet.ServletHandler loadServlet
+정보: Loading Servlet: com.sun.jersey.spi.container.servlet.ServletContainer
+10월 22, 2015 8:27:35 오후 com.sun.jersey.api.core.PackagesResourceConfig init
+정보: Scanning for root resource and provider classes in the packages:
   org.onosproject.rest
-Oct 22, 2015 1:02:58 AM com.sun.jersey.api.core.ScanningResourceConfig logClasses
-INFO: Root resource classes found:
-  class org.onosproject.rest.resources.FlowsWebResource
-  class org.onosproject.rest.resources.ClusterWebResource
-  class org.onosproject.rest.resources.IntentsWebResource
-  class org.onosproject.rest.resources.LinksWebResource
-  class org.onosproject.rest.resources.ApiDocResource
-  class org.onosproject.rest.resources.StatisticsWebResource
-  class org.onosproject.rest.resources.ComponentConfigWebResource
-  class org.onosproject.rest.resources.DevicesWebResource
+10월 22, 2015 8:27:36 오후 com.sun.jersey.api.core.ScanningResourceConfig logClasses
+정보: Root resource classes found:
   class org.onosproject.rest.resources.HostsWebResource
-  class org.onosproject.rest.resources.PathsWebResource
-  class org.onosproject.rest.resources.ApplicationsWebResource
-  class org.onosproject.rest.resources.ConfigWebResource
+  class org.onosproject.rest.resources.LinksWebResource
+  class org.onosproject.rest.resources.DevicesWebResource
   class org.onosproject.rest.resources.TopologyWebResource
+  class org.onosproject.rest.resources.ComponentConfigWebResource
+  class org.onosproject.rest.resources.PathsWebResource
+  class org.onosproject.rest.resources.StatisticsWebResource
+  class org.onosproject.rest.resources.ClusterWebResource
+  class org.onosproject.rest.resources.ApplicationsWebResource
+  class org.onosproject.rest.resources.FlowsWebResource
+  class org.onosproject.rest.resources.ApiDocResource
+  class org.onosproject.rest.resources.ConfigWebResource
+  class org.onosproject.rest.resources.IntentsWebResource
   class org.onosproject.rest.resources.NetworkConfigWebResource
-Oct 22, 2015 1:02:58 AM com.sun.jersey.api.core.ScanningResourceConfig logClasses
-INFO: Provider classes found:
-  class org.onosproject.rest.exceptions.ServerErrorMapper
-  class org.onosproject.rest.exceptions.BadRequestMapper
+10월 22, 2015 8:27:36 오후 com.sun.jersey.api.core.ScanningResourceConfig logClasses
+정보: Provider classes found:
   class org.onosproject.rest.exceptions.ServiceNotFoundMapper
-  class org.onosproject.rest.exceptions.IllegalStateExceptionMapper
-  class org.onosproject.rest.exceptions.IllegalArgumentExceptionMapper
-  class org.onosproject.rest.exceptions.NotFoundMapper
-  class org.onosproject.rest.resources.JsonBodyWriter
-  class org.onosproject.rest.exceptions.WebApplicationExceptionMapper
   class org.onosproject.rest.exceptions.EntityNotFoundMapper
-Oct 22, 2015 1:02:58 AM com.sun.jersey.server.impl.application.WebApplicationImpl _initiate
-INFO: Initiating Jersey application, version 'Jersey: 1.19 02/11/2015 03:25 AM'
-Oct 22, 2015 1:02:59 AM com.sun.jersey.spi.inject.Errors processErrorMessages
-WARNING: The following warnings have been detected with resource and/or provider classes:
+  class org.onosproject.rest.exceptions.IllegalArgumentExceptionMapper
+  class org.onosproject.rest.exceptions.WebApplicationExceptionMapper
+  class org.onosproject.rest.exceptions.ServerErrorMapper
+  class org.onosproject.rest.exceptions.IllegalStateExceptionMapper
+  class org.onosproject.rest.exceptions.BadRequestMapper
+  class org.onosproject.rest.resources.JsonBodyWriter
+  class org.onosproject.rest.exceptions.NotFoundMapper
+10월 22, 2015 8:27:36 오후 com.sun.jersey.server.impl.application.WebApplicationImpl _initiate
+정보: Initiating Jersey application, version 'Jersey: 1.19 02/11/2015 03:25 AM'
+10월 22, 2015 8:27:36 오후 com.sun.jersey.spi.inject.Errors processErrorMessages
+경고: The following warnings have been detected with resource and/or provider classes:
   WARNING: A sub-resource method, public javax.ws.rs.core.Response org.onosproject.rest.resources.ApiDocResource.getDefault() throws java.io.IOException,java.net.URISyntaxException, with URI template, "/", is treated as a resource method
-Oct 22, 2015 1:02:59 AM com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer stop
-INFO: Stopping the Grizzly2 Web Container...
-Oct 22, 2015 1:02:59 AM org.glassfish.grizzly.http.server.NetworkListener stop
-INFO: Stopped listener bound to [localhost:54858]
-Oct 22, 2015 1:02:59 AM com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer <init>
-INFO: Creating Grizzly2 Web Container configured at the base URI http://localhost:36260/
-Oct 22, 2015 1:02:59 AM org.glassfish.grizzly.http.server.NetworkListener start
-INFO: Started listener bound to [localhost:36260]
-Oct 22, 2015 1:02:59 AM org.glassfish.grizzly.http.server.HttpServer start
-INFO: [HttpServer-48] Started.
-Oct 22, 2015 1:02:59 AM org.glassfish.grizzly.servlet.WebappContext deploy
-INFO: Starting application [TestContext] ...
-Oct 22, 2015 1:02:59 AM org.glassfish.grizzly.servlet.WebappContext initServlets
-INFO: [TestContext] Servlet [com.sun.jersey.spi.container.servlet.ServletContainer] registered for url pattern(s) [[/*]].
-Oct 22, 2015 1:02:59 AM org.glassfish.grizzly.servlet.WebappContext deploy
-INFO: Application [TestContext] is ready to service requests.  Root: [].
+10월 22, 2015 8:27:36 오후 com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer stop
+정보: Stopping the Grizzly2 Web Container...
+10월 22, 2015 8:27:36 오후 org.glassfish.grizzly.http.server.NetworkListener stop
+정보: Stopped listener bound to [localhost:52109]
+10월 22, 2015 8:27:36 오후 com.sun.jersey.test.framework.spi.container.grizzly2.web.GrizzlyWebTestContainerFactory$GrizzlyWebTestContainer <init>
+정보: Creating Grizzly2 Web Container configured at the base URI http://localhost:52111/
+10월 22, 2015 8:27:36 오후 org.glassfish.grizzly.http.server.NetworkListener start
+정보: Started listener bound to [localhost:52111]
+10월 22, 2015 8:27:36 오후 org.glassfish.grizzly.http.server.HttpServer start
+정보: [HttpServer-51] Started.
+10월 22, 2015 8:27:36 오후 org.glassfish.grizzly.servlet.WebappContext deploy
+정보: Starting application [TestContext] ...
+10월 22, 2015 8:27:36 오후 org.glassfish.grizzly.servlet.WebappContext initServlets
+정보: [TestContext] Servlet [com.sun.jersey.spi.container.servlet.ServletContainer] registered for url pattern(s) [[/*]].
+10월 22, 2015 8:27:36 오후 org.glassfish.grizzly.servlet.WebappContext deploy
+정보: Application [TestContext] is ready to service requests.  Root: [].

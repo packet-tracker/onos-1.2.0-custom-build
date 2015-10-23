@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?><components xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0">
-    <scr:component immediate="true" name="org.onosproject.fwd.ReactiveForwarding" activate="activate" deactivate="deactivate" modified="modified">
-        <implementation class="org.onosproject.fwd.ReactiveForwarding"/>
+    <scr:component immediate="true" name="org.onosproject.somafwd.ReactiveForwarding" activate="activate" deactivate="deactivate" modified="modified">
+        <implementation class="org.onosproject.somafwd.ReactiveForwarding"/>
         <property name="packetOutOnly" type="Boolean" value="false"/>
         <property name="packetOutOfppTable" type="Boolean" value="false"/>
         <property name="flowTimeout" type="Integer" value="10"/>
@@ -15,7 +15,7 @@
         <property name="matchTcpUdpPorts" type="Boolean" value="false"/>
         <property name="matchIcmpFields" type="Boolean" value="false"/>
         <property name="ignoreIPv4Multicast" type="Boolean" value="false"/>
-        <property name="service.pid" value="org.onosproject.fwd.ReactiveForwarding"/>
+        <property name="service.pid" value="org.onosproject.somafwd.ReactiveForwarding"/>
         <reference name="topologyService" interface="org.onosproject.net.topology.TopologyService" cardinality="1..1" policy="static" bind="bindTopologyService" unbind="unbindTopologyService"/>
         <reference name="packetService" interface="org.onosproject.net.packet.PacketService" cardinality="1..1" policy="static" bind="bindPacketService" unbind="unbindPacketService"/>
         <reference name="hostService" interface="org.onosproject.net.host.HostService" cardinality="1..1" policy="static" bind="bindHostService" unbind="unbindHostService"/>

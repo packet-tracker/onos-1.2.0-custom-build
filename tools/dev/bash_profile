@@ -16,10 +16,10 @@ if [ -z "${JAVA_HOME}" ]; then
     fi
 fi
 
-export MAVEN=${MAVEN:-~/Applications/apache-maven-3.3.1}
+export MAVEN=${MAVEN:-~/Downloads/apache-maven-3.3.1}
 
 export KARAF_VERSION=${KARAF_VERSION:-3.0.3}
-export KARAF_ROOT=${KARAF_ROOT:-~/Applications/apache-karaf-$KARAF_VERSION}
+export KARAF_ROOT=${KARAF_ROOT:-~/Downloads/apache-karaf-$KARAF_VERSION}
 export KARAF_LOG=$KARAF_ROOT/data/log/karaf.log
 
 # Setup a path
@@ -29,7 +29,7 @@ export PATH="$PATH:$ONOS_ROOT/tools/build"
 export PATH="$PATH:$MAVEN/bin:$KARAF_ROOT/bin"
 
 # Setup cell enviroment
-export ONOS_CELL=${ONOS_CELL:-local}
+#export ONOS_CELL=${ONOS_CELL:-local}
 
 # Setup default web user/password
 export ONOS_WEB_USER=onos

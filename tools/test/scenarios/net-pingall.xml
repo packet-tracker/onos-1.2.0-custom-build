@@ -17,7 +17,7 @@
     <!-- TODO: parametrize this via recipes -->
     <group name="Net-Pingall">
         <step name="Install-Apps"
-              exec="onos ${OC1} app activate org.onosproject.openflow org.onosproject.proxyarp org.onosproject.fwd"/>
+              exec="onos ${OC1} app activate org.onosproject.openflow org.onosproject.proxyarp org.onosproject.somafwd"/>
         <step name="Check-Apps" requires="^"
               exec="onos-check-apps ${OC1} drivers,openflow,proxyarp,fwd includes"/>
 

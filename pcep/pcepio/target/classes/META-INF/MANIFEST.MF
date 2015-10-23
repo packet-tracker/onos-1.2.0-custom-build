@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501033400
+Bnd-LastModified: 1445513315912
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: ONOS Pcepio Protocol subsystem
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -9,15 +9,15 @@ Bundle-Name: onos-pcepio
 Bundle-SymbolicName: org.onosproject.onos-pcepio
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.pcepio.types;uses:="org.jboss.netty.buff
- er,org.onosproject.pcepio.exceptions,org.onosproject.pcepio.protocol,or
- g.slf4j";version="1.4.0",org.onosproject.pcepio.util;uses:="org.jboss.n
- etty.buffer,org.slf4j";version="1.4.0",org.onosproject.pcepio.exception
- s;version="1.4.0",org.onosproject.pcepio.protocol;uses:="org.jboss.nett
- y.buffer,org.onosproject.pcepio.exceptions,org.onosproject.pcepio.types
- ,org.slf4j";version="1.4.0",org.onosproject.pcepio.protocol.ver1;uses:=
- "org.jboss.netty.buffer,org.onosproject.pcepio.exceptions,org.onosproje
- ct.pcepio.protocol,org.onosproject.pcepio.types,org.slf4j";version="1.4
+Export-Package: org.onosproject.pcepio.exceptions;version="1.4.0",org.on
+ osproject.pcepio.protocol;uses:="org.jboss.netty.buffer,org.onosproject
+ .pcepio.exceptions,org.onosproject.pcepio.types,org.slf4j";version="1.4
+ .0",org.onosproject.pcepio.protocol.ver1;uses:="org.jboss.netty.buffer,
+ org.onosproject.pcepio.exceptions,org.onosproject.pcepio.protocol,org.o
+ nosproject.pcepio.types,org.slf4j";version="1.4.0",org.onosproject.pcep
+ io.types;uses:="org.jboss.netty.buffer,org.onosproject.pcepio.exception
+ s,org.onosproject.pcepio.protocol,org.slf4j";version="1.4.0",org.onospr
+ oject.pcepio.util;uses:="org.jboss.netty.buffer,org.slf4j";version="1.4
  .0"
 Import-Package: com.google.common.base;version="[18.0,19)",org.jboss.net
  ty.buffer;version="[3.9,4)",org.slf4j;version="[1.7,2)"

@@ -1,8 +1,8 @@
 > alpha: started; null
 > one: started; asdads
 > two: started; asdads
-< one: completed
 < two: completed
+< one: completed
 > three: started; null
 > three.a: started; asdads
 < three.a: completed
@@ -12,47 +12,47 @@
 < three.c: completed
 < three: completed
 < alpha: completed
-> hi: started; some-command Barfoo or /home/parallels other args
-< hi: completed
+> hi: started; some-command Barfoo or /Users/eunhwanpark other args
 > ping-1: started; asdads 1.2.3.1
 > ping-3: started; asdads 1.2.3.3
 > waz: started; some-command other args
 > ping-2: started; asdads 1.2.3.2
-< ping-1: completed
 > pong-2: started; asdads
-< ping-3: completed
 > pong-3: started; asdads
-< waz: completed
+< hi: completed
 > pong-1: started; asdads
-< ping-2: completed
-> yo: started; some-command /home/parallels and Foobar args
-< pong-2: completed
-< pong-3: completed
-< pong-1: completed
-< yo: completed
+> yo: started; some-command /Users/eunhwanpark and Foobar args
 > foo.yolo: started; some-command args
 > dude: started; some-command args
+< ping-1: completed
+< dude: completed
+< ping-3: completed
+< waz: completed
+> up: started; another-command
+< ping-2: completed
+< pong-2: completed
+> ding-2: started; asdads
+< pong-3: completed
+> ding-3: started; asdads
+< foo.yolo: completed
+< yo: completed
+> foo.hello: started; some-command other args
 > alpha: started; null
-> ding-1: started; asdads
 > one: started; asdads
 > two: started; asdads
-< foo.yolo: completed
 > there: started; another-command
-< dude: completed
+< up: completed
+< ding-2: completed
+< pong-1: completed
+> ding-1: started; asdads
+< foo.hello: completed
+< ding-3: completed
+< there: completed
 < ding-1: completed
 < two: completed
-> ding-3: started; asdads
 < one: completed
-> ding-2: started; asdads
-< there: completed
-> up: started; another-command
 > three: started; null
 > three.a: started; asdads
-> foo.hello: started; some-command other args
-< ding-3: completed
-< ding-2: completed
-< up: completed
-< foo.hello: completed
 < three.a: completed
 > three.b: started; asdads
 < three.b: completed

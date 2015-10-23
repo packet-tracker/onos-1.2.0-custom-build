@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1445501214640
+Bnd-LastModified: 1445592476326
 Build-Jdk: 1.8.0_60
-Built-By: parallels
+Built-By: eunhwanpark
 Bundle-Description: Software Maestro 6th - 2th Project
 Bundle-License: http://www.apache.org/licenses/LICENSE-2.0.txt
 Bundle-ManifestVersion: 2
@@ -9,10 +9,10 @@ Bundle-Name: soma-app-fwd
 Bundle-SymbolicName: org.onosproject.soma-app-fwd
 Bundle-Version: 1.4.0.SNAPSHOT
 Created-By: Apache Maven Bundle Plugin
-Export-Package: org.onosproject.fwd;uses:="org.onosproject.cfg,org.onosp
- roject.core,org.onosproject.net.flow,org.onosproject.net.flowobjective,
- org.onosproject.net.host,org.onosproject.net.packet,org.onosproject.net
- .topology,org.osgi.service.component";version="1.4.0"
+Export-Package: org.onosproject.somafwd;uses:="org.onosproject.cfg,org.o
+ nosproject.core,org.onosproject.net.flow,org.onosproject.net.flowobject
+ ive,org.onosproject.net.host,org.onosproject.net.packet,org.onosproject
+ .net.topology,org.osgi.service.component";version="1.4.0"
 Import-Package: com.google.common.base;version="[18.0,19)",com.google.co
  mmon.collect;version="[18.0,19)",org.onlab.packet;version="[1.4,2)",org
  .onosproject.cfg;version="[1.4,2)",org.onosproject.core;version="[1.4,2
@@ -35,5 +35,6 @@ Require-Capability: osgi.service;effective:=active;filter:="(objectClass
  t.core.CoreService)",osgi.service;effective:=active;filter:="(objectCla
  ss=org.onosproject.net.flowobjective.FlowObjectiveService)",osgi.ee;fil
  ter:="(&(osgi.ee=JavaSE)(version=1.8))"
-Service-Component: OSGI-INF/org.onosproject.fwd.ReactiveForwarding.xml
+Service-Component: OSGI-INF/org.onosproject.somafwd.ReactiveForwarding.x
+ ml
 Tool: Bnd-2.4.0.201411031534
