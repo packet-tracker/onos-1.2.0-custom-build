@@ -398,7 +398,7 @@ public class ReactiveForwarding {
             }
         } catch (ClassCastException e) {
             // No propertyName defined.
-            enabled = false;fl
+            enabled = false;
         }
         return enabled;
     }
