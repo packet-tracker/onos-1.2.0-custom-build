@@ -89,7 +89,7 @@ import static org.slf4j.LoggerFactory.getLogger;
 @Component(immediate = true)
 public class ReactiveForwarding {
 
-    private static final MACAddress HONEY_POT = MACAddress("d0:50:99:25:a2:07");
+    private static final MacAddress HONEY_POT = new MacAddress("d0:50:99:25:a2:07".getBytes());
 
     private static final int DEFAULT_TIMEOUT = 10;
     private static final int DEFAULT_PRIORITY = 10;
@@ -431,7 +431,7 @@ public class ReactiveForwarding {
             }
 
             // Skip IPv6 multicast packet when IPv6 forward is disabled.
-            000if (!ipv6Forwarding && isIpv6Multicast(ethPkt)) {
+            if (!ipv6Forwarding && isIpv6Multicast(ethPkt)) {
                 return;
             }
 
@@ -453,8 +453,7 @@ public class ReactiveForwarding {
             Host dst = hostService.getHost(id);
             if (dst == null) {
                 flood(context);
-//                return;
-		dst = hostService.getHost(HostId.hostId(HONEY_POT));
+                dst = hostService.getHost(HostId.hostId(HONEY_POT));
             }
 
             // Are we on an edge switch that our destination is on? If so,
